@@ -97,22 +97,28 @@ acceptance result is asserted by this contract.
 ## Selected combined inspection
 
 The specified inspect selection uses `operation="inspect"` and requires
-an `inspection` object, for example `inspection={"level":"both"}`, with exactly
-`level`, whose value is `l0`, `l1` or `both`. A project root selects L0 only;
-L1/Both use a genuine detail map and an eligible exact entity root. Missing
-inspection for inspect, explicit null,
-unknown fields/levels and inspection on map refuse. The field is optional in the
-request family and is omitted for map. The nested platform request still uses `operation="map"`;
-it supplies the original native map read, not a second inspection acquisition.
-The same host/request/result /1 schemas and
+an `inspection` object with exactly `level` (`l0`, `l1` or `both`) and optional
+`l1_profile_id`. A project root selects L0 only; L1/Both use a genuine detail map
+and an eligible exact entity root. Omitting `l1_profile_id` preserves the existing
+default Primary skeleton selection. Its only accepted explicit value is
+`wow-context/primary-state-detail-l1/1`, and that explicit selection requires `level="l1"`
+with an exact `GraphEntity` root. `null`, a non-string value, the explicit default or
+Reference-facts recipe IDs, any unknown ID, and incompatible level/root
+combinations refuse during request decoding, before either owner read is acquired.
+Missing inspection for inspect, explicit null, unknown fields/levels and inspection
+on map refuse. The nested platform request still uses `operation="map"`; it
+supplies the original native map read, not a second inspection acquisition. The
+same host/request/result /1 schemas and
 `wow-context/combined-native-one-hop/1` family apply.
 
 Inspection consumes the genuine combined construction under its actual continuing
-Budget. Primary skeletons use the original default L0/L1 engines, existing exact
-root/level requirements and support; Both keeps their fixed original order.
-Platform inspect borrows the original admitted map/page/support without another
-platform read. Maps, universes and their IDs remain distinct; inspection cannot
-upgrade native omissions or infer cross-universe links. Omitting inspection
+Budget. By default, Primary skeletons use the original L0/L1 engines and Both
+keeps their fixed original order. The explicit StateDetail selection uses the
+existing native Primary StateDetail L1 engine and retains its nested
+`wow-context/l1-skeleton/primary-state-detail/1` schema and original skeleton ID
+semantics. Platform inspect borrows the original admitted map/page/support without
+another platform read. Maps, universes and their IDs remain distinct; inspection
+cannot upgrade native omissions or infer cross-universe links. Omitting inspection
 preserves the existing map request/artifact bytes.
 
 Inspection work/retained bytes and final delivery use the continuing construction
@@ -147,14 +153,22 @@ their original owners, including unevaluated platform neighbor support closure.
 | Rendered artifact | `wow-context/rendered-context-artifact/combined/1` |
 
 The existing combined request family selects `operation="build"` and a required
-non-null `build` object with exactly `level`, `context_profile_id` and
-`renderer_profile_ids`. Level is `l0`, `l1` or `both`, with the original root/layer
-admission; project roots select L0 only. The context profile is the pack ID above.
-The required renderer array is empty for None, contains one reviewed renderer,
-or both distinct reviewed IDs. Both renders JSON then Markdown. Null, unknown/
+non-null `build` object with exactly `level`, `context_profile_id`, `renderer_profile_ids`
+and optional `l1_profile_id`; no other fields are accepted. Level is `l0`, `l1` or `both`, with the original
+root/layer admission; project roots select L0 only. Omission of `l1_profile_id`
+preserves the existing default Primary selection. Its only accepted explicit value
+is `wow-context/primary-state-detail-l1/1`, requiring `level="l1"` and an exact
+`GraphEntity` root. `null`, a non-string, the default or Reference-facts recipe
+IDs, unknown IDs and incompatible level/root combinations refuse during request
+decoding, before either owner read is acquired. The context profile is the pack
+ID above. The required renderer array is empty for None, contains one reviewed
+renderer, or both distinct reviewed IDs. Both renders JSON then Markdown. Unknown/
 mixed profiles, duplicates, excess renderers, `inspection` on build and `build`
-on map/inspect refuse. The outer profile remains `wow-context/combined-native-one-hop/1`;
-the nested platform request remains Map with its exact candidate/publication/binding.
+on map/inspect refuse. The outer profile remains
+`wow-context/combined-native-one-hop/1`; the nested platform request remains Map
+with its exact candidate/publication/binding. StateDetail retains its original
+nested L1 schema and artifact identity; no combined, pack, or renderer /2 family
+is introduced.
 
 Map, Inspect, pack construction/validation and every requested render/validation
 continue the same actual private Budget. The pack moves Inspect custody and its

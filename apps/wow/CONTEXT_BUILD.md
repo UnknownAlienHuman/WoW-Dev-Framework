@@ -256,9 +256,18 @@ Use the strict combined host/request families described by the
 The request selects `operation="build"`, outer profile
 `wow-context/combined-native-one-hop/1`, exact Primary generation/publication/root
 and the original platform Map request with exact candidate and native binding.
-The required non-null `build` object has exactly `level` (`l0|l1|both`),
-`context_profile_id="wow-context/combined-native-structural-pack/1"` and
-`renderer_profile_ids`. The array is required: `[]` selects None; one selects
+The required non-null `build` object has `level` (`l0|l1|both`),
+`context_profile_id="wow-context/combined-native-structural-pack/1"`,
+`renderer_profile_ids` and optional `l1_profile_id`. Omission preserves the
+existing default Primary recipe. The only explicit value is
+`wow-context/primary-state-detail-l1/1`, requiring `level="l1"` and an exact
+GraphEntity root. Null, a non-string, default/Reference-facts recipe IDs, unknown
+IDs and, when this profile is explicitly selected, L0/Both/Project roots refuse during request decoding. Mixed operation fields refuse
+before owner acquisition. StateDetail preserves its original nested
+`wow-context/l1-skeleton/primary-state-detail/1` schema and artifact ID. The
+combined request/result, combined pack and renderer families remain /1; no
+additional argv flag or request/read/map operation is introduced.
+The renderer array is required: `[]` selects None; one selects
 `wow-context/combined-pack-json/1` or `wow-context/combined-pack-markdown/1`; both
 unique IDs render JSON then Markdown. Project roots select L0 only; original
 entity/root/layer admission remains mandatory.

@@ -1340,6 +1340,40 @@ pub(crate) fn build_primary_skeletons_with_budget<'m, 'a>(
     Ok((result, budget))
 }
 
+/// Continue the admitted StateDetail L1 engine on a held construction ledger.
+/// The prepared detail map is neither rebuilt nor charged a second time.
+pub(crate) fn build_primary_state_detail_on_budget<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &L0Scope,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<PrimarySkeletons<'m, 'a>> {
+    budget.work(1, stop)?;
+    let L0Scope::Entity(id) = root else {
+        return Err(invalid());
+    };
+    let view = validate_input(universe, map, graph, stop)?;
+    let artifact = l1(
+        universe,
+        map,
+        graph,
+        (id, PrimaryL1Profile::StateDetailV1, None),
+        &view,
+        budget,
+        stop,
+    )?;
+    finish_primary_skeletons_on_budget(
+        universe,
+        SkeletonLevel::L1,
+        None,
+        Some(artifact),
+        budget,
+        stop,
+    )
+}
+
 /// Continue an existing construction ledger; the origin map was already charged.
 /// Only the default container/entity recipes are selected by combined inspect.
 pub(crate) fn build_primary_skeletons_on_budget<'m, 'a>(

@@ -80,6 +80,22 @@ validation and all requested rendering. Each operation preserves its native
 owner ledger; limits cannot reset or mandatory evidence be dropped to fit. Frontier and
 L0/Both/Project selection remain unsupported for this profile.
 
+## Combined consumers
+
+Combined inspect accepts optional `inspection.l1_profile_id`, and combined build
+accepts optional `build.l1_profile_id`, in the existing
+`wow-service/context-combined-request/1` family. Omission preserves the default
+Primary recipe. The only explicit value is
+`wow-context/primary-state-detail-l1/1`, paired with L1 and an exact GraphEntity
+root; null, wrong types, other recipe IDs, and L0/Both/Project roots with
+that explicit profile refuse before owner acquisition. Mixed operation
+fields refuse before owner acquisition. These routes call the same StateDetail
+L1 owner described above. The nested schema remains
+`wow-context/l1-skeleton/primary-state-detail/1` with its original artifact ID;
+the combined, semantic-pack and renderer families remain /1. Inspect and build
+continue their shared actual construction Budget through inspection and, for
+build, pack validation and selected rendering.
+
 This is generic static state metadata. No values, loaded state, combat safety,
 API parity, current-source qualification, bodies or exhaustive-field claim is
 added. Coverage remains Partial/Truncated with `absence_authoritative=false`;

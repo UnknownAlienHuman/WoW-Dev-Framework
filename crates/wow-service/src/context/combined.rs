@@ -9,7 +9,7 @@ use super::{
     ContextMapHostInput, ContextMapPublication, ContextMapRequest, ContextMapResult,
     ContextMapRoot, ContextMapStatus, ContextPlatformHostInput, ContextPlatformOperation,
     ContextPlatformRequest, ContextRenderSelection, PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
-    checkpoint, context_error, failure,
+    PRIMARY_STATE_DETAIL_L1_PROFILE_ID, checkpoint, context_error, failure,
     operation::{
         Envelope, encode, failed_operation, preflight, with_checked_context_read,
         with_primary_composition,
@@ -122,10 +122,39 @@ fn non_null_build<'de, D: serde::Deserializer<'de>>(
     BuildSelection::deserialize(deserializer).map(Some)
 }
 
+fn non_null_l1_profile_id<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Box<str>>, D::Error> {
+    Box::<str>::deserialize(deserializer).map(Some)
+}
+
+fn select_state_detail(
+    profile_id: Option<&str>,
+    level: wow_context::SkeletonLevel,
+    root: &ContextMapRoot,
+) -> ServiceResult<bool> {
+    match profile_id {
+        None => Ok(false),
+        Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)
+            if level == wow_context::SkeletonLevel::L1
+                && matches!(root, ContextMapRoot::GraphEntity(_)) =>
+        {
+            Ok(true)
+        }
+        Some(_) => Err(failure(ServiceErrorCode::InvalidRequest)),
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Inspection {
     level: Box<str>,
+    #[serde(
+        default,
+        deserialize_with = "non_null_l1_profile_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    l1_profile_id: Option<Box<str>>,
 }
 impl Inspection {
     fn level(&self) -> ServiceResult<wow_context::SkeletonLevel> {
@@ -148,6 +177,12 @@ struct BuildSelection {
     level: Box<str>,
     context_profile_id: Box<str>,
     renderer_profile_ids: Vec<Box<str>>,
+    #[serde(
+        default,
+        deserialize_with = "non_null_l1_profile_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    l1_profile_id: Option<Box<str>>,
 }
 impl BuildSelection {
     fn normalize(
@@ -204,6 +239,8 @@ pub struct ContextCombinedRequest {
     #[serde(skip)]
     selected_level: Option<wow_context::SkeletonLevel>,
     #[serde(skip)]
+    state_detail: bool,
+    #[serde(skip)]
     render: ContextRenderSelection,
     #[serde(skip)]
     primary_request: ContextMapRequest,
@@ -224,7 +261,7 @@ impl ContextCombinedRequest {
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
-        let (operation, selected_level, render) = match (
+        let (operation, selected_level, render, state_detail) = match (
             document.operation.as_ref(),
             document.inspection.as_ref(),
             document.build.as_mut(),
@@ -233,15 +270,35 @@ impl ContextCombinedRequest {
                 ContextCombinedOperation::Map,
                 None,
                 ContextRenderSelection::None,
+                false,
             ),
-            ("inspect", Some(selection), None) => (
-                ContextCombinedOperation::Inspect,
-                Some(selection.level()?),
-                ContextRenderSelection::None,
-            ),
+            ("inspect", Some(selection), None) => {
+                let level = selection.level()?;
+                let state_detail = select_state_detail(
+                    selection.l1_profile_id.as_deref(),
+                    level,
+                    &document.primary.root,
+                )?;
+                (
+                    ContextCombinedOperation::Inspect,
+                    Some(level),
+                    ContextRenderSelection::None,
+                    state_detail,
+                )
+            }
             ("build", None, Some(selection)) => {
                 let (level, render) = selection.normalize(stop)?;
-                (ContextCombinedOperation::Build, Some(level), render)
+                let state_detail = select_state_detail(
+                    selection.l1_profile_id.as_deref(),
+                    level,
+                    &document.primary.root,
+                )?;
+                (
+                    ContextCombinedOperation::Build,
+                    Some(level),
+                    render,
+                    state_detail,
+                )
             }
             _ => return Err(failure(ServiceErrorCode::InvalidRequest)),
         };
@@ -282,6 +339,7 @@ impl ContextCombinedRequest {
             inspection: document.inspection,
             build: document.build,
             selected_level,
+            state_detail,
             render,
             primary_request,
         })
@@ -401,9 +459,15 @@ pub fn execute_context_combined(
                                                 wow_context::L0Scope::Entity(id.clone())
                                             }
                                         };
-                                        let inspect = wow_context::build_combined_context_inspect(
-                                            &mut map, &universe, graph, &scope, level, stop,
-                                        )
+                                        let inspect = if request.state_detail {
+                                            wow_context::build_combined_state_detail_inspect(
+                                                &mut map, &universe, graph, &scope, stop,
+                                            )
+                                        } else {
+                                            wow_context::build_combined_context_inspect(
+                                                &mut map, &universe, graph, &scope, level, stop,
+                                            )
+                                        }
                                         .map_err(context_error)?;
                                         if request.build.is_some() {
                                             encode_build_result(
@@ -692,3 +756,6 @@ fn encode_result<T: Serialize>(
         .map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
     Ok((encode(&envelope, limit, stop)?, status))
 }
+
+#[cfg(test)]
+mod tests;

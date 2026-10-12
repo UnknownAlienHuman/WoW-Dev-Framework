@@ -13,7 +13,7 @@ use crate::platform::{
     PlatformContextInspectView, PlatformMapArtifact, bind_platform_context_universe_with_budget,
     build_platform_context_inspect_on_budget, encode_retained,
 };
-use crate::skeleton::build_primary_skeletons_on_budget;
+use crate::skeleton::{build_primary_skeletons_on_budget, build_primary_state_detail_on_budget};
 use crate::{
     ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, L0Scope,
     PrimaryMapForComposition, PrimaryMapLimits, PrimarySkeletons, ProjectMap, ProjectMapState,
@@ -354,6 +354,50 @@ pub fn build_combined_context_inspect<'m, 'p, 'f>(
     level: SkeletonLevel,
     stop: &AtomicBool,
 ) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
+    build_combined_inspect(
+        map,
+        universe,
+        graph,
+        CombinedInspection::Default { root, level },
+        stop,
+    )
+}
+
+/// Explicit Primary StateDetail L1 with the unchanged original platform inspect.
+/// Both components continue the same held combined construction ledger.
+pub fn build_combined_state_detail_inspect<'m, 'p, 'f>(
+    map: &'m mut CombinedContextMap<'p, 'f>,
+    universe: &'m ContextUniverseSet<'p>,
+    graph: &GraphPartitionRead<'p>,
+    root: &L0Scope,
+    stop: &AtomicBool,
+) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
+    build_combined_inspect(
+        map,
+        universe,
+        graph,
+        CombinedInspection::StateDetail { root },
+        stop,
+    )
+}
+
+enum CombinedInspection<'r> {
+    Default {
+        root: &'r L0Scope,
+        level: SkeletonLevel,
+    },
+    StateDetail {
+        root: &'r L0Scope,
+    },
+}
+
+fn build_combined_inspect<'m, 'p, 'f>(
+    map: &'m mut CombinedContextMap<'p, 'f>,
+    universe: &'m ContextUniverseSet<'p>,
+    graph: &GraphPartitionRead<'p>,
+    selection: CombinedInspection<'_>,
+    stop: &AtomicBool,
+) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
     checkpoint(stop)?;
     let CombinedContextMap {
         artifact,
@@ -366,14 +410,24 @@ pub fn build_combined_context_inspect<'m, 'p, 'f>(
     if map.core.limits != universe.limits {
         return Err(ContextError::new(ContextErrorCode::UniverseMismatch));
     }
-    let primary_skeletons = build_primary_skeletons_on_budget(
-        universe,
-        &map.core.primary,
-        graph,
-        (root, level),
-        budget,
-        stop,
-    )?;
+    let primary_skeletons = match selection {
+        CombinedInspection::Default { root, level } => build_primary_skeletons_on_budget(
+            universe,
+            &map.core.primary,
+            graph,
+            (root, level),
+            budget,
+            stop,
+        )?,
+        CombinedInspection::StateDetail { root } => build_primary_state_detail_on_budget(
+            universe,
+            &map.core.primary,
+            graph,
+            root,
+            budget,
+            stop,
+        )?,
+    };
     let platform_inspect = build_platform_context_inspect_on_budget(
         &map.core.platform,
         platform_map_canonical_bytes,
