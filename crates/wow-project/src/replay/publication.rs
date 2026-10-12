@@ -1,5 +1,6 @@
 //! Project-owned coherent handoff to the manifested store. Semantic identities
 //! precede logical membership, publication-set identity and store generation.
+mod commitments;
 mod direct;
 mod namespace;
 use super::{ProjectReplay, invalid};
@@ -9,7 +10,7 @@ use crate::graph::{
 use crate::{ProjectPhase, ProjectPublisher, ProjectResult, ProjectView};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::atomic::AtomicBool};
-use wow_graph::GraphPartitionSnapshot;
+use wow_graph::{GraphPartitionSnapshot, ValidatedGraphPartitionSnapshot};
 use wow_store::project::{PartitionRecord, ProjectStoreNamespace, ReadSnapshot};
 
 pub const STORAGE_SCHEMAS: &[&str] = &[
@@ -469,7 +470,7 @@ impl AcquiredProjectPair {
         {
             return Err(invalid());
         }
-        validate_native_parts(&self.project, self.graph(), native, stop)?;
+        validate_read_native_parts(&self.project, &self.graph, native, stop)?;
         crate::analyzer::checkpoint(stop)?;
         Ok(self.publisher)
     }
@@ -479,7 +480,7 @@ impl AcquiredProjectPair {
             read,
             stop,
             |_, _| Ok(((), Vec::new())),
-            |project, graph, _, stop| validate_pair_with_source_provenance(project, graph, stop),
+            |project, graph, _, stop| validate_read_pair(project, graph, stop),
         )
         .map(|(pair, ())| pair)
     }
@@ -500,7 +501,7 @@ impl AcquiredProjectPair {
         E: From<crate::ProjectError>,
     {
         Self::read_owner(read, stop, rebuild, |project, graph, owner: &T, stop| {
-            validate_native_parts(project, graph, owner.as_ref(), stop).map(|()| None)
+            validate_read_native_parts(project, graph, owner.as_ref(), stop).map(|()| None)
         })
     }
 
@@ -513,7 +514,7 @@ impl AcquiredProjectPair {
         ) -> Result<(T, Vec<PartitionRecord>), E>,
         validate: impl FnOnce(
             &ProjectView,
-            &GraphPartitionSnapshot,
+            &ValidatedGraphPartitionSnapshot,
             &T,
             &AtomicBool,
         ) -> ProjectResult<Option<crate::graph::ProjectGraphProvenance>>,
@@ -568,59 +569,16 @@ impl AcquiredProjectPair {
         let publisher = replay.hydrate_owner(stop)?;
         let project = publisher.open_current()?;
         let (owner, companion_records) = rebuild(&project, graph.as_snapshot())?;
-        let source_provenance = validate(&project, graph.as_snapshot(), &owner, stop)?;
-        // Dispatch from the actual epoch retained by this read lease. A failed
-        // namespace check cannot fall back to the legacy graph-universe mode.
-        let namespace = read.epoch().namespace();
-        let mut expected =
-            plan_in_namespace(&replay, &project, graph.as_snapshot(), namespace, stop)?;
-        if expected
-            .records
-            .len()
-            .checked_add(companion_records.len())
-            .is_none_or(|count| count != read.manifest().members.len())
-        {
-            return Err(invalid().into());
-        }
-        for record in companion_records {
-            crate::analyzer::checkpoint(stop)?;
-            if expected
-                .records
-                .iter()
-                .any(|existing| existing.key() == record.key())
-            {
-                return Err(invalid().into());
-            }
-            expected.records.push(record);
-        }
-        expected.records.sort_by(|a, b| a.key().cmp(b.key()));
-        let expected_owner = namespace.map_or_else(
-            || graph.as_snapshot().snapshot().universe().as_str(),
-            |namespace| namespace.id().as_str(),
-        );
-        if expected.bindings != read.manifest().bindings
-            || expected.records.len() != read.manifest().members.len()
-            || read.manifest().owner != expected_owner
-            || read.epoch().owner() != expected_owner
-        {
-            return Err(invalid().into());
-        }
-        for (record, member) in expected.records.iter().zip(&read.manifest().members) {
-            crate::analyzer::checkpoint(stop)?;
-            if record.key() != member.key || record.version() != &member.version {
-                return Err(invalid().into());
-            }
-        }
-        let expected_header: PairHeader = expected
-            .records
-            .iter()
-            .find(|r| r.key() == HEADER_KEY)
-            .ok_or_else(invalid)?
-            .decode()
-            .map_err(|_| invalid())?;
-        if header != expected_header {
-            return Err(invalid().into());
-        }
+        let source_provenance = validate(&project, &graph, &owner, stop)?;
+        commitments::validate_read(
+            read,
+            &replay,
+            &project,
+            &graph,
+            &header,
+            companion_records,
+            stop,
+        )?;
         crate::analyzer::checkpoint(stop)?;
         Ok((
             Self {
@@ -647,6 +605,26 @@ fn validate_native_parts(
     crate::analyzer::checkpoint(stop)?;
     project.snapshot().validate()?;
     graph.validate(stop).map_err(graph_error)?;
+    validate_native_binding(project, graph, native, stop)
+}
+
+fn validate_read_native_parts(
+    project: &ProjectView,
+    graph: &ValidatedGraphPartitionSnapshot,
+    native: &crate::graph::PlatformIndexSourceParts,
+    stop: &AtomicBool,
+) -> ProjectResult<()> {
+    crate::analyzer::checkpoint(stop)?;
+    project.snapshot().validate()?;
+    validate_native_binding(project, graph.as_snapshot(), native, stop)
+}
+
+fn validate_native_binding(
+    project: &ProjectView,
+    graph: &GraphPartitionSnapshot,
+    native: &crate::graph::PlatformIndexSourceParts,
+    stop: &AtomicBool,
+) -> ProjectResult<()> {
     let profile = match project.configuration().platform_graph_profile() {
         Some(crate::PlatformGraphProfile::DirectCapabilitiesV1(selected))
             if native.capabilities() == Some(selected) =>
@@ -697,6 +675,24 @@ fn validate_pair_with_source_provenance(
     crate::analyzer::checkpoint(stop)?;
     project.snapshot().validate()?;
     graph.validate(stop).map_err(graph_error)?;
+    validate_source_binding(project, graph, stop)
+}
+
+fn validate_read_pair(
+    project: &ProjectView,
+    graph: &ValidatedGraphPartitionSnapshot,
+    stop: &AtomicBool,
+) -> ProjectResult<Option<crate::graph::ProjectGraphProvenance>> {
+    crate::analyzer::checkpoint(stop)?;
+    project.snapshot().validate()?;
+    validate_source_binding(project, graph.as_snapshot(), stop)
+}
+
+fn validate_source_binding(
+    project: &ProjectView,
+    graph: &GraphPartitionSnapshot,
+    stop: &AtomicBool,
+) -> ProjectResult<Option<crate::graph::ProjectGraphProvenance>> {
     if project
         .configuration()
         .platform_graph_profile()
@@ -785,65 +781,12 @@ fn plan(
         .iter()
         .map(|r| (r.key(), r.version()))
         .collect::<Vec<_>>();
-    // All graph/project/analyzer IDs and logical member versions are already
-    // stable. Neither current, epoch nor store generation enters this identity.
-    let publication_set_id = crate::identity::canonical_id(
-        "project-publication-set:sha256:",
-        "wow-project/live-project-publication-set/1",
-        &(
-            project.snapshot_id(),
-            project.analyzer_snapshot_id(),
-            graph.snapshot().snapshot_id(),
-            &membership,
-        ),
-        ProjectPhase::Publication,
-    )?
-    .into_string();
-    let header = PairHeader {
-        schema: HEADER_SCHEMA.into(),
-        project_snapshot_id: project.snapshot_id().into(),
-        analyzer_snapshot_id: project.analyzer_snapshot_id().into(),
-        graph_snapshot_id: graph.snapshot().snapshot_id().as_str().into(),
-        publication_set_id: publication_set_id.clone(),
-    };
+    let (header, bindings) = commitments::metadata(project, graph, &membership)?;
     records.push(
         PartitionRecord::new(HEADER_KEY, "wow-project.live-pair.v1", &header)
             .map_err(|_| invalid())?,
     );
     records.sort_by(|a, b| a.key().cmp(b.key()));
-    let bindings = BTreeMap::from([
-        ("scope".into(), "native-live-project-pair-v1".into()),
-        ("project_publication_set_id".into(), publication_set_id),
-        ("project_snapshot_id".into(), project.snapshot_id().into()),
-        (
-            "analyzer_snapshot_id".into(),
-            project.analyzer_snapshot_id().into(),
-        ),
-        (
-            "graph_snapshot_id".into(),
-            graph.snapshot().snapshot_id().as_str().into(),
-        ),
-        (
-            "project_generation_id".into(),
-            project.project_generation().to_string(),
-        ),
-        (
-            "source_context_id".into(),
-            graph.source_context_id().to_string(),
-        ),
-        (
-            "profile_id".into(),
-            project
-                .configuration()
-                .selected_profile()
-                .profile_id()
-                .to_string(),
-        ),
-        (
-            "reference_generation_id".into(),
-            project.configuration().reference_generation().to_string(),
-        ),
-    ]);
     Ok(ProjectPublicationBundle {
         records,
         bindings,

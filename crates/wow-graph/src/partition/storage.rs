@@ -3,7 +3,7 @@
 use super::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, sync::atomic::AtomicBool};
-use wow_store::project::{PartitionRecord, ReadSnapshot};
+use wow_store::project::{PartitionMember, PartitionRecord, ReadSnapshot};
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -28,19 +28,40 @@ impl GraphPartitionSnapshot {
     /// registries and producer records can be reused without rewriting them.
     pub fn storage_records(&self, stop: &AtomicBool) -> GraphResult<Vec<PartitionRecord>> {
         self.validate(stop)?;
-        let mut records = vec![
-            PartitionRecord::new("graph.registry", "wow-graph.registry.v1", &self.registry)?,
-            PartitionRecord::new(
-                "graph.foundation",
-                "wow-graph.foundation.v1",
-                &self.foundation,
-            )?,
-            PartitionRecord::new(
-                "graph.materialized",
-                "wow-graph.materialized.v1",
-                &self.snapshot,
-            )?,
-        ];
+        let mut records = Vec::new();
+        self.visit_storage_records(stop, |record| {
+            records.push(record);
+            Ok(())
+        })?;
+        Ok(records)
+    }
+
+    /// Share the exact publication encoding while allowing read-side comparison
+    /// to release each payload before encoding the next one. Admission belongs
+    /// to the raw entry point or the immutable validated owner above this seam.
+    fn visit_storage_records(
+        &self,
+        stop: &AtomicBool,
+        mut visit: impl FnMut(PartitionRecord) -> GraphResult<()>,
+    ) -> GraphResult<()> {
+        check_cancelled(stop)?;
+        visit(PartitionRecord::new(
+            "graph.registry",
+            "wow-graph.registry.v1",
+            &self.registry,
+        )?)?;
+        check_cancelled(stop)?;
+        visit(PartitionRecord::new(
+            "graph.foundation",
+            "wow-graph.foundation.v1",
+            &self.foundation,
+        )?)?;
+        check_cancelled(stop)?;
+        visit(PartitionRecord::new(
+            "graph.materialized",
+            "wow-graph.materialized.v1",
+            &self.snapshot,
+        )?)?;
         let mut producers = Vec::new();
         for p in &self.partitions {
             check_cancelled(stop)?;
@@ -50,10 +71,11 @@ impl GraphPartitionSnapshot {
             } else {
                 "wow-graph.producer.v1"
             };
-            records.push(PartitionRecord::new(&key, schema, p)?);
+            visit(PartitionRecord::new(&key, schema, p)?)?;
             producers.push(key);
         }
-        records.push(PartitionRecord::new(
+        check_cancelled(stop)?;
+        visit(PartitionRecord::new(
             "graph.header",
             if self.schema.as_ref() == GRAPH_PARTITION_SNAPSHOT_SCHEMA_V2 {
                 "wow-graph.header.v2"
@@ -65,8 +87,8 @@ impl GraphPartitionSnapshot {
                 source_context_id: self.source_context_id,
                 producers,
             },
-        )?);
-        Ok(records)
+        )?)?;
+        check_cancelled(stop)
     }
     /// Restore only from this exact generation's complete membership, then replay
     /// the existing registry/proposal/materialization validator, not Lua analysis.
@@ -166,6 +188,48 @@ impl GraphPartitionSnapshot {
         result.validate(stop)?;
         check_cancelled(stop)?;
         Ok(ValidatedGraphPartitionSnapshot { owner: result })
+    }
+}
+
+impl ValidatedGraphPartitionSnapshot {
+    /// Compare canonical typed graph records against this exact held store read.
+    /// The graph proof avoids another rebuild; each encoded payload is dropped
+    /// after comparison. Store admission alone cannot prove typed canonical
+    /// commitments, so decoding an equivalent JSON representation is insufficient.
+    pub fn validate_storage_membership<'read>(
+        &self,
+        read: &'read ReadSnapshot,
+        stop: &AtomicBool,
+    ) -> GraphResult<Vec<&'read PartitionMember>> {
+        let mut members = Vec::with_capacity(self.owner.partitions.len() + 4);
+        self.owner.visit_storage_records(stop, |record| {
+            check_cancelled(stop)?;
+            let index = read
+                .manifest()
+                .members
+                .binary_search_by(|member| member.key.as_str().cmp(record.key()))
+                .map_err(|_| invalid("stored graph record missing"))?;
+            let member = &read.manifest().members[index];
+            // The version commits the key, schema and canonical payload bytes.
+            if record.version() != &member.version {
+                return Err(invalid("stored graph record commitment mismatch"));
+            }
+            members.push(member);
+            Ok(())
+        })?;
+        if members.len()
+            != read
+                .manifest()
+                .members
+                .iter()
+                .filter(|member| member.key.starts_with("graph."))
+                .count()
+        {
+            return Err(invalid("stored graph membership mismatch"));
+        }
+        members.sort_by(|left, right| left.key.cmp(&right.key));
+        check_cancelled(stop)?;
+        Ok(members)
     }
 }
 fn producer_key(id: &str) -> GraphResult<String> {

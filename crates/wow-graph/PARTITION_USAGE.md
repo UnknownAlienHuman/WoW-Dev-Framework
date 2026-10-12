@@ -105,6 +105,17 @@ canonical JSON byte conversion remain finite bounded phases with checks around
 them; this is cooperative cancellation, not a hard real-time latency guarantee.
 No identity recipe, serialization, limits, coverage or publication guard changes.
 
+Retained project acquisition keeps `ValidatedGraphPartitionSnapshot` through
+native/source owner binding checks. Its `validate_storage_membership(read, stop)`
+compares the exact canonical typed graph records with the held read, using the
+same encoder as publication and dropping each payload after comparison. It
+returns only borrowed member commitments from that read. A semantic decode or
+generic store validation alone is insufficient; changed canonical record
+versions or extra graph members fail. Project replay, header, namespace and
+rebuilt companion owners still require their independent exact commitments.
+This avoids another graph rebuild and retaining a complete graph publication
+payload merely to read a pair; raw publication and validation remain complete.
+
 ## Atomic replacement sets
 
 `prepare_replacements(requests, cancelled)` prepares one plan for 1–64 independent producer partitions. Every request must name the same current `expected_snapshot_id` and the exact previous digest for its own partition (`None` remains create-only). Duplicate partition IDs are rejected, not merged or applied last-wins.

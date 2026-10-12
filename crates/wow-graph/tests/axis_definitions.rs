@@ -290,8 +290,21 @@ fn existing_stored_partitions_reopen_without_rederiving_another_edge_dialect() -
         &ReadSelector::Exact(request.generation().generation_id.clone()),
         &stop,
     )?;
-    let restored = GraphPartitionSnapshot::read_stored(&read, &stop)?;
-    assert_eq!(owner, restored);
+    let restored = GraphPartitionSnapshot::read_stored_validated(&read, &stop)?;
+    assert_eq!(&owner, restored.as_snapshot());
+    let membership = restored.validate_storage_membership(&read, &stop)?;
+    assert_eq!(
+        membership,
+        read.manifest().members.iter().collect::<Vec<_>>()
+    );
+    assert_eq!(
+        restored
+            .validate_storage_membership(&read, &AtomicBool::new(true))
+            .err()
+            .ok_or("cancelled storage comparison accepted")?
+            .code(),
+        GraphErrorCode::Cancelled
+    );
     let profile = GraphAxisProfile::bind_definitions(
         owner.registry(),
         GraphAxis::Ownership,
@@ -300,9 +313,51 @@ fn existing_stored_partitions_reopen_without_rederiving_another_edge_dialect() -
     let query = query(&owner, &profile)?;
     assert_eq!(
         serde_json::to_vec(&query.execute(&owner, &profile, &stop)?)?,
-        serde_json::to_vec(&query.execute(&restored, &profile, &stop)?)?
+        serde_json::to_vec(&query.execute(restored.as_snapshot(), &profile, &stop)?)?
     );
-    drop(read);
+
+    // The generic store admits these internally consistent canonical bytes.
+    // The retained graph proof must still compare its own typed commitments,
+    // rather than lending that proof to this other read's changed manifest.
+    let mut foreign_records = owner.storage_records(&stop)?;
+    let header_index = foreign_records
+        .iter()
+        .position(|record| record.key() == "graph.header")
+        .ok_or("graph header missing")?;
+    let mut foreign_header: serde_json::Value = foreign_records[header_index].decode()?;
+    foreign_header["schema"] = "foreign-stored-header".into();
+    foreign_records[header_index] = wow_store::project::PartitionRecord::new(
+        "graph.header",
+        "wow-graph.header.v1",
+        &foreign_header,
+    )?;
+    let foreign = PublicationRequest::new(
+        store.epoch(),
+        wow_store::OperationId::new("fixture:axis-foreign-read")?,
+        None,
+        request.generation().bindings.clone(),
+        foreign_records,
+    )?;
+    store.prepare(&foreign, &stop)?;
+    let foreign_read = store.read(
+        &ReadSelector::Exact(foreign.generation().generation_id.clone()),
+        &stop,
+    )?;
+    assert_eq!(
+        restored
+            .validate_storage_membership(&foreign_read, &stop)
+            .err()
+            .ok_or("changed canonical graph commitment accepted")?
+            .code(),
+        GraphErrorCode::PartitionInvalid
+    );
+    // The original held read and owner retain their exact membership.
+    assert_eq!(
+        membership,
+        restored.validate_storage_membership(&read, &stop)?
+    );
+    foreign_read.close()?;
+    read.close()?;
     drop(store);
     // This exact newly created fixture root is owned by this test.
     std::fs::remove_dir_all(root)?;
