@@ -86,7 +86,7 @@ missing-root refusal, cumulative delivery bounds and Windows CLI byte checks pas
 The same selected L1 also feeds structural pack build and its existing JSON/Markdown
 renderers, with bounded source-absent lifecycle and Windows CLI checks. Frontier,
 L0/Both/Project and other root kinds remain unsupported for this profile.
-Default EntityV1 and old /1 bytes remain unchanged.
+The default EntityV1 selection remains available.
 
 ## Native API and custody
 
@@ -98,7 +98,7 @@ graph-owner mismatch; decoded JSON cannot reconstruct this borrowed authority.
 The combined API shares one aggregate reservation and builds L0 before L1.
 `build_l0_skeleton_with_profile` and `build_primary_skeletons_with_profile`
 accept the closed PrimaryL0Profile selection over those same owners. Existing
-builders default to ContainersV1; old /1 behavior and bytes remain unchanged.
+builders still default to ContainersV1; L0 is unchanged.
 `build_primary_l1_skeletons_with_profile(universe, map, graph, root, profile, stop)`
 accepts the closed PrimaryL1Profile over the same native owners. StateDetailV1
 returns the existing PrimarySkeletons wrapper with only L1; EntityV1 retains the
@@ -137,6 +137,39 @@ empty. Bodies and SourceFunctionFact.shape never enter this metadata projection.
 Lua/XML occurrence rows retain their exact original IDs, proposals and source /
 evidence handles. The owner does not invent richer XML/type/role summaries.
 
+## Native XML handler L1 metadata
+
+The unreleased `PrimaryL1Profile::EntityV1` consolidates original XML handler
+rows into its advertised Lua/XML occurrence metadata under the existing
+`wow-context/primary-l1/1` selection. There is no separate ScriptDetail profile.
+For each selected native `xml_source_handler`, retain the original
+`ProjectGraphInlineHandler`: `script_id`, `unit_id`, `document` and
+`semantic_context`, with the exact accepted proposal/materialized node and
+original source-handle/evidence support from retained native provenance.
+A decoded sidecar, name or guessed script/unit join cannot supply that custody.
+
+The row also retains the uniquely associated original `ProjectGraphScriptSource`.
+Its `document`, `script_id`, `source_handle_id` and `evidence_id` must
+match the handler exactly, with `source_kind=InlineBody`; missing or multiple
+matches refuse. Both original records contain metadata, not source bodies.
+An explicit handler root requires its exact declaration row; absence refuses.
+
+The original field meanings are retained. The inline unit is not a physical Main
+function; semantic_context is a static source observation. Runtime binding and
+effective receiver remain `NotEvaluated`; no loaded/executed-handler claim or
+source body is added.
+
+L0 is unchanged. Handler-containing L1 artifacts and containing packs/renders
+intentionally change bytes and IDs. Nonempty retained handler provenance is
+traversed and published-node lookups are charged before map membership filtering,
+so L1 work can change even with no selected handler. Empty handler provenance
+returns before those traversal debits. Structural pack and existing
+renderer families remain in use, with no new flag/profile. L1/pack output stays
+Serialize-only; there is no durable L1/pack decoder or accepted legacy handler
+surface to preserve. Persisted Project, registry and replay remain unchanged.
+Existing finite caller-selected limits, cancellation and support refusal apply;
+these generic bounds do not qualify a frozen corpus or behavioral acceptance.
+
 ## Selected native UsesApi evidence
 
 The existing L1 detail vocabulary consumes `UsesApi` when the ordinary acquired
@@ -165,7 +198,7 @@ keep their captured uncertainty. Rendering does not prove runtime execution,
 loaded state, API legality, protected/Secret behavior or combat safety.
 
 This handoff introduces no context profile/schema or changed request recipe.
-Absent native API selection preserves the previous route and bytes. Output stays
+Absent native API selection keeps its previous routing. Output stays
 Partial/Truncated with nonauthoritative absence and existing cumulative bounds;
 broader Reference enrichment and Tier A/X qualification remain open.
 
@@ -173,7 +206,7 @@ The explicit [Reference-facts L1 selection](NATIVE_PRIMARY_REFERENCE_FACTS.md)
 retains original records and genuine ordered source-normalized observations
 separately. Source type resolution, corrected overlays, annotation display
 lowering, broader restrictions and runtime qualification remain unevaluated;
-default/state profiles and persisted Project/Reference bytes stay unchanged.
+default/state profile IDs and persisted Project/Reference bytes stay unchanged.
 
 ## Bounds and remaining qualification
 

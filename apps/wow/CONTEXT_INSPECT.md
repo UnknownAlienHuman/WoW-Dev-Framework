@@ -55,11 +55,26 @@ and an L0 flag conflicts with level l1. Unknown options, repeated non-repeatable
 options and other profiles/platform/output modes refuse; map-target/profile flags are not inspect
 options. Service checks actual root kind/existence, original custody and project
 identity after acquisition. A method/function cannot silently become an L0
-container. Old default /1 requests and artifacts retain their behavior/bytes.
+container. Existing root/profile selection remains; handler-bearing artifacts
+gain the metadata described below.
 
 Current guards require publication current. Reference guards require all three
 options together. Service pins Current once or reads the exact store generation;
 the CLI performs no selector resolution, search, alias lookup or retry.
+
+## Native XML handler L1 metadata
+
+Use existing `--level l1`, an exact `graph-entity@` root and default
+`wow-context/primary-l1/1` for a retained native `xml_source_handler`.
+Unreleased EntityV1 consolidates the original `script_id`, `unit_id`,
+`document`, `semantic_context` and accepted node/source/evidence support.
+Runtime binding and effective receiver remain `NotEvaluated`. No new flag or
+ScriptDetail profile is introduced. Handler-containing L1 artifacts/pack IDs
+intentionally change. Traversal and published-node lookup of nonempty handler
+provenance also debit work when no handler is selected. The original script source
+is retained by an exact unique support join; a handler-root row is mandatory.
+L0 and persisted Project/registry/replay stay unchanged.
+See [the existing inspection contract](../../crates/wow-context/e3/NATIVE_PRIMARY_INSPECT.md#native-xml-handler-l1-metadata).
 
 ## Selected native state-detail L1
 
@@ -78,7 +93,7 @@ state facet is not a fallback. Other native omissions remain visible.
 
 One owner ledger covers the immutable selected skeleton and its custody;
 the selected final envelope must fit the actual remaining metadata allowance
-after construction. Default inspect bytes remain unchanged. Inspect behavioral
+after construction. Inspect behavioral
 verification passes on the bounded source-absent lifecycle and Windows CLI byte
 checks. The selected build consumer has its own bounded lifecycle and CLI checks.
 This metadata projection does not attest runtime
@@ -114,7 +129,7 @@ The embedded map still reports `ReferenceContractNotEvaluated` source custody;
 the selected L1 facet supplies exact record/source association and those retained
 source observations,
 without relabeling that map omission or including source excerpts. Default/state
-profiles retain their existing bytes and omissions. The same selection has a
+profile IDs and scoped omissions are retained. The same selection has a
 structural [build/JSON/Markdown route](CONTEXT_BUILD.md#selected-native-reference-facts-l1-pack).
 See [the selected owner contract](../../crates/wow-context/e3/NATIVE_PRIMARY_REFERENCE_FACTS.md)
 for custody, continuing limits and nonclaims; execution evidence remains in #122.
@@ -144,7 +159,7 @@ retained records/support and final output. Mandatory overflow refuses; native
 query limits/truncation remain visible. The selected one-round bound ends
 expansion even when nothing is added; it does not establish NoNewEvidence,
 absence or completeness. No recursive round or inferred edge is emitted.
-Inspect retains its original result bytes. The separate
+The one-round expansion keeps its existing selection. The separate
 [selected frontier build/pack/render family](CONTEXT_BUILD.md#selected-frontier-pack)
 consumes the native step with its continuing Budget. Its bounded source-absent
 service/CLI path is verified in #122. Explicit additional batches use the
@@ -185,7 +200,7 @@ There is no background or retained cross-request continuation.
 The [selected progressive pack/render family](CONTEXT_BUILD.md#selected-progressive-pack)
 consumes this genuine history and continuing ledger. See
 [Native Primary progressive expansion](../../crates/wow-context/e3/NATIVE_PRIMARY_PROGRESSIVE.md).
-Existing one-round/default/state/Reference routes retain their profiles and bytes;
+Existing one-round/default/state/Reference profile IDs are retained;
 broader facets and runtime qualification remain open.
 
 ## Selected native UsesApi evidence
@@ -214,8 +229,8 @@ and Reference source excerpts remain `NotEvaluated`; existing captured native
 signature observations retain their original availability. Static accepted
 relations and source observations do not prove runtime execution, API legality,
 loaded state, protected/Secret behavior, combat safety or authoritative absence.
-Existing context profiles, request/schema recipes and unselected bytes remain
-unchanged; this route does not claim full E3 or Tier A/X acceptance.
+Existing context profile IDs and request/schema recipes are retained;
+this route does not claim full E3 or Tier A/X acceptance.
 
 ## Host input and service result
 
@@ -231,7 +246,7 @@ Selected expansion additionally binds its exact profile and normalized frontier
 in the request/identity. Progressive selection binds its named profile and
 ordered batches to the same acquired universe and native round history.
 Unselected expansion fields are omitted, preserving old inspect transport bytes
-and original L1/map bytes.
+and the original map. Handler metadata remains part of the retained L1.
 
 The result schema is `wow-service/context-inspect-result/1`, operation
 `context_inspect`. Its payload retains resolved_request_id, publication-set /
@@ -282,5 +297,5 @@ This route documents selected functionality, not full E3 or Tier A/X acceptance.
 Broader scopes/facets, control/effect enrichment, automatic expansion and retained
 cross-request continuation, broader Reference/type enrichment, excerpts/privacy/tokens
 and platform/combined context remain open. [Build/pack/render](CONTEXT_BUILD.md) consumes the native
-step, not a decoded inspect envelope. Existing map commands/profile and unselected
-inspect bytes remain unchanged.
+step, not a decoded inspect envelope. Existing map commands and root/profile
+selections remain in use.

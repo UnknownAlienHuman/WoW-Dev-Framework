@@ -7,9 +7,9 @@ use wow_graph::{GraphEdge, GraphNode, GraphNodeId, GraphPartitionRead, GraphRela
 use wow_project::{
     ProjectId,
     graph::{
-        ProjectCallableMetadata, ProjectGraphLuaDeclaration, ProjectGraphStateDeclaration,
-        ProjectGraphStatePath, ProjectGraphStateRoot, ProjectGraphXmlDeclaration,
-        SOURCE_GRAPH_PARTITION,
+        ProjectCallableMetadata, ProjectGraphInlineHandler, ProjectGraphLuaDeclaration,
+        ProjectGraphScriptSource, ProjectGraphStateDeclaration, ProjectGraphStatePath,
+        ProjectGraphStateRoot, ProjectGraphXmlDeclaration, SOURCE_GRAPH_PARTITION,
     },
 };
 
@@ -240,6 +240,11 @@ enum Declaration<'a> {
     Xml {
         node: &'a GraphNode,
         origin: &'a ProjectGraphXmlDeclaration,
+    },
+    XmlHandler {
+        node: &'a GraphNode,
+        origin: &'a ProjectGraphInlineHandler,
+        source: &'a ProjectGraphScriptSource,
     },
     StateRoot {
         node: &'a GraphNode,
@@ -528,11 +533,81 @@ fn declarations<'a>(
     }
     Ok(rows)
 }
+// L1-only metadata from the same admitted source proposal. Source bodies and
+// callable signatures are absent from both borrowed native records.
+fn xml_handler_declarations<'a>(
+    universe: &ContextUniverseSet<'a>,
+    view: &ProjectMapView<'_, 'a>,
+    graph: &GraphPartitionRead<'a>,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<Vec<Declaration<'a>>> {
+    checkpoint(stop)?;
+    let provenance = universe.pair.source_provenance().ok_or_else(missing)?;
+    let mut rows = Vec::new();
+    if provenance.inline_handlers().is_empty() {
+        return Ok(rows);
+    }
+    budget.work(
+        provenance
+            .inline_handlers()
+            .len()
+            .checked_mul(published_lookup_work(graph)?)
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    for origin in provenance.inline_handlers() {
+        budget.work(1, stop)?;
+        let node = graph
+            .published_entity(SOURCE_GRAPH_PARTITION, &origin.proposal_id, stop)
+            .map_err(crate::error::graph_error)?;
+        if !view
+            .node(node.node_id())
+            .is_some_and(|selected| std::ptr::eq(selected, node))
+        {
+            continue;
+        }
+        if node.kind() != "xml_source_handler"
+            || !origin.semantic_context.admits_static_source_association()
+        {
+            return Err(ContextError::new(ContextErrorCode::SupportMismatch));
+        }
+        // A script_id alone is not a cross-scope join. The source constructor
+        // supplies this exact document and support pair with the handler.
+        budget.work(provenance.script_sources().len(), stop)?;
+        let mut source = None;
+        for candidate in provenance.script_sources() {
+            checkpoint(stop)?;
+            if candidate.script_id == origin.script_id
+                && candidate.document == origin.document
+                && candidate.source_handle_id == origin.source_handle_id
+                && candidate.evidence_id == origin.evidence_id
+                && source.replace(candidate).is_some()
+            {
+                return Err(ContextError::new(ContextErrorCode::SupportMismatch));
+            }
+        }
+        let source = source.ok_or_else(missing)?;
+        if source.source_kind != wow_project::load::XmlScriptSource::InlineBody {
+            return Err(ContextError::new(ContextErrorCode::SupportMismatch));
+        }
+        let row = Declaration::XmlHandler {
+            node,
+            origin,
+            source,
+        };
+        budget.retain(&row, stop)?;
+        rows.push(row);
+    }
+    Ok(rows)
+}
+
 fn declaration_node<'a>(row: &Declaration<'a>) -> &'a GraphNode {
     match row {
         Declaration::Callable { node, .. }
         | Declaration::Lua { node, .. }
         | Declaration::Xml { node, .. }
+        | Declaration::XmlHandler { node, .. }
         | Declaration::StateRoot { node, .. }
         | Declaration::StatePath { node, .. } => node,
     }
@@ -1010,10 +1085,18 @@ fn l1<'m, 'a>(
         return Err(invalid());
     }
     let mut rows = declarations(universe, view, graph, budget, stop)?;
+    let original_row_count = rows.len();
+    rows.extend(xml_handler_declarations(
+        universe, view, graph, budget, stop,
+    )?);
     if profile == PrimaryL1Profile::StateDetailV1 {
         rows.extend(state_detail_declarations(
             universe, view, graph, budget, stop,
         )?);
+    }
+    // Common rows already passed checked order/dedup. Preserve the old
+    // no-handler debit path; check the complete set whenever rows were added.
+    if profile == PrimaryL1Profile::StateDetailV1 || rows.len() != original_row_count {
         budget.work(
             rows.len()
                 .checked_mul(rows.len().max(1).ilog2() as usize + 1)
@@ -1033,7 +1116,10 @@ fn l1<'m, 'a>(
     }
     if matches!(
         root.kind(),
-        "lua_source_function" | "lua_source_declaration" | "xml_source_declaration"
+        "lua_source_function"
+            | "lua_source_declaration"
+            | "xml_source_declaration"
+            | "xml_source_handler"
     ) && !rows
         .iter()
         .any(|row| declaration_node(row).node_id() == root.node_id())

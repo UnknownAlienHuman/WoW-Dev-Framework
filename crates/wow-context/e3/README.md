@@ -7,6 +7,9 @@ records and retained source-normalized signature observations with exact support
 Source type resolution and annotation display lowering remain unevaluated.
 [Explicit native progressive batches](NATIVE_PRIMARY_PROGRESSIVE.md) define the
 bounded inspect/pack/render selection, preserving original rounds and one ledger.
+[Native XML handler L1 metadata](NATIVE_PRIMARY_INSPECT.md#native-xml-handler-l1-metadata)
+retains original script/unit/document/context and accepted support; runtime and
+effective receiver remain NotEvaluated.
 The complete E3-B contract below remains the target; broader operations and
 acceptance are pending under Issue #122.
 

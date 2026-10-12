@@ -3867,3 +3867,496 @@ fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_bud
     assert!(!input.exists());
     Ok(())
 }
+
+#[test]
+fn retained_native_inline_xml_handler_context_survives_source_removal() -> TestResult {
+    use wow_project::disk::{ProjectDiskFile, ProjectInputDirectory};
+    use wow_project::load::XmlScriptSource;
+
+    fn original_handler(
+        store_root: &Path,
+        generation: &wow_store::project::StoreGenerationId,
+        stop: &AtomicBool,
+    ) -> TestResult<(GraphNodeId, Value)> {
+        let store = LiveProjectStore::open(store_root)?;
+        let read = store.read(&ReadSelector::Exact(generation.clone()), stop)?;
+        let provenance = read
+            .pair()
+            .source_provenance()
+            .ok_or("native XML provenance")?;
+        let mut handlers = provenance.inline_handlers().iter();
+        let handler = handlers.next().ok_or("genuine admitted inline handler")?;
+        assert!(
+            handlers.next().is_none(),
+            "original fixture has one inline ScriptBinding"
+        );
+        assert_eq!(handler.document, "XML.xml");
+        let mut sources = provenance.script_sources().iter().filter(|source| {
+            source.script_id == handler.script_id && source.document == handler.document
+        });
+        let source = sources.next().ok_or("same original script site")?;
+        assert!(sources.next().is_none());
+        assert_eq!(source.source_kind, XmlScriptSource::InlineBody);
+        assert_eq!(source.source_handle_id, handler.source_handle_id);
+        assert_eq!(source.evidence_id, handler.evidence_id);
+        assert!(handler.semantic_context.admits_static_source_association());
+        let plan = read
+            .project()
+            .configuration()
+            .load_plan()
+            .ok_or("held ordinary load plan")?;
+        let index = plan
+            .xml_documents()
+            .get(&handler.document)
+            .ok_or("held XML index")?;
+        let site = index
+            .scripts()
+            .find(|row| row.occurrence_id == handler.script_id)
+            .ok_or("original indexed script occurrence")?;
+        assert!(site.issues.is_empty());
+        let analysis = read
+            .project()
+            .snapshot()
+            .analyzer_binding()
+            .xml_lua_analysis()
+            .ok_or("original XML Lua analysis")?;
+        let mut units = analysis.units().iter().filter(|unit| {
+            unit.unit_id.as_ref() == handler.unit_id
+                && unit.document == handler.document
+                && unit.script_occurrence_id == handler.script_id
+        });
+        let unit = units.next().ok_or("same original native XML unit")?;
+        assert!(units.next().is_none());
+        assert!(unit.package.is_none() && unit.diagnostics.is_empty());
+        assert_eq!(unit.document_digest, index.source_digest());
+        assert_eq!(unit.context, handler.semantic_context);
+        assert_eq!(source.script_name, site.qualified_name);
+        assert_eq!(
+            source.declaring_owner_id,
+            site.script
+                .as_ref()
+                .ok_or("script record")?
+                .owner_occurrence_id
+        );
+        // Named handlers and a top-level Script have no admitted inline endpoint.
+        // Retain that distinction; never invent a graph root for an omitted unit.
+        for unavailable in provenance.script_sources().iter().filter(|row| {
+            row.source_kind != XmlScriptSource::InlineBody || row.declaring_owner_id.is_none()
+        }) {
+            assert!(!provenance.inline_handlers().iter().any(|row| {
+                row.script_id == unavailable.script_id && row.document == unavailable.document
+            }));
+        }
+        let graph = read.graph();
+        let proof = read.pair().graph_read(stop)?;
+        let node = proof.published_entity(SOURCE_GRAPH_PARTITION, &handler.proposal_id, stop)?;
+        assert_eq!(node.kind(), "xml_source_handler");
+        assert!(std::ptr::eq(
+            graph
+                .snapshot()
+                .node(node.node_id())
+                .ok_or("final handler member")?,
+            node
+        ));
+        let partition = graph
+            .partition(SOURCE_GRAPH_PARTITION)
+            .ok_or("source partition")?;
+        let proposal = partition
+            .batch()
+            .entity_proposals()
+            .iter()
+            .find(|row| row.proposal_id() == handler.proposal_id)
+            .ok_or("original handler proposal")?;
+        let accepted = partition
+            .report()
+            .accepted_entities()
+            .iter()
+            .find(|row| row.proposal_id() == handler.proposal_id)
+            .ok_or("accepted handler proposal")?;
+        assert_eq!(proposal.entity_kind_id(), "xml_source_handler");
+        assert_eq!(proposal.source_handle_ids(), &[handler.source_handle_id]);
+        assert_eq!(proposal.evidence_ids(), &[handler.evidence_id]);
+        let handle = provenance
+            .source_handles()
+            .get(&handler.source_handle_id)
+            .ok_or("original handler source handle")?;
+        assert_eq!(handle.span(), source.span);
+        assert_eq!(*handle.content_digest(), index.source_digest());
+        for (key, value) in [
+            (
+                "document",
+                wow_graph::GraphProposalValue::String(handler.document.clone().into()),
+            ),
+            (
+                "occurrence",
+                wow_graph::GraphProposalValue::Identifier(handler.script_id.clone().into()),
+            ),
+            (
+                "semantic_context_id",
+                wow_graph::GraphProposalValue::String(handler.semantic_context.context_id().into()),
+            ),
+        ] {
+            assert_eq!(proposal.semantic_key().get(key), Some(&value));
+        }
+        let root = node.node_id().clone();
+        let records = json!({
+            "node": node, "handler": handler, "script_source": source,
+            "proposal": proposal, "accepted": accepted,
+            "handle": handle,
+            "evidence": provenance.evidence().get(&handler.evidence_id).ok_or("original handler evidence")?,
+            "document_digest": index.source_digest(),
+            "source_context_id": provenance.context().context_id(),
+            "publication_set_id": read.publication_set_id(),
+            "current": read.current_at_acquisition().ok_or("exact Current observation")?
+        });
+        read.close()?;
+        store.close()?;
+        Ok((root, records))
+    }
+
+    fn assert_handler_l1(l1: &Value, expected: &Value) -> TestResult {
+        let core = &l1["core"];
+        assert_eq!(core["root"], expected["node"]);
+        let mut declarations = rows(&core["declarations"])?
+            .iter()
+            .filter(|row| row["node"] == expected["node"]);
+        let declaration = declarations
+            .next()
+            .ok_or("original handler declaration facet")?;
+        assert!(declarations.next().is_none());
+        assert_eq!(declaration["kind"], "xml_handler");
+        assert_eq!(declaration["origin"], expected["handler"]);
+        assert_eq!(declaration["source"], expected["script_source"]);
+        let origins = &core["context"]["origins"]["core"];
+        let receipt = rows(&origins["supports"])?
+            .iter()
+            .find(|row| {
+                row["explanation"]["record"]["kind"] == "entity"
+                    && row["explanation"]["record"]["node"] == expected["node"]
+            })
+            .ok_or("handler accepted support receipt")?;
+        let explanation = &receipt["explanation"];
+        assert_eq!(explanation["support_complete"], true);
+        assert_eq!(
+            explanation["source_context_id"],
+            expected["source_context_id"]
+        );
+        assert!(rows(&explanation["supports"])?.iter().any(|support| {
+            support["producer"]["partition_id"] == SOURCE_GRAPH_PARTITION
+                && support["proposal"] == expected["proposal"]
+                && support["accepted"] == expected["accepted"]
+        }));
+        let evidence = &receipt["evidence_resolution"];
+        assert_eq!(evidence["closure_complete"], true);
+        assert!(rows(&evidence["unresolved"])?.is_empty());
+        assert!(rows(&evidence["source_handles"])?.contains(&expected["handle"]));
+        assert!(rows(&evidence["evidence_records"])?.contains(&expected["evidence"]));
+        assert_eq!(core["context"]["state"], "partial");
+        assert_eq!(core["context"]["absence_authoritative"], false);
+        assert_eq!(core["context"]["source_bodies"], "excluded");
+        assert_eq!(
+            expected["handler"]["semantic_context"]["implicit_receiver"],
+            wow_project::xml_lua::XML_LUA_IMPLICIT_RECEIVER_NOT_EVALUATED
+        );
+        assert_eq!(
+            expected["handler"]["semantic_context"]["runtime_dispatch"],
+            wow_project::xml_lua::XML_LUA_RUNTIME_DISPATCH_NOT_EVALUATED
+        );
+        Ok(())
+    }
+
+    let stop = AtomicBool::new(false);
+    let scratch = Scratch::new()?;
+    let input = scratch.root.join("xml-input");
+    std::fs::create_dir(&input)?;
+    // Reuse the existing source fixture verbatim, through the real ordinary load owner.
+    for (path, bytes) in [
+        (
+            "XmlPipeline.toc",
+            include_bytes!("../../../tests/data/xml-pipeline/XmlPipeline.toc").as_slice(),
+        ),
+        (
+            "XML.xml",
+            include_bytes!("../../../tests/data/xml-pipeline/XML.xml").as_slice(),
+        ),
+        (
+            "main.lua",
+            include_bytes!("../../../tests/data/xml-pipeline/main.lua").as_slice(),
+        ),
+    ] {
+        write_export(&input, path, bytes, 8192)?;
+    }
+    let base = input_bundle(LUA)?;
+    let original = base.configuration();
+    let (files, plan) = ProjectInputDirectory::open(&input)?
+        .read_toc_project_with_context(
+            ".",
+            &ProjectDiskFile::new("XmlPipeline.toc"),
+            original.selected_profile(),
+            None,
+            &stop,
+        )?
+        .into_parts();
+    let configuration = ProjectConfigurationBuilder::new(
+        original.project_id().clone(),
+        original.project_kind(),
+        original.selected_profile().clone(),
+        original.reference_generation(),
+        original.analyzer_binding().clone(),
+    )
+    .workspace_id(original.workspace_id().clone())
+    .source_origin_id(original.source_origin_id().clone())
+    .logical_root(original.logical_root().as_str())
+    .capability_policy(original.capability_policy().clone())
+    .budget_policy(original.budget_policy())
+    .load_plan(&plan)?
+    .build()?;
+    let bundle = ProjectInputBundle::closed(configuration, files, base.libraries().to_vec())?;
+    let (publisher, graph, reference, profile) = owners_from_bundle(bundle, &stop)?;
+    let store_root = scratch.root.join("registered-store");
+    let mut store = LiveProjectStore::create(&store_root, graph.snapshot().universe().as_str())?;
+    let publication = store.publish(
+        &publisher,
+        &graph,
+        "fixture-context-inline-xml",
+        None,
+        &stop,
+    )?;
+    store.close()?;
+    let before = original_handler(&store_root, &publication.generation_id, &stop)?;
+    drop(graph);
+    drop(publisher);
+    drop(base);
+    drop(plan);
+    std::fs::remove_dir_all(&input)?;
+    assert!(!input.exists());
+    let (root, expected) = original_handler(&store_root, &publication.generation_id, &stop)?;
+    assert_eq!((root.clone(), expected.clone()), before);
+    let mut host_json = host_value(&store_root, &profile, &reference);
+    // Existing finite caller fixture allowance, not a product/default cap change.
+    host_json["limits"]["max_context_work"] = json!(8_000_000);
+    host_json["limits"]["max_metadata_bytes"] = json!(4 * 1024 * 1024);
+    let host = decode_host(&host_json, &stop)?;
+    let request = exact_inspect_request(
+        &publication.generation_id,
+        ContextInspectLevel::L1,
+        ContextMapRoot::graph_entity(root.as_str())?,
+        &profile,
+        &reference,
+    )?;
+    let result = execute_context_inspect(&host, &request, &stop)?;
+    assert_eq!(result.status(), ContextMapStatus::Partial);
+    assert_eq!(result.failure_code(), None);
+    let envelope: Value = serde_json::from_slice(result.canonical_bytes())?;
+    assert_eq!(envelope["resource_closure"], "closed");
+    let payload = &envelope["payload"];
+    assert_eq!(
+        payload["publication_set_id"],
+        expected["publication_set_id"]
+    );
+    assert_eq!(payload["current_at_acquisition"], expected["current"]);
+    assert_eq!(
+        payload["store_generation_id"],
+        publication.generation_id.as_str()
+    );
+    assert!(payload["skeletons"].get("l0").is_none());
+    assert!(payload.get("expansion").is_none());
+    assert_handler_l1(&payload["skeletons"]["l1"], &expected)?;
+    assert_eq!(
+        result.canonical_bytes(),
+        execute_context_inspect(&host, &request, &stop)?.canonical_bytes()
+    );
+    let build_request = ContextBuildRequest::primary(
+        STORE_ID,
+        ContextMapPublication::store_generation(publication.generation_id.as_str())?,
+        ContextInspectLevel::L1,
+        ContextMapRoot::graph_entity(root.as_str())?,
+        ContextRenderSelection::Both,
+        None,
+        Some(reference_guard(&profile, &reference)?),
+    )?;
+    let built = execute_context_build(&host, &build_request, &stop)?;
+    assert_eq!(built.status(), ContextMapStatus::Partial);
+    assert_eq!(built.failure_code(), None);
+    let built_envelope: Value = serde_json::from_slice(built.canonical_bytes())?;
+    assert_eq!(built_envelope["resource_closure"], "closed");
+    let built_payload = &built_envelope["payload"];
+    assert_eq!(
+        built_payload["publication_set_id"],
+        expected["publication_set_id"]
+    );
+    let pack = &built_payload["semantic_pack"];
+    assert_handler_l1(&pack["core"]["skeletons"]["l1"], &expected)?;
+    assert_eq!(pack["core"]["absence_authoritative"], false);
+    let rendered = rows(&built_payload["rendered_artifacts"])?;
+    assert_eq!(rendered.len(), 2);
+    assert_eq!(
+        rendered[0]["core"]["profile"]["profile_id"],
+        PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID
+    );
+    let json_content = rendered[0]["core"]["content"]
+        .as_str()
+        .ok_or("JSON pack content")?;
+    assert_eq!(serde_json::from_str::<Value>(json_content)?, *pack);
+    assert_eq!(
+        json_content.as_bytes(),
+        wow_core::canonical_json_bytes(pack)?
+    );
+    super::build::assert_markdown_lossless(&rendered[1], pack)?;
+    for bytes in [result.canonical_bytes(), built.canonical_bytes()] {
+        let text = std::str::from_utf8(bytes)?;
+        assert!(!text.contains("project_store_root"));
+        assert!(
+            !text.contains(
+                scratch
+                    .root
+                    .file_name()
+                    .ok_or("scratch name")?
+                    .to_str()
+                    .ok_or("scratch UTF-8")?
+            )
+        );
+        assert!(
+            !text.contains("XmlChildButton.OnClick(self)"),
+            "source bodies are excluded"
+        );
+        assert!(!text.contains("source_only = true"));
+    }
+    let mut bounded_json = host_json.clone();
+    bounded_json["limits"]["max_context_work"] = json!(1);
+    let bounded = decode_host(&bounded_json, &stop)?;
+    assert_inspect_refused(
+        &bounded,
+        &request,
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+        &stop,
+    )?;
+    let refused = execute_context_build(&bounded, &build_request, &stop)?;
+    assert_eq!(
+        refused.failure_code(),
+        Some(ServiceErrorCode::BudgetExceeded)
+    );
+    let refused_envelope: Value = serde_json::from_slice(refused.canonical_bytes())?;
+    assert_eq!(refused_envelope["resource_closure"], "closed");
+    assert!(refused_envelope.get("payload").is_none());
+    assert_inspect_refused(
+        &host,
+        &request,
+        ServiceErrorCode::Cancelled,
+        "not_acquired",
+        &AtomicBool::new(true),
+    )?;
+    // Refusals leave the exact retained native origin and its Current observation intact.
+    assert_eq!(
+        original_handler(&store_root, &publication.generation_id, &stop)?,
+        (root.clone(), expected)
+    );
+    if scratch.export {
+        let arguments = json!([
+            "context",
+            "inspect",
+            "--native-host-config",
+            scratch.root.join("host.json"),
+            "--project-store",
+            STORE_ID,
+            "--publication",
+            format!("store-generation:{}", publication.generation_id.as_str()),
+            "--root",
+            root_token(&root),
+            "--level",
+            "l1",
+            "--l1-profile-id",
+            PRIMARY_L1_PROFILE_ID,
+            "--platform",
+            "omitted",
+            "--expect-profile",
+            profile.profile_id().as_str(),
+            "--expect-reference-generation",
+            reference.generation_id(),
+            "--expect-reference-view",
+            reference.self_digest(),
+            "--output",
+            "envelope-json"
+        ]);
+        let build_arguments = json!([
+            "context",
+            "build",
+            "--native-host-config",
+            scratch.root.join("host.json"),
+            "--project-store",
+            STORE_ID,
+            "--publication",
+            format!("store-generation:{}", publication.generation_id.as_str()),
+            "--root",
+            root_token(&root),
+            "--level",
+            "l1",
+            "--l1-profile-id",
+            PRIMARY_L1_PROFILE_ID,
+            "--context-profile-id",
+            PRIMARY_CONTEXT_PACK_PROFILE_ID,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+            "--platform",
+            "omitted",
+            "--expect-profile",
+            profile.profile_id().as_str(),
+            "--expect-reference-generation",
+            reference.generation_id(),
+            "--expect-reference-view",
+            reference.self_digest(),
+            "--output",
+            "envelope-json"
+        ]);
+        // Exactly six private transport/witness files, through the existing
+        // finite create-new Scratch seam; no fixture source or inferred facts.
+        for (name, bytes, limit) in [
+            (
+                "host.json",
+                wow_core::canonical_json_bytes(&host_json)?,
+                CONTEXT_MAP_HOST_INPUT_MAX_BYTES,
+            ),
+            (
+                "native-script-facets-inspect-cli-arguments.json",
+                wow_core::canonical_json_bytes(&arguments)?,
+                64 * 1024,
+            ),
+            (
+                "native-script-facets-inspect-expected-envelope.json",
+                result.canonical_bytes().to_vec(),
+                CONTEXT_MAP_RESULT_MAX_BYTES,
+            ),
+            (
+                "native-script-facets-build-cli-arguments.json",
+                wow_core::canonical_json_bytes(&build_arguments)?,
+                64 * 1024,
+            ),
+            (
+                "native-script-facets-build-expected-envelope.json",
+                built.canonical_bytes().to_vec(),
+                CONTEXT_MAP_RESULT_MAX_BYTES,
+            ),
+            (
+                "native-script-facets-fixture.json",
+                wow_core::canonical_json_bytes(&json!({
+                    "synthetic": true, "authority": "fixture_only_not_live_or_ketho",
+                    "handler_root_token": root_token(&root),
+                    "source_absent_paths": [input],
+                    "expected_inspect_cli_exit": 2, "expected_build_cli_exit": 2,
+                    "cli_stdout": "corresponding expected-envelope bytes followed by one LF",
+                    "selection": "ordinary source-absent native inline XML handler; no receiver/runtime authority",
+                    "semantic_host_paths": "excluded", "inspect_request": request,
+                    "build_request": build_request
+                }))?,
+                64 * 1024,
+            ),
+        ] {
+            write_export(&scratch.root, name, &bytes, limit)?;
+        }
+    }
+    assert!(!input.exists());
+    Ok(())
+}

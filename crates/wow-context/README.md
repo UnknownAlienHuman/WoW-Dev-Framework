@@ -11,7 +11,8 @@ configured Reference binding, original support and load/source custody:
 
 - [Direct/project-root maps](e3/NATIVE_PRIMARY_MAP.md).
 - [L0/L1 inspection](e3/NATIVE_PRIMARY_INSPECT.md), including selected native
-  syntax/signature metadata and ordinary TOC state-root L0 inspect/build.
+  syntax/signature metadata, [original XML handler L1 metadata](e3/NATIVE_PRIMARY_INSPECT.md#native-xml-handler-l1-metadata)
+  and ordinary TOC state-root L0 inspect/build.
 - [Sealed semantic packs and canonical JSON/metadata-safe Markdown](e3/NATIVE_PRIMARY_PACK.md).
 - [One explicit native frontier round](e3/NATIVE_PRIMARY_EXPANSION.md) and its
   [build/pack/JSON/Markdown consumer](e3/NATIVE_PRIMARY_FRONTIER_PACK.md).

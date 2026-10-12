@@ -56,6 +56,22 @@ There is no `--render` flag, standalone render/import route, auto profile select
 or text/artifact stdout mode. Requested renderers are required: refusal suppresses
 the delivery payload rather than returning a pack-only fallback.
 
+## Native XML handler L1 metadata in packs
+
+Existing default EntityV1 L1 build selection carries the original handler facet
+from [native inspection](../../crates/wow-context/e3/NATIVE_PRIMARY_INSPECT.md#native-xml-handler-l1-metadata)
+into the semantic pack and JSON/Markdown records. Original script/unit/document/
+semantic_context fields and accepted support remain source observations; runtime
+binding and effective receiver remain `NotEvaluated`. Handler-containing
+L1/pack bytes and IDs intentionally change. Nonempty off-map handler provenance
+also incurs traversal/published-node lookup work. The uniquely joined original
+script source and mandatory handler-root row remain in the retained L1.
+Structural pack and
+existing renderer families remain in use; no new flag/profile is added.
+Serialize-only output does not establish durable decoder/legacy handler
+compatibility. L0 and persisted Project/registry/replay stay unchanged;
+continuing finite caller-selected limits still apply.
+
 ## Native API evidence in structural L1 packs
 
 An ordinary native project may explicitly select
@@ -92,7 +108,7 @@ With default L1, this evidence handoff leaves Reference record/signature enrichm
 It adds no source excerpts, source-inclusion permission, runtime authority or
 clean-negative claim; failed or missing native documents retain their Partial
 coverage and omissions. Existing context/pack/render profiles, schemas, commands
-and unselected bytes remain unchanged.
+remain in use; handler-bearing packs gain the handler metadata described above.
 
 ## Selected native state-detail L1 pack
 
@@ -117,7 +133,7 @@ the actual remaining metadata allowance after rendering/validation. Mandatory
 overflow or cancellation suppresses delivery.
 
 The optional selected l1_profile_id in the nested native pack request binds
-this selection. Its default None is omitted, preserving old pack bytes; no new
+this selection. Its default None is omitted; no new
 pack/render profile or version is introduced. Metadata does not attest state
 values, loaded state, combat safety or runtime behavior. The bounded source-absent
 build lifecycle, cumulative refusal and actual Windows CLI pass in #122.
@@ -149,8 +165,8 @@ acquisition and the continuing native Budget cover selected L1 joins, pack
 construction, validation, each renderer and final delivery. Mandatory custody,
 work/byte overflow or cancellation suppresses delivery; there is no pack-only
 fallback when a required renderer refuses. Optional selected l1_profile_id binds
-this recipe into pack identity; omitted/default selection preserves old bytes,
-profiles and omissions, including existing state-detail behavior. Persisted
+this recipe into pack identity; omitted/default selection preserves profile IDs
+and scoped omissions, including existing state-detail behavior. Persisted
 Project/Reference records and their recipes stay unchanged; the retained typed
 catalog is runtime owner custody, not a new replay/store representation.
 
@@ -187,8 +203,8 @@ EXPANSION record immediately after SKELETONS, before entity/relation items, usin
 the existing metadata-safe encoding and exact content-byte trace ranges.
 The selected final service envelope must fit the actual remaining metadata budget
 after all requested rendering/validation; it cannot reset the allowance.
-Mandatory overflow suppresses the payload. The default family and absent selection
-fields retain their original bytes. The focused source-absent lifecycle and actual
+Mandatory overflow suppresses the payload. The default family is retained and
+absent selection fields are omitted. The focused source-absent lifecycle and actual
 Windows CLI verify this selected consumer, including cumulative refusal; see the
 [owner contract](../../crates/wow-context/e3/NATIVE_PRIMARY_FRONTIER_PACK.md).
 
@@ -224,7 +240,7 @@ from scalar counters. Mandatory overflow/cancellation suppresses delivery and
 checked close still precedes output. Partial/Truncated and nonauthoritative
 absence persist at the final explicit batch/profile bound. No automatic frontier,
 inferred NoNewEvidence or retained cross-request continuation is supplied.
-Unselected/default/frontier/state/Reference families keep their existing bytes.
+Unselected/default/frontier/state/Reference family IDs remain in use.
 
 ## Host, bounds and custody
 
@@ -264,7 +280,7 @@ pack request's selected l0_profile_id binds state-root L0; its optional selected
 l1_profile_id binds state-detail or Reference-facts L1 into request/pack identity.
 Default
 ContainersV1/EntityV1 retain None for these native pack fields, omitted from
-serialization to preserve old pack bytes. Default pack/renderer profile IDs stay
+serialization. Default pack/renderer profile IDs stay
 the existing choices. Frontier selection binds its normalized profile/frontier and
 named pack/renderer family. Progressive selection binds ordered batches and
 immutable native round history under its own pack/renderer family. Absent
