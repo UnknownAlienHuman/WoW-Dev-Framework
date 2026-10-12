@@ -1,8 +1,6 @@
-use super::{LiveProjectStore, project_error, store_error};
+use super::{LiveProjectStore, store_error, validate_ordinary_read};
 use crate::ServiceResult;
 use std::{path::Path, sync::atomic::AtomicBool};
-use wow_graph::GraphPartitionSnapshot;
-use wow_project::replay::publication::{self, AcquiredProjectPair};
 use wow_store::OperationId;
 use wow_store::project::{
     CurrentRecordId, ReadSelector, RegistrySelection, ReplacementReceipt, ValidatedRead,
@@ -127,14 +125,7 @@ pub(super) fn validate_owners(
         let read = backup
             .read(&ReadSelector::Exact(id.clone()), stop)
             .map_err(store_error)?;
-        AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
-        checks.push(
-            read.owner_validation(&[
-                GraphPartitionSnapshot::STORAGE_CHECK,
-                publication::STORAGE_CHECK,
-            ])
-            .map_err(store_error)?,
-        );
+        checks.push(validate_ordinary_read(read, stop)?);
     }
     Ok(checks)
 }

@@ -290,7 +290,7 @@ pub(super) fn capture_once(
             stop,
         )?;
     }
-    let (snapshot, call_recognition) = calls::publish(native.graph(), addresses, stop)
+    let (snapshot, call_recognition) = calls::publish(native.graph(), addresses, None, stop)
         .map_err(|failure| stage_error("calls", failure))?;
     let (snapshot, construction_recognition) = construction::publish(&snapshot, addresses, stop)
         .map_err(|failure| stage_error("construction", failure))?;
@@ -389,7 +389,9 @@ fn build_function_query(
             SourceCallOutcome::Projected { proposal_id, .. } => {
                 ComposedCallOutcome::Projected { proposal_id }
             }
-            SourceCallOutcome::LibraryTarget => ComposedCallOutcome::LibraryTarget,
+            SourceCallOutcome::LibraryTarget | SourceCallOutcome::ApiUseProjected { .. } => {
+                ComposedCallOutcome::LibraryTarget
+            }
             SourceCallOutcome::SelfRecursionUnsupported => {
                 ComposedCallOutcome::SelfRecursionUnsupported
             }

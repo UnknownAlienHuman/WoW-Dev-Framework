@@ -40,6 +40,14 @@ pub enum ProjectKind {
     BlizzardUiPlatformSource,
 }
 
+/// Explicit native Reference callable/use composition. Missing selection keeps
+/// the ordinary source registry and previously admitted replay bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeApiUseRecipe {
+    ReferenceV1,
+}
+
 /// Explicit additive analyzer recipe for genuine platform package inputs.
 /// An absent selection retains the historical package analysis unchanged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -547,6 +555,8 @@ pub struct ProjectConfiguration {
     native_library_input_digest: Option<ContentDigest<CanonicalResult>>,
     #[serde(skip)]
     native_library_input: Option<crate::NativeLibraryInput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    native_api_uses: Option<NativeApiUseRecipe>,
 }
 
 impl ProjectConfiguration {
@@ -559,6 +569,17 @@ impl ProjectConfiguration {
             )
         })?;
         self.analyzer_binding.validate()?;
+        if self.native_api_uses.is_some()
+            && (self.native_library_input.is_none()
+                || self.platform_graph_profile.is_some()
+                || self.project_kind == ProjectKind::BlizzardUiPlatformSource)
+        {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidConfiguration,
+                ProjectPhase::Configuration,
+                "native API uses require the ordinary retained native Library input",
+            ));
+        }
         if self.native_library_input_digest
             != self
                 .native_library_input
@@ -768,6 +789,7 @@ impl ProjectConfiguration {
             self.physical_function_declarations,
             self.physical_function_signatures,
             self.native_library_input_digest,
+            self.native_api_uses,
         )?;
         if expected != self.configuration_digest {
             return Err(ProjectError::new(
@@ -923,6 +945,11 @@ impl ProjectConfiguration {
         self.native_library_input.as_ref()
     }
 
+    #[must_use]
+    pub const fn native_api_uses(&self) -> Option<NativeApiUseRecipe> {
+        self.native_api_uses
+    }
+
     pub(crate) fn with_native_library_input(
         mut self,
         input: crate::NativeLibraryInput,
@@ -959,6 +986,49 @@ impl ProjectConfiguration {
             self.physical_function_declarations,
             self.physical_function_signatures,
             self.native_library_input_digest,
+            self.native_api_uses,
+        )?;
+        self.validate()?;
+        Ok(self)
+    }
+    pub(crate) fn with_native_api_uses(
+        mut self,
+        recipe: NativeApiUseRecipe,
+    ) -> ProjectResult<Self> {
+        if self.native_api_uses.is_some()
+            || self.native_library_input.is_none()
+            || self.platform_graph_profile.is_some()
+            || self.project_kind == ProjectKind::BlizzardUiPlatformSource
+        {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidConfiguration,
+                ProjectPhase::Configuration,
+                "native API use selection requires an unselected ordinary native project",
+            ));
+        }
+        self.native_api_uses = Some(recipe);
+        self.configuration_digest = configuration_digest(
+            &self.project_id,
+            self.project_kind,
+            &self.workspace_id,
+            &self.source_origin_id,
+            &self.logical_root,
+            &self.selected_profile,
+            self.reference_generation,
+            &self.analyzer_binding,
+            &self.capability_policy,
+            self.budget_policy,
+            self.load_plan_digest,
+            self.package_load_plan_digest,
+            self.package_main_plan_digest,
+            self.platform_package_binding_digest,
+            self.package_xml_binding_profile,
+            self.platform_graph_profile,
+            self.xml_schema_classification.as_ref(),
+            self.physical_function_declarations,
+            self.physical_function_signatures,
+            self.native_library_input_digest,
+            self.native_api_uses,
         )?;
         self.validate()?;
         Ok(self)
@@ -1245,6 +1315,7 @@ impl ProjectConfigurationBuilder {
             self.physical_function_declarations,
             self.physical_function_signatures,
             None,
+            None,
         )?;
         let configuration = ProjectConfiguration {
             project_id: self.project_id,
@@ -1274,6 +1345,7 @@ impl ProjectConfigurationBuilder {
             physical_function_signatures: self.physical_function_signatures,
             native_library_input_digest: None,
             native_library_input: None,
+            native_api_uses: None,
         };
         configuration.validate()?;
         Ok(configuration)
@@ -1302,6 +1374,7 @@ fn configuration_digest(
     physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
     physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
     native_library_input_digest: Option<ContentDigest<CanonicalResult>>,
+    native_api_uses: Option<NativeApiUseRecipe>,
 ) -> ProjectResult<ContentDigest<CanonicalResult>> {
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -1340,6 +1413,8 @@ fn configuration_digest(
         physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
         #[serde(skip_serializing_if = "Option::is_none")]
         native_library_input_digest: Option<ContentDigest<CanonicalResult>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        native_api_uses: Option<NativeApiUseRecipe>,
     }
     canonical_digest(
         "wow-project/configuration/e0-d/1",
@@ -1368,6 +1443,7 @@ fn configuration_digest(
             physical_function_declarations,
             physical_function_signatures,
             native_library_input_digest,
+            native_api_uses,
         },
         ProjectPhase::Configuration,
     )

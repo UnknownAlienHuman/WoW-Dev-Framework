@@ -41,6 +41,10 @@ pub use xml_fingerprints::{
 };
 mod lua_mixins;
 mod materialized;
+mod native_api;
+mod native_api_reopen;
+pub(crate) use native_api::NativeApiProvenance;
+pub(crate) use native_api_reopen::validate as validate_native_api_reopen;
 mod scripts;
 mod signals;
 mod source_addresses;
@@ -202,6 +206,8 @@ pub struct GraphBuildRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     physical_function_signatures: Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    native_api_uses: Option<wow_project::NativeApiUseRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     function_fingerprints: Option<FunctionFingerprintSelection>,
     #[serde(skip_serializing_if = "Option::is_none")]
     xml_fingerprints: Option<XmlFingerprintSelection>,
@@ -227,6 +233,7 @@ impl GraphBuildRequest {
             xml_classification_profile_digest: None,
             physical_function_declarations: None,
             physical_function_signatures: None,
+            native_api_uses: None,
             function_fingerprints: None,
             xml_fingerprints: None,
         })
@@ -243,6 +250,7 @@ impl GraphBuildRequest {
         self.xml_classification_profile_digest = None;
         self.physical_function_declarations = None;
         self.physical_function_signatures = None;
+        self.native_api_uses = None;
         match profile {
             wow_project::PlatformGraphProfile::PackageProjectionV1 => {
                 self.schema = "wow-service/graph-build-request/10";
@@ -281,11 +289,17 @@ impl GraphBuildRequest {
             .map(|profile| profile.digest());
         request.physical_function_declarations = configuration.physical_function_declarations();
         request.physical_function_signatures = configuration.physical_function_signatures();
+        request.native_api_uses = configuration.native_api_uses();
+        request.projection = wow_project::graph::source_graph_profile(configuration);
         request.select_component_schema();
         request
     }
 
     fn select_component_schema(&mut self) {
+        if self.native_api_uses.is_some() {
+            self.schema = "wow-service/graph-build-request/native-api-uses/1";
+            return;
+        }
         if self.physical_function_signatures.is_some()
             || self
                 .function_fingerprints
@@ -364,6 +378,9 @@ impl GraphBuildRequest {
             return Err(error(ServiceErrorCode::IdentityMismatch));
         }
         let project = backend.acquire_project(&self.selector, stop)?;
+        if self.native_api_uses != project.configuration().native_api_uses() {
+            return Err(error(ServiceErrorCode::IdentityMismatch));
+        }
         if self.projection != wow_project::graph::source_graph_profile(project.configuration()) {
             return Err(error(ServiceErrorCode::IdentityMismatch));
         }
@@ -708,7 +725,9 @@ pub fn execute_graph_build_diagnosed(
     diagnostics.reset();
     let request_digest = super::hash(&bounded(request, super::GRAPH_REQUEST_MAX_BYTES)?);
     let mut result = GraphBuildResult {
-        schema: if request.physical_function_signatures.is_some()
+        schema: if request.native_api_uses.is_some() {
+            "wow-service/graph-build-result/native-api-uses/1"
+        } else if request.physical_function_signatures.is_some()
             || request.function_fingerprints.as_ref().is_some_and(|selection| {
                 selection.package_load_roles().is_some() || selection.direct_neighborhood().is_some()
             })
@@ -1093,8 +1112,21 @@ fn compose_backend_diagnosed(
         )?;
     }
     let provenance = addresses.source();
+    let api_producer = if project.configuration().native_api_uses().is_some() {
+        Some(
+            native_api::publish(&project, &source_owner, stop)
+                .map_err(|e| stage_error("native-api", e))?,
+        )
+    } else {
+        None
+    };
+    let (call_owner, native_api) = match &api_producer {
+        Some((owner, api)) => (owner, Some(api)),
+        None => (&source_owner, None),
+    };
     let (calls_snapshot, call_recognition) =
-        calls::publish(&source_owner, &addresses, stop).map_err(|e| stage_error("calls", e))?;
+        calls::publish(call_owner, &addresses, native_api, stop)
+            .map_err(|e| stage_error("calls", e))?;
     let (construction_snapshot, construction_recognition) =
         construction::publish(&calls_snapshot, &addresses, stop)
             .map_err(|e| stage_error("construction", e))?;
@@ -1160,8 +1192,9 @@ fn compose_backend_diagnosed(
     let (handler_nodes, script_edges) =
         scripts::maps_bound(&snapshot, &addresses, &script_recognition, stop)
             .map_err(|e| stage_error("script-crosswalk", e))?;
-    let (function_nodes, call_edges) = calls::maps(&snapshot, &addresses, &call_recognition, stop)
-        .map_err(|e| stage_error("call-crosswalk", e))?;
+    let (function_nodes, call_edges) =
+        calls::maps(&snapshot, &addresses, &call_recognition, native_api, stop)
+            .map_err(|e| stage_error("call-crosswalk", e))?;
     let (frame_nodes, creation_edges) =
         construction::maps(&snapshot, &addresses, &construction_recognition, stop)
             .map_err(|e| stage_error("construction-crosswalk", e))?;
@@ -1200,7 +1233,9 @@ fn compose_backend_diagnosed(
                 SourceCallOutcome::Projected { proposal_id, .. } => {
                     ComposedCallOutcome::Projected { proposal_id }
                 }
-                SourceCallOutcome::LibraryTarget => ComposedCallOutcome::LibraryTarget,
+                SourceCallOutcome::LibraryTarget | SourceCallOutcome::ApiUseProjected { .. } => {
+                    ComposedCallOutcome::LibraryTarget
+                }
                 SourceCallOutcome::SelfRecursionUnsupported => {
                     ComposedCallOutcome::SelfRecursionUnsupported
                 }

@@ -195,6 +195,18 @@ pub(super) struct ReplayConfiguration {
         deserialize_with = "non_null_native_library_input"
     )]
     native_library_input: Option<crate::NativeLibraryInput>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null_native_api_uses"
+    )]
+    native_api_uses: Option<crate::NativeApiUseRecipe>,
+}
+
+fn non_null_native_api_uses<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<crate::NativeApiUseRecipe>, D::Error> {
+    crate::NativeApiUseRecipe::deserialize(deserializer).map(Some)
 }
 
 fn non_null_native_library_input<'de, D: serde::Deserializer<'de>>(
@@ -224,6 +236,9 @@ fn non_null_physical_function_signatures<'de, D: serde::Deserializer<'de>>(
 impl ReplayConfiguration {
     pub(super) const fn native_library_input(&self) -> Option<&crate::NativeLibraryInput> {
         self.native_library_input.as_ref()
+    }
+    pub(super) const fn native_api_uses(&self) -> Option<crate::NativeApiUseRecipe> {
+        self.native_api_uses
     }
     pub(super) const fn physical_function_signatures(
         &self,
@@ -275,6 +290,7 @@ impl ReplayConfiguration {
             physical_function_declarations: config.physical_function_declarations(),
             physical_function_signatures: config.physical_function_signatures(),
             native_library_input: config.native_library_input().cloned(),
+            native_api_uses: config.native_api_uses(),
         })
     }
     pub(super) fn profile(&self) -> &ProfileIdentity {
@@ -380,6 +396,10 @@ impl ReplayConfiguration {
         let config = builder.build()?;
         let config = match &self.native_library_input {
             Some(input) => config.with_native_library_input(input.clone())?,
+            None => config,
+        };
+        let config = match self.native_api_uses {
+            Some(recipe) => config.with_native_api_uses(recipe)?,
             None => config,
         };
         if config.configuration_digest() != self.expected_configuration_digest {

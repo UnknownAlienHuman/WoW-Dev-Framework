@@ -546,6 +546,372 @@ fn native_library_inputs_requalify_after_published_source_absent_reopen() -> Tes
 }
 
 #[test]
+fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResult {
+    use crate::{
+        graph::GraphBuildRequest,
+        live_project::{LiveProjectPublishRequest, LiveProjectStore, publish_local_project},
+    };
+    use wow_emmy::function_calls::SourceCallTarget;
+    use wow_graph::{GraphProposalValue, GraphRelationKind};
+    use wow_project::{NativeApiUseRecipe, ProjectPublisher, replay::ProjectReplay};
+    use wow_store::project::ReadSelector;
+
+    let (root, mut config) = native_fixture()?;
+    let main = "function FixtureFunction() return C_Transport.Read() end\n";
+    let mut manifest: Value =
+        serde_json::from_slice(&std::fs::read(root.0.join("manifest.json"))?)?;
+    let files = manifest["files"]
+        .as_array_mut()
+        .ok_or("fixture manifest files")?;
+    let member = files
+        .iter_mut()
+        .find(|file| file["path"] == "UI/main.lua")
+        .ok_or("fixture Main manifest member")?;
+    member["bytes"] = json!(main.len());
+    member["content_sha256"] = json!(format!("{:x}", Sha256::digest(main.as_bytes())));
+    let total = files
+        .iter()
+        .try_fold(0_u64, |sum, file| -> TestResult<u64> {
+            Ok(sum
+                .checked_add(file["bytes"].as_u64().ok_or("member bytes")?)
+                .ok_or("manifest source byte sum")?)
+        })?;
+    manifest["coverage"]["included_bytes"] = json!(total);
+    manifest
+        .as_object_mut()
+        .ok_or("fixture manifest")?
+        .remove("manifest_sha256");
+    manifest["manifest_sha256"] = json!(format!(
+        "{:x}",
+        Sha256::digest(wow_core::canonical_json_bytes(&manifest)?)
+    ));
+    std::fs::write(root.0.join("UI/main.lua"), main)?;
+    let manifested = write_json(&root, "manifest.json", &manifest)?;
+    // Updating the manifest bytes also updates its admitted disk descriptor.
+    config["native_reference"]["native_source"]["manifest"] = serde_json::to_value(manifested)?;
+    let native_manifest = json!({
+        "schema": crate::local::LOCAL_NATIVE_SCHEMA,
+        "project_id": config["project_id"], "workspace_id": config["workspace_id"],
+        "source_origin_id": config["source_origin_id"], "logical_root": config["logical_root"],
+        "profile": config["native_reference"]["profile"], "analyzer": config["analyzer"],
+        "main": {"root": "UI", "files": [ProjectDiskFile::new("main.lua")]},
+        "native_source": config["native_reference"]["native_source"],
+        "native_api_uses": "reference_v1"
+    });
+    write_json(&root, "native-project.json", &native_manifest)?;
+    let stop = AtomicBool::new(false);
+    let input = LocalProjectInput::from_config_path(&root.0.join("native-project.json"), &stop)?;
+    assert_eq!(
+        input.bundle.configuration().native_api_uses(),
+        Some(NativeApiUseRecipe::ReferenceV1)
+    );
+    let expected_reference = serde_json::to_value(input.reference_view())?;
+    let bindings = input
+        .native_callable_bindings()
+        .ok_or("genuine native callable origins")?;
+    assert_eq!(bindings.bindings().len(), 1);
+    let origin = &bindings.bindings()[0];
+    assert!(!origin.ambiguous_origin());
+    let expected_source = origin.source().clone();
+    let expected_source_id = origin.source_id().to_owned();
+    let expected_key = origin.key().to_owned();
+    let expected_record_digest = origin.record_digest().to_owned();
+    let expected_mapping = origin.mapping_id().to_owned();
+    let expected_generation = bindings.reference_generation().to_owned();
+    let expected_view_digest = bindings.reference_digest().to_owned();
+    let expected_profile = input
+        .bundle
+        .configuration()
+        .selected_profile()
+        .profile_id()
+        .to_owned();
+
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(input.bundle.clone(), &stop)?;
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let archive = serde_json::to_value(&replay)?;
+    assert_eq!(archive["configuration"]["native_api_uses"], "reference_v1");
+    const UNSELECTED_REPLAY: &str = "wow-project/native-project-replay/native-library-input/1";
+    assert_eq!(
+        archive["schema"],
+        "wow-project/native-project-replay/native-api-uses/1"
+    );
+    let mut dropped = archive.clone();
+    dropped["configuration"]
+        .as_object_mut()
+        .ok_or("replay configuration")?
+        .remove("native_api_uses");
+    let mut null = archive.clone();
+    null["configuration"]["native_api_uses"] = Value::Null;
+    let mut downgraded = archive.clone();
+    downgraded["schema"] = json!(UNSELECTED_REPLAY);
+    for (label, invalid) in [("drop", dropped), ("null", null), ("downgrade", downgraded)] {
+        assert!(
+            ProjectReplay::from_json(&serde_json::to_vec(&invalid)?, &stop).is_err(),
+            "selected native API replay {label} admitted"
+        );
+    }
+    let original_snapshot = publisher.open_current()?.snapshot_id().to_owned();
+    let original_analyzer = publisher.open_current()?.analyzer_snapshot_id().to_owned();
+    let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
+        .with_input_profile(&input);
+    // Own a fresh parent only after creation; ProjectStore::create needs an absent child.
+    let store_parent_path = root.0.with_extension("selected-native-api-store");
+    std::fs::create_dir(&store_parent_path)?;
+    let store_parent = FixtureRoot(store_parent_path);
+    let store_path = store_parent.0.join("store");
+    publish_local_project(
+        &root.0.join("native-project.json"),
+        &request,
+        &store_path,
+        &LiveProjectPublishRequest::new("fixture-selected-native-api", "absent", true, true)?,
+        &stop,
+    )?;
+    // A valid generic graph with a removed semantic output must not activate.
+    // Reconstructing the real producers, rather than trusting stored acceptance,
+    // is the boundary this selected publication adds.
+    let mut store = LiveProjectStore::open(&store_path)?;
+    let previous = store.current()?.ok_or("selected native API current")?;
+    let read = store.read(&ReadSelector::Current, &stop)?;
+    let graph = read.graph();
+    let calls = graph
+        .partition(wow_recognizers::source_calls::SOURCE_CALL_PARTITION)
+        .ok_or("selected call producer")?;
+    let empty_calls = wow_graph::GraphProposalBatch::build(
+        graph.registry().bundle_id(),
+        graph.registry().registry_digest(),
+        graph.foundation().universe().clone(),
+        graph.foundation().generation().clone(),
+        graph.source_context_id(),
+        calls.partition_id(),
+        Vec::new(),
+        Vec::new(),
+    )?;
+    let altered = graph.prepare_replacement(
+        wow_graph::GraphPartitionReplacement {
+            expected_snapshot_id: graph.snapshot().snapshot_id().clone(),
+            expected_partition_digest: Some(calls.partition_digest().into()),
+            producer_version: calls.producer_version().into(),
+            batch: empty_calls,
+            coverage: calls.coverage().to_vec(),
+        },
+        &stop,
+    )?;
+    read.close()?;
+    let error = store
+        .publish(
+            &publisher,
+            altered.candidate(),
+            "fixture-selected-native-api-altered",
+            Some(previous.record_id.clone()),
+            &stop,
+        )
+        .err()
+        .ok_or("altered native call producer activated")?;
+    assert_eq!(error.code(), crate::ServiceErrorCode::IdentityMismatch);
+    assert_eq!(store.current()?, Some(previous));
+    store.close()?;
+    drop(input);
+    drop(publisher);
+    std::fs::remove_dir_all(&root.0)?;
+    assert!(!root.0.exists());
+
+    let hydrated =
+        ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?.hydrate(&stop)?;
+    assert_eq!(hydrated.snapshot_id(), original_snapshot);
+    assert_eq!(hydrated.analyzer_snapshot_id(), original_analyzer);
+    assert_eq!(
+        hydrated.configuration().native_api_uses(),
+        Some(NativeApiUseRecipe::ReferenceV1)
+    );
+    let store = LiveProjectStore::open(&store_path)?;
+    let read = store.read(&ReadSelector::Current, &stop)?;
+    assert_eq!(read.project().snapshot_id(), original_snapshot);
+    assert_eq!(read.project().analyzer_snapshot_id(), original_analyzer);
+    assert_eq!(
+        read.project().configuration().native_api_uses(),
+        Some(NativeApiUseRecipe::ReferenceV1)
+    );
+    let rebuilt = read.requalify_native_library(&stop)?;
+    assert_eq!(
+        serde_json::to_value(&rebuilt.reference().view)?,
+        expected_reference
+    );
+    assert_eq!(rebuilt.input_failure_count(), 1);
+    assert!(!rebuilt.reference().negative_authority);
+
+    // The caller and target come from the actual replayed physical Main report.
+    let report = read
+        .project()
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("reopened physical Main callable report")?;
+    assert_eq!(report.calls().len(), 1);
+    let call = &report.calls()[0];
+    let SourceCallTarget::LibraryFunction { target } = call.target() else {
+        return Err("native fixture lost its genuine Library closure target".into());
+    };
+    let caller = report
+        .functions()
+        .iter()
+        .find(|function| function.fact_id() == call.caller_function_id())
+        .ok_or("actual physical caller")?;
+    assert_eq!(caller.path(), "main.lua");
+    let resolver = rebuilt.target_resolver(read.project(), &stop)?;
+    let super::super::NativeApiTargetResolution::Bound(association) =
+        resolver.resolve_target(target, &stop)?
+    else {
+        return Err("reopened native target did not bind".into());
+    };
+    assert_eq!(association.target(), target);
+    assert_eq!(association.binding().source(), &expected_source);
+    assert_eq!(association.binding().source_id(), expected_source_id);
+    assert_eq!(association.binding().mapping_id(), expected_mapping);
+    assert_eq!(association.binding().key(), expected_key);
+    assert_eq!(
+        association.reference_record().digest()?,
+        expected_record_digest
+    );
+    assert!(
+        association
+            .reference_record()
+            .source_ids()
+            .iter()
+            .any(|source_id| source_id.as_ref() == expected_source_id)
+    );
+
+    let owner = read.graph();
+    let api = owner
+        .partition("wow-service.native-api-callables")
+        .ok_or("accepted native API producer")?;
+    assert_eq!(api.report().accepted_entities().len(), 1);
+    assert!(api.report().accepted_relations().is_empty());
+    let accepted_api = &api.report().accepted_entities()[0];
+    let api_proposal = api
+        .batch()
+        .entity_proposal(accepted_api.proposal_id())
+        .ok_or("accepted original API proposal")?;
+    assert_eq!(api_proposal.entity_kind_id(), "native_api_callable");
+    for (field, expected) in [
+        ("reference_profile_id", expected_profile.as_str()),
+        ("reference_generation_id", expected_generation.as_str()),
+        ("reference_digest", expected_view_digest.as_str()),
+        ("record_key", expected_key.as_str()),
+        ("record_digest", expected_record_digest.as_str()),
+    ] {
+        let Some(
+            GraphProposalValue::String(actual)
+            | GraphProposalValue::Identifier(actual)
+            | GraphProposalValue::Reference(actual),
+        ) = api_proposal.semantic_key().get(field)
+        else {
+            return Err(format!("native API identity field {field} missing").into());
+        };
+        assert_eq!(actual.as_ref(), expected);
+    }
+    assert_eq!(api_proposal.source_handle_ids().len(), 1);
+    assert_eq!(api_proposal.evidence_ids().len(), 1);
+    let api_handles = read
+        .native_api()
+        .ok_or("genuine native API reopen proof")?
+        .source_handles();
+    let api_handle = api_handles
+        .get(&api_proposal.source_handle_ids()[0])
+        .ok_or("retained original API source support")?;
+    assert_eq!(api_handle.path().as_str(), expected_source.path());
+    assert_eq!(
+        api_handle.content_digest().canonical(),
+        expected_source.sha256()
+    );
+    assert_eq!(
+        api_handle.span().byte_start(),
+        Some(expected_source.span().start())
+    );
+    assert_eq!(
+        api_handle.span().byte_end(),
+        Some(expected_source.span().end())
+    );
+    assert_eq!(
+        api_handle.reference_generation().map(|id| id.to_string()),
+        Some(expected_generation)
+    );
+
+    let provenance = read
+        .pair()
+        .source_provenance()
+        .ok_or("retained Main provenance")?;
+    let function = provenance
+        .functions()
+        .iter()
+        .find(|function| function.function_id == caller.fact_id())
+        .ok_or("actual Main function proposal")?;
+    assert_eq!(function.span, caller.span());
+    let native_source = owner
+        .partition(wow_project::graph::SOURCE_GRAPH_PARTITION)
+        .ok_or("physical Main producer")?;
+    let accepted_caller = native_source
+        .report()
+        .accepted_entities()
+        .iter()
+        .find(|entity| entity.proposal_id() == function.proposal_id)
+        .ok_or("accepted physical Main function")?;
+    let calls = owner
+        .partition(wow_recognizers::source_calls::SOURCE_CALL_PARTITION)
+        .ok_or("existing calls producer")?;
+    let mut uses = calls
+        .report()
+        .accepted_relations()
+        .iter()
+        .filter(|relation| relation.edge().relation() == GraphRelationKind::UsesApi);
+    let uses = (uses.next().ok_or("accepted native UsesApi")?, uses.next());
+    assert!(
+        uses.1.is_none(),
+        "fixture must have exactly one accepted UsesApi"
+    );
+    assert_eq!(uses.0.edge().from(), accepted_caller.node().node_id());
+    assert_eq!(uses.0.edge().to(), accepted_api.node().node_id());
+    let use_proposal = calls
+        .batch()
+        .relation_proposal(uses.0.proposal_id())
+        .ok_or("accepted native UsesApi proposal")?;
+    assert_eq!(use_proposal.relation_kind_id(), "lua_uses_native_api");
+    assert!(
+        use_proposal
+            .source_handle_ids()
+            .contains(&function.source_handle_id)
+    );
+    assert!(
+        use_proposal
+            .source_handle_ids()
+            .contains(&api_handle.handle_id())
+    );
+
+    let graph_read = read.pair().graph_read(&stop)?;
+    let final_caller = graph_read.published_entity(
+        wow_project::graph::SOURCE_GRAPH_PARTITION,
+        &function.proposal_id,
+        &stop,
+    )?;
+    let final_api =
+        graph_read.published_entity(api.partition_id(), accepted_api.proposal_id(), &stop)?;
+    let final_uses = owner
+        .snapshot()
+        .edges()
+        .iter()
+        .filter(|edge| edge.relation() == GraphRelationKind::UsesApi)
+        .collect::<Vec<_>>();
+    assert_eq!(final_uses.len(), 1);
+    assert_eq!(final_uses[0].from(), final_caller.node_id());
+    assert_eq!(final_uses[0].to(), final_api.node_id());
+    drop(resolver);
+    drop(rebuilt);
+    read.close()?;
+    store.close()?;
+    Ok(())
+}
+
+#[test]
 fn native_reference_composes_exact_platform_input_without_losing_partial_coverage() -> TestResult {
     use crate::graph::{GraphBuildRequest, GraphReadStatus, execute_graph_build};
     let (root, config) = native_fixture()?;

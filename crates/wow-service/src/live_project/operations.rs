@@ -4,6 +4,7 @@ use super::{LiveProjectRead, LiveProjectStore, PlatformStoreSelection, fail};
 use crate::{LocalProjectInput, ServiceErrorCode, ServiceResult, graph::GraphBuildRequest};
 use serde::Serialize;
 use std::{path::Path, sync::atomic::AtomicBool};
+use wow_project::replay::publication;
 use wow_store::{
     OperationId,
     project::{
@@ -218,21 +219,23 @@ pub(super) fn publish_input(
     request: &LiveProjectPublishRequest,
     stop: &AtomicBool,
 ) -> ServiceResult<LiveProjectResult> {
-    // LocalProjectInput has already validated this immutable configuration.
-    // Select the ordinary catalog before graph composition consumes the input.
-    let configuration = input.project_bundle().configuration();
-    let native_library_input = configuration.native_library_input().is_some();
-    let primary_callables = matches!(
-        configuration.project_kind(),
-        wow_project::ProjectKind::Fixture | wow_project::ProjectKind::Repository
-    ) && (configuration.physical_function_declarations().is_some()
-        || configuration.physical_function_signatures().is_some());
     let (bundle, owner) = crate::graph::live_publication(input, graph_request, stop)?;
     super::publication_checkpoint(stop)?;
     let mut store = if request.initialize {
-        if native_library_input {
+        // Dispatch from the actual native replay record, not a raw input selector.
+        let schema = bundle.replay_storage_schema();
+        if schema == publication::STORAGE_SCHEMAS_NATIVE_API_USES_V1[0] {
+            LiveProjectStore {
+                store: wow_store::project::ProjectStore::create_with_gc(
+                    root,
+                    &owner,
+                    super::catalog_for(publication::STORAGE_SCHEMAS_NATIVE_API_USES_V1)?,
+                )
+                .map_err(super::store_error)?,
+            }
+        } else if schema == publication::STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1[0] {
             LiveProjectStore::create_native_library_input(root, &owner)?
-        } else if primary_callables {
+        } else if schema == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1[0] {
             LiveProjectStore::create_primary_callables(root, &owner)?
         } else {
             LiveProjectStore::create(root, &owner)?

@@ -5,9 +5,9 @@ mod build;
 #[cfg(test)]
 pub(crate) use build::verify_source_axes_through_service;
 pub(crate) use build::{
-    CANDIDATE_RECORD_KEY, CANDIDATE_STORAGE_CHECK, CANDIDATE_STORAGE_SCHEMA,
+    CANDIDATE_RECORD_KEY, CANDIDATE_STORAGE_CHECK, CANDIDATE_STORAGE_SCHEMA, NativeApiProvenance,
     candidate_storage_record, capture_candidate_from_backend, live_publication,
-    live_publication_from_backend, read_candidate_pair,
+    live_publication_from_backend, read_candidate_pair, validate_native_api_reopen,
 };
 mod bundle;
 pub use bundle::GRAPH_BUNDLE_MAX_BYTES;

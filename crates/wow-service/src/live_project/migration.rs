@@ -1,8 +1,7 @@
-use super::{LiveProjectStore, catalog_for, project_error, store_error};
+use super::{LiveProjectStore, catalog_for, store_error, validate_ordinary_read};
 use crate::{ServiceErrorCode, ServiceResult};
 use std::{path::Path, sync::atomic::AtomicBool};
-use wow_graph::GraphPartitionSnapshot;
-use wow_project::replay::publication::{self, AcquiredProjectPair};
+use wow_project::replay::publication;
 use wow_store::project::{
     CurrentRecordId, MigrationCandidate, MigrationPreparation, MigrationSelectionCandidate,
     MigrationSelectionReceipt, ReadyMigration, RegistrySelection, ValidatedMigration,
@@ -47,14 +46,7 @@ fn finish_preparation(
         let read = preparation
             .read_generation(&generation, stop)
             .map_err(store_error)?;
-        AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
-        checks.push(
-            read.owner_validation(&[
-                GraphPartitionSnapshot::STORAGE_CHECK,
-                publication::STORAGE_CHECK,
-            ])
-            .map_err(store_error)?,
-        );
+        checks.push(validate_ordinary_read(read, stop)?);
     }
     preparation
         .finish(migration, checks, stop)
@@ -105,14 +97,7 @@ impl LiveProjectStore {
             let read = candidate
                 .read_generation(&generation, stop)
                 .map_err(store_error)?;
-            AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
-            checks.push(
-                read.owner_validation(&[
-                    GraphPartitionSnapshot::STORAGE_CHECK,
-                    publication::STORAGE_CHECK,
-                ])
-                .map_err(store_error)?,
-            );
+            checks.push(validate_ordinary_read(read, stop)?);
         }
         self.store
             .activate_ready_selection(migration, ready, candidate, checks, stop)
@@ -160,7 +145,7 @@ impl LiveProjectStore {
                     stop,
                 )
                 .map_err(store_error)?;
-            AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
+            validate_ordinary_read(read, stop)?;
         }
         Ok(backup)
     }
@@ -205,7 +190,7 @@ pub fn export_live_project_migration(
                 stop,
             )
             .map_err(store_error)?;
-        AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
+        validate_ordinary_read(read, stop)?;
     }
     Ok(backup)
 }
@@ -249,14 +234,7 @@ fn validate_candidate(
     let mut checks = Vec::new();
     for id in candidate.target_generations() {
         let read = candidate.read_generation(&id, stop).map_err(store_error)?;
-        AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
-        checks.push(
-            read.owner_validation(&[
-                GraphPartitionSnapshot::STORAGE_CHECK,
-                publication::STORAGE_CHECK,
-            ])
-            .map_err(store_error)?,
-        );
+        checks.push(validate_ordinary_read(read, stop)?);
     }
     candidate.finish(checks, stop).map_err(store_error)
 }

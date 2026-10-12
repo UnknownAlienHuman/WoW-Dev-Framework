@@ -48,6 +48,8 @@ struct NativeInput {
     main: MainInventory,
     native_source: NativeSourceInput,
     #[serde(default, deserialize_with = "present")]
+    native_api_uses: Option<wow_project::NativeApiUseRecipe>,
+    #[serde(default, deserialize_with = "present")]
     annotation_inputs: Option<NativeAnnotationInputs>,
     #[serde(default, deserialize_with = "present")]
     compatibility_evidence: Option<NativeCompatibilityInputs>,
@@ -702,6 +704,12 @@ impl LocalProjectInput {
             .bundle
             .with_native_library_input(native_library_input)
             .map_err(super::disk_input::acquisition_error)?;
+        if let Some(recipe) = input.native_api_uses {
+            assembled.bundle = assembled
+                .bundle
+                .with_native_api_uses(recipe)
+                .map_err(super::disk_input::acquisition_error)?;
+        }
         assembled.native_input = Some(Arc::new(NativeInputEvidence {
             receipt,
             report: report.into_boxed_slice(),

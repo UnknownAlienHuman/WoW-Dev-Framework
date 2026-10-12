@@ -569,6 +569,14 @@ impl ProjectInputBundle {
         Ok(self)
     }
 
+    pub fn with_native_api_uses(
+        mut self,
+        recipe: crate::NativeApiUseRecipe,
+    ) -> ProjectResult<Self> {
+        self.configuration = self.configuration.with_native_api_uses(recipe)?;
+        Ok(self)
+    }
+
     pub(crate) fn into_parts(
         self,
     ) -> (

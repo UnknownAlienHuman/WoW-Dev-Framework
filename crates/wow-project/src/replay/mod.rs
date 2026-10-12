@@ -68,6 +68,9 @@ const NATIVE_LIBRARY_INPUT_REPLAY_SCHEMA: &str =
     "wow-project/native-project-replay/native-library-input/1";
 pub(super) const NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA: &str =
     "wow-project.live-replay.native-library-input.v1";
+const NATIVE_API_USES_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/native-api-uses/1";
+pub(super) const NATIVE_API_USES_STORAGE_SCHEMA: &str =
+    "wow-project.live-replay.native-api-uses.v1";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -277,7 +280,10 @@ impl ProjectReplay {
             2 => Some(2),
             _ => return Err(invalid()),
         };
-        if configuration.native_library_input().is_some() && generation_schema_version != Some(2) {
+        if (configuration.native_library_input().is_some()
+            || configuration.native_api_uses().is_some())
+            && generation_schema_version != Some(2)
+        {
             return Err(invalid());
         }
         // The package graph projection is selected only together with the
@@ -390,7 +396,8 @@ impl ProjectReplay {
         Ok(replay)
     }
     fn expected_schema(&self) -> ProjectResult<&'static str> {
-        if self.configuration.native_library_input().is_some()
+        if (self.configuration.native_library_input().is_some()
+            || self.configuration.native_api_uses().is_some())
             && self.generation_schema_version != Some(2)
         {
             return Err(invalid());
@@ -697,6 +704,7 @@ impl ProjectReplay {
             SELECTED_COMPONENTS_REPLAY_SCHEMA => Ok(SELECTED_COMPONENTS_STORAGE_SCHEMA),
             PRIMARY_CALLABLES_REPLAY_SCHEMA => Ok(PRIMARY_CALLABLES_STORAGE_SCHEMA),
             NATIVE_LIBRARY_INPUT_REPLAY_SCHEMA => Ok(NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA),
+            NATIVE_API_USES_REPLAY_SCHEMA => Ok(NATIVE_API_USES_STORAGE_SCHEMA),
             _ => Err(invalid()),
         }
     }
@@ -710,6 +718,15 @@ fn selected_component_schema(
 ) -> ProjectResult<&'static str> {
     let selected =
         selected_component_base_schema(base, configuration, function_calls, physical_primary)?;
+    match configuration.native_api_uses() {
+        Some(crate::NativeApiUseRecipe::ReferenceV1)
+            if configuration.native_library_input().is_some() && !configuration.is_platform() =>
+        {
+            return Ok(NATIVE_API_USES_REPLAY_SCHEMA);
+        }
+        Some(_) => return Err(invalid()),
+        None => {}
+    }
     if configuration.native_library_input().is_some() {
         if configuration.is_platform() {
             return Err(invalid());

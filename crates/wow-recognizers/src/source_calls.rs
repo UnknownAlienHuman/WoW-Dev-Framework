@@ -1,4 +1,4 @@
-//! Exact captured callable facts -> existing recognizer engine -> Calls proposals.
+//! Exact captured callable facts -> existing recognizer engine -> call proposals.
 //! The source producer owns functions; this producer owns semantic call relations.
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -8,12 +8,13 @@ use wow_core::{
     ClaimScope, ContentDigest, EvidenceConfidence, EvidenceId, EvidenceRecord, GenerationContext,
     ProvenanceClass, SourceContent, SourceHandle, SourceSpan, StableHandleId,
 };
+use wow_emmy::bindings::SymbolTarget;
 use wow_emmy::function_calls::{FunctionCallReport, SourceCallTarget};
 use wow_graph::{
     GraphAssertionKind, GraphAssertionRef, GraphConfidence, GraphCoverageRecord,
     GraphCoverageState, GraphLocalAssertion, GraphNodeId, GraphPartitionSnapshot,
-    GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue, GraphRelationKind,
-    GraphRelationProposal, GraphRelationProposalInput,
+    GraphProducerLookup, GraphProposalBatch, GraphProposalEndpoint, GraphProposalValue,
+    GraphRelationKind, GraphRelationProposal, GraphRelationProposalInput,
 };
 
 use crate::{
@@ -24,8 +25,23 @@ use crate::{
 
 pub const SOURCE_CALL_PARTITION: &str = "wow-recognizers.lua-direct-calls";
 pub const SOURCE_CALL_PROFILE: &str = "wow-recognizers/source-function-calls/2";
+/// Selected API-use adapter; the ordinary direct-call profile remains unchanged.
+pub const SOURCE_API_CALL_PROFILE: &str = "wow-recognizers/source-function-api-calls/1";
+pub const SOURCE_API_ENTITY_KIND: &str = "native_api_callable";
+pub const SOURCE_API_RELATION: &str = "lua_uses_native_api";
 const MAX_FUNCTIONS: usize = 8192;
 const MAX_CALLS: usize = 8192;
+
+/// An upstream native owner associates the exact Library tuple with an admitted
+/// API producer. This adapter validates acceptance/support, never discovers the
+/// association from a query name or reconstructs native/Reference authority.
+/// The minimal endpoint contract carries one original platform source support.
+#[derive(Debug)]
+pub struct SourceApiTargetBinding<'a> {
+    pub assertion: GraphAssertionRef,
+    pub source_handle: &'a SourceHandle,
+    pub evidence: &'a EvidenceRecord,
+}
 
 /// Caller supplied crosswalks are checked against source proposals and real records.
 pub struct SourceCallInput<'a> {
@@ -37,6 +53,10 @@ pub struct SourceCallInput<'a> {
     pub call_support: BTreeMap<&'a str, (StableHandleId, EvidenceId)>,
     pub source_handles: &'a BTreeMap<StableHandleId, SourceHandle>,
     pub evidence: &'a BTreeMap<EvidenceId, EvidenceRecord>,
+    /// None preserves LibraryTarget omissions and the ordinary profile/coverage.
+    /// Some selects exact API use; absent keys remain LibraryTarget omissions.
+    /// Rows must be used Library targets in this report (at most MAX_CALLS).
+    pub api_targets: Option<&'a BTreeMap<SymbolTarget, SourceApiTargetBinding<'a>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -46,6 +66,11 @@ pub enum SourceCallOutcome {
         observation_id: String,
         assertion_id: String,
         proposal_id: String,
+    },
+    /// Selected API use never participates in the Main-only Calls receipt set.
+    ApiUseProjected {
+        proposal_id: String,
+        rule_id: String,
     },
     SelfRecursionUnsupported,
     LibraryTarget,
@@ -95,7 +120,12 @@ pub fn recognize_source_calls(
     stop: &AtomicBool,
 ) -> RecognizerResult<SourceCallProposals> {
     checkpoint(stop)?;
-    if input.report.functions().len() > MAX_FUNCTIONS || input.report.calls().len() > MAX_CALLS {
+    if input.report.functions().len() > MAX_FUNCTIONS
+        || input.report.calls().len() > MAX_CALLS
+        || input
+            .api_targets
+            .is_some_and(|targets| targets.len() > MAX_CALLS)
+    {
         return Err(failure(RecognizerErrorCode::BudgetExceeded));
     }
     input
@@ -116,6 +146,8 @@ pub fn recognize_source_calls(
     // Assertions must never use node IDs from a materialized generation as inputs.
     let lookup = input.owner.producer_lookup(stop).map_err(graph_error)?;
     let graph = lookup.input_view();
+    let api_selected = input.api_targets.is_some();
+    let api_bindings = resolve_api_targets(&input, &lookup, stop)?;
     let partition = input
         .owner
         .partition(input.source_partition)
@@ -193,6 +225,7 @@ pub fn recognize_source_calls(
     let mut observations = Vec::new();
     let mut pending = BTreeMap::new();
     let mut receipts = BTreeMap::new();
+    let mut used_api_targets = BTreeSet::new();
     for call in input.report.calls() {
         checkpoint(stop)?;
         let (handle, evidence) = *input
@@ -243,7 +276,13 @@ pub fn recognize_source_calls(
                     if pending
                         .insert(
                             observation.observation_id().to_string(),
-                            (call.fact_id(), handles, source_evidence),
+                            (
+                                call.fact_id(),
+                                handles,
+                                source_evidence,
+                                GraphRelationKind::Calls,
+                                "lua_direct_calls",
+                            ),
                         )
                         .is_some()
                     {
@@ -253,7 +292,52 @@ pub fn recognize_source_calls(
                     None
                 }
             }
-            SourceCallTarget::LibraryFunction { .. } => Some(SourceCallOutcome::LibraryTarget),
+            SourceCallTarget::LibraryFunction { target } => {
+                if let Some(binding) = api_bindings.get(target) {
+                    used_api_targets.insert(target);
+                    let source_evidence =
+                        BTreeSet::from([evidence, caller.evidence, binding.evidence])
+                            .into_iter()
+                            .collect::<Vec<_>>();
+                    let observation = StructuredObservation::new(
+                        StructuredObservationInput {
+                            source_snapshot_id: graph.snapshot_id().clone(),
+                            family: ObservationFamily::ApiUse,
+                            from: caller.node.clone(),
+                            to: binding.node.clone(),
+                            origin: ObservationOrigin::AnalyzerFact,
+                            confidence: GraphConfidence::Derived,
+                            evidence_ids: source_evidence
+                                .iter()
+                                .map(|id| id.to_string().into_boxed_str())
+                                .collect(),
+                        },
+                        limits,
+                    )?;
+                    let handles = BTreeSet::from([handle, caller.handle, binding.handle])
+                        .into_iter()
+                        .collect::<Vec<_>>();
+                    if pending
+                        .insert(
+                            observation.observation_id().to_string(),
+                            (
+                                call.fact_id(),
+                                handles,
+                                source_evidence,
+                                GraphRelationKind::UsesApi,
+                                SOURCE_API_RELATION,
+                            ),
+                        )
+                        .is_some()
+                    {
+                        return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
+                    }
+                    observations.push(observation);
+                    None
+                } else {
+                    Some(SourceCallOutcome::LibraryTarget)
+                }
+            }
             SourceCallTarget::SignatureNotCaptured => Some(SourceCallOutcome::SignatureNotCaptured),
             SourceCallTarget::Unresolved => Some(SourceCallOutcome::Unresolved),
             SourceCallTarget::Indeterminate => Some(SourceCallOutcome::Indeterminate),
@@ -262,6 +346,9 @@ pub fn recognize_source_calls(
             receipts.insert(call.fact_id(), outcome);
         }
     }
+    if used_api_targets.len() != api_bindings.len() {
+        return Err(failure(RecognizerErrorCode::AdapterBindingUnknown));
+    }
     let coverage = ObservationFamily::ALL
         .into_iter()
         .map(|family| {
@@ -269,6 +356,11 @@ pub fn recognize_source_calls(
                 (
                     RecognitionCoverageState::Partial,
                     "source_calls.captured_single_signature_main_targets_only",
+                )
+            } else if api_selected && family == ObservationFamily::ApiUse {
+                (
+                    RecognitionCoverageState::Partial,
+                    "source_calls.selected_exact_library_api_targets_no_absence_authority",
                 )
             } else {
                 (
@@ -290,17 +382,15 @@ pub fn recognize_source_calls(
     let mut relations = Vec::new();
     for assertion in recognition.assertions() {
         checkpoint(stop)?;
-        if assertion.relation() != GraphRelationKind::Calls
-            || assertion.confidence() != GraphConfidence::Derived
-        {
+        let (call_id, handles, evidence_ids, relation, relation_id) = pending
+            .remove(assertion.observation_id().as_str())
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingUnknown))?;
+        if assertion.relation() != relation || assertion.confidence() != GraphConfidence::Derived {
             return Err(RecognizerError::new(
                 RecognizerErrorCode::AdapterFactMismatch,
                 "source call assertion has incompatible relation or confidence",
             ));
         }
-        let (call_id, handles, evidence_ids) = pending
-            .remove(assertion.observation_id().as_str())
-            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingUnknown))?;
         let proposal_id = assertion.assertion_id().to_string();
         // The generic assertion also names its structured observation. That
         // receipt is retained in RecognitionReport, not a source EvidenceRecord.
@@ -319,7 +409,7 @@ pub fn recognize_source_calls(
         relations.push(
             GraphRelationProposal::new(
                 proposal_id.as_str(),
-                "lua_direct_calls",
+                relation_id,
                 GraphRelationProposalInput {
                     source: GraphProposalEndpoint::Existing(assertion.from().clone()),
                     target: GraphProposalEndpoint::Existing(assertion.to().clone()),
@@ -331,17 +421,19 @@ pub fn recognize_source_calls(
             )
             .map_err(graph_error)?,
         );
-        if receipts
-            .insert(
-                call_id,
-                SourceCallOutcome::Projected {
-                    observation_id: assertion.observation_id().to_string(),
-                    assertion_id: assertion.assertion_id().to_string(),
-                    proposal_id,
-                },
-            )
-            .is_some()
-        {
+        let outcome = match relation {
+            GraphRelationKind::Calls => SourceCallOutcome::Projected {
+                observation_id: assertion.observation_id().to_string(),
+                assertion_id: assertion.assertion_id().to_string(),
+                proposal_id,
+            },
+            GraphRelationKind::UsesApi => SourceCallOutcome::ApiUseProjected {
+                proposal_id,
+                rule_id: assertion.recognizer_id().to_string(),
+            },
+            _ => return Err(failure(RecognizerErrorCode::AdapterFactMismatch)),
+        };
+        if receipts.insert(call_id, outcome).is_some() {
             return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
         }
     }
@@ -362,13 +454,17 @@ pub fn recognize_source_calls(
         .map(|relation| {
             GraphCoverageRecord::new(
                 relation,
-                if relation == GraphRelationKind::Calls {
+                if relation == GraphRelationKind::Calls
+                    || api_selected && relation == GraphRelationKind::UsesApi
+                {
                     GraphCoverageState::Partial
                 } else {
                     GraphCoverageState::NotEvaluated
                 },
                 false,
-                vec![if relation == GraphRelationKind::Calls {
+                vec![if relation == GraphRelationKind::Calls
+                    || api_selected && relation == GraphRelationKind::UsesApi
+                {
                     "source_calls.static_partial_no_runtime_authority".into()
                 } else {
                     "source_calls.relation_owned_by_other_producer".into()
@@ -394,7 +490,11 @@ pub fn recognize_source_calls(
         batch,
         coverage,
         recognition: SourceCallRecognition {
-            profile: SOURCE_CALL_PROFILE,
+            profile: if api_selected {
+                SOURCE_API_CALL_PROFILE
+            } else {
+                SOURCE_CALL_PROFILE
+            },
             analyzer_report_id: input.report.analysis_id().into(),
             source_partition: input.source_partition.into(),
             recognition,
@@ -407,6 +507,98 @@ pub fn recognize_source_calls(
                 .collect(),
         },
     })
+}
+
+fn resolve_api_targets<'a>(
+    input: &SourceCallInput<'a>,
+    lookup: &GraphProducerLookup<'_>,
+    stop: &AtomicBool,
+) -> RecognizerResult<BTreeMap<&'a SymbolTarget, FunctionBinding>> {
+    let mut bindings = BTreeMap::new();
+    let Some(targets) = input.api_targets else {
+        return Ok(bindings);
+    };
+    // Selection requires the reviewed API definitions even for an empty map.
+    let registry = input.owner.registry();
+    let entity = registry
+        .entity_kind(SOURCE_API_ENTITY_KIND)
+        .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+    let relation = registry
+        .relation_kind(SOURCE_API_RELATION)
+        .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+    if !entity.allows_universe(lookup.input_view().universe())
+        || !entity.allows_confidence(GraphConfidence::Derived)
+        || relation.relation() != GraphRelationKind::UsesApi
+        || !relation.allows_source_kind("lua_source_function")
+        || !relation.allows_target_kind(SOURCE_API_ENTITY_KIND)
+        || !relation.allows_confidence(GraphConfidence::Derived)
+    {
+        return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+    }
+    for (target, binding) in targets {
+        checkpoint(stop)?;
+        target
+            .span
+            .validate()
+            .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+        target
+            .content_digest
+            .parse::<ContentDigest<SourceContent>>()
+            .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+        if target.role != "library"
+            || input
+                .report
+                .library_snapshot_ids()
+                .binary_search(&target.workspace_id)
+                .is_err()
+            || target.path.is_empty()
+            || target.span.byte_start() == target.span.byte_end()
+        {
+            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        let resolved = lookup
+            .entity(lookup.scope(), &binding.assertion, stop)
+            .map_err(graph_error)?;
+        let proposal = resolved.proposal();
+        let handle = binding.source_handle;
+        let evidence = binding.evidence;
+        handle
+            .validate()
+            .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+        evidence
+            .validate()
+            .map_err(|_| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+        if proposal.entity_kind_id() != SOURCE_API_ENTITY_KIND
+            || proposal.confidence() != GraphConfidence::Derived
+            || proposal.source_handle_ids() != [handle.handle_id()]
+            || proposal.evidence_ids() != [evidence.evidence_id()]
+            || evidence.context_id() != input.context.context_id()
+            || evidence.source_handle_ids() != [handle.handle_id()]
+            || evidence.provenance() != ProvenanceClass::PlatformSource
+            || evidence.confidence() != EvidenceConfidence::Proven
+            || evidence.claim_scope() != ClaimScope::SourceObservation
+            || !evidence.derivation_input_ids().is_empty()
+            || !evidence.coverage_refs().is_empty()
+            || handle.reference_generation() != Some(input.context.reference_generation())
+            || handle
+                .project_generation()
+                .is_some_and(|generation| Some(generation) != input.context.project_generation())
+        {
+            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+        }
+        // Original API support is not the generated Library closure span. Their
+        // exact native association is a caller-owned admission prerequisite.
+        bindings.insert(
+            target,
+            FunctionBinding {
+                node: resolved.accepted().node().node_id().clone(),
+                handle: handle.handle_id(),
+                evidence: evidence.evidence_id(),
+            },
+        );
+    }
+    checkpoint(stop)?;
+    Ok(bindings)
 }
 
 fn validate_support(

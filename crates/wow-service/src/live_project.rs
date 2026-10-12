@@ -65,6 +65,7 @@ pub struct LiveProjectStore {
 pub struct LiveProjectRead {
     pair: AcquiredProjectPair,
     candidate: Option<crate::graph::BlizzardUiIndexCandidate>,
+    native_api: Option<crate::graph::NativeApiProvenance>,
     read: ReadSnapshot,
 }
 /// Checked reconstruction unwind is distinct from native acquisition failures,
@@ -84,8 +85,10 @@ impl LiveProjectRead {
         let Self {
             pair,
             candidate,
+            native_api,
             read,
         } = self;
+        drop(native_api);
         drop(candidate);
         drop(pair);
         read.close().map_err(store_error)
@@ -97,6 +100,10 @@ impl LiveProjectRead {
     /// Later Skeleton owners consume this genuine sealed candidate, never a DTO.
     pub fn candidate(&self) -> Option<&crate::graph::BlizzardUiIndexCandidate> {
         self.candidate.as_ref()
+    }
+    #[cfg(test)]
+    pub(crate) fn native_api(&self) -> Option<&crate::graph::NativeApiProvenance> {
+        self.native_api.as_ref()
     }
     pub fn project(&self) -> &ProjectView {
         self.pair.project()
@@ -138,8 +145,10 @@ impl LiveProjectRead {
         let Self {
             pair,
             candidate,
+            native_api,
             read,
         } = self;
+        drop(native_api);
         let candidate = candidate.ok_or_else(|| fail(ServiceErrorCode::IdentityMismatch))?;
         let receipt = crate::graph::candidate_storage_record(&candidate, stop)?;
         let publisher = pair
@@ -150,8 +159,16 @@ impl LiveProjectRead {
         Ok((publisher, read, receipt))
     }
     fn into_update_publisher(self) -> ServiceResult<(ProjectPublisher, ReadSnapshot)> {
-        let publisher = self.pair.into_update_publisher().map_err(project_error)?;
-        Ok((publisher, self.read))
+        let Self {
+            pair,
+            candidate,
+            native_api,
+            read,
+        } = self;
+        drop(native_api);
+        drop(candidate);
+        let publisher = pair.into_update_publisher().map_err(project_error)?;
+        Ok((publisher, read))
     }
 }
 impl LiveProjectStore {
@@ -209,7 +226,8 @@ impl LiveProjectStore {
             for selected in [false, true] {
                 if selected
                     && (schemas == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1
-                        || schemas == publication::STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1)
+                        || schemas == publication::STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1
+                        || schemas == publication::STORAGE_SCHEMAS_NATIVE_API_USES_V1)
                 {
                     continue;
                 }
@@ -311,14 +329,19 @@ impl LiveProjectStore {
                     stop,
                 )
                 .map_err(store_error)?;
-            let (pair, candidate) = candidate::read_owners(&read, stop)?;
-            let selected = candidate.is_some();
-            let validated = read
-                .owner_validation(&candidate::completed_checks(selected))
-                .map_err(store_error)?;
-            drop(candidate);
-            drop(pair);
-            drop(read);
+            let validation = (|| {
+                let (pair, candidate) = candidate::read_owners(&read, stop)?;
+                let native_api = crate::graph::validate_native_api_reopen(&pair, stop)?;
+                let validated = read
+                    .owner_validation(&candidate::completed_checks(candidate.is_some()))
+                    .map_err(store_error);
+                drop(native_api);
+                drop(candidate);
+                drop(pair);
+                validated
+            })();
+            read.close().map_err(store_error)?;
+            let validated = validation?;
             if operation.state == PublicationState::Activated {
                 return Ok(operation);
             }
@@ -365,7 +388,11 @@ impl LiveProjectStore {
                 error: store_error(error),
                 closure: ReadFailureClosure::NotEvaluated,
             })?;
-        let (pair, candidate) = match candidate::read_owners(&read, stop) {
+        let qualified = candidate::read_owners(&read, stop).and_then(|(pair, candidate)| {
+            let native_api = crate::graph::validate_native_api_reopen(&pair, stop)?;
+            Ok((pair, candidate, native_api))
+        });
+        let (pair, candidate, native_api) = match qualified {
             Ok(owners) => owners,
             Err(error) => {
                 return Err(match read.close() {
@@ -383,6 +410,7 @@ impl LiveProjectStore {
         Ok(LiveProjectRead {
             pair,
             candidate,
+            native_api,
             read,
         })
     }
@@ -390,6 +418,25 @@ impl LiveProjectStore {
         let id = OperationId::new(operation_id).map_err(store_error)?;
         self.store.reconcile(&id).map_err(store_error)
     }
+}
+// Ordinary migration/restore/export paths need the same selected qualification
+// before issuing native owner checks. Consume and close the exact held read once.
+fn validate_ordinary_read(
+    read: ReadSnapshot,
+    stop: &AtomicBool,
+) -> ServiceResult<wow_store::project::ValidatedRead> {
+    let validation = (|| {
+        let pair = AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
+        let native_api = crate::graph::validate_native_api_reopen(&pair, stop)?;
+        let validated = read
+            .owner_validation(&candidate::completed_checks(false))
+            .map_err(store_error);
+        drop(native_api);
+        drop(pair);
+        validated
+    })();
+    read.close().map_err(store_error)?;
+    validation
 }
 fn catalog() -> ServiceResult<RecordCatalog> {
     catalog_for(publication::STORAGE_SCHEMAS)
@@ -406,6 +453,7 @@ fn catalog_accepts_components(
 ) -> bool {
     if schemas == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1
         || schemas == publication::STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1
+        || schemas == publication::STORAGE_SCHEMAS_NATIVE_API_USES_V1
     {
         return false;
     }

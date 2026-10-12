@@ -179,31 +179,46 @@ impl LiveProjectStore {
             Ok(read) => read,
             Err(error) => return acquisition_outcome(error),
         };
-        if &read.manifest().epoch_id != physical.epoch_id()
-            || read.manifest().epoch_id != current.epoch_id
-            || read.manifest().generation_id != current.generation_id
-        {
-            return CurrentDomainObservation::Failed(CurrentDomainFailure {
-                phase: CurrentDomainPhase::AcquirePublication,
-                code: ServiceErrorCode::IdentityMismatch,
-            });
-        }
         // Publication selected the reported history record. The later observed
         // current_at_acquisition is independent and cannot replace that selection.
-        let pair = match AcquiredProjectPair::read(&read, stop) {
-            Ok(pair) => pair,
-            Err(error) => return replay_outcome(error),
-        };
-        let ids = CurrentDomainIds {
-            publication_set_id: pair.publication_set_id().to_owned(),
-            project_snapshot_id: pair.project().snapshot_id().to_owned(),
-            analyzer_snapshot_id: pair.project().analyzer_snapshot_id().to_owned(),
-            graph_snapshot_id: pair.graph().snapshot().snapshot_id().to_string(),
-        };
-        if stop.load(Ordering::Acquire) {
-            return cancelled(CurrentDomainPhase::Replay);
+        let observation = (|| {
+            if &read.manifest().epoch_id != physical.epoch_id()
+                || read.manifest().epoch_id != current.epoch_id
+                || read.manifest().generation_id != current.generation_id
+            {
+                return CurrentDomainObservation::Failed(CurrentDomainFailure {
+                    phase: CurrentDomainPhase::AcquirePublication,
+                    code: ServiceErrorCode::IdentityMismatch,
+                });
+            }
+            let pair = match AcquiredProjectPair::read(&read, stop) {
+                Ok(pair) => pair,
+                Err(error) => return replay_outcome(error),
+            };
+            let native_api = match crate::graph::validate_native_api_reopen(&pair, stop) {
+                Ok(proof) => proof,
+                Err(error) => return native_replay_outcome(error.code()),
+            };
+            let ids = CurrentDomainIds {
+                publication_set_id: pair.publication_set_id().to_owned(),
+                project_snapshot_id: pair.project().snapshot_id().to_owned(),
+                analyzer_snapshot_id: pair.project().analyzer_snapshot_id().to_owned(),
+                graph_snapshot_id: pair.graph().snapshot().snapshot_id().to_string(),
+            };
+            drop(native_api);
+            drop(pair);
+            if stop.load(Ordering::Acquire) {
+                return cancelled(CurrentDomainPhase::Replay);
+            }
+            CurrentDomainObservation::Validated(ids)
+        })();
+        match read.close() {
+            Ok(()) => observation,
+            Err(error) => CurrentDomainObservation::Failed(CurrentDomainFailure {
+                phase: CurrentDomainPhase::Replay,
+                code: store_error(error).code(),
+            }),
         }
-        CurrentDomainObservation::Validated(ids)
     }
 }
 
@@ -280,5 +295,18 @@ fn replay_outcome(error: ProjectError) -> CurrentDomainObservation {
             phase,
             code: project_error(error).code(),
         }),
+    }
+}
+
+fn native_replay_outcome(code: ServiceErrorCode) -> CurrentDomainObservation {
+    let phase = CurrentDomainPhase::Replay;
+    match code {
+        ServiceErrorCode::Cancelled => cancelled(phase),
+        ServiceErrorCode::BudgetExceeded
+        | ServiceErrorCode::ComponentUnavailable
+        | ServiceErrorCode::OperationNotImplementedForMilestone => {
+            CurrentDomainObservation::Incomplete(CurrentDomainFailure { phase, code })
+        }
+        _ => CurrentDomainObservation::Failed(CurrentDomainFailure { phase, code }),
     }
 }

@@ -1,4 +1,5 @@
 //! Glue for the source-function and recognizer producer partitions.
+use super::native_api::NativeApiProvenance;
 use super::source_addresses::SourceGraphAddressCrosswalk;
 use super::*;
 use std::collections::BTreeMap;
@@ -24,12 +25,16 @@ pub(super) struct CallEdge {
 pub(super) fn publish(
     source: &GraphPartitionSnapshot,
     crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
+    api: Option<&NativeApiProvenance>,
     stop: &AtomicBool,
 ) -> ServiceResult<(GraphPartitionSnapshot, SourceCallRecognition)> {
     let provenance = crosswalk.source();
     let report = provenance
         .function_call_report()
         .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+    checkpoint(stop)?;
+    let api_targets = api.map(|api| api.api_bindings(stop)).transpose()?;
+    checkpoint(stop)?;
     let result = recognize_source_calls(
         SourceCallInput {
             owner: source,
@@ -48,6 +53,7 @@ pub(super) fn publish(
                 .collect(),
             source_handles: provenance.source_handles(),
             evidence: provenance.evidence(),
+            api_targets: api_targets.as_ref(),
         },
         stop,
     )
@@ -89,6 +95,7 @@ pub(super) fn maps(
     snapshot: &GraphPartitionSnapshot,
     crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
     recognition: &SourceCallRecognition,
+    api: Option<&NativeApiProvenance>,
     stop: &AtomicBool,
 ) -> ServiceResult<(Vec<FunctionNode>, Vec<CallEdge>)> {
     let provenance = crosswalk.source();
@@ -119,11 +126,48 @@ pub(super) fn maps(
     let report = provenance
         .function_call_report()
         .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+    // Resolve each exact Library tuple once against the accepted API producer.
+    // None keeps the ordinary Calls path free of API/materialization maps.
+    checkpoint(stop)?;
+    let api_targets = api.map(|api| api.api_bindings(stop)).transpose()?;
+    checkpoint(stop)?;
+    let materialized_nodes = if api_targets.is_some() {
+        Some(materialized::nodes(snapshot, stop)?)
+    } else {
+        None
+    };
+    let mut api_nodes = BTreeMap::new();
+    if let Some(targets) = api_targets {
+        let nodes = materialized_nodes
+            .as_ref()
+            .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+        for (target, binding) in targets {
+            checkpoint(stop)?;
+            let resolved = lookup
+                .entity(lookup.scope(), &binding.assertion, stop)
+                .map_err(graph_error)?;
+            let proposal = resolved.proposal();
+            if proposal.entity_kind_id() != wow_recognizers::source_calls::SOURCE_API_ENTITY_KIND
+                || proposal.confidence() != wow_graph::GraphConfidence::Derived
+                || proposal.source_handle_ids() != [binding.source_handle.handle_id()]
+                || proposal.evidence_ids() != [binding.evidence.evidence_id()]
+            {
+                return Err(error(ServiceErrorCode::InternalContractViolation));
+            }
+            let input_id = resolved.accepted().node().node_id();
+            let final_id = nodes
+                .get(input_id)
+                .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+            api_nodes.insert(target, (input_id.clone(), final_id.clone()));
+        }
+    }
     let mut edges = Vec::new();
     for receipt in recognition.receipts() {
         checkpoint(stop)?;
-        let SourceCallOutcome::Projected { proposal_id, .. } = &receipt.outcome else {
-            continue;
+        let (proposal_id, api_use) = match &receipt.outcome {
+            SourceCallOutcome::Projected { proposal_id, .. } => (proposal_id, false),
+            SourceCallOutcome::ApiUseProjected { proposal_id, .. } => (proposal_id, true),
+            _ => continue,
         };
         let index = accepted
             .binary_search_by(|p| p.proposal_id().cmp(proposal_id))
@@ -134,17 +178,39 @@ pub(super) fn maps(
             .binary_search_by(|c| c.fact_id().cmp(&receipt.call_id))
             .map_err(|_| error(ServiceErrorCode::InternalContractViolation))?;
         let call = &report.calls()[index];
-        let wow_emmy::function_calls::SourceCallTarget::MainFunction { function_id } =
-            call.target()
-        else {
-            return Err(error(ServiceErrorCode::InternalContractViolation));
-        };
         let from = node_ids
             .get(call.caller_function_id())
             .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
-        let to = node_ids
-            .get(function_id.as_str())
-            .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+        let to = if api_use {
+            let wow_emmy::function_calls::SourceCallTarget::LibraryFunction { target } =
+                call.target()
+            else {
+                return Err(error(ServiceErrorCode::InternalContractViolation));
+            };
+            let (input_id, final_id) = api_nodes
+                .get(target)
+                .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+            let nodes = materialized_nodes
+                .as_ref()
+                .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+            if edge.relation() != wow_graph::GraphRelationKind::UsesApi
+                || edge.confidence() != wow_graph::GraphConfidence::Derived
+                || edge.to() != input_id
+                || nodes.get(edge.from()) != Some(from)
+            {
+                return Err(error(ServiceErrorCode::InternalContractViolation));
+            }
+            final_id
+        } else {
+            let wow_emmy::function_calls::SourceCallTarget::MainFunction { function_id } =
+                call.target()
+            else {
+                return Err(error(ServiceErrorCode::InternalContractViolation));
+            };
+            node_ids
+                .get(function_id.as_str())
+                .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?
+        };
         let final_edge = wow_graph::GraphEdge::new(
             from.clone(),
             to.clone(),

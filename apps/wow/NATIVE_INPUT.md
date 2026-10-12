@@ -17,7 +17,8 @@ internal `ProfileIdentity` JSON or a manually assembled annotation Library.
 
 The top-level fields are exactly `schema`, `project_id`, `workspace_id`,
 `source_origin_id`, `logical_root`, `profile`, `analyzer`, `main`, `native_source`,
-with optional `annotation_inputs` as described below. Unknown or duplicate known fields reject. Logical project/workspace/origin/root
+with optional `annotation_inputs`, `compatibility_evidence`, `distribution_evidence`
+and `native_api_uses` as described below. Unknown or duplicate known fields reject. Logical project/workspace/origin/root
 identities retain their [existing meanings](LOCAL_INPUT.md#input-wow-servicelocal-project-input1).
 Physical paths remain relative to the explicitly selected config directory.
 
@@ -60,6 +61,26 @@ This route neither generates an acceptance pin nor bypasses owner validation.
 [selected TOC form](TOC_INPUT.md) with `toc` and optional `load_context` instead of
 `files`. Exactly one form is allowed. No caller-provided `library` or
 `reference_view` field is accepted in the native schema.
+
+Select `"native_api_uses": "reference_v1"` to project exact native API callables
+and physical Main `UsesApi` relations through `wow graph build` and ordinary
+`wow project publish`. The generated Library target must belong to the actual
+analyzer report, select one declaration from the complete source map, and match
+one conflict-free configured Reference record. Unsupported, ambiguous and
+unmapped targets remain omissions; these static relations grant no runtime or
+absence authority. Each accepted endpoint retains the exact Reference profile,
+generation, view/record digests and original document support.
+
+The selection changes configuration and graph identity and uses the named
+`wow-project/native-project-replay/native-api-uses/1` replay in a separate
+`wow-project.live-replay.native-api-uses.v1` catalog. Publication activation and
+ordinary service reopen reconstruct the source, native API and call producers
+from retained input and compare their complete partitions and final graph
+membership. Missing or altered producers refuse. The original source directory
+is unnecessary after publication. An existing store with another catalog needs
+an explicit migration; it is never widened by this switch. Omitted selection
+keeps the previous replay/catalog and Library-target omission behavior. Present
+null and unknown selections reject.
 
 ## Manifested TOC input
 

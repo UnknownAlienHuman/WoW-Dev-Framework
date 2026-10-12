@@ -122,11 +122,15 @@ pub const PACKAGE_RAW_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-prop
 pub const DIRECT_PLATFORM_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/22";
 pub const CAPABILITIES_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-capabilities/1";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
+pub const NATIVE_API_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-native-api-uses/1";
 
 /// Select the graph identity from the admitted configuration, never from source
 /// class alone. Missing selection retains the published /19 recipe.
 #[must_use]
 pub fn source_graph_profile(configuration: &crate::ProjectConfiguration) -> &'static str {
+    if configuration.native_api_uses().is_some() {
+        return NATIVE_API_SOURCE_GRAPH_PROFILE;
+    }
     match configuration.platform_graph_profile() {
         None => SOURCE_GRAPH_PROFILE,
         Some(crate::PlatformGraphProfile::PackageProjectionV1) => PACKAGE_SOURCE_GRAPH_PROFILE,
@@ -416,10 +420,59 @@ fn registry(project_kind: ProjectKind, raw_inventory: bool) -> ProjectResult<Gra
     registry_for_recipe(project_kind, raw_inventory, DirectRecipe::Original)
 }
 
+/// Exact local-graph kind for a callable projected from a held native Reference.
+pub const NATIVE_API_CALLABLE_KIND: &str = "native_api_callable";
+/// Physical Main function use, distinct from the existing Library relations.
+pub const PHYSICAL_FUNCTION_USES_NATIVE_API_RELATION: &str = "lua_uses_native_api";
+
+/// Opt-in definitions for the ordinary native API callable projection.
+///
+/// Existing registry builders do not call this constructor. A selected producer
+/// must append both definitions under its exact registry recipe and retain the
+/// genuine Reference record and source/call support. These definitions alone
+/// grant no authority to raw Library input, unresolved targets or conflicts.
+///
+/// The target is a projection in the project's graph universe, not a foreign
+/// Reference graph entity or an inferred cross-universe relation.
+pub fn native_api_callable_registry_definitions()
+-> ProjectResult<(GraphEntityKindDefinition, GraphRelationKindDefinition)> {
+    let callable = GraphEntityKindDefinition::new(
+        NATIVE_API_CALLABLE_KIND,
+        vec!["project".into()],
+        vec![
+            "reference_profile_id".into(),
+            "reference_generation_id".into(),
+            "reference_digest".into(),
+            "record_key".into(),
+            "record_digest".into(),
+        ],
+        vec![GraphConfidence::Derived],
+    )
+    .map_err(|_| invalid())?;
+    let uses_api = GraphRelationKindDefinition::new(
+        PHYSICAL_FUNCTION_USES_NATIVE_API_RELATION,
+        GraphRelationKind::UsesApi,
+        vec!["lua_source_function".into()],
+        vec![NATIVE_API_CALLABLE_KIND.into()],
+        vec![GraphConfidence::Derived],
+    )
+    .map_err(|_| invalid())?;
+    Ok((callable, uses_api))
+}
+
 fn registry_for_recipe(
     project_kind: ProjectKind,
     raw_inventory: bool,
     recipe: DirectRecipe,
+) -> ProjectResult<GraphRegistryBundle> {
+    registry_with_native_api(project_kind, raw_inventory, recipe, false)
+}
+
+fn registry_with_native_api(
+    project_kind: ProjectKind,
+    raw_inventory: bool,
+    recipe: DirectRecipe,
+    native_api: bool,
 ) -> ProjectResult<GraphRegistryBundle> {
     let universe_class = match project_kind {
         ProjectKind::Fixture | ProjectKind::Repository => "project",
@@ -817,10 +870,20 @@ fn registry_for_recipe(
     if recipe.xml_schema_classification() {
         xml_classification::extend_registry(&mut entities, &mut relations)?;
     }
-    let version = match recipe {
-        DirectRecipe::Capabilities(capabilities) => capabilities.version_id(),
-        DirectRecipe::Original if raw_inventory => "16".into(),
-        DirectRecipe::Original => "15".into(),
+    let version = if native_api {
+        if project_kind == ProjectKind::BlizzardUiPlatformSource || raw_inventory {
+            return Err(invalid());
+        }
+        let (api, uses) = native_api_callable_registry_definitions()?;
+        entities.push(api);
+        relations.push(uses);
+        "native-api-uses-1".into()
+    } else {
+        match recipe {
+            DirectRecipe::Capabilities(capabilities) => capabilities.version_id(),
+            DirectRecipe::Original if raw_inventory => "16".into(),
+            DirectRecipe::Original => "15".into(),
+        }
     };
     GraphRegistryBundle::build(SOURCE_GRAPH_REGISTRY_ID, version, entities, relations)
         .map_err(|_| invalid())
@@ -1121,7 +1184,12 @@ fn collect_source_graph_proposals_for_recipe(
         },
     )?;
     let raw_selected = raw_inventory::selected(config);
-    let registry = registry_for_recipe(config.project_kind(), raw_selected, recipe)?;
+    let registry = registry_with_native_api(
+        config.project_kind(),
+        raw_selected,
+        recipe,
+        config.native_api_uses().is_some(),
+    )?;
     let universe = match config.project_kind() {
         ProjectKind::BlizzardUiPlatformSource => {
             let binding = config.platform_package_binding().ok_or_else(invalid)?;

@@ -260,8 +260,14 @@ pub const STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1: &[&str] = &[
     super::NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA,
     "wow-project.live-pair.v1",
 ];
+/// Ordinary selected native API-use recipe; prior epoch catalogs remain frozen.
+pub const STORAGE_SCHEMAS_NATIVE_API_USES_V1: &[&str] = &[
+    super::NATIVE_API_USES_STORAGE_SCHEMA,
+    "wow-project.live-pair.v1",
+];
 /// Exact catalogs admitted by open/recovery/migration. Never widen a retained epoch.
 pub const STORAGE_SCHEMA_CATALOGS: &[&[&str]] = &[
+    STORAGE_SCHEMAS_NATIVE_API_USES_V1,
     STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1,
     STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1,
     STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1,
@@ -304,6 +310,7 @@ struct PairHeader {
 pub struct ProjectPublicationBundle {
     records: Vec<PartitionRecord>,
     bindings: BTreeMap<String, String>,
+    replay_storage_schema: &'static str,
 }
 impl ProjectPublicationBundle {
     pub fn build(
@@ -371,6 +378,13 @@ impl ProjectPublicationBundle {
         validate_native_parts(&project, graph, native, stop)?;
         let replay = ProjectReplay::capture(publisher, stop)?;
         plan_in_namespace(&replay, &project, graph, namespace, stop)
+    }
+
+    /// Exact schema already selected and validated for the retained replay record.
+    /// Catalog dispatch borrows this native handoff without decoding record bytes.
+    #[must_use]
+    pub const fn replay_storage_schema(&self) -> &'static str {
+        self.replay_storage_schema
     }
 
     pub fn into_parts(self) -> (Vec<PartitionRecord>, BTreeMap<String, String>) {
@@ -541,6 +555,7 @@ impl AcquiredProjectPair {
                 | super::SELECTED_COMPONENTS_STORAGE_SCHEMA
                 | super::PRIMARY_CALLABLES_STORAGE_SCHEMA
                 | super::NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA
+                | super::NATIVE_API_USES_STORAGE_SCHEMA
         ) {
             return Err(invalid().into());
         }
@@ -759,8 +774,9 @@ fn plan(
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectPublicationBundle> {
     let mut records = graph.storage_records(stop).map_err(graph_error)?;
+    let replay_storage_schema = replay.storage_schema()?;
     records.push(
-        PartitionRecord::new(REPLAY_KEY, replay.storage_schema()?, replay)
+        PartitionRecord::new(REPLAY_KEY, replay_storage_schema, replay)
             .map_err(|_| super::exhausted())?,
     );
     records.sort_by(|a, b| a.key().cmp(b.key()));
@@ -828,7 +844,11 @@ fn plan(
             project.configuration().reference_generation().to_string(),
         ),
     ]);
-    Ok(ProjectPublicationBundle { records, bindings })
+    Ok(ProjectPublicationBundle {
+        records,
+        bindings,
+        replay_storage_schema,
+    })
 }
 fn load<T: serde::de::DeserializeOwned>(
     read: &ReadSnapshot,

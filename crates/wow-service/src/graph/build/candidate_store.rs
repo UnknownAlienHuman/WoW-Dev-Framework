@@ -217,8 +217,9 @@ fn compose_candidate_from_project(
     let (handler_nodes, script_edges) =
         scripts::maps_bound(snapshot, &addresses, script_recognition, stop)
             .map_err(|e| stage_error("script-crosswalk", e))?;
-    let (function_nodes, call_edges) = calls::maps(snapshot, &addresses, call_recognition, stop)
-        .map_err(|e| stage_error("call-crosswalk", e))?;
+    let (function_nodes, call_edges) =
+        calls::maps(snapshot, &addresses, call_recognition, None, stop)
+            .map_err(|e| stage_error("call-crosswalk", e))?;
     let (frame_nodes, creation_edges) =
         construction::maps(snapshot, &addresses, construction_recognition, stop)
             .map_err(|e| stage_error("construction-crosswalk", e))?;
