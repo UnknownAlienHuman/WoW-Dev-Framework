@@ -2,8 +2,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use wow_annotations::native::{project, project_with_alias_catalog};
 use wow_annotations::navigation::{
-    GeneratedLookup, LookupError, NavigationIndex, PositionEncoding, SourceLookup, TextPosition,
-    source_at, source_at_position,
+    GeneratedLookup, LookupError, NavigationIndex, NavigationSourceInventory, PositionEncoding,
+    SourceLookup, TextPosition, source_at, source_at_position,
 };
 use wow_reference::native::{DocumentationDocument, ingest_document, source_digest};
 use wow_reference::native_aliases::ingest_alias_catalog;
@@ -25,6 +25,83 @@ fn document() -> Result<DocumentationDocument> {
         &source_digest(RAW.as_bytes()),
         &AtomicBool::new(false),
     )?)
+}
+
+#[test]
+fn retained_navigation_preserves_whole_range_ties_and_refuses_map_changes() -> Result<()> {
+    let docs = [document()?];
+    let stop = AtomicBool::new(false);
+    let mut library = project(&docs, "Mainline", &stop)?;
+    let file = library.files.first_mut().ok_or("file")?;
+    let declaration = file
+        .mappings
+        .iter()
+        .find(|mapping| mapping.granularity == "declaration")
+        .ok_or("declaration")?
+        .clone();
+    let member = file
+        .mappings
+        .iter()
+        .find(|mapping| mapping.granularity == "parameter")
+        .ok_or("member")?
+        .generated;
+    file.mappings.push(declaration.clone());
+    let original = NavigationIndex::new(&library, &stop)?;
+    let expected = serde_json::to_value(original.source_for_range(
+        &library.files[0].path,
+        &library.files[0].sha256,
+        declaration.generated,
+        &stop,
+    )?)?;
+    let expected_member = serde_json::to_value(original.source_for_range(
+        &library.files[0].path,
+        &library.files[0].sha256,
+        member,
+        &stop,
+    )?)?;
+    drop(original);
+    let inventory = NavigationSourceInventory::from_library(&library, &stop)?;
+    let mut files = std::mem::take(&mut library.files);
+    // The retained seam owns only descriptors; the original producers may move.
+    drop(library);
+    drop(docs);
+    let retained = NavigationIndex::from_retained(&files, &inventory, &stop)?;
+    let actual = retained.source_for_range(
+        &files[0].path,
+        &files[0].sha256,
+        declaration.generated,
+        &stop,
+    )?;
+    assert!(matches!(&actual, SourceLookup::Mapped { candidates, .. } if candidates.len() == 2));
+    assert_eq!(serde_json::to_value(actual)?, expected);
+    assert_eq!(
+        serde_json::to_value(retained.source_for_range(
+            &files[0].path,
+            &files[0].sha256,
+            member,
+            &stop,
+        )?)?,
+        expected_member
+    );
+    assert_eq!(
+        retained
+            .source_for_range(&files[0].path, "stale", declaration.generated, &stop,)
+            .err(),
+        Some(LookupError::StaleArtifact)
+    );
+    drop(retained);
+    let mapping = files[0].mappings.pop().ok_or("duplicate mapping")?;
+    assert_eq!(
+        NavigationIndex::from_retained(&files, &inventory, &stop).err(),
+        Some(LookupError::StaleArtifact)
+    );
+    files[0].mappings.push(mapping);
+    stop.store(true, Ordering::Relaxed);
+    assert_eq!(
+        NavigationIndex::from_retained(&files, &inventory, &stop).err(),
+        Some(LookupError::Cancelled)
+    );
+    Ok(())
 }
 
 #[test]

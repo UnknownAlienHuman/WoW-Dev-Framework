@@ -276,7 +276,39 @@ fn native_library_inputs_requalify_after_published_source_absent_reopen() -> Tes
     };
     use wow_project::{ProjectPublisher, replay::ProjectReplay};
     use wow_store::project::ReadSelector;
-    let (root, config) = native_fixture()?;
+    let (root, mut config) = native_fixture()?;
+    // Reach the real analyzer Library target in this same bounded native fixture.
+    let main = "function FixtureFunction() return C_Transport.Read() end\n";
+    let mut manifest: Value =
+        serde_json::from_slice(&std::fs::read(root.0.join("manifest.json"))?)?;
+    let files = manifest["files"]
+        .as_array_mut()
+        .ok_or("fixture manifest files")?;
+    let member = files
+        .iter_mut()
+        .find(|file| file["path"] == "UI/main.lua")
+        .ok_or("fixture Main manifest member")?;
+    member["bytes"] = json!(main.len());
+    member["content_sha256"] = json!(format!("{:x}", Sha256::digest(main.as_bytes())));
+    let total = files
+        .iter()
+        .try_fold(0_u64, |sum, file| -> TestResult<u64> {
+            Ok(sum
+                .checked_add(file["bytes"].as_u64().ok_or("member bytes")?)
+                .ok_or("manifest source byte sum")?)
+        })?;
+    manifest["coverage"]["included_bytes"] = json!(total);
+    manifest
+        .as_object_mut()
+        .ok_or("fixture manifest")?
+        .remove("manifest_sha256");
+    manifest["manifest_sha256"] = json!(format!(
+        "{:x}",
+        Sha256::digest(wow_core::canonical_json_bytes(&manifest)?)
+    ));
+    std::fs::write(root.0.join("UI/main.lua"), main)?;
+    let manifested = write_json(&root, "manifest.json", &manifest)?;
+    config["native_reference"]["native_source"]["manifest"] = serde_json::to_value(manifested)?;
     let stop = AtomicBool::new(false);
     let native_manifest = json!({
         "schema": crate::local::LOCAL_NATIVE_SCHEMA,
@@ -404,11 +436,106 @@ fn native_library_inputs_requalify_after_published_source_absent_reopen() -> Tes
         .collect::<Vec<_>>();
     assert!(!actual_bindings.is_empty());
     assert_eq!(actual_bindings, expected_bindings);
+    use wow_emmy::function_calls::SourceCallTarget;
+    let report = read
+        .project()
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("reopened native callable report")?;
+    let mut targets = report
+        .calls()
+        .iter()
+        .filter_map(|call| match call.target() {
+            SourceCallTarget::LibraryFunction { target } => Some(target),
+            _ => None,
+        });
+    let target = targets
+        .next()
+        .ok_or("missing genuine analyzer Library closure target")?
+        .clone();
+    assert!(
+        targets.next().is_none(),
+        "fixture must have one Library call"
+    );
+    assert_eq!(target.role, "library");
+    let resolver = rebuilt.target_resolver(read.project(), &stop)?;
+    let super::super::NativeApiTargetResolution::Bound(association) =
+        resolver.resolve_target(&target, &stop)?
+    else {
+        return Err("genuine native Library target did not bind".into());
+    };
+    let (origin, record) = (association.binding(), association.reference_record());
+    assert_eq!(association.target(), &target);
+    let expected_origins = rebuilt.callable_bindings().bindings();
+    assert_eq!(expected_origins.len(), 1);
+    let expected_origin = &expected_origins[0];
+    assert_eq!(origin.key(), expected_origin.key());
+    assert_eq!(origin.mapping_id(), expected_origin.mapping_id());
+    assert_eq!(origin.source(), expected_origin.source());
+    assert_eq!(origin.source_id(), expected_origin.source_id());
+    assert_eq!(origin.generated_path(), target.path);
+    assert_eq!(origin.generated_sha256(), target.content_digest);
+    assert!(!origin.ambiguous_origin());
+    let wow_reference::LookupResult::Found(expected_record) = rebuilt.reference().view.lookup(
+        wow_reference::native_view::NATIVE_API_PARTITION,
+        expected_origin.key(),
+    ) else {
+        return Err("original native callable is not Found".into());
+    };
+    assert_eq!(record, expected_record);
+    assert_eq!(record.digest()?, origin.record_digest());
+    assert_eq!(record.source_ids()[0].as_ref(), origin.source_id());
+
+    // Mutate only the received SymbolTarget; never rebuild the native fixture.
+    let mut wrong_role = target.clone();
+    wrong_role.role = "main";
+    let mut wrong_snapshot = target.clone();
+    wrong_snapshot.workspace_id.push_str("-stale");
+    let mut wrong_path = target.clone();
+    wrong_path.path.push_str(".missing");
+    let mut wrong_digest = target.clone();
+    wrong_digest.content_digest = format!("sha256:{}", "0".repeat(64));
+    assert_ne!(wrong_digest.content_digest, target.content_digest);
+    let file = rebuilt
+        .sidecars()
+        .source_map()
+        .files()
+        .iter()
+        .find(|file| file.path() == target.path)
+        .ok_or("actual generated Library file")?;
+    let mut wrong_span = target.clone();
+    wrong_span.span = wow_core::SourceSpan::byte_range(
+        0,
+        file.byte_length()
+            .checked_add(1)
+            .ok_or("Library span overflow")?,
+    )?;
+    for (label, invalid) in [
+        ("role", wrong_role),
+        ("snapshot", wrong_snapshot),
+        ("path", wrong_path),
+        ("digest", wrong_digest),
+        ("span", wrong_span),
+    ] {
+        assert!(
+            resolver.resolve_target(&invalid, &stop).is_err(),
+            "mismatched Library target {label} admitted"
+        );
+    }
     let cancelled = AtomicBool::new(true);
     assert_eq!(
         read.requalify_native_library(&cancelled)
             .err()
             .ok_or("pre-cancel admitted")?
+            .code(),
+        crate::ServiceErrorCode::Cancelled
+    );
+    assert_eq!(
+        resolver
+            .resolve_target(&target, &cancelled)
+            .err()
+            .ok_or("pre-cancel target resolution admitted")?
             .code(),
         crate::ServiceErrorCode::Cancelled
     );

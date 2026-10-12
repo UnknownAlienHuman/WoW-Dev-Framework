@@ -7,6 +7,7 @@ use serde::de::{IgnoredAny, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use wow_annotations::artifact::AnnotationArtifact;
 use wow_annotations::native::AnnotationFile;
+use wow_annotations::navigation::{LookupError, NavigationSourceInventory};
 use wow_annotations::reference_links::{NativeCallableBindingError, NativeCallableBindings};
 use wow_annotations::sidecars::NativeProjectionSidecars;
 use wow_core::{ContentDigest, CorrectionSet, ProfileIdentity, ProfileKind, SourceContent};
@@ -181,6 +182,7 @@ pub(super) fn capture(
 /// Genuine, owned lower-producer results. No borrowed NativeLibrary or decoded
 /// report carries semantic authority across the retained-input boundary.
 pub struct RequalifiedNativeLibrary {
+    pub(super) project_snapshot_id: Box<str>,
     pub(super) profile: ProfileIdentity,
     pub(super) reference: NativeViewProjection,
     pub(super) source_files: Vec<NativeFileIdentity>,
@@ -188,9 +190,23 @@ pub struct RequalifiedNativeLibrary {
     pub(super) artifact: AnnotationArtifact,
     pub(super) sidecars: NativeProjectionSidecars,
     pub(super) callable_bindings: NativeCallableBindings,
+    pub(super) annotation_files: Vec<AnnotationFile>,
+    pub(super) navigation_sources: NavigationSourceInventory,
 }
 
 impl RequalifiedNativeLibrary {
+    #[must_use]
+    pub fn project_snapshot_id(&self) -> &str {
+        &self.project_snapshot_id
+    }
+    #[must_use]
+    pub fn annotation_files(&self) -> &[AnnotationFile] {
+        &self.annotation_files
+    }
+    #[must_use]
+    pub fn navigation_sources(&self) -> &NavigationSourceInventory {
+        &self.navigation_sources
+    }
     #[must_use]
     pub fn profile(&self) -> &ProfileIdentity {
         &self.profile
@@ -348,10 +364,14 @@ pub(crate) fn rebuild_for_project(
     {
         return Err(identity_error());
     }
+    let navigation_sources =
+        NavigationSourceInventory::from_library(&library, stop).map_err(navigation_error)?;
     let remaining = METADATA_MAX_BYTES
         .checked_sub(producer_bytes)
         .and_then(|bytes| bytes.checked_sub(sidecars.source_map_bytes().len()))
         .and_then(|bytes| bytes.checked_sub(sidecars.loss_report_bytes().len()))
+        .and_then(|bytes| bytes.checked_sub(navigation_sources.metadata_bytes()))
+        .and_then(|bytes| bytes.checked_sub(project.snapshot_id().len()))
         .ok_or_else(budget_error)?;
     let callable_bindings =
         NativeCallableBindings::build(&sidecars, &reference, remaining, BINDING_MAX_WORK, stop)
@@ -365,6 +385,7 @@ pub(crate) fn rebuild_for_project(
             })?;
     cancelled(stop)?;
     Ok(RequalifiedNativeLibrary {
+        project_snapshot_id: project.snapshot_id().into(),
         profile,
         reference,
         source_files,
@@ -372,7 +393,19 @@ pub(crate) fn rebuild_for_project(
         artifact,
         sidecars,
         callable_bindings,
+        annotation_files: library.files,
+        navigation_sources,
     })
+}
+
+pub(super) fn navigation_error(error: LookupError) -> ServiceError {
+    match error {
+        LookupError::Cancelled => {
+            ServiceError::new(ServiceErrorCode::Cancelled, "native navigation cancelled")
+        }
+        LookupError::InputLimit => budget_error(),
+        _ => identity_error(),
+    }
 }
 
 fn capture_annotation_inputs(

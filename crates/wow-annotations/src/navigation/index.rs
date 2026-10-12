@@ -67,11 +67,36 @@ impl<'a> NavigationIndex<'a> {
     ) -> Result<Self, LookupError> {
         validate_library(library, cancelled)?;
         let sources = sources::Sources::new(library, cancelled)?;
+        Self::build(&library.files, sources, cancelled)
+    }
+
+    /// Reuse the same validated range/position/reverse-navigation algorithms
+    /// after the original native producer moves. Complete files and mapping
+    /// fingerprints must match the sealed original inventory.
+    pub fn from_retained(
+        files: &'a [AnnotationFile],
+        inventory: &'a sources::NavigationSourceInventory,
+        cancelled: &AtomicBool,
+    ) -> Result<Self, LookupError> {
+        inventory.validate_files(files, cancelled)?;
+        let sources = sources::Sources::from_retained(inventory, cancelled)?;
+        Self::build(files, sources, cancelled)
+    }
+
+    fn build(
+        generated_files: &'a [AnnotationFile],
+        sources: sources::Sources<'a>,
+        cancelled: &AtomicBool,
+    ) -> Result<Self, LookupError> {
+        check_cancelled(cancelled)?;
+        if generated_files.len() > super::MAX_FILES {
+            return Err(LookupError::InputLimit);
+        }
         let mut files = BTreeMap::new();
         let mut reverse = reverse::Reverse::default();
         let mut bytes = 0usize;
         let mut mappings = 0usize;
-        for file in &library.files {
+        for file in generated_files {
             check_cancelled(cancelled)?;
             bytes = bytes
                 .checked_add(file.text.len())

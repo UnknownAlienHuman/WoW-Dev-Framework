@@ -11,6 +11,7 @@ pub(crate) mod native_library_input;
 mod native_reference;
 mod native_resources;
 mod native_source;
+mod native_target;
 mod platform_input;
 mod projection;
 mod response;
@@ -36,6 +37,10 @@ pub use native_reference::{
     SOURCE_REFERENCE_INPUT_SCHEMA, SourceReferenceResult, read_local_source_reference,
 };
 pub use native_resources::{NativeAnnotationInputsReceipt, NativeAnnotationSelection};
+pub use native_target::{
+    NativeApiTargetAssociation, NativeApiTargetOmission, NativeApiTargetResolution,
+    NativeApiTargetResolver,
+};
 pub use platform_input::{LOCAL_PLATFORM_BUDGET_SCHEMA, LOCAL_PLATFORM_SCHEMA};
 pub use projection::OwnerAnalysis;
 pub use response::{

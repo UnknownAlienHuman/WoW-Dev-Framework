@@ -9,7 +9,9 @@ use wow_reference::native_view::{
 };
 use wow_reference::{ReferenceRecordKind, ReferenceViewError};
 
-use crate::sidecars::{NativeProjectionSidecars, NativeSidecarSource, NativeSidecarSpan};
+use crate::sidecars::{
+    NativeProjectionSidecars, NativeSidecarSource, NativeSidecarSpan, NativeSourceMapEntry,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NativeCallableBindingError {
@@ -22,6 +24,14 @@ pub enum NativeCallableBindingError {
 pub enum NativeCallableReferenceStatus {
     Found,
     Conflict,
+}
+
+/// Association of an already navigation-selected mapping. This never performs
+/// range selection or resolves competing original callable candidates.
+pub enum NativeCallableMapping<'a> {
+    Unmatched,
+    AmbiguousOrigin,
+    Bound(&'a NativeCallableBinding),
 }
 
 /// One exact generated declaration and its original native API candidate.
@@ -372,6 +382,44 @@ impl NativeCallableBindings {
     pub fn bindings(&self) -> &[NativeCallableBinding] {
         &self.bindings
     }
+
+    /// Resolve an already selected declaration mapping into its unique native binding.
+    /// No range selection occurs here; ambiguous origins remain explicit.
+    /// A conflict binding retains its status and never selects a Reference winner.
+    #[must_use]
+    pub fn for_mapping(
+        &self,
+        generated_path: &str,
+        generated_sha256: &str,
+        mapping: &NativeSourceMapEntry,
+    ) -> NativeCallableMapping<'_> {
+        if mapping.granularity() != "declaration" || mapping.source().scope().is_some() {
+            return NativeCallableMapping::Unmatched;
+        }
+        // The sealed map orders files by path and mappings by mapping_id. Build
+        // preserves that order, with origin candidates contiguous per mapping.
+        let key = (generated_path, mapping.mapping_id());
+        let index = self
+            .bindings
+            .partition_point(|binding| (binding.generated_path(), binding.mapping_id()) < key);
+        let Some(binding) = self.bindings.get(index) else {
+            return NativeCallableMapping::Unmatched;
+        };
+        if binding.generated_path() != generated_path
+            || binding.generated_sha256() != generated_sha256
+            || binding.mapping_id() != mapping.mapping_id()
+            || binding.generated() != mapping.generated()
+            || binding.source() != mapping.source()
+        {
+            return NativeCallableMapping::Unmatched;
+        }
+        if binding.ambiguous_origin() {
+            NativeCallableMapping::AmbiguousOrigin
+        } else {
+            NativeCallableMapping::Bound(binding)
+        }
+    }
+
     /// Cumulative conservative reservation, including temporary indexes.
     #[must_use]
     pub const fn metadata_bytes(&self) -> usize {
