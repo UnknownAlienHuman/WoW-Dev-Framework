@@ -421,7 +421,11 @@ fn platform_root_facets_compose_with_valid_primary_recipes_in_inspect_and_build(
             Some(CombinedL1Recipe::ReferenceFactsBoth),
         ),
     ];
-    for facet in ["callable_metadata", "xml_handler_metadata"] {
+    for facet in [
+        "callable_metadata",
+        "xml_handler_metadata",
+        "xml_declaration_metadata",
+    ] {
         for operation in ["inspect", "build"] {
             for (level, field, profile, expected_l0, expected_l1) in recipes {
                 let mut value = if operation == "inspect" {
@@ -444,7 +448,10 @@ fn platform_root_facets_compose_with_valid_primary_recipes_in_inspect_and_build(
                     request.platform_root_facet,
                     Some(match facet {
                         "callable_metadata" => wow_context::PlatformRootFacet::CallableMetadata,
-                        _ => wow_context::PlatformRootFacet::XmlHandlerMetadata,
+                        "xml_handler_metadata" => {
+                            wow_context::PlatformRootFacet::XmlHandlerMetadata
+                        }
+                        _ => wow_context::PlatformRootFacet::XmlDeclarationMetadata,
                     })
                 );
                 assert!(request.l0_recipe == expected_l0);
@@ -458,7 +465,11 @@ fn platform_root_facets_compose_with_valid_primary_recipes_in_inspect_and_build(
         }
     }
 
-    for facet in ["callable_metadata", "xml_handler_metadata"] {
+    for facet in [
+        "callable_metadata",
+        "xml_handler_metadata",
+        "xml_declaration_metadata",
+    ] {
         for operation in ["inspect", "build"] {
             let mut mixed = if operation == "inspect" {
                 inspect("l0", None)?
@@ -625,61 +636,69 @@ fn platform_callable_selection_refuses_invalid_and_mixed_intent_before_acquisiti
 }
 
 #[test]
-fn platform_xml_handler_selection_is_closed_and_additive() -> TestResult {
-    for level in ["l0", "l1", "both"] {
-        for omitted in [inspect(level, None)?, build(level, None)?] {
-            let request = ContextCombinedRequest::from_json_slice(
-                &serde_json::to_vec(&omitted)?,
-                &AtomicBool::new(false),
-            )?;
-            assert!(request.platform_root_facet.is_none());
-            assert_eq!(
-                wow_core::canonical_json_bytes(&request)?,
-                wow_core::canonical_json_bytes(&omitted)?,
-            );
+fn platform_xml_metadata_selectors_are_closed_and_additive() -> TestResult {
+    for (selector, expected_facet) in [
+        (
+            "xml_handler_metadata",
+            wow_context::PlatformRootFacet::XmlHandlerMetadata,
+        ),
+        (
+            "xml_declaration_metadata",
+            wow_context::PlatformRootFacet::XmlDeclarationMetadata,
+        ),
+    ] {
+        for level in ["l0", "l1", "both"] {
+            for omitted in [inspect(level, None)?, build(level, None)?] {
+                let request = ContextCombinedRequest::from_json_slice(
+                    &serde_json::to_vec(&omitted)?,
+                    &AtomicBool::new(false),
+                )?;
+                assert!(request.platform_root_facet.is_none());
+                assert_eq!(
+                    wow_core::canonical_json_bytes(&request)?,
+                    wow_core::canonical_json_bytes(&omitted)?,
+                );
 
-            let mut selected = omitted;
-            let key = if selected["operation"] == "inspect" {
-                "inspection"
-            } else {
-                "build"
-            };
-            selected[key]["platform_root_facet"] = json!("xml_handler_metadata");
-            let request = ContextCombinedRequest::from_json_slice(
-                &serde_json::to_vec(&selected)?,
-                &AtomicBool::new(false),
-            )?;
-            assert_eq!(
-                request.platform_root_facet,
-                Some(wow_context::PlatformRootFacet::XmlHandlerMetadata),
-            );
-            assert!(request.l0_recipe.is_none() && request.l1_recipe.is_none());
-            let expected = wow_core::canonical_json_bytes(&selected)?;
-            assert_eq!(wow_core::canonical_json_bytes(&request)?, expected);
-            let roundtrip =
-                ContextCombinedRequest::from_json_slice(&expected, &AtomicBool::new(false))?;
-            assert_eq!(wow_core::canonical_json_bytes(&roundtrip)?, expected);
-        }
-
-        for mut value in [inspect(level, None)?, build(level, None)?] {
-            let key = if value["operation"] == "inspect" {
-                "inspection"
-            } else {
-                "build"
-            };
-            for invalid in [
-                Value::Null,
-                json!(false),
-                json!(1),
-                json!([]),
-                json!({"xml_handler_metadata": null}),
-                json!("default"),
-                json!("unknown"),
-            ] {
-                value[key]["platform_root_facet"] = invalid;
-                refused(&value, ServiceErrorCode::InvalidRequest)?;
+                let mut selected = omitted;
+                let key = if selected["operation"] == "inspect" {
+                    "inspection"
+                } else {
+                    "build"
+                };
+                selected[key]["platform_root_facet"] = json!(selector);
+                let request = ContextCombinedRequest::from_json_slice(
+                    &serde_json::to_vec(&selected)?,
+                    &AtomicBool::new(false),
+                )?;
+                assert_eq!(request.platform_root_facet, Some(expected_facet));
+                assert!(request.l0_recipe.is_none() && request.l1_recipe.is_none());
+                let expected = wow_core::canonical_json_bytes(&selected)?;
+                assert_eq!(wow_core::canonical_json_bytes(&request)?, expected);
+                let roundtrip =
+                    ContextCombinedRequest::from_json_slice(&expected, &AtomicBool::new(false))?;
+                assert_eq!(wow_core::canonical_json_bytes(&roundtrip)?, expected);
             }
-            value[key]["platform_root_facet"] = json!("xml_handler_metadata");
+
+            for mut value in [inspect(level, None)?, build(level, None)?] {
+                let key = if value["operation"] == "inspect" {
+                    "inspection"
+                } else {
+                    "build"
+                };
+                for invalid in [
+                    Value::Null,
+                    json!(false),
+                    json!(1),
+                    json!([]),
+                    json!({(selector): null}),
+                    json!("default"),
+                    json!("unknown"),
+                ] {
+                    value[key]["platform_root_facet"] = invalid;
+                    refused(&value, ServiceErrorCode::InvalidRequest)?;
+                }
+                value[key]["platform_root_facet"] = json!(selector);
+            }
         }
     }
     Ok(())

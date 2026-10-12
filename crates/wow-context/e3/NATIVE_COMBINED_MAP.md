@@ -207,6 +207,23 @@ The original page's typed-metadata omission remains page-scoped. Missing custody
 incompatible support or a wrong-kind root refuses with checked closure. Omission
 and the existing callable selection preserve their previous bytes.
 
+### Selected platform-root XML declaration facet
+
+`inspection.platform_root_facet="xml_declaration_metadata"` selects an exact
+accepted native `xml_source_declaration`. The supplemental
+`platform_root_xml_declaration` borrows its original `ProjectGraphXmlDeclaration`,
+source context, producer assertion, accepted final root, source handle, evidence
+and root support from the held `SkeletonInputView`. It retains occurrence and
+span custody without XML contents or inferred classification, schema, type,
+inheritance, parent, runtime or bridge facts.
+
+The facet independently composes with every valid Primary recipe. Its bounded,
+cancellable receipt/identity/catalog joins are precharged to the continuing
+Budget; the same Inspect supplies Build and renderer origins. Missing,
+mismatched, ambiguous or incomplete custody refuses with checked closure.
+Omission and the callable/XML-handler selections preserve their bytes and
+counters. No second parser, map, native read, ledger or schema family is added.
+
 ## Selected combined semantic pack and rendering
 
 Build consumes the genuine combined Inspect with
@@ -236,7 +253,8 @@ L0/L1 recipe fields cannot coexist with each other. Explicit `l0_profile_id` sel
 StateRootV1 owner on the navigation map and continuing Budget. Its kind/custody
 checks and original L0 schema/identity also govern pack/render; no L1 is emitted.
 Other explicit L0 profile/level/root combinations refuse before acquisition.
-`build.platform_root_facet="callable_metadata"` or `"xml_handler_metadata"` selects
+`build.platform_root_facet="callable_metadata"`, `"xml_handler_metadata"` or
+`"xml_declaration_metadata"` selects
 the original platform-root facet independently of any valid Primary recipe.
 The consuming pack retains both original owners in Inspect origins;
 None/JSON/Markdown share one semantic pack identity and never rebuild that facet.

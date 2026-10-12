@@ -15,7 +15,10 @@ use wow_project::skeleton_input::{
 };
 use wow_project::{
     ProjectError, ProjectErrorCode, ProjectKind,
-    graph::{ProjectCallableMetadata, ProjectGraphInlineHandler, ProjectGraphScriptSource},
+    graph::{
+        ProjectCallableMetadata, ProjectGraphInlineHandler, ProjectGraphScriptSource,
+        ProjectGraphXmlDeclaration,
+    },
     load::XmlScriptSource,
 };
 use wow_reference::{ReferenceConflict, ReferenceView, ReferenceViewError};
@@ -34,6 +37,7 @@ pub const PLATFORM_NATIVE_ONE_HOP_PROFILE_BYTES: &[u8] = br#"{"native":"genuine_
 pub enum PlatformRootFacet {
     CallableMetadata,
     XmlHandlerMetadata,
+    XmlDeclarationMetadata,
 }
 
 #[derive(Serialize)]
@@ -1035,6 +1039,230 @@ pub(crate) fn build_platform_root_xml_handler_facet_on_budget<'m, 'a>(
         root: final_node,
         handler,
         script_source,
+        source_handle,
+        evidence,
+        root_support,
+    };
+    budget.retain(&facet, stop)?;
+    Ok(facet)
+}
+
+/// Original accepted XML-declaration identity and source-span custody. The
+/// declaration record contains metadata only; no XML text or meaning is inferred.
+#[derive(Serialize)]
+pub(crate) struct PlatformRootXmlDeclarationFacet<'m, 'a> {
+    selection: PlatformRootFacet,
+    interpretation: &'static str,
+    source_context: &'a GenerationContext,
+    assertion: &'a GraphAssertionRef,
+    root: &'a GraphNode,
+    declaration: &'a ProjectGraphXmlDeclaration,
+    source_handle: &'a SourceHandle,
+    evidence: &'a EvidenceRecord,
+    root_support: &'m GraphResolvedExplanation<'m>,
+}
+
+pub(crate) fn build_platform_root_xml_declaration_facet_on_budget<'m, 'a>(
+    map: &'m PlatformMapArtifact<'a>,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<PlatformRootXmlDeclarationFacet<'m, 'a>> {
+    checkpoint(stop)?;
+    let native_view: &'a SkeletonInputView<'a> = map.native_view;
+    let (native, accepted, _) = native_view.context_parts();
+    let source = native.source();
+    let root = map.page().neighborhood().root();
+    let root_support = map.page().root_support();
+    if root.kind() != "xml_source_declaration" {
+        return Err(ContextError::new(ContextErrorCode::RootInvalid));
+    }
+    if source.context().context_id() != accepted.source_context_id()
+        || source.context().context_id() != native.scope().source_context_id
+    {
+        return Err(mismatch());
+    }
+    let explanation = root_support.explanation();
+    if !explanation.support_complete() || !explanation.derivation_complete() {
+        return Err(facet_missing());
+    }
+    if !explanation.conflicts().is_empty() {
+        return Err(facet_mismatch());
+    }
+
+    // Match only original declaration rows against ProducerEntity receipts in
+    // this exact root explanation. Charge the full cross-product before search.
+    let supports = explanation.supports();
+    let declarations = source.xml_declarations();
+    budget.work(
+        declarations
+            .len()
+            .checked_add(1)
+            .and_then(|n| n.checked_mul(supports.len()))
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    let depth = |count: usize| count.max(1).ilog2() as usize + 1;
+    let address_depth = depth(native.charged_metadata_bytes());
+    let mut selected = None;
+    for support in supports {
+        checkpoint(stop)?;
+        let GraphAssertionSupport::ProducerEntity {
+            producer,
+            proposal,
+            accepted: receipt,
+            ..
+        } = support
+        else {
+            continue;
+        };
+        if receipt.node().kind() != root.kind() || receipt.node().owner_key() != root.owner_key() {
+            continue;
+        }
+        for declaration in declarations {
+            checkpoint(stop)?;
+            budget.work(
+                1usize
+                    .checked_add(declaration.proposal_id.len())
+                    .and_then(|n| n.checked_add(declaration.ownership_proposal_id.len()))
+                    .and_then(|n| n.checked_add(address_depth))
+                    .ok_or_else(exhausted)?,
+                stop,
+            )?;
+            if declaration.proposal_id != proposal.proposal_id() {
+                continue;
+            }
+            budget.retain(declaration, stop)?;
+            let local = GraphLocalAssertion {
+                kind: GraphAssertionKind::Entity,
+                proposal_id: declaration.proposal_id.clone().into(),
+            };
+            let assertion = native.assertion(&local).ok_or_else(facet_missing)?;
+            let GraphAssertionRef::Producer {
+                partition_id,
+                batch_id,
+                assertion: retained_local,
+            } = assertion
+            else {
+                return Err(facet_mismatch());
+            };
+            if partition_id.as_ref() != producer.partition_id
+                || batch_id.as_ref() != producer.batch_id
+            {
+                continue;
+            }
+            if retained_local != &local
+                || receipt.proposal_id() != proposal.proposal_id()
+                || proposal.proposal_id() != declaration.proposal_id
+                || proposal.entity_kind_id() != "xml_source_declaration"
+                || receipt.node().universe() != &native.scope().universe
+                || receipt.node().generation() != &native.scope().generation
+            {
+                return Err(facet_mismatch());
+            }
+            if selected
+                .replace((declaration, assertion, *proposal, *receipt))
+                .is_some()
+            {
+                return Err(facet_mismatch());
+            }
+        }
+    }
+    let (declaration, assertion, proposal, receipt) = selected.ok_or_else(facet_missing)?;
+
+    // Rebind the original accepted identity into the held final snapshot and
+    // require pointer membership of the exact map root.
+    let snapshot = accepted.snapshot();
+    let evidence_count = receipt.node().evidence_ids().len();
+    let node_work = depth(snapshot.nodes().len())
+        .checked_add(8)
+        .and_then(|n| {
+            evidence_count
+                .checked_mul(depth(evidence_count) + 1)
+                .and_then(|e| n.checked_add(e))
+        })
+        .ok_or_else(exhausted)?;
+    budget.work(node_work, stop)?;
+    let original = receipt.node();
+    let node_material = (original, snapshot.universe(), snapshot.generation());
+    budget.retain(&node_material, stop)?;
+    let node_bytes = encoded_len(&node_material, budget.remaining_context_work(), stop)?;
+    budget.work(usize::try_from(node_bytes).map_err(|_| exhausted())?, stop)?;
+    let rebound = GraphNode::new(
+        snapshot.universe().clone(),
+        snapshot.generation().clone(),
+        original.kind(),
+        original.owner_key(),
+        original.evidence_ids().to_vec(),
+        snapshot.limits(),
+    )
+    .map_err(crate::error::graph_error)?;
+    let final_node = snapshot.node(rebound.node_id()).ok_or_else(facet_missing)?;
+    if !std::ptr::eq(final_node, root) {
+        return Err(facet_mismatch());
+    }
+
+    // Charge catalog lookup, identity comparisons, and retained support before
+    // resolving the original source handle and evidence row.
+    let handles = source.source_handles();
+    let evidence_records = source.evidence();
+    budget.work(
+        depth(handles.len())
+            .checked_add(depth(evidence_records.len()))
+            .and_then(|n| n.checked_add(declaration.source_handle_id.as_hash().len()))
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    let source_handle = handles
+        .get(&declaration.source_handle_id)
+        .ok_or_else(facet_missing)?;
+    let evidence = evidence_records
+        .get(&declaration.evidence_id)
+        .ok_or_else(facet_missing)?;
+    let evidence_resolution = root_support.evidence_resolution();
+    let comparison_work = evidence_resolution
+        .source_handles()
+        .len()
+        .checked_add(evidence_resolution.evidence_records().len())
+        .and_then(|n| n.checked_add(proposal.source_handle_ids().len()))
+        .and_then(|n| n.checked_add(proposal.evidence_ids().len()))
+        .and_then(|n| n.checked_add(evidence.source_handle_ids().len()))
+        .ok_or_else(exhausted)?;
+    budget.work(comparison_work, stop)?;
+    let comparison_bytes = encoded_len(
+        &(declaration, source_handle, evidence, evidence_resolution),
+        budget
+            .remaining_metadata_bytes()?
+            .min(budget.remaining_context_work()),
+        stop,
+    )?;
+    budget.work(
+        usize::try_from(comparison_bytes).map_err(|_| exhausted())?,
+        stop,
+    )?;
+    if source_handle.path().as_str() != declaration.path.as_str()
+        || evidence.context_id() != source.context().context_id()
+        || !proposal
+            .source_handle_ids()
+            .contains(&declaration.source_handle_id)
+        || !proposal.evidence_ids().contains(&declaration.evidence_id)
+        || !evidence
+            .source_handle_ids()
+            .contains(&declaration.source_handle_id)
+        || !evidence_resolution
+            .source_handles()
+            .contains(&source_handle)
+        || !evidence_resolution.evidence_records().contains(&evidence)
+    {
+        return Err(facet_mismatch());
+    }
+
+    let facet = PlatformRootXmlDeclarationFacet {
+        selection: PlatformRootFacet::XmlDeclarationMetadata,
+        interpretation: "original_accepted_root_xml_declaration_identity_span_no_classification_or_runtime_resolution",
+        source_context: source.context(),
+        assertion,
+        root: final_node,
+        declaration,
         source_handle,
         evidence,
         root_support,

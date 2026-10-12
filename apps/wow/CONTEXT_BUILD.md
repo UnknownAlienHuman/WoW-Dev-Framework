@@ -289,6 +289,16 @@ metadata, handle/evidence and support in those same Inspect origins. It uses the
 same admission, continuing Budget and None/JSON/Markdown identity rules without
 source bodies or inferred receiver/runtime dispatch. The existing callable
 selection preserves its bytes.
+The closed `platform_root_facet="xml_declaration_metadata"` selects only an
+exact accepted native `xml_source_declaration` root. Its original
+`ProjectGraphXmlDeclaration` must match the producer assertion and accepted
+final root; source, evidence and root support remain those of the held
+`SkeletonInputView`. The selected facet preserves declaration identity and
+source span custody only, without XML contents or schema/classification/type/
+inheritance/parent/runtime/bridge inference. It composes with each valid Primary
+recipe in the same Inspect origins, semantic pack and renderer path under the
+cumulative Budget. Missing, mismatched, ambiguous or incomplete custody refuses
+with checked closure. Omission preserves existing bytes.
 StateDetail retains its original nested
 `wow-context/l1-skeleton/primary-state-detail/1` schema and artifact ID;
 ReferenceFacts retains `wow-context/l1-skeleton/primary-reference-facts/1`,

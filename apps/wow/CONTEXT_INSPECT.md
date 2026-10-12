@@ -398,3 +398,13 @@ It retains the original inline-handler/script-source records, native support,
 handle and evidence without source bodies or inferred receiver/runtime dispatch.
 Wrong-kind or missing custody refuses with checked closure; omission and the
 existing callable selection preserve their bytes.
+
+`inspection.platform_root_facet="xml_declaration_metadata"` selects only an
+exact accepted native `xml_source_declaration` root. The original
+`ProjectGraphXmlDeclaration` must match its producer assertion and accepted
+final root; original source, evidence and root support come from the held
+`SkeletonInputView`. The facet carries declaration identity and source span
+custody only, with no XML contents or schema/classification/type/inheritance/
+parent/runtime/bridge inference. It composes with each valid Primary recipe
+under the cumulative Budget. Missing, mismatched, ambiguous or incomplete
+custody refuses with checked closure; omission preserves existing bytes.

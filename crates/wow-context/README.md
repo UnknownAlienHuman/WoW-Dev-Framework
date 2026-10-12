@@ -28,7 +28,9 @@ configured Reference binding, original support and load/source custody:
   using one retained Skeleton input; broader platform and combined acceptance remain open.
 - [Selected combined native map, L0/L1 inspection and semantic pack/JSON/Markdown](e3/NATIVE_COMBINED_MAP.md),
   retaining separate original owners/origins and exact shared Reference association
-  under one continuing construction Budget through validation and final delivery.
+  under one continuing construction Budget through validation and final delivery;
+  selected native platform-root callable, XML-handler and XML-declaration metadata
+  compose independently with each valid Primary recipe in Inspect/Build.
 
 Selected projections remain Partial or Truncated with absence_authoritative=false;
 a bound Reference view does not imply Reference enrichment.

@@ -11,8 +11,10 @@ use wow_reference::ReferenceView;
 use crate::budget::{Budget, canonical, checkpoint, exhausted, identity};
 use crate::platform::{
     PlatformContextInspectView, PlatformMapArtifact, PlatformRootCallableFacet, PlatformRootFacet,
-    PlatformRootXmlHandlerFacet, bind_platform_context_universe_with_budget,
-    build_platform_context_inspect_on_budget, build_platform_root_callable_facet_on_budget,
+    PlatformRootXmlDeclarationFacet, PlatformRootXmlHandlerFacet,
+    bind_platform_context_universe_with_budget, build_platform_context_inspect_on_budget,
+    build_platform_root_callable_facet_on_budget,
+    build_platform_root_xml_declaration_facet_on_budget,
     build_platform_root_xml_handler_facet_on_budget, encode_retained,
 };
 use crate::skeleton::{
@@ -239,6 +241,8 @@ struct CombinedInspectCore<'m, 'p, 'f> {
     platform_root_callable: Option<PlatformRootCallableFacet<'m, 'f>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     platform_root_xml_handler: Option<PlatformRootXmlHandlerFacet<'m, 'f>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    platform_root_xml_declaration: Option<PlatformRootXmlDeclarationFacet<'m, 'f>>,
     state: ProjectMapState,
     absence_authoritative: bool,
     cross_universe_relations: &'static str,
@@ -601,10 +605,17 @@ pub fn build_combined_context_inspect_with_selection_and_platform_root_facet<'m,
         ),
         None => None,
         Some(PlatformRootFacet::XmlHandlerMetadata) => None,
+        Some(PlatformRootFacet::XmlDeclarationMetadata) => None,
     };
     let platform_root_xml_handler = match platform_root_facet {
         Some(PlatformRootFacet::XmlHandlerMetadata) => Some(
             build_platform_root_xml_handler_facet_on_budget(&map.core.platform, budget, stop)?,
+        ),
+        _ => None,
+    };
+    let platform_root_xml_declaration = match platform_root_facet {
+        Some(PlatformRootFacet::XmlDeclarationMetadata) => Some(
+            build_platform_root_xml_declaration_facet_on_budget(&map.core.platform, budget, stop)?,
         ),
         _ => None,
     };
@@ -623,6 +634,7 @@ pub fn build_combined_context_inspect_with_selection_and_platform_root_facet<'m,
         platform_inspect,
         platform_root_callable,
         platform_root_xml_handler,
+        platform_root_xml_declaration,
         state,
         absence_authoritative: false,
         cross_universe_relations: "not_evaluated",

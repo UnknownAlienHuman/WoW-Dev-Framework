@@ -151,6 +151,17 @@ handle/evidence and root support without source bodies or inferred receiver/runt
 dispatch. The new facet stays in original Inspect/Build origins; omission and
 existing callable-selected bytes remain unchanged.
 
+The closed value `xml_declaration_metadata` selects only an exact accepted native
+`xml_source_declaration` root. The original `ProjectGraphXmlDeclaration` must
+match its producer assertion and accepted final root, with the original source,
+evidence and root support retained from the held `SkeletonInputView`. The facet
+preserves declaration identity and source span custody only; it adds no XML
+contents, schema/classification, type, inheritance, parent, runtime or bridge
+inference. It composes independently with each valid Primary recipe through the
+same Inspect/Build path and cumulative Budget. Missing, mismatched, ambiguous or
+incomplete custody refuses with checked closure. Omission preserves existing
+bytes.
+
 The optional non-null `l0_profile_id` selects only
 `wow-context/primary-state-root-l0/1` with L0/GraphEntity. It invokes the original
 StateRootV1 L0 on the ordinary navigation map and continuing Budget. Native
