@@ -485,15 +485,54 @@ fn source_id(
     doc: &DocumentationDocument,
     span: Span,
 ) -> Result<String, NativeError> {
-    let bytes = crate::wire_json::canonical_json_bytes(&(
-        profile,
-        kind,
-        revision,
-        doc.path(),
-        doc.sha256(),
-        span,
-    ))
-    .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
+    origin_source_id(profile, kind, revision, doc.path(), doc.sha256(), span)
+}
+
+/// Exact native callable origin identity. Names and generated annotation ranges
+/// are deliberately absent; this is the same identity minted by the producer.
+pub fn callable_origin_id(
+    profile: &str,
+    revision: &str,
+    path: &str,
+    sha256: &str,
+    span: Span,
+) -> Result<String, NativeError> {
+    if !matches!(profile, NATIVE_VIEW_PROFILE | NATIVE_VIEW_AUTHORITY_PROFILE)
+        || !matches!(revision.len(), 40 | 64)
+        || !revision
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        || path.is_empty()
+        || path.len() > 4096
+        || path.contains(['\\', ':'])
+        || path.chars().any(char::is_control)
+        || path
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+        || !sha256.strip_prefix("sha256:").is_some_and(|digest| {
+            digest.len() == 64
+                && digest
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        })
+        || span.start >= span.end
+    {
+        return Err(error(NativeErrorCode::InvalidIdentity));
+    }
+    origin_source_id(profile, "callable", revision, path, sha256, span)
+}
+
+fn origin_source_id(
+    profile: &str,
+    kind: &str,
+    revision: &str,
+    path: &str,
+    sha256: &str,
+    span: Span,
+) -> Result<String, NativeError> {
+    let bytes =
+        crate::wire_json::canonical_json_bytes(&(profile, kind, revision, path, sha256, span))
+            .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
     Ok(format!("native-apidoc:{}", source_digest(&bytes)))
 }
 

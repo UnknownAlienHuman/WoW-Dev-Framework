@@ -56,6 +56,294 @@ fn lua_to_library_is_entirely_native_and_retains_raw_metadata() {
             );
         }
     }
+
+    use wow_annotations::artifact::AnnotationArtifact;
+    use wow_annotations::reference_links::{
+        NativeCallableBindingError, NativeCallableBindings, NativeCallableReferenceStatus,
+    };
+    use wow_annotations::sidecars::NativeProjectionSidecars;
+    use wow_core::ReferenceGenerationId;
+    use wow_reference::native_view::{
+        NATIVE_API_PARTITION, NativeCallableCorpus, project_callables,
+    };
+    use wow_reference::{LookupResult, ReferenceRecordKind};
+
+    let stop = AtomicBool::new(false);
+    let selection = ReferenceGenerationId::derive(&("native-origin-fixture", REV, 1_u8)).unwrap();
+    let reference = project_callables(
+        &docs,
+        "Mainline",
+        selection,
+        NativeCallableCorpus::explicit_partial(),
+        &stop,
+    )
+    .unwrap();
+    assert!(reference.issues.is_empty(), "{:?}", reference.issues);
+    assert!(!reference.negative_authority);
+    let artifact = AnnotationArtifact::from_native_library(
+        env!("CARGO_PKG_VERSION"),
+        "native-origin-fixture",
+        reference.view.generation_id(),
+        &library,
+    )
+    .unwrap();
+    let sidecars = NativeProjectionSidecars::from_library(&artifact, &library).unwrap();
+    let map = sidecars.source_map();
+    let max_metadata_bytes = 64 * 1024;
+    let max_work = 64 * 1024;
+    let origins =
+        NativeCallableBindings::build(&sidecars, &reference, max_metadata_bytes, max_work, &stop)
+            .unwrap();
+    assert_eq!(origins.source_map_id(), map.source_map_id());
+    assert_eq!(origins.annotation_artifact_id(), artifact.artifact_id());
+    assert_eq!(origins.profile_id(), artifact.profile_id());
+    assert_eq!(
+        origins.reference_generation(),
+        reference.view.generation_id()
+    );
+    assert_eq!(origins.reference_digest(), reference.view.self_digest());
+    assert_eq!(origins.revision(), REV);
+    assert_eq!(map.source_generation_id(), reference.view.generation_id());
+    assert!(origins.metadata_bytes() > 0 && origins.metadata_bytes() <= max_metadata_bytes);
+    assert!(origins.work() > 0 && origins.work() <= max_work);
+
+    // The unchanged fixture has one callable; neither record nor origin is synthetic.
+    assert_eq!(reference.candidates.len(), 1);
+    assert_eq!(reference.sources.len(), 1);
+    assert_eq!(origins.bindings().len(), 1);
+    let record = &reference.candidates[0];
+    let source = &reference.sources[0];
+    let origin = &origins.bindings()[0];
+    assert_eq!(record.kind(), ReferenceRecordKind::Api);
+    assert_eq!(record.source_ids().len(), 1);
+    assert_eq!(record.source_ids()[0].as_ref(), source.id.as_str());
+    assert_eq!(origin.source_id(), source.id.as_str());
+    assert_eq!(origin.key(), record.key());
+    assert_eq!(origin.record_digest(), record.digest().unwrap());
+    assert_eq!(origin.status(), NativeCallableReferenceStatus::Found);
+    assert!(!origin.ambiguous_origin());
+    assert_eq!(
+        reference.view.lookup(NATIVE_API_PARTITION, origin.key()),
+        LookupResult::Found(record)
+    );
+    assert_eq!(source.path, docs[0].path());
+    assert_eq!(source.sha256, docs[0].sha256());
+    assert_eq!(origin.source().scope(), None);
+    assert_eq!(origin.source().path(), source.path);
+    assert_eq!(origin.source().sha256(), source.sha256);
+    assert_eq!(
+        origin.source().span().start(),
+        u64::try_from(source.span.start).unwrap()
+    );
+    assert_eq!(
+        origin.source().span().end(),
+        u64::try_from(source.span.end).unwrap()
+    );
+
+    let mapped_file = map
+        .files()
+        .iter()
+        .find(|file| file.path() == origin.generated_path())
+        .unwrap();
+    let mapping = mapped_file
+        .mappings()
+        .iter()
+        .find(|mapping| mapping.mapping_id() == origin.mapping_id())
+        .unwrap();
+    assert_eq!(origin.generated_sha256(), mapped_file.sha256());
+    assert_eq!(mapping.granularity(), "declaration");
+    assert_eq!(origin.generated(), mapping.generated());
+    assert_eq!(origin.source(), mapping.source());
+    let original_file = library
+        .files
+        .iter()
+        .find(|file| file.path == origin.generated_path())
+        .unwrap();
+    assert_eq!(origin.generated_sha256(), original_file.sha256);
+    let original_mappings = original_file
+        .mappings
+        .iter()
+        .filter(|mapping| {
+            mapping.granularity == "declaration"
+                && mapping.source.path == source.path
+                && mapping.source.sha256 == source.sha256
+                && mapping.source.span == source.span
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(original_mappings.len(), 1);
+    let original = original_mappings[0];
+    assert_eq!(original.source.scope, origin.source().scope());
+    assert_eq!(
+        origin.generated().start(),
+        u64::try_from(original.generated.start).unwrap()
+    );
+    assert_eq!(
+        origin.generated().end(),
+        u64::try_from(original.generated.end).unwrap()
+    );
+
+    // Genuine replacement generation, still using the same admitted documents.
+    let replacement = project_callables(
+        &docs,
+        "Mainline",
+        ReferenceGenerationId::derive(&("native-origin-fixture", REV, 2_u8)).unwrap(),
+        NativeCallableCorpus::explicit_partial(),
+        &stop,
+    )
+    .unwrap();
+    assert_ne!(
+        reference.view.generation_id(),
+        replacement.view.generation_id()
+    );
+    let replacement_artifact = AnnotationArtifact::from_native_library(
+        env!("CARGO_PKG_VERSION"),
+        artifact.profile_id(),
+        replacement.view.generation_id(),
+        &library,
+    )
+    .unwrap();
+    let replacement_sidecars =
+        NativeProjectionSidecars::from_library(&replacement_artifact, &library).unwrap();
+    assert_ne!(
+        map.source_map_id(),
+        replacement_sidecars.source_map().source_map_id()
+    );
+    assert_eq!(
+        NativeCallableBindings::build(&sidecars, &replacement, max_metadata_bytes, max_work, &stop)
+            .unwrap_err(),
+        NativeCallableBindingError::IncompatibleInput
+    );
+    assert_eq!(
+        NativeCallableBindings::build(
+            &replacement_sidecars,
+            &reference,
+            max_metadata_bytes,
+            max_work,
+            &stop,
+        )
+        .unwrap_err(),
+        NativeCallableBindingError::IncompatibleInput
+    );
+    assert_eq!(
+        NativeCallableBindings::build(&sidecars, &reference, 1, max_work, &stop).unwrap_err(),
+        NativeCallableBindingError::Limit
+    );
+    assert_eq!(
+        NativeCallableBindings::build(&sidecars, &reference, max_metadata_bytes, 1, &stop)
+            .unwrap_err(),
+        NativeCallableBindingError::Limit
+    );
+    assert_eq!(
+        NativeCallableBindings::build(
+            &sidecars,
+            &reference,
+            max_metadata_bytes,
+            max_work,
+            &AtomicBool::new(true),
+        )
+        .unwrap_err(),
+        NativeCallableBindingError::Cancelled
+    );
+}
+
+#[test]
+fn reused_callable_descriptor_retains_every_native_origin() {
+    use std::collections::BTreeSet;
+    use wow_annotations::reference_links::{NativeCallableBindings, NativeCallableReferenceStatus};
+    use wow_annotations::{artifact::AnnotationArtifact, sidecars::NativeProjectionSidecars};
+    use wow_core::ReferenceGenerationId;
+    use wow_reference::native_view::{NativeCallableCorpus, project_callables};
+
+    let stop = AtomicBool::new(false);
+    let docs = [doc(
+        "Shared.lua",
+        r#"local f={Name='Read',Type='Function'}
+APIDocumentation:AddDocumentationTable({Name='A',Type='System',Namespace='C_A',Functions={f}})
+APIDocumentation:AddDocumentationTable({Name='B',Type='System',Namespace='C_B',Functions={f}})"#,
+    )];
+    let library = project(&docs, "Mainline", &stop).unwrap();
+    let selection = ReferenceGenerationId::derive(&("shared-native-origin-fixture", REV)).unwrap();
+    let reference = project_callables(
+        &docs,
+        "Mainline",
+        selection,
+        NativeCallableCorpus::explicit_partial(),
+        &stop,
+    )
+    .unwrap();
+    assert!(library.issues.is_empty(), "{:?}", library.issues);
+    assert!(reference.issues.is_empty(), "{:?}", reference.issues);
+    assert!(!reference.negative_authority);
+    assert_eq!(reference.candidates.len(), 2);
+    assert_eq!(reference.sources.len(), 2);
+    assert_eq!(reference.sources[0], reference.sources[1]);
+    assert_eq!(reference.candidates[0].source_ids().len(), 1);
+    assert_eq!(
+        reference.candidates[0].source_ids(),
+        reference.candidates[1].source_ids()
+    );
+    assert_eq!(
+        reference.candidates[0].source_ids()[0].as_ref(),
+        reference.sources[0].id
+    );
+    assert_ne!(reference.candidates[0].key(), reference.candidates[1].key());
+    let artifact = AnnotationArtifact::from_native_library(
+        env!("CARGO_PKG_VERSION"),
+        "shared-native-origin-fixture",
+        reference.view.generation_id(),
+        &library,
+    )
+    .unwrap();
+    let sidecars = NativeProjectionSidecars::from_library(&artifact, &library).unwrap();
+    let origins =
+        NativeCallableBindings::build(&sidecars, &reference, 64 * 1024, 64 * 1024, &stop).unwrap();
+    let expected_keys = reference
+        .candidates
+        .iter()
+        .map(|record| record.key())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(origins.bindings().len(), 4);
+    let mut declarations = 0;
+    for file in sidecars.source_map().files() {
+        for mapping in file
+            .mappings()
+            .iter()
+            .filter(|mapping| mapping.granularity() == "declaration")
+        {
+            declarations += 1;
+            let rows = origins
+                .bindings()
+                .iter()
+                .filter(|origin| {
+                    origin.generated_path() == file.path()
+                        && origin.mapping_id() == mapping.mapping_id()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(rows.len(), 2);
+            assert_eq!(
+                rows.iter()
+                    .map(|origin| origin.key())
+                    .collect::<BTreeSet<_>>(),
+                expected_keys
+            );
+            for origin in rows {
+                assert!(origin.ambiguous_origin());
+                assert_eq!(origin.status(), NativeCallableReferenceStatus::Found);
+                assert_eq!(origin.generated_path(), file.path());
+                assert_eq!(origin.generated_sha256(), file.sha256());
+                assert_eq!(origin.generated(), mapping.generated());
+                assert_eq!(origin.source(), mapping.source());
+                assert_eq!(origin.source_id(), reference.sources[0].id);
+                let record = reference
+                    .candidates
+                    .iter()
+                    .find(|record| record.key() == origin.key())
+                    .unwrap();
+                assert_eq!(origin.record_digest(), record.digest().unwrap());
+            }
+        }
+    }
+    assert_eq!(declarations, 2);
 }
 #[test]
 fn methods_with_same_name_on_distinct_objects_stay_distinct() {

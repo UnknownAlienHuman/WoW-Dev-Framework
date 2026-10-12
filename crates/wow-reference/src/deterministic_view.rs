@@ -7,6 +7,8 @@
 
 use std::error::Error;
 use std::fmt;
+use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -93,6 +95,10 @@ pub enum LookupResult<'a> {
 /// Validation or canonicalization failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReferenceViewError {
+    /// A bounded read operation was cancelled.
+    Cancelled,
+    /// Its finite canonical byte or traversal allowance was exhausted.
+    LimitExceeded,
     /// A required identifier is missing or non-canonical.
     InvalidIdentifier {
         /// Stable field path.
@@ -148,6 +154,8 @@ pub enum ReferenceViewError {
 impl fmt::Display for ReferenceViewError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Cancelled => formatter.write_str("reference validation cancelled"),
+            Self::LimitExceeded => formatter.write_str("reference validation allowance exhausted"),
             Self::InvalidIdentifier { field, value } => {
                 write!(formatter, "invalid identifier at {field}: {value}")
             }
@@ -318,6 +326,24 @@ impl ReferenceRecord {
         Ok(sha256_digest(&bytes))
     }
 
+    /// Same canonical digest, streamed under the caller's continuing allowance.
+    pub fn digest_bounded(
+        &self,
+        max_bytes: usize,
+        max_steps: usize,
+        stop: &AtomicBool,
+    ) -> ReferenceViewResult<(String, usize, usize)> {
+        let result = bounded_digest(self, max_bytes, max_steps, stop)?;
+        if stop.load(Ordering::Acquire) {
+            return Err(ReferenceViewError::Cancelled);
+        }
+        self.validate()?;
+        if stop.load(Ordering::Acquire) {
+            return Err(ReferenceViewError::Cancelled);
+        }
+        Ok(result)
+    }
+
     fn validate(&self) -> ReferenceViewResult<()> {
         validate_identifier("record.key", self.key())?;
         validate_payload(self.payload())?;
@@ -449,11 +475,6 @@ impl ReferencePartition {
     pub fn records(&self) -> &[ReferenceRecord] {
         &self.records
     }
-
-    fn validate(&self) -> ReferenceViewResult<()> {
-        validate_identifier("partition.id", self.id())?;
-        validate_records(self.records())
-    }
 }
 
 /// Generation-bound deterministic reference view.
@@ -552,6 +573,52 @@ impl ReferenceView {
         Ok(())
     }
 
+    /// Validate immutable contents and the original digest without a full JSON
+    /// buffer. Returned bytes/steps belong to the caller's cumulative allowance.
+    pub fn validate_bounded(
+        &self,
+        max_bytes: usize,
+        max_steps: usize,
+        stop: &AtomicBool,
+    ) -> ReferenceViewResult<(usize, usize)> {
+        let unsigned = UnsignedReferenceView {
+            schema: self.schema(),
+            generation_id: self.generation_id(),
+            partitions: self.partitions(),
+            conflicts: self.conflicts(),
+        };
+        let (computed, bytes, mut steps) = bounded_digest(&unsigned, max_bytes, max_steps, stop)?;
+        let mut checkpoint = || {
+            if stop.load(Ordering::Acquire) {
+                return Err(ReferenceViewError::Cancelled);
+            }
+            steps = steps
+                .checked_add(1)
+                .ok_or(ReferenceViewError::LimitExceeded)?;
+            if steps > max_steps {
+                return Err(ReferenceViewError::LimitExceeded);
+            }
+            Ok(())
+        };
+        checkpoint()?;
+        if self.schema() != REFERENCE_VIEW_SCHEMA {
+            return Err(ReferenceViewError::InvalidIdentifier {
+                field: "view.schema",
+                value: self.schema().into(),
+            });
+        }
+        self.validate_contents_with(&mut checkpoint)?;
+        validate_digest("view.self_digest", self.self_digest())?;
+        checkpoint()?;
+        if computed != self.self_digest() {
+            return Err(ReferenceViewError::DigestMismatch {
+                stored: self.self_digest().into(),
+                computed: computed.into_boxed_str(),
+            });
+        }
+        Ok((bytes, steps))
+    }
+
     /// Returns canonical JSON bytes including the verified self-digest.
     ///
     /// # Errors
@@ -624,14 +691,51 @@ impl ReferenceView {
     }
 
     fn validate_contents(&self) -> ReferenceViewResult<()> {
+        self.validate_contents_with(&mut || Ok(()))
+    }
+
+    fn validate_contents_with(
+        &self,
+        checkpoint: &mut impl FnMut() -> ReferenceViewResult<()>,
+    ) -> ReferenceViewResult<()> {
         validate_identifier("view.generation_id", self.generation_id())?;
-        validate_partition_slice(self.partitions())?;
-        validate_conflict_slice(self.conflicts())?;
+        // Check each bounded record separately rather than hiding a whole
+        // partition's traversal between cancellation checkpoints.
+        for partition in self.partitions() {
+            checkpoint()?;
+            validate_identifier("partition.id", partition.id())?;
+            for record in partition.records() {
+                checkpoint()?;
+                record.validate()?;
+            }
+            validate_record_order(partition.records())?;
+        }
+        for pair in self.partitions().windows(2) {
+            checkpoint()?;
+            if pair[0].id() >= pair[1].id() {
+                return Err(if pair[0].id() == pair[1].id() {
+                    ReferenceViewError::DuplicateKey {
+                        field: "view.partitions",
+                        value: pair[0].id().into(),
+                    }
+                } else {
+                    ReferenceViewError::NonCanonicalOrder {
+                        field: "view.partitions",
+                    }
+                });
+            }
+        }
         for conflict in self.conflicts() {
-            if !self
+            checkpoint()?;
+            conflict.validate()?;
+        }
+        validate_conflict_order(self.conflicts())?;
+        for conflict in self.conflicts() {
+            checkpoint()?;
+            if self
                 .partitions()
-                .iter()
-                .any(|partition| partition.id() == conflict.partition_id())
+                .binary_search_by(|partition| partition.id().cmp(conflict.partition_id()))
+                .is_err()
             {
                 return Err(ReferenceViewError::MissingConflictPartition {
                     partition_id: conflict.partition_id().into(),
@@ -771,6 +875,10 @@ fn validate_records(values: &[ReferenceRecord]) -> ReferenceViewResult<()> {
     for value in values {
         value.validate()?;
     }
+    validate_record_order(values)
+}
+
+fn validate_record_order(values: &[ReferenceRecord]) -> ReferenceViewResult<()> {
     for pair in values.windows(2) {
         if pair[0].key() >= pair[1].key() {
             let error = if pair[0].key() == pair[1].key() {
@@ -789,32 +897,7 @@ fn validate_records(values: &[ReferenceRecord]) -> ReferenceViewResult<()> {
     Ok(())
 }
 
-fn validate_partition_slice(values: &[ReferencePartition]) -> ReferenceViewResult<()> {
-    for value in values {
-        value.validate()?;
-    }
-    for pair in values.windows(2) {
-        if pair[0].id() >= pair[1].id() {
-            let error = if pair[0].id() == pair[1].id() {
-                ReferenceViewError::DuplicateKey {
-                    field: "view.partitions",
-                    value: pair[0].id().into(),
-                }
-            } else {
-                ReferenceViewError::NonCanonicalOrder {
-                    field: "view.partitions",
-                }
-            };
-            return Err(error);
-        }
-    }
-    Ok(())
-}
-
-fn validate_conflict_slice(values: &[ReferenceConflict]) -> ReferenceViewResult<()> {
-    for value in values {
-        value.validate()?;
-    }
+fn validate_conflict_order(values: &[ReferenceConflict]) -> ReferenceViewResult<()> {
     for pair in values.windows(2) {
         let left = (pair[0].partition_id(), pair[0].key());
         let right = (pair[1].partition_id(), pair[1].key());
@@ -855,8 +938,11 @@ fn validate_digest(field: &'static str, value: &str) -> ReferenceViewResult<()> 
 }
 
 fn sha256_digest(bytes: &[u8]) -> String {
+    encode_digest(Sha256::digest(bytes))
+}
+
+fn encode_digest(digest: impl IntoIterator<Item = u8>) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
-    let digest = Sha256::digest(bytes);
     let mut encoded = String::with_capacity(71);
     encoded.push_str("sha256:");
     for byte in digest {
@@ -864,6 +950,70 @@ fn sha256_digest(bytes: &[u8]) -> String {
         encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
     encoded
+}
+
+fn bounded_digest(
+    value: &impl Serialize,
+    max_bytes: usize,
+    max_steps: usize,
+    stop: &AtomicBool,
+) -> ReferenceViewResult<(String, usize, usize)> {
+    struct Sink<'a> {
+        hash: Sha256,
+        bytes: usize,
+        steps: usize,
+        max_bytes: usize,
+        max_steps: usize,
+        stop: &'a AtomicBool,
+        failure: Option<ReferenceViewError>,
+    }
+    impl Write for Sink<'_> {
+        fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+            let bytes = self.bytes.checked_add(data.len());
+            let steps = self.steps.checked_add(1);
+            self.failure = if self.stop.load(Ordering::Acquire) {
+                Some(ReferenceViewError::Cancelled)
+            } else if bytes.is_none_or(|bytes| bytes > self.max_bytes)
+                || steps.is_none_or(|steps| steps > self.max_steps)
+            {
+                Some(ReferenceViewError::LimitExceeded)
+            } else {
+                None
+            };
+            if self.failure.is_some() {
+                return Err(std::io::Error::other("bounded reference digest stopped"));
+            }
+            self.bytes = bytes.ok_or_else(|| std::io::Error::other("reference byte overflow"))?;
+            self.steps = steps.ok_or_else(|| std::io::Error::other("reference step overflow"))?;
+            self.hash.update(data);
+            Ok(data.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    if stop.load(Ordering::Acquire) {
+        return Err(ReferenceViewError::Cancelled);
+    }
+    if max_bytes == 0 || max_steps == 0 {
+        return Err(ReferenceViewError::LimitExceeded);
+    }
+    let mut sink = Sink {
+        hash: Sha256::new(),
+        bytes: 0,
+        steps: 0,
+        max_bytes,
+        max_steps,
+        stop,
+        failure: None,
+    };
+    if let Err(error) = serde_json::to_writer(&mut sink, value) {
+        return Err(sink.failure.unwrap_or_else(|| serialization_error(error)));
+    }
+    if stop.load(Ordering::Acquire) {
+        return Err(ReferenceViewError::Cancelled);
+    }
+    Ok((encode_digest(sink.hash.finalize()), sink.bytes, sink.steps))
 }
 
 fn serialization_error(error: serde_json::Error) -> ReferenceViewError {

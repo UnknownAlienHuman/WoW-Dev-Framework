@@ -285,6 +285,104 @@ fn native_reference_composes_exact_platform_input_without_losing_partial_coverag
         ),
         wow_reference::LookupResult::Found(_)
     ));
+    {
+        // Reuse the same source/TOC and Main bytes through the native manifest
+        // loader. The platform loader below does not retain annotation bindings.
+        let native_manifest = json!({
+            "schema": crate::local::LOCAL_NATIVE_SCHEMA,
+            "project_id": config["project_id"],
+            "workspace_id": config["workspace_id"],
+            "source_origin_id": config["source_origin_id"],
+            "logical_root": config["logical_root"],
+            "profile": config["native_reference"]["profile"],
+            "analyzer": config["analyzer"],
+            "main": {"root": "UI", "files": [ProjectDiskFile::new("main.lua")]},
+            "native_source": config["native_reference"]["native_source"]
+        });
+        let directory = ProjectInputDirectory::open(&root.0)?;
+        let native_input = LocalProjectInput::from_native_manifest(
+            &serde_json::to_vec(&native_manifest)?,
+            &directory,
+            &stop,
+        )?;
+        assert_eq!(native_input.reference_view(), &expected.reference().view);
+        let bindings = native_input
+            .native_callable_bindings()
+            .ok_or("missing retained native callable bindings")?;
+        let source_map = native_input
+            .native_annotation_sidecars()
+            .ok_or("missing retained native annotation sidecars")?
+            .source_map();
+        assert_eq!(bindings.source_map_id(), source_map.source_map_id());
+        assert_eq!(
+            bindings.annotation_artifact_id(),
+            source_map.annotation_artifact_id()
+        );
+        assert_eq!(bindings.profile_id(), source_map.profile_id());
+        assert_eq!(bindings.revision(), source_map.revision());
+        assert_eq!(
+            bindings.reference_generation(),
+            native_input.reference_view().generation_id()
+        );
+        assert_eq!(
+            bindings.reference_generation(),
+            source_map.source_generation_id()
+        );
+        assert_eq!(
+            bindings.reference_digest(),
+            native_input.reference_view().self_digest()
+        );
+        let mut matching = bindings
+            .bindings()
+            .iter()
+            .filter(|binding| binding.key() == "function:C_Transport.Read");
+        let binding = matching.next().ok_or("missing original Read binding")?;
+        assert!(matching.next().is_none());
+        assert_eq!(
+            binding.status(),
+            wow_annotations::reference_links::NativeCallableReferenceStatus::Found
+        );
+        let wow_reference::LookupResult::Found(callable) = native_input.reference_view().lookup(
+            wow_reference::native_view::NATIVE_API_PARTITION,
+            binding.key(),
+        ) else {
+            return Err("original Read callable is not Found".into());
+        };
+        assert_eq!(binding.record_digest(), callable.digest()?);
+        assert_eq!(callable.source_ids().len(), 1);
+        assert_eq!(callable.source_ids()[0].as_ref(), binding.source_id());
+        let original = expected
+            .reference()
+            .sources
+            .iter()
+            .find(|source| source.id == binding.source_id())
+            .ok_or("missing original callable source")?;
+        assert_eq!(binding.source().scope(), None);
+        assert_eq!(binding.source().path(), original.path);
+        assert_eq!(binding.source().sha256(), original.sha256);
+        assert_eq!(
+            binding.source().span().start(),
+            u64::try_from(original.span.start)?
+        );
+        assert_eq!(
+            binding.source().span().end(),
+            u64::try_from(original.span.end)?
+        );
+        let mapped_file = source_map
+            .files()
+            .iter()
+            .find(|file| file.path() == binding.generated_path())
+            .ok_or("missing bound generated file")?;
+        assert_eq!(binding.generated_sha256(), mapped_file.sha256());
+        let mapping = mapped_file
+            .mappings()
+            .iter()
+            .find(|mapping| mapping.mapping_id() == binding.mapping_id())
+            .ok_or("missing bound declaration mapping")?;
+        assert_eq!(mapping.granularity(), "declaration");
+        assert_eq!(binding.generated(), mapping.generated());
+        assert_eq!(binding.source(), mapping.source());
+    }
     let input = LocalProjectInput::from_config_path(&path, &stop)?;
     assert_eq!(input.reference_view(), &expected.reference().view);
     assert_eq!(

@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use wow_annotations::{
     artifact::AnnotationArtifact,
     compatibility::{NativeCompatibilityBinding, NativeCompatibilityEvidence},
+    reference_links::{NativeCallableBindingError, NativeCallableBindings},
     sidecars::NativeProjectionSidecars,
 };
 use wow_core::{CanonicalResult, ContentDigest, ProfileIdentity};
@@ -185,6 +186,7 @@ pub(super) struct NativeInputEvidence {
     annotation_artifact: AnnotationArtifact,
     annotation_files: Box<[NativeAnnotationFile]>,
     annotation_sidecars: NativeProjectionSidecars,
+    annotation_callable_bindings: NativeCallableBindings,
     annotation_compatibility: Option<NativeCompatibilityEvidence>,
     distribution_evidence: Option<NativeDistributionManifest>,
 }
@@ -230,6 +232,14 @@ impl LocalProjectInput {
         self.native_input
             .as_ref()
             .map(|evidence| &evidence.annotation_sidecars)
+    }
+
+    /// Exact in-process declaration origins; these are not published graph receipts.
+    #[must_use]
+    pub fn native_callable_bindings(&self) -> Option<&NativeCallableBindings> {
+        self.native_input
+            .as_ref()
+            .map(|evidence| &evidence.annotation_callable_bindings)
     }
 
     #[must_use]
@@ -616,6 +626,28 @@ impl LocalProjectInput {
             distribution_evidence: distribution_selection,
             semantic_consumer_acceptance,
         };
+        // Preserve the typed origin join while both producer views still exist.
+        // Its reservations continue the report's finite metadata allowance.
+        let annotation_callable_bindings = NativeCallableBindings::build(
+            &annotation_sidecars,
+            &reference,
+            NATIVE_REPORT_LIMIT.saturating_sub(report.len()),
+            1_000_000,
+            stop,
+        )
+        .map_err(|error| match error {
+            NativeCallableBindingError::Cancelled => ServiceError::new(
+                ServiceErrorCode::Cancelled,
+                "native callable binding cancelled",
+            ),
+            NativeCallableBindingError::Limit => ServiceError::new(
+                ServiceErrorCode::BudgetExceeded,
+                "native callable binding exceeds metadata allowance",
+            ),
+            NativeCallableBindingError::IncompatibleInput => {
+                invalid("native callable binding has incompatible producer origins")
+            }
+        })?;
         let libraries = library
             .files
             .into_iter()
@@ -660,6 +692,7 @@ impl LocalProjectInput {
             annotation_artifact,
             annotation_files,
             annotation_sidecars,
+            annotation_callable_bindings,
             annotation_compatibility: annotation_compatibility.map(|loaded| loaded.evidence),
             distribution_evidence: distribution_evidence.map(|loaded| loaded.evidence),
         }));

@@ -114,6 +114,16 @@ pub struct NativeSidecarSpan {
 }
 
 impl NativeSidecarSpan {
+    #[must_use]
+    pub const fn start(self) -> u64 {
+        self.start
+    }
+
+    #[must_use]
+    pub const fn end(self) -> u64 {
+        self.end
+    }
+
     fn from_usize(start: usize, end: usize) -> NativeSidecarResult<Self> {
         let start = u64::try_from(start).map_err(|_| {
             NativeSidecarError::new(
@@ -148,6 +158,26 @@ pub struct NativeSidecarSource {
 }
 
 impl NativeSidecarSource {
+    #[must_use]
+    pub fn scope(&self) -> Option<&str> {
+        self.scope.as_deref()
+    }
+
+    #[must_use]
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    #[must_use]
+    pub fn sha256(&self) -> &str {
+        &self.sha256
+    }
+
+    #[must_use]
+    pub const fn span(&self) -> NativeSidecarSpan {
+        self.span
+    }
+
     fn from_link(link: &SourceLink) -> NativeSidecarResult<Self> {
         let source = Self {
             scope: link.scope.map(Into::into),
@@ -197,6 +227,26 @@ pub struct NativeSourceMapEntry {
 }
 
 impl NativeSourceMapEntry {
+    #[must_use]
+    pub fn mapping_id(&self) -> &str {
+        &self.mapping_id
+    }
+
+    #[must_use]
+    pub fn granularity(&self) -> &str {
+        &self.granularity
+    }
+
+    #[must_use]
+    pub const fn generated(&self) -> NativeSidecarSpan {
+        self.generated
+    }
+
+    #[must_use]
+    pub const fn source(&self) -> &NativeSidecarSource {
+        &self.source
+    }
+
     fn build(
         granularity: &str,
         generated_start: usize,
@@ -524,6 +574,11 @@ impl NativeSourceMap {
     #[must_use]
     pub fn source_generation_id(&self) -> &str {
         &self.source_generation_id
+    }
+
+    #[must_use]
+    pub fn revision(&self) -> &str {
+        &self.revision
     }
 
     #[must_use]

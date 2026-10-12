@@ -73,6 +73,39 @@ projection status/loss IDs
 
 At least one exact reference/derivation link per material semantic fragment.
 
+### Selected native callable origin read and retention
+
+Read-only `NativeSourceMapEntry::{generated,source}`, `NativeSidecarSource` and
+`NativeSidecarSpan` accessors expose the existing typed mapping metadata.
+`NativeCallableBindings::build` borrows owner-minted immutable sidecars and a native
+Reference projection before their producer views move; it retains a sealed,
+nonserialized list of exact callable declaration-origin bindings.
+
+Bind source-map/artifact/profile IDs, source revision, the actual final
+Reference generation and view digest. Each binding retains the generated
+path/digest/range and mapping ID, raw source scope/path/digest/range, exact native
+source ID, record key/digest and Found/Conflict state. Require matching map/Reference
+generation and the native producer's callable origin identity; names, opaque-key
+parsing and generated-range similarity cannot supply that identity. Conflict
+retains the exact candidate's validated native conflict membership, never a winner.
+Annotation overlay scopes and unmatched mappings cannot imply Reference/API absence.
+Repeated raw descriptors retain all original candidates with an explicit
+`ambiguous_origin` flag. Native navigation still owns target-range selection.
+
+One positive finite cumulative metadata/work reservation covers temporary indexes,
+traversal and retained descriptors, charged before owned retention. No phase resets
+the reservation; cancellation/overflow refuses rather than silently losing custody.
+Canonical view/record validation hashes through a bounded cancellable sink and
+charges its actual bytes/steps without allocating whole JSON buffers. The native
+origin hash has a reserved temporary allowance; source and exact-record indexes
+are built once rather than repeatedly scanning the view. These counters are
+reservations, not runtime or physical-memory measurements.
+
+The accessors/list add no serialized source-map, artifact or Reference fields or
+versions. This seam provides read/retention custody only: target matching, accepted
+graph receipts, replay and context enrichment are separate consumers. It grants
+no runtime authority or acceptance.
+
 ## 5. Source bodies
 
 Source map can point to stable source handles without embedding source text. Optional bounded source snippets/objects are governed by ReferenceData license/object/security policy and are not required for semantic mapping.
