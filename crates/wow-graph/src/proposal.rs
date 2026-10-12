@@ -1,4 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::atomic::AtomicBool;
+
+#[cfg(test)]
+mod qualified_tests;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -715,6 +719,48 @@ pub fn validate_graph_proposal_batch(
     limits: GraphLimits,
 ) -> GraphResult<GraphProposalValidationReport> {
     registry.validate()?;
+    validate_batch_binding(registry, batch, limits)?;
+    if let Some(base) = base {
+        base.validate()?;
+        validate_base_binding(base, batch)?;
+    }
+    validate_proposals(registry, base, batch, limits, &AtomicBool::new(false))
+}
+
+/// Owner-internal registry proof. All batches still validate their exact binding
+/// and records; bases must carry the proof minted by a completed graph build.
+pub(crate) struct GraphProposalValidator<'a> {
+    registry: &'a GraphRegistryBundle,
+}
+
+impl<'a> GraphProposalValidator<'a> {
+    pub(crate) fn new(registry: &'a GraphRegistryBundle, stop: &AtomicBool) -> GraphResult<Self> {
+        crate::partition::check_cancelled(stop)?;
+        registry.validate()?;
+        crate::partition::check_cancelled(stop)?;
+        Ok(Self { registry })
+    }
+
+    pub(crate) fn validate(
+        &self,
+        base: &crate::model::ValidatedGraphSnapshot,
+        batch: &GraphProposalBatch,
+        limits: GraphLimits,
+        stop: &AtomicBool,
+    ) -> GraphResult<GraphProposalValidationReport> {
+        crate::partition::check_cancelled(stop)?;
+        validate_batch_binding(self.registry, batch, limits)?;
+        let base = base.as_snapshot();
+        validate_base_binding(base, batch)?;
+        validate_proposals(self.registry, Some(base), batch, limits, stop)
+    }
+}
+
+fn validate_batch_binding(
+    registry: &GraphRegistryBundle,
+    batch: &GraphProposalBatch,
+    limits: GraphLimits,
+) -> GraphResult<()> {
     batch.validate()?;
     limits.validate()?;
     if registry.bundle_id() != batch.registry_bundle_id()
@@ -725,22 +771,33 @@ pub fn validate_graph_proposal_batch(
             "graph proposal batch targets another registry bundle",
         ));
     }
-    if let Some(base) = base {
-        base.validate()?;
-        if base.universe() != batch.universe() {
-            return Err(GraphError::new(
-                GraphErrorCode::UniverseMismatch,
-                "graph proposal batch and base snapshot use different universes",
-            ));
-        }
-        if base.generation() != batch.generation() {
-            return Err(GraphError::new(
-                GraphErrorCode::GenerationMismatch,
-                "graph proposal batch and base snapshot use different generations",
-            ));
-        }
-    }
+    Ok(())
+}
 
+fn validate_base_binding(base: &GraphSnapshot, batch: &GraphProposalBatch) -> GraphResult<()> {
+    if base.universe() != batch.universe() {
+        return Err(GraphError::new(
+            GraphErrorCode::UniverseMismatch,
+            "graph proposal batch and base snapshot use different universes",
+        ));
+    }
+    if base.generation() != batch.generation() {
+        return Err(GraphError::new(
+            GraphErrorCode::GenerationMismatch,
+            "graph proposal batch and base snapshot use different generations",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_proposals(
+    registry: &GraphRegistryBundle,
+    base: Option<&GraphSnapshot>,
+    batch: &GraphProposalBatch,
+    limits: GraphLimits,
+    stop: &AtomicBool,
+) -> GraphResult<GraphProposalValidationReport> {
+    crate::partition::check_cancelled(stop)?;
     let mut accepted_entities = Vec::new();
     let mut accepted_relations = Vec::new();
     let mut rejections = Vec::new();
@@ -748,6 +805,7 @@ pub fn validate_graph_proposal_batch(
     let mut semantic_nodes = BTreeSet::<GraphNodeId>::new();
 
     for proposal in &batch.entity_proposals {
+        crate::partition::check_cancelled(stop)?;
         let result = validate_entity_proposal(registry, batch, proposal, limits);
         match result {
             Ok(node) if semantic_nodes.insert(node.node_id().clone()) => {
@@ -771,6 +829,7 @@ pub fn validate_graph_proposal_batch(
     }
 
     for proposal in &batch.relation_proposals {
+        crate::partition::check_cancelled(stop)?;
         match validate_relation_proposal(registry, base, &proposed_nodes, proposal, limits) {
             Ok(edge) => accepted_relations.push(GraphAcceptedRelationProposal {
                 proposal_id: proposal.proposal_id.clone(),
@@ -807,6 +866,7 @@ pub fn validate_graph_proposal_batch(
         rejections,
     };
     report.validate(limits)?;
+    crate::partition::check_cancelled(stop)?;
     Ok(report)
 }
 

@@ -15,7 +15,7 @@ use wow_core::{GenerationContextId, canonical_json_bytes};
 use crate::{
     GraphCoverageRecord, GraphError, GraphErrorCode, GraphGenerationId, GraphNode,
     GraphProposalBatch, GraphProposalValidationReport, GraphRegistryBundle, GraphResult,
-    GraphSnapshot, GraphSnapshotId, validate_graph_proposal_batch,
+    GraphSnapshot, GraphSnapshotId,
 };
 
 pub const GRAPH_PARTITION_SNAPSHOT_SCHEMA: &str = "wow-graph/partition-snapshot/e2-a/1";
@@ -408,8 +408,8 @@ fn rebuild(
     cancelled: &AtomicBool,
 ) -> GraphResult<GraphPartitionSnapshot> {
     check_cancelled(cancelled)?;
-    registry.validate()?;
-    foundation.validate()?;
+    let validator = crate::proposal::GraphProposalValidator::new(&registry, cancelled)?;
+    foundation.validate_with_cancel(cancelled)?;
     if partitions.len() > MAX_GRAPH_PRODUCER_PARTITIONS {
         return Err(GraphError::new(
             GraphErrorCode::BudgetExceeded,
@@ -461,10 +461,10 @@ fn rebuild(
             ));
         }
     }
-    let input = materialize::input_view(&foundation, &partitions, false, cancelled)?;
+    let input = materialize::input_view_validated(&foundation, &partitions, false, cancelled)?;
     for item in &partitions {
         check_cancelled(cancelled)?;
-        let verified = validate_graph_proposal_batch(&registry, Some(&input), &item.batch, limits)?;
+        let verified = validator.validate(&input, &item.batch, limits, cancelled)?;
         if verified != item.report {
             return Err(invalid(
                 "producer report does not match its exact batch and endpoints",
@@ -483,7 +483,7 @@ fn rebuild(
             &partitions,
         ),
     )?)?;
-    let snapshot = materialize::rebind(&input, generation, cancelled)?;
+    let snapshot = materialize::rebind(input.as_snapshot(), generation, cancelled)?;
     Ok(GraphPartitionSnapshot {
         schema: schema.into(),
         registry,

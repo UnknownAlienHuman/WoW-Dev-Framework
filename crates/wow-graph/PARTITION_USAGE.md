@@ -91,6 +91,20 @@ still needed. Consuming the plan is not publication: a receiving session or
 store retains its own validation and expected-snapshot checks. Session
 publication also moves the candidate after those checks.
 
+Partition rebuild and atomic replacement sets retain the full-build proof for
+their one shared immutable input or endpoint view. The graph owner qualifies the
+registry once and validates every producer batch against that exact borrowed
+base, without rebuilding the same base for each producer. Each batch, report,
+registry binding, generation, endpoint, support and assertion closure remains
+checked. This proof is private, immutable and neither decoded nor caller-minted;
+the public raw proposal API still independently validates its registry and base.
+
+Owner construction checks cancellation between record copies, record validation,
+identity sequence admission and bounded hash chunks. Sorting and the final
+canonical JSON byte conversion remain finite bounded phases with checks around
+them; this is cooperative cancellation, not a hard real-time latency guarantee.
+No identity recipe, serialization, limits, coverage or publication guard changes.
+
 ## Atomic replacement sets
 
 `prepare_replacements(requests, cancelled)` prepares one plan for 1–64 independent producer partitions. Every request must name the same current `expected_snapshot_id` and the exact previous digest for its own partition (`None` remains create-only). Duplicate partition IDs are rejected, not merged or applied last-wins.

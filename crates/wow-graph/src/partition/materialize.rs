@@ -14,6 +14,16 @@ pub(super) fn input_view(
     endpoints_only: bool,
     cancelled: &AtomicBool,
 ) -> GraphResult<GraphSnapshot> {
+    input_view_validated(foundation, partitions, endpoints_only, cancelled)
+        .map(crate::model::ValidatedGraphSnapshot::into_raw)
+}
+
+pub(super) fn input_view_validated(
+    foundation: &GraphSnapshot,
+    partitions: &[GraphProducerPartition],
+    endpoints_only: bool,
+    cancelled: &AtomicBool,
+) -> GraphResult<crate::model::ValidatedGraphSnapshot> {
     let limits = foundation.limits();
     let mut nodes = BTreeMap::<GraphNodeId, GraphNode>::new();
     for node in foundation
@@ -87,13 +97,14 @@ pub(super) fn input_view(
     } else {
         aggregate_coverage(foundation, partitions, cancelled)?
     };
-    GraphSnapshot::build(
+    GraphSnapshot::build_validated(
         foundation.universe().clone(),
         foundation.generation().clone(),
         limits,
         nodes.into_values().collect(),
         edges.into_values().collect(),
         coverage,
+        cancelled,
     )
 }
 
@@ -182,14 +193,16 @@ pub(super) fn rebind(
         check_cancelled(cancelled)?;
         edges.push(remap_edge(edge, &remap, input.limits())?);
     }
-    GraphSnapshot::build(
+    GraphSnapshot::build_validated(
         input.universe().clone(),
         generation,
         input.limits(),
         nodes,
         edges,
         input.coverage().to_vec(),
+        cancelled,
     )
+    .map(crate::model::ValidatedGraphSnapshot::into_raw)
 }
 
 /// Publication and exact assertion projections share the same identity rule.

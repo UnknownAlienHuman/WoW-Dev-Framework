@@ -1,4 +1,11 @@
 use std::collections::BTreeSet;
+use std::sync::atomic::AtomicBool;
+
+mod validation;
+pub(crate) use validation::ValidatedGraphSnapshot;
+#[cfg(test)]
+pub(crate) use validation::snapshot_work_counts;
+use validation::{checked_slice, clone_records};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -408,10 +415,35 @@ impl GraphSnapshot {
         universe: GraphUniverseId,
         generation: GraphGenerationId,
         limits: GraphLimits,
+        nodes: Vec<GraphNode>,
+        edges: Vec<GraphEdge>,
+        coverage: Vec<GraphCoverageRecord>,
+    ) -> GraphResult<Self> {
+        Self::build_validated(
+            universe,
+            generation,
+            limits,
+            nodes,
+            edges,
+            coverage,
+            &AtomicBool::new(false),
+        )
+        .map(ValidatedGraphSnapshot::into_raw)
+    }
+
+    /// Only a completed full build can mint this owner-internal immutable proof.
+    pub(crate) fn build_validated(
+        universe: GraphUniverseId,
+        generation: GraphGenerationId,
+        limits: GraphLimits,
         mut nodes: Vec<GraphNode>,
         mut edges: Vec<GraphEdge>,
         mut coverage: Vec<GraphCoverageRecord>,
-    ) -> GraphResult<Self> {
+        stop: &AtomicBool,
+    ) -> GraphResult<ValidatedGraphSnapshot> {
+        crate::partition::check_cancelled(stop)?;
+        #[cfg(test)]
+        validation::record_build();
         limits.validate()?;
         if nodes.len() > limits.max_nodes as usize
             || edges.len() > limits.max_edges as usize
@@ -423,6 +455,7 @@ impl GraphSnapshot {
             ));
         }
         for node in &nodes {
+            crate::partition::check_cancelled(stop)?;
             node.validate(limits)?;
             if node.universe() != &universe {
                 return Err(GraphError::new(
@@ -438,6 +471,7 @@ impl GraphSnapshot {
             }
         }
         nodes.sort_by(|left, right| left.node_id().cmp(right.node_id()));
+        crate::partition::check_cancelled(stop)?;
         if nodes
             .windows(2)
             .any(|pair| pair[0].node_id() == pair[1].node_id())
@@ -447,11 +481,13 @@ impl GraphSnapshot {
                 "graph snapshot contains a duplicate node",
             ));
         }
-        let node_ids = nodes
-            .iter()
-            .map(|node| node.node_id().clone())
-            .collect::<BTreeSet<_>>();
+        let mut node_ids = BTreeSet::new();
+        for node in &nodes {
+            crate::partition::check_cancelled(stop)?;
+            node_ids.insert(node.node_id());
+        }
         for edge in &edges {
+            crate::partition::check_cancelled(stop)?;
             edge.validate(limits)?;
             if !node_ids.contains(edge.from()) || !node_ids.contains(edge.to()) {
                 return Err(GraphError::new(
@@ -461,6 +497,7 @@ impl GraphSnapshot {
             }
         }
         edges.sort_by(|left, right| left.edge_id().cmp(right.edge_id()));
+        crate::partition::check_cancelled(stop)?;
         if edges
             .windows(2)
             .any(|pair| pair[0].edge_id() == pair[1].edge_id())
@@ -471,9 +508,11 @@ impl GraphSnapshot {
             ));
         }
         for record in &coverage {
+            crate::partition::check_cancelled(stop)?;
             record.validate(limits)?;
         }
         coverage.sort_by_key(GraphCoverageRecord::relation);
+        crate::partition::check_cancelled(stop)?;
         if coverage
             .windows(2)
             .any(|pair| pair[0].relation() == pair[1].relation())
@@ -483,9 +522,17 @@ impl GraphSnapshot {
                 "graph snapshot contains duplicate relation coverage",
             ));
         }
-        let snapshot_id =
-            derive_snapshot_id(&universe, &generation, limits, &nodes, &edges, &coverage)?;
-        Ok(Self {
+        let snapshot_id = derive_snapshot_id(
+            &universe,
+            &generation,
+            limits,
+            &nodes,
+            &edges,
+            &coverage,
+            stop,
+        )?;
+        crate::partition::check_cancelled(stop)?;
+        Ok(ValidatedGraphSnapshot::new(Self {
             schema: GRAPH_SNAPSHOT_SCHEMA.into(),
             snapshot_id,
             universe,
@@ -494,24 +541,33 @@ impl GraphSnapshot {
             nodes,
             edges,
             coverage,
-        })
+        }))
     }
 
     pub fn validate(&self) -> GraphResult<()> {
+        self.validate_with_cancel(&AtomicBool::new(false))
+    }
+
+    pub(crate) fn validate_with_cancel(&self, stop: &AtomicBool) -> GraphResult<()> {
+        crate::partition::check_cancelled(stop)?;
+        #[cfg(test)]
+        validation::record_validation();
         if self.schema.as_ref() != GRAPH_SNAPSHOT_SCHEMA {
             return Err(GraphError::new(
                 GraphErrorCode::SnapshotInvalid,
                 "graph snapshot schema is unsupported",
             ));
         }
-        let rebuilt = Self::build(
+        let rebuilt = Self::build_validated(
             self.universe.clone(),
             self.generation.clone(),
             self.limits,
-            self.nodes.clone(),
-            self.edges.clone(),
-            self.coverage.clone(),
-        )?;
+            clone_records(&self.nodes, stop)?,
+            clone_records(&self.edges, stop)?,
+            clone_records(&self.coverage, stop)?,
+            stop,
+        )?
+        .into_raw();
         if rebuilt.snapshot_id != self.snapshot_id
             || rebuilt.nodes != self.nodes
             || rebuilt.edges != self.edges
@@ -522,6 +578,7 @@ impl GraphSnapshot {
                 "graph snapshot identity or canonical order does not match",
             ));
         }
+        crate::partition::check_cancelled(stop)?;
         Ok(())
     }
 
@@ -641,6 +698,7 @@ fn derive_snapshot_id(
     nodes: &[GraphNode],
     edges: &[GraphEdge],
     coverage: &[GraphCoverageRecord],
+    stop: &AtomicBool,
 ) -> GraphResult<GraphSnapshotId> {
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -648,24 +706,33 @@ fn derive_snapshot_id(
         universe: &'a GraphUniverseId,
         generation: &'a GraphGenerationId,
         limits: GraphLimits,
-        nodes: &'a [GraphNode],
-        edges: &'a [GraphEdge],
-        coverage: &'a [GraphCoverageRecord],
+        nodes: validation::CheckedSlice<'a, GraphNode>,
+        edges: validation::CheckedSlice<'a, GraphEdge>,
+        coverage: validation::CheckedSlice<'a, GraphCoverageRecord>,
     }
     let bytes = canonical_json_bytes(&Identity {
         schema: GRAPH_SNAPSHOT_SCHEMA,
         universe,
         generation,
         limits,
-        nodes,
-        edges,
-        coverage,
+        nodes: checked_slice(nodes, stop),
+        edges: checked_slice(edges, stop),
+        coverage: checked_slice(coverage, stop),
     })
-    .map_err(|_| GraphError::new(GraphErrorCode::SnapshotInvalid, "snapshot identity failed"))?;
-    GraphSnapshotId::new(format!(
-        "graph-snapshot:sha256:{}",
-        hex(&Sha256::digest(bytes))
-    ))
+    .map_err(|_| {
+        crate::partition::check_cancelled(stop)
+            .err()
+            .unwrap_or_else(|| {
+                GraphError::new(GraphErrorCode::SnapshotInvalid, "snapshot identity failed")
+            })
+    })?;
+    let mut hash = Sha256::new();
+    for chunk in bytes.chunks(64 * 1024) {
+        crate::partition::check_cancelled(stop)?;
+        hash.update(chunk);
+    }
+    crate::partition::check_cancelled(stop)?;
+    GraphSnapshotId::new(format!("graph-snapshot:sha256:{}", hex(&hash.finalize())))
 }
 
 fn normalize_evidence(

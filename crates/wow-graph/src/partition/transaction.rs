@@ -1,10 +1,7 @@
 use std::collections::BTreeSet;
 use std::sync::atomic::AtomicBool;
 
-use crate::{
-    GraphCoverageRecord, GraphCoverageState, GraphError, GraphErrorCode, GraphResult,
-    validate_graph_proposal_batch,
-};
+use crate::{GraphCoverageRecord, GraphCoverageState, GraphError, GraphErrorCode, GraphResult};
 
 use super::{
     GraphPartitionChange, GraphPartitionReplacement, GraphPartitionReplacementPlan,
@@ -96,7 +93,9 @@ pub(super) fn prepare(
     // Drop ALL replaced ownership before endpoint resolution. The fixed view
     // prevents a removed peer from satisfying an Existing endpoint, and avoids
     // accepting/rejecting batches based on their order in this transaction.
-    let endpoints = materialize::input_view(&base.foundation, &partitions, true, cancelled)?;
+    let endpoints =
+        materialize::input_view_validated(&base.foundation, &partitions, true, cancelled)?;
+    let validator = crate::proposal::GraphProposalValidator::new(&base.registry, cancelled)?;
     let mut nodes = base.foundation.nodes().len();
     let mut edges = base.foundation.edges().len();
     for item in &partitions {
@@ -106,12 +105,7 @@ pub(super) fn prepare(
     let mut changes = Vec::with_capacity(requests.len());
     for request in requests {
         check_cancelled(cancelled)?;
-        let report = validate_graph_proposal_batch(
-            &base.registry,
-            Some(&endpoints),
-            &request.batch,
-            limits,
-        )?;
+        let report = validator.validate(&endpoints, &request.batch, limits, cancelled)?;
         if !report.ready_for_publication() {
             return Err(GraphError::new(
                 GraphErrorCode::PartitionRejected,
