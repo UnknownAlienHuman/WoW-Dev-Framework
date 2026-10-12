@@ -337,18 +337,18 @@ pub fn build_platform_context_map<'a>(
 }
 
 #[derive(Serialize)]
-struct PlatformInspectArtifact<'a> {
+struct PlatformInspectArtifact<M> {
     family: &'static str,
     artifact_kind: &'static str,
     inspect_id: Box<str>,
-    map: PlatformMapArtifact<'a>,
+    map: M,
 }
 
 /// Selected root/native-neighborhood metadata and original root support only.
 #[derive(Serialize)]
 pub struct PlatformContextInspect<'a> {
     #[serde(flatten)]
-    artifact: PlatformInspectArtifact<'a>,
+    artifact: PlatformInspectArtifact<PlatformMapArtifact<'a>>,
     #[serde(skip)]
     canonical_bytes: Box<[u8]>,
     #[serde(skip)]
@@ -415,12 +415,29 @@ pub fn build_platform_context_inspect<'a>(
         mut budget,
     } = map;
     let limits = map.core.binding.limits;
+    let (artifact, canonical_bytes) = platform_inspect_artifact(map, &mut budget, limits, stop)?;
+    Ok(PlatformContextInspect {
+        artifact,
+        canonical_bytes,
+        map_canonical_bytes,
+        budget,
+    })
+}
+
+// Owned standalone and borrowed combined inspections use identical identity and
+// encoding steps; references serialize the original immutable map exactly.
+fn platform_inspect_artifact<M: Serialize>(
+    map: M,
+    budget: &mut Budget,
+    limits: PrimaryMapLimits,
+    stop: &AtomicBool,
+) -> ContextResult<(PlatformInspectArtifact<M>, Box<[u8]>)> {
     budget.work(1, stop)?;
     let inspect_id = identity(
         PLATFORM_NATIVE_ONE_HOP_PROFILE,
         "platform-context-inspect:sha256:",
         &("inspect", &map),
-        remaining(&budget, limits)?,
+        remaining(budget, limits)?,
         stop,
     )?;
     let artifact = PlatformInspectArtifact {
@@ -429,12 +446,77 @@ pub fn build_platform_context_inspect<'a>(
         inspect_id,
         map,
     };
-    let canonical_bytes = encode_retained(&artifact, &mut budget, limits, stop)?;
-    Ok(PlatformContextInspect {
+    let canonical_bytes = encode_retained(&artifact, budget, limits, stop)?;
+    Ok((artifact, canonical_bytes))
+}
+
+/// Borrowed original platform inspection, sealed by the same owner engine.
+/// It owns only its inspection identity/canonical cache, never a native page copy.
+#[derive(Serialize)]
+pub struct PlatformContextInspectView<'m, 'a> {
+    #[serde(flatten)]
+    artifact: PlatformInspectArtifact<&'m PlatformMapArtifact<'a>>,
+    #[serde(skip)]
+    canonical_bytes: Box<[u8]>,
+    #[serde(skip)]
+    map_canonical_bytes: &'m [u8],
+}
+impl<'a> PlatformContextInspectView<'_, 'a> {
+    #[must_use]
+    pub fn inspect_id(&self) -> &str {
+        &self.artifact.inspect_id
+    }
+    #[must_use]
+    pub fn map_id(&self) -> &str {
+        self.artifact.map.map_id()
+    }
+    #[must_use]
+    pub fn canonical_bytes(&self) -> &[u8] {
+        &self.canonical_bytes
+    }
+    #[must_use]
+    pub fn map_canonical_bytes(&self) -> &[u8] {
+        self.map_canonical_bytes
+    }
+    #[must_use]
+    pub fn page(&self) -> &SkeletonInputPage<'a> {
+        self.artifact.map.page()
+    }
+    #[must_use]
+    pub fn root(&self) -> &GraphNode {
+        self.page().neighborhood().root()
+    }
+    #[must_use]
+    pub fn neighborhood(&self) -> &GraphNeighborView<'_> {
+        self.page().neighborhood()
+    }
+    #[must_use]
+    pub fn root_support(&self) -> &GraphResolvedExplanation<'_> {
+        self.page().root_support()
+    }
+    #[must_use]
+    pub fn not_evaluated(&self) -> &[SkeletonInputNotEvaluated] {
+        self.page().not_evaluated()
+    }
+    #[must_use]
+    pub fn state(&self) -> GraphQueryState {
+        self.page().state()
+    }
+}
+
+pub(crate) fn build_platform_context_inspect_on_budget<'m, 'a>(
+    map: &'m PlatformMapArtifact<'a>,
+    map_canonical_bytes: &'m [u8],
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<PlatformContextInspectView<'m, 'a>> {
+    checkpoint(stop)?;
+    let (artifact, canonical_bytes) =
+        platform_inspect_artifact(map, budget, map.core.binding.limits, stop)?;
+    Ok(PlatformContextInspectView {
         artifact,
         canonical_bytes,
         map_canonical_bytes,
-        budget,
     })
 }
 

@@ -92,6 +92,30 @@ struct RequestDocument {
     profile_id: Box<str>,
     primary: PrimarySelection,
     platform: platform::RequestDocument,
+    #[serde(default, deserialize_with = "non_null_inspection")]
+    inspection: Option<Inspection>,
+}
+
+fn non_null_inspection<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Inspection>, D::Error> {
+    Inspection::deserialize(deserializer).map(Some)
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Inspection {
+    level: Box<str>,
+}
+impl Inspection {
+    fn level(&self) -> ServiceResult<wow_context::SkeletonLevel> {
+        match self.level.as_ref() {
+            "l0" => Ok(wow_context::SkeletonLevel::L0),
+            "l1" => Ok(wow_context::SkeletonLevel::L1),
+            "both" => Ok(wow_context::SkeletonLevel::Both),
+            _ => Err(failure(ServiceErrorCode::InvalidRequest)),
+        }
+    }
 }
 
 /// Exact inert selections; decoded records cannot create retained owner views.
@@ -102,6 +126,8 @@ pub struct ContextCombinedRequest {
     profile_id: &'static str,
     primary: PrimarySelection,
     platform: ContextPlatformRequest,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    inspection: Option<Inspection>,
     #[serde(skip)]
     primary_request: ContextMapRequest,
 }
@@ -116,10 +142,22 @@ impl ContextCombinedRequest {
         )
         .map_err(|error| failure(error.code))?;
         if document.schema.as_ref() != CONTEXT_COMBINED_REQUEST_SCHEMA
-            || document.operation.as_ref() != "map"
+            || !matches!(document.operation.as_ref(), "map" | "inspect")
             || document.profile_id.as_ref() != COMBINED_NATIVE_MAP_PROFILE_ID
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        match (document.operation.as_ref(), document.inspection.as_ref()) {
+            ("map", None) => {}
+            ("inspect", Some(selection)) => {
+                let level = selection.level()?;
+                if matches!(&document.primary.root, ContextMapRoot::Project(_))
+                    && level != wow_context::SkeletonLevel::L0
+                {
+                    return Err(failure(ServiceErrorCode::InvalidRequest));
+                }
+            }
+            _ => return Err(failure(ServiceErrorCode::InvalidRequest)),
         }
         request::identifier(&document.primary.publication_set_id)?;
         // Reuse the original root/request admission, rather than accepting DTO authority.
@@ -142,12 +180,33 @@ impl ContextCombinedRequest {
         checkpoint(stop)?;
         Ok(Self {
             schema: CONTEXT_COMBINED_REQUEST_SCHEMA,
-            operation: "map",
+            operation: if document.inspection.is_some() {
+                "inspect"
+            } else {
+                "map"
+            },
             profile_id: COMBINED_NATIVE_MAP_PROFILE_ID,
             primary: document.primary,
             platform,
+            inspection: document.inspection,
             primary_request,
         })
+    }
+
+    pub fn operation(&self) -> ContextPlatformOperation {
+        if self.inspection.is_some() {
+            ContextPlatformOperation::Inspect
+        } else {
+            ContextPlatformOperation::Map
+        }
+    }
+
+    fn result_operation(&self) -> &'static str {
+        if self.inspection.is_some() {
+            "context_combined_inspect"
+        } else {
+            "context_combined_map"
+        }
     }
 }
 
@@ -190,7 +249,7 @@ pub fn execute_context_combined(
             error.code(),
             "not_acquired",
             CONTEXT_COMBINED_RESULT_SCHEMA,
-            "context_combined_map",
+            request.result_operation(),
         );
     }
     let selector = ReadSelector::Exact(request.primary.store_generation_id.clone());
@@ -213,9 +272,13 @@ pub fn execute_context_combined(
                 &universe,
                 primary_read,
                 &host.primary,
-                root,
+                root.clone(),
+                request
+                    .inspection
+                    .as_ref()
+                    .is_some_and(|selection| selection.level.as_ref() != "l0"),
                 stop,
-                |primary| {
+                |primary, graph| {
                     let (outcome, closure) = with_checked_platform_read(
                         &host.platform,
                         &request.platform,
@@ -226,7 +289,7 @@ pub fn execute_context_combined(
                                 &request.platform,
                                 stop,
                                 |view| {
-                                    let map = wow_context::build_combined_context_map(
+                                    let mut map = wow_context::build_combined_context_map(
                                         primary,
                                         view,
                                         &host.platform.reference,
@@ -234,15 +297,66 @@ pub fn execute_context_combined(
                                         stop,
                                     )
                                     .map_err(context_error)?;
-                                    encode_result(
-                                        host,
-                                        request,
-                                        &request_id,
-                                        primary_read,
-                                        platform_read,
-                                        &map,
-                                        stop,
-                                    )
+                                    if let Some(selection) = &request.inspection {
+                                        let scope = match &root {
+                                            ContextMapRoot::Project(id) => {
+                                                wow_context::L0Scope::Project(id.clone())
+                                            }
+                                            ContextMapRoot::GraphEntity(id) => {
+                                                wow_context::L0Scope::Entity(id.clone())
+                                            }
+                                        };
+                                        let inspect = wow_context::build_combined_context_inspect(
+                                            &mut map,
+                                            &universe,
+                                            graph,
+                                            &scope,
+                                            selection.level()?,
+                                            stop,
+                                        )
+                                        .map_err(context_error)?;
+                                        let delivery = Delivery {
+                                            artifact: InspectPayload {
+                                                combined_inspect_byte_length: inspect
+                                                    .canonical_bytes()
+                                                    .len(),
+                                                combined_inspect: &inspect,
+                                            },
+                                            state: inspect.state(),
+                                            remaining_metadata_bytes: inspect
+                                                .remaining_metadata_bytes(),
+                                        };
+                                        encode_result(
+                                            host,
+                                            request,
+                                            &request_id,
+                                            primary_read,
+                                            platform_read,
+                                            delivery,
+                                            stop,
+                                        )
+                                    } else {
+                                        let delivery = Delivery {
+                                            artifact: MapPayload {
+                                                combined_map_byte_length: map
+                                                    .canonical_bytes()
+                                                    .len(),
+                                                combined_map: &map,
+                                            },
+                                            state: map.state(),
+                                            remaining_metadata_bytes: map
+                                                .remaining_metadata_bytes(),
+                                        };
+                                        encode_result(
+                                            host,
+                                            request,
+                                            &request_id,
+                                            primary_read,
+                                            platform_read,
+                                            delivery,
+                                            stop,
+                                        )
+                                    }
                                 },
                             )
                         },
@@ -266,7 +380,7 @@ pub fn execute_context_combined(
             ServiceErrorCode::InternalContractViolation,
             closure,
             CONTEXT_COMBINED_RESULT_SCHEMA,
-            "context_combined_map",
+            request.result_operation(),
         ),
         Err(error) => failed_operation(
             request,
@@ -274,7 +388,7 @@ pub fn execute_context_combined(
             error.code(),
             closure,
             CONTEXT_COMBINED_RESULT_SCHEMA,
-            "context_combined_map",
+            request.result_operation(),
         ),
     }
 }
@@ -339,16 +453,31 @@ struct Payload<'a, S: Serialize, T: Serialize> {
     primary: ReadBinding<'a>,
     platform: ReadBinding<'a>,
     platform_selection: &'a S,
+    #[serde(flatten)]
+    artifact: T,
+}
+#[derive(Serialize)]
+struct MapPayload<'a, T: Serialize> {
     combined_map_byte_length: usize,
     combined_map: &'a T,
 }
-fn encode_result(
+#[derive(Serialize)]
+struct InspectPayload<'a, T: Serialize> {
+    combined_inspect_byte_length: usize,
+    combined_inspect: &'a T,
+}
+struct Delivery<T> {
+    artifact: T,
+    state: wow_context::ProjectMapState,
+    remaining_metadata_bytes: u64,
+}
+fn encode_result<T: Serialize>(
     host: &ContextCombinedHostInput,
     request: &ContextCombinedRequest,
     request_id: &str,
     primary_read: &LiveProjectRead,
     platform_read: &LiveProjectRead,
-    map: &wow_context::CombinedContextMap<'_, '_>,
+    delivery: Delivery<T>,
     stop: &AtomicBool,
 ) -> ServiceResult<(Vec<u8>, ContextMapStatus)> {
     let primary = read_binding(primary_read, &host.primary.project_store_id);
@@ -372,7 +501,7 @@ fn encode_result(
         "context-combined-resolved-request:{}",
         ContentDigest::<CanonicalResult>::from_bytes(digest)
     );
-    let status = match map.state() {
+    let status = match delivery.state {
         wow_context::ProjectMapState::Partial => ContextMapStatus::Partial,
         wow_context::ProjectMapState::Truncated => ContextMapStatus::Truncated,
     };
@@ -381,12 +510,11 @@ fn encode_result(
         primary,
         platform,
         platform_selection: host.platform.selection.intent(),
-        combined_map_byte_length: map.canonical_bytes().len(),
-        combined_map: map,
+        artifact: delivery.artifact,
     };
     let envelope = Envelope {
         schema: CONTEXT_COMBINED_RESULT_SCHEMA,
-        operation: "context_combined_map",
+        operation: request.result_operation(),
         request_id,
         request,
         status,
@@ -394,7 +522,7 @@ fn encode_result(
         failure_code: None,
         payload: Some(payload),
     };
-    let limit = usize::try_from(map.remaining_metadata_bytes())
+    let limit = usize::try_from(delivery.remaining_metadata_bytes)
         .map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
     Ok((encode(&envelope, limit, stop)?, status))
 }

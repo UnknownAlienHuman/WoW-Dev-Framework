@@ -63,8 +63,8 @@ Decoding supplies inert intent; original acquired owners supply authority.
 | Document | Exact schema and fields |
 |---|---|
 | Host | `wow-service/context-combined-native-host/1`: `schema`, `primary`, `platform` |
-| Request | `wow-service/context-combined-request/1`: `schema`, `operation="map"`, `profile_id="wow-context/combined-native-one-hop/1"`, `primary`, `platform` |
-| Result | `wow-service/context-combined-result/1`, operation `context_combined_map` |
+| Request | `wow-service/context-combined-request/1`: `schema`, `operation="map"` or `"inspect"`, `profile_id="wow-context/combined-native-one-hop/1"`, `primary`, `platform`; inspect additionally requires `inspection` |
+| Result | `wow-service/context-combined-result/1` |
 
 Host `primary` is the complete existing
 `wow-service/context-map-native-host/1` document; `platform` is the complete
@@ -91,5 +91,37 @@ Either truncated component makes the outer state Truncated; otherwise it is
 Partial. Original coverage/conflicts/support/NotEvaluated stay nested and
 `absence_authoritative=false`. The [explicit map CLI](../../../apps/wow/CONTEXT_MAP.md#selected-combined-native-map)
 uses envelope JSON only. Existing Primary/platform contracts remain separate;
-combined inspect, packs/rendering, cross-universe links and runtime qualification
-remain open. No behavioral or acceptance result is asserted by this contract.
+combined packs/rendering, cross-universe links and runtime qualification remain
+open. No behavioral or acceptance result is asserted by this contract.
+
+## Selected combined inspection
+
+The specified inspect selection uses `operation="inspect"` and requires
+an `inspection` object, for example `inspection={"level":"both"}`, with exactly
+`level`, whose value is `l0`, `l1` or `both`. A project root selects L0 only;
+L1/Both use a genuine detail map and an eligible exact entity root. Missing
+inspection for inspect, explicit null,
+unknown fields/levels and inspection on map refuse. The field is optional in the
+request family and is omitted for map. The nested platform request still uses `operation="map"`;
+it supplies the original native map read, not a second inspection acquisition.
+The same host/request/result /1 schemas and
+`wow-context/combined-native-one-hop/1` family apply.
+
+Inspection consumes the genuine combined construction under its actual continuing
+Budget. Primary skeletons use the original default L0/L1 engines, existing exact
+root/level requirements and support; Both keeps their fixed original order.
+Platform inspect borrows the original admitted map/page/support without another
+platform read. Maps, universes and their IDs remain distinct; inspection cannot
+upgrade native omissions or infer cross-universe links. Omitting inspection
+preserves the existing map request/artifact bytes.
+
+Inspection work/retained bytes and final delivery use the continuing construction
+allowance; earlier acquisition/universe/catalog work retains its existing owner
+bounds. Checked platform-then-Primary read/store closure precedes payload exposure;
+overflow/cancellation/close failure suppresses payload conservatively. Partial/
+Truncated and nonauthoritative absence remain. The
+[combined inspect CLI](../../../apps/wow/CONTEXT_INSPECT.md#selected-combined-native-inspect)
+uses explicit host/request files and envelope JSON only. The service result operation
+is `context_combined_inspect`; payload retains `combined_inspect_byte_length` and
+original `combined_inspect`, alongside the existing native read bindings/selection.
+Selected behavioral verification is tracked in #122; full E3 acceptance remains open.

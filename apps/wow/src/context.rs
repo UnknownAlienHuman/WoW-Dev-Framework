@@ -1176,6 +1176,99 @@ mod tests {
             assert!(parse(values).is_err(), "{flag}");
         }
 
+        // Combined retains explicit file transport; inspection level stays in its request.
+        let combined_values = |command: &str| {
+            [
+                "context",
+                command,
+                "--platform",
+                "combined",
+                "--native-host-config",
+                "combined-host.json",
+                "--combined-request-input",
+                "combined-request.json",
+            ]
+            .into_iter()
+            .map(OsString::from)
+            .collect::<Vec<_>>()
+        };
+        for (command, operation, other, duplicate) in [
+            (
+                "map",
+                wow_service::context::ContextPlatformOperation::Map,
+                wow_service::context::ContextPlatformOperation::Inspect,
+                "duplicate context map option",
+            ),
+            (
+                "inspect",
+                wow_service::context::ContextPlatformOperation::Inspect,
+                wow_service::context::ContextPlatformOperation::Map,
+                "duplicate context inspect option",
+            ),
+        ] {
+            let values = combined_values(command);
+            let parsed = parse(values.clone())?;
+            assert_eq!(parsed.host_config, PathBuf::from("combined-host.json"));
+            let Request::Combined(request) = parsed.request else {
+                return Err("expected combined explicit file transport");
+            };
+            assert!(request.operation_matches(operation));
+            assert!(!request.operation_matches(other));
+            let mut explicit_output = values.clone();
+            push(&mut explicit_output, "--output", "envelope-json");
+            assert!(parse(explicit_output).is_ok());
+            for (flag, value) in [
+                ("--native-host-config", "other-host.json"),
+                ("--combined-request-input", "other-request.json"),
+                ("--platform", "combined"),
+                ("--output", "envelope-json"),
+            ] {
+                let mut repeated = values.clone();
+                if flag == "--output" {
+                    push(&mut repeated, flag, value);
+                }
+                push(&mut repeated, flag, value);
+                assert!(matches!(parse(repeated), Err(error) if error == duplicate));
+            }
+            for (flag, value) in [
+                ("--level", "l1"),
+                ("--root", GRAPH_ROOT),
+                ("--platform-request-input", "native-request.json"),
+                ("--unknown", "value"),
+                ("--output", "text"),
+            ] {
+                let mut rejected = values.clone();
+                push(&mut rejected, flag, value);
+                assert!(parse(rejected).is_err(), "{command} {flag}");
+            }
+            let mut mixed = values.clone();
+            replace(&mut mixed, "--platform", "native")?;
+            assert!(parse(mixed).is_err());
+            for flag in [
+                "--native-host-config",
+                "--combined-request-input",
+                "--platform",
+            ] {
+                let mut missing = values.clone();
+                let index = missing
+                    .iter()
+                    .position(|value| value == flag)
+                    .ok_or("missing combined fixture option")?;
+                missing.drain(index..index + 2);
+                assert!(parse(missing).is_err(), "{command} {flag}");
+            }
+            let mut missing_value = values;
+            missing_value.push("--output".into());
+            assert!(matches!(
+                parse(missing_value),
+                Err("missing combined context option value")
+            ));
+        }
+        assert!(matches!(
+            parse(combined_values("build")),
+            Err("combined platform supports context map or inspect only")
+        ));
+
         let mut partial_reference = arguments();
         push(&mut partial_reference, "--expect-profile", PROFILE);
         assert!(parse(partial_reference.clone()).is_err());

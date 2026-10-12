@@ -13,8 +13,9 @@ effective receiver remain NotEvaluated.
 The [native platform route](NATIVE_PLATFORM_MAP.md) binds one retained
 Skeleton input under `wow-context/platform-native-one-hop/1` through selected
 service/CLI map and inspect; complete Primary/platform/combined acceptance remains open.
-The [selected combined map](NATIVE_COMBINED_MAP.md) consumes the genuine prepared
-Primary ledger into a separate native platform map; broader acceptance remains open.
+The [selected combined map and inspection](NATIVE_COMBINED_MAP.md) continue the genuine
+prepared Primary ledger through the separate native platform map and original L0/L1
+and platform inspection engines; broader acceptance remains open.
 The complete E3-B contract below remains the target; broader operations and
 acceptance are pending under Issue #122.
 

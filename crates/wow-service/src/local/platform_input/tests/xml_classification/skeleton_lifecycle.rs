@@ -673,13 +673,15 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
         )?,
         &stop,
     )?;
+    let mut platform_inspect_wire = platform_request.clone();
+    platform_inspect_wire["operation"] = json!("inspect");
     let platform_leaf = execute_context_platform(
         &ContextPlatformHostInput::from_json_slice(
             &wow_core::canonical_json_bytes(&platform_host)?,
             &stop,
         )?,
         &ContextPlatformRequest::from_json_slice(
-            &wow_core::canonical_json_bytes(&platform_request)?,
+            &wow_core::canonical_json_bytes(&platform_inspect_wire)?,
             &stop,
         )?,
         &stop,
@@ -693,7 +695,8 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
     assert_eq!(primary_leaf["resource_closure"], "closed");
     assert_eq!(platform_leaf["resource_closure"], "closed");
     let original_primary_map = &primary_leaf["payload"]["project_map"];
-    let original_platform_map = &platform_leaf["payload"]["artifact"];
+    let original_platform_inspect = &platform_leaf["payload"]["artifact"];
+    let original_platform_map = &original_platform_inspect["map"];
     let host_wire = json!({"schema": CONTEXT_COMBINED_HOST_SCHEMA, "primary": primary_host, "platform": platform_host});
     let request_wire = json!({
         "schema": CONTEXT_COMBINED_REQUEST_SCHEMA, "operation": "map", "profile_id": COMBINED_NATIVE_MAP_PROFILE_ID,
@@ -710,6 +713,55 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
         &wow_core::canonical_json_bytes(&request_wire)?,
         &stop,
     )?;
+    assert_eq!(serde_json::to_value(&request)?, request_wire);
+    assert!(serde_json::to_value(&request)?.get("inspection").is_none());
+    let mut inspect_wire = request_wire.clone();
+    inspect_wire["operation"] = json!("inspect");
+    inspect_wire["inspection"] = json!({"level": "both"});
+    let inspect_request_bytes = wow_core::canonical_json_bytes(&inspect_wire)?;
+    let inspect_request = ContextCombinedRequest::from_json_slice(&inspect_request_bytes, &stop)?;
+    assert_eq!(serde_json::to_value(&inspect_request)?, inspect_wire);
+
+    // Decode-only controls never acquire either store or rerun a producer.
+    let mut missing_inspection = inspect_wire.clone();
+    missing_inspection
+        .as_object_mut()
+        .ok_or("combined inspect request object")?
+        .remove("inspection");
+    let mut null_inspection = inspect_wire.clone();
+    null_inspection["inspection"] = Value::Null;
+    let mut null_map_inspection = request_wire.clone();
+    null_map_inspection["inspection"] = Value::Null;
+    let mut map_with_inspection = inspect_wire.clone();
+    map_with_inspection["operation"] = json!("map");
+    let mut unknown_level = inspect_wire.clone();
+    unknown_level["inspection"]["level"] = json!("unknown");
+    let mut nested_inspect = inspect_wire.clone();
+    nested_inspect["platform"]["operation"] = json!("inspect");
+    for invalid in [
+        missing_inspection,
+        null_inspection,
+        null_map_inspection,
+        map_with_inspection,
+        unknown_level,
+        nested_inspect,
+    ] {
+        assert_eq!(
+            ContextCombinedRequest::from_json_slice(&serde_json::to_vec(&invalid)?, &stop,)
+                .err()
+                .ok_or("malformed combined inspection accepted")?
+                .code(),
+            ServiceErrorCode::InvalidRequest
+        );
+    }
+    assert_eq!(
+        ContextCombinedRequest::from_json_slice(&inspect_request_bytes, &AtomicBool::new(true),)
+            .err()
+            .ok_or("pre-admission combined inspection cancellation ignored")?
+            .code(),
+        ServiceErrorCode::Cancelled
+    );
+
     let observed = execute_context_combined(&host, &request, &stop)?;
     assert_eq!(observed.status(), ContextMapStatus::Partial);
     assert_eq!(observed.failure_code(), None);
@@ -841,9 +893,144 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
     }
     assert!(!observed.canonical_bytes().ends_with(b"\n"));
 
+    // L0 on the SAME exact source-file root consumes the navigation map
+    // unchanged. Both intentionally selects the existing native detail origin.
+    let mut l0_wire = inspect_wire.clone();
+    l0_wire["inspection"]["level"] = json!("l0");
+    let l0_request =
+        ContextCombinedRequest::from_json_slice(&wow_core::canonical_json_bytes(&l0_wire)?, &stop)?;
+    let l0_observed = execute_context_combined(&host, &l0_request, &stop)?;
+    assert_eq!(l0_observed.status(), ContextMapStatus::Partial);
+    assert_eq!(l0_observed.failure_code(), None);
+    let l0_envelope: Value = serde_json::from_slice(l0_observed.canonical_bytes())?;
+    assert_eq!(l0_envelope["resource_closure"], "closed");
+    assert_eq!(l0_envelope["operation"], "context_combined_inspect");
+    let l0_inspect = &l0_envelope["payload"]["combined_inspect"];
+    assert_eq!(
+        l0_inspect["core"]["map"], *map,
+        "unchanged combined map origin"
+    );
+    assert_eq!(
+        wow_core::canonical_json_bytes(&l0_inspect["core"]["map"])?,
+        wow_core::canonical_json_bytes(map)?
+    );
+    assert_eq!(
+        l0_inspect["core"]["platform_inspect"],
+        *original_platform_inspect
+    );
+    assert_eq!(
+        l0_envelope["payload"]["combined_inspect_byte_length"],
+        wow_core::canonical_json_bytes(l0_inspect)?.len()
+    );
+    let l0_skeletons = &l0_inspect["core"]["primary_skeletons"];
+    assert_eq!(l0_skeletons["level"], "l0");
+    assert!(l0_skeletons.get("l1").is_none());
+    assert_eq!(l0_skeletons["l0"]["core"]["scope"]["node"], primary_node);
+    assert_eq!(
+        l0_skeletons["l0"]["core"]["context"]["origins"],
+        *original_primary_map
+    );
+
+    let inspect_observed = execute_context_combined(&host, &inspect_request, &stop)?;
+    assert_eq!(inspect_observed.status(), ContextMapStatus::Partial);
+    assert_eq!(inspect_observed.failure_code(), None);
+    let inspect_envelope: Value = serde_json::from_slice(inspect_observed.canonical_bytes())?;
+    assert_eq!(inspect_envelope["resource_closure"], "closed");
+    assert_eq!(inspect_envelope["schema"], CONTEXT_COMBINED_RESULT_SCHEMA);
+    assert_eq!(inspect_envelope["operation"], "context_combined_inspect");
+    assert_eq!(inspect_envelope["request"], inspect_wire);
+    assert_ne!(inspect_envelope["request_id"], envelope["request_id"]);
+    assert!(inspect_envelope.get("failure_code").is_none());
+    let inspect_payload = &inspect_envelope["payload"];
+    for key in ["primary", "platform", "platform_selection"] {
+        assert_eq!(inspect_payload[key], payload[key]);
+    }
+    assert_ne!(
+        inspect_payload["resolved_request_id"],
+        payload["resolved_request_id"]
+    );
+    let inspect = &inspect_payload["combined_inspect"];
+    assert_eq!(inspect["family"], COMBINED_NATIVE_MAP_PROFILE_ID);
+    assert_eq!(inspect["artifact_kind"], "inspect");
+    assert!(
+        inspect["inspect_id"]
+            .as_str()
+            .ok_or("native combined inspect ID")?
+            .starts_with("combined-context-inspect:sha256:")
+    );
+    assert_eq!(
+        inspect_payload["combined_inspect_byte_length"],
+        wow_core::canonical_json_bytes(inspect)?.len()
+    );
+    let inspect_core = &inspect["core"];
+    let inspect_map = &inspect_core["map"];
+    let inspect_primary_map = &inspect_map["core"]["primary"];
+    assert_eq!(inspect_map["family"], COMBINED_NATIVE_MAP_PROFILE_ID);
+    assert_eq!(inspect_map["artifact_kind"], "map");
+    assert_ne!(inspect_map["combined_map_id"], map["combined_map_id"]);
+    assert_eq!(
+        inspect_primary_map["core"]["profile"]["profile"],
+        "wow-context/primary-entity-detail-origins/1"
+    );
+    assert_eq!(
+        inspect_primary_map["core"]["binding"],
+        core["primary"]["core"]["binding"]
+    );
+    assert_eq!(
+        inspect_primary_map["core"]["navigation"]["root"],
+        primary_node
+    );
+    let inspect_root_support = inspect_primary_map["core"]["supports"]
+        .as_array()
+        .ok_or("native detail-origin supports")?
+        .iter()
+        .find(|row| row["explanation"]["record"]["node"] == primary_node)
+        .ok_or("native detail-origin root support")?;
+    assert_eq!(inspect_root_support, root_support);
+    let skeletons = &inspect_core["primary_skeletons"];
+    assert_eq!(
+        skeletons["schema"],
+        "wow-context/primary-skeleton-inspection/1"
+    );
+    assert_eq!(skeletons["level"], "both");
+    assert_eq!(skeletons["l0"]["core"]["scope"]["node"], primary_node);
+    assert_eq!(skeletons["l1"]["core"]["root"], primary_node);
+    for level in ["l0", "l1"] {
+        let context = &skeletons[level]["core"]["context"];
+        assert_eq!(
+            context["origin_map_id"],
+            inspect_primary_map["project_map_id"]
+        );
+        assert_eq!(context["origins"], *inspect_primary_map);
+        assert_eq!(context["state"], "partial");
+        assert_eq!(context["absence_authoritative"], false);
+    }
+    assert_eq!(inspect_map["core"]["platform"], *original_platform_map);
+    assert_eq!(inspect_core["platform_inspect"], *original_platform_inspect);
+    assert_eq!(
+        wow_core::canonical_json_bytes(&inspect_core["platform_inspect"])?,
+        wow_core::canonical_json_bytes(original_platform_inspect)?
+    );
+    assert_eq!(
+        inspect_core["platform_inspect"]["map"]["core"]["native"],
+        original_native["page"]
+    );
+    assert_eq!(inspect_core["state"], "partial");
+    assert_eq!(inspect_core["absence_authoritative"], false);
+    assert_eq!(inspect_core["cross_universe_relations"], "not_evaluated");
+    assert!(!inspect_observed.canonical_bytes().ends_with(b"\n"));
+    let inspect_text = std::str::from_utf8(inspect_observed.canonical_bytes())?;
+    assert!(
+        !inspect_text.contains("project_store_root")
+            && !inspect_text.contains("local function ContextFixture")
+    );
+    for source in [&root.0, &primary_store, &platform_store] {
+        assert!(!inspect_text.contains(&serde_json::to_string(source)?));
+    }
+
     // Original Primary reservations remain held; additional platform bind work
     // makes this exact Primary-plus-native-scan floor insufficient on one ledger.
-    let primary_work = original_primary_map["core"]["budget"]["context_work_reserved"]
+    let primary_work = inspect_primary_map["core"]["budget"]["context_work_reserved"]
         .as_u64()
         .ok_or("original Primary reserved work")?;
     let native_floor = original_native["page"]["body"]["neighborhood"]["scanned_edges"]
@@ -861,6 +1048,20 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
         .checked_add(native_floor)
         .ok_or("combined work overflow")?;
     assert!(primary_work > 0 && native_floor > 0 && selected_work < 8_000_000);
+    assert!(
+        skeletons["work_reserved"]
+            .as_u64()
+            .ok_or("continuing Primary inspection work")?
+            > selected_work
+    );
+    assert!(
+        skeletons["bytes_reserved"]
+            .as_u64()
+            .ok_or("continuing Primary inspection metadata")?
+            > inspect_primary_map["core"]["budget"]["retained_rows_bytes_reserved"]
+                .as_u64()
+                .ok_or("original Primary map metadata")?
+    );
     let mut bounded_wire = host_wire.clone();
     bounded_wire["primary"]["limits"]["max_context_work"] = json!(selected_work);
     bounded_wire["platform"]["limits"]["max_context_work"] = json!(selected_work);
@@ -868,15 +1069,54 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
         &wow_core::canonical_json_bytes(&bounded_wire)?,
         &stop,
     )?;
-    let refused = execute_context_combined(&bounded, &request, &stop)?;
-    assert_eq!(refused.status(), ContextMapStatus::Failed);
+    // Keep the existing navigation-map refusal independently of the new
+    // detail/inspection selection; its original ledger regression stays covered.
+    let original_map_work = original_primary_map["core"]["budget"]["context_work_reserved"]
+        .as_u64()
+        .and_then(|work| work.checked_add(native_floor))
+        .ok_or("original combined map work overflow")?;
+    let mut original_map_bound = host_wire.clone();
+    original_map_bound["primary"]["limits"]["max_context_work"] = json!(original_map_work);
+    original_map_bound["platform"]["limits"]["max_context_work"] = json!(original_map_work);
+    let original_map_bound = ContextCombinedHostInput::from_json_slice(
+        &wow_core::canonical_json_bytes(&original_map_bound)?,
+        &stop,
+    )?;
+    let original_refused = execute_context_combined(&original_map_bound, &request, &stop)?;
+    assert_eq!(original_refused.status(), ContextMapStatus::Failed);
     assert_eq!(
-        refused.failure_code(),
+        original_refused.failure_code(),
         Some(ServiceErrorCode::BudgetExceeded)
     );
-    let refused: Value = serde_json::from_slice(refused.canonical_bytes())?;
-    assert_eq!(refused["resource_closure"], "closed");
-    assert!(refused.get("payload").is_none());
+    let original_refused: Value = serde_json::from_slice(original_refused.canonical_bytes())?;
+    assert_eq!(original_refused["resource_closure"], "closed");
+    assert!(original_refused.get("payload").is_none());
+    // The genuine inspection artifact alone fits this positive byte allowance
+    // at the original limits. Earlier retained construction and final delivery
+    // must also fit the same ledger; no specific refusal stage is assumed.
+    let inspection_bytes = inspect_payload["combined_inspect_byte_length"]
+        .as_u64()
+        .ok_or("native combined inspection byte count")?;
+    assert!(inspection_bytes > 0 && inspection_bytes < 8_000_000);
+    let mut metadata_wire = host_wire.clone();
+    metadata_wire["primary"]["limits"]["max_metadata_bytes"] = json!(inspection_bytes);
+    metadata_wire["platform"]["limits"]["max_metadata_bytes"] = json!(inspection_bytes);
+    let metadata_bounded = ContextCombinedHostInput::from_json_slice(
+        &wow_core::canonical_json_bytes(&metadata_wire)?,
+        &stop,
+    )?;
+    for selected_host in [&bounded, &metadata_bounded] {
+        let refused = execute_context_combined(selected_host, &inspect_request, &stop)?;
+        assert_eq!(refused.status(), ContextMapStatus::Failed);
+        assert_eq!(
+            refused.failure_code(),
+            Some(ServiceErrorCode::BudgetExceeded)
+        );
+        let refused: Value = serde_json::from_slice(refused.canonical_bytes())?;
+        assert_eq!(refused["operation"], "context_combined_inspect");
+        assert_eq!(refused["resource_closure"], "closed");
+        assert!(refused.get("payload").is_none());
+    }
     assert!(source_absent_paths.iter().all(|path| !path.exists()));
 
     if let Some(destination) = &export {
@@ -893,6 +1133,20 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
             "expected_envelope": "expected-envelope.json", "expected_exit": 2,
             "stdout": "expected service bytes followed by one LF", "resource_closure": "closed"
         });
+        let mut inspect_cli_case = cli_case.clone();
+        inspect_cli_case["argv"] = json!([
+            "context",
+            "inspect",
+            "--platform",
+            "combined",
+            "--native-host-config",
+            destination.join("host.json"),
+            "--combined-request-input",
+            destination.join("inspect-request.json"),
+            "--output",
+            "envelope-json"
+        ]);
+        inspect_cli_case["expected_envelope"] = json!("expected-inspect-envelope.json");
         for (name, bytes, limit) in [
             (
                 "host.json",
@@ -912,6 +1166,21 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
             (
                 "expected-envelope.json",
                 observed.canonical_bytes().to_vec(),
+                CONTEXT_MAP_RESULT_MAX_BYTES,
+            ),
+            (
+                "inspect-request.json",
+                wow_core::canonical_json_bytes(&inspect_request)?,
+                CONTEXT_COMBINED_REQUEST_MAX_BYTES,
+            ),
+            (
+                "inspect-cli-case.json",
+                wow_core::canonical_json_bytes(&inspect_cli_case)?,
+                64 * 1024,
+            ),
+            (
+                "expected-inspect-envelope.json",
+                inspect_observed.canonical_bytes().to_vec(),
                 CONTEXT_MAP_RESULT_MAX_BYTES,
             ),
         ] {

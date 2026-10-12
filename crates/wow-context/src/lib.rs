@@ -16,8 +16,8 @@ mod universe;
 
 pub use budget::PrimaryMapLimits;
 pub use combined::{
-    COMBINED_NATIVE_ONE_HOP_PROFILE, COMBINED_NATIVE_ONE_HOP_PROFILE_BYTES, CombinedContextMap,
-    build_combined_context_map,
+    COMBINED_NATIVE_ONE_HOP_PROFILE, COMBINED_NATIVE_ONE_HOP_PROFILE_BYTES, CombinedContextInspect,
+    CombinedContextMap, build_combined_context_inspect, build_combined_context_map,
 };
 pub use error::{ContextError, ContextErrorCode, ContextResult};
 pub use map::{
@@ -45,8 +45,8 @@ pub use pack::{
 };
 pub use platform::{
     PLATFORM_NATIVE_ONE_HOP_PROFILE, PLATFORM_NATIVE_ONE_HOP_PROFILE_BYTES, PlatformContextInspect,
-    PlatformContextMap, PlatformContextUniverse, bind_platform_context_universe,
-    build_platform_context_inspect, build_platform_context_map,
+    PlatformContextInspectView, PlatformContextMap, PlatformContextUniverse,
+    bind_platform_context_universe, build_platform_context_inspect, build_platform_context_map,
 };
 pub use profile::{
     PRIMARY_MAP_PROFILE, PRIMARY_MAP_PROFILE_BYTES, PRIMARY_PROJECT_MAP_PROFILE,

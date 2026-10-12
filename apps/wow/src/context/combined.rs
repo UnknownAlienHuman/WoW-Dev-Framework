@@ -1,4 +1,4 @@
-//! Closed combined-map explicit-file transport; semantics remain service-owned.
+//! Closed combined map/inspect explicit-file transport; semantics remain service-owned.
 use super::{Arguments, Command, MAX_VALUE_BYTES, set};
 use std::{
     ffi::{OsStr, OsString},
@@ -10,12 +10,24 @@ use wow_service::{
     ServiceErrorCode,
     context::{
         CONTEXT_COMBINED_HOST_INPUT_MAX_BYTES, CONTEXT_COMBINED_REQUEST_MAX_BYTES,
-        ContextCombinedHostInput, ContextCombinedRequest, execute_context_combined,
+        ContextCombinedHostInput, ContextCombinedRequest, ContextPlatformOperation,
+        execute_context_combined,
     },
 };
 
 pub(super) struct Request {
+    command: Command,
     request_input: PathBuf,
+}
+
+impl Request {
+    pub(super) fn operation_matches(&self, operation: ContextPlatformOperation) -> bool {
+        matches!(
+            (self.command, operation),
+            (Command::Map, ContextPlatformOperation::Map)
+                | (Command::Inspect, ContextPlatformOperation::Inspect)
+        )
+    }
 }
 
 /// Run after aggregate argv bounds. Only option positions select Combined.
@@ -32,11 +44,14 @@ pub(super) fn parse(values: &[OsString]) -> Result<Option<Arguments>, &'static s
     if !selected {
         return Ok(None);
     }
-    if values.first().map(OsString::as_os_str) != Some(OsStr::new("context"))
-        || values.get(1).map(OsString::as_os_str) != Some(OsStr::new("map"))
-    {
-        return Err("combined platform supports context map only");
+    if values.first().map(OsString::as_os_str) != Some(OsStr::new("context")) {
+        return Err("expected context map or inspect");
     }
+    let command = match values.get(1).and_then(|value| value.to_str()) {
+        Some("map") => Command::Map,
+        Some("inspect") => Command::Inspect,
+        _ => return Err("combined platform supports context map or inspect only"),
+    };
     let mut host_config = None;
     let mut request_input = None;
     let mut platform = None;
@@ -60,30 +75,26 @@ pub(super) fn parse(values: &[OsString]) -> Result<Option<Arguments>, &'static s
         }
         match option {
             "--native-host-config" => {
-                set(
-                    &mut host_config,
-                    PathBuf::from(value.as_os_str()),
-                    Command::Map,
-                )?;
+                set(&mut host_config, PathBuf::from(value.as_os_str()), command)?;
             }
             "--combined-request-input" => {
                 set(
                     &mut request_input,
                     PathBuf::from(value.as_os_str()),
-                    Command::Map,
+                    command,
                 )?;
             }
             "--platform" => {
                 if value != "combined" {
                     return Err("combined context rejects mixed platform selection");
                 }
-                set(&mut platform, (), Command::Map)?;
+                set(&mut platform, (), command)?;
             }
             "--output" => {
                 if value != "envelope-json" {
-                    return Err("combined context map output must be envelope-json");
+                    return Err("combined context map/inspect output must be envelope-json");
                 }
-                set(&mut output, (), Command::Map)?;
+                set(&mut output, (), command)?;
             }
             _ => return Err("unknown combined context option"),
         }
@@ -92,6 +103,7 @@ pub(super) fn parse(values: &[OsString]) -> Result<Option<Arguments>, &'static s
     Ok(Some(Arguments {
         host_config: host_config.ok_or("combined context requires explicit native host input")?,
         request: super::Request::Combined(Request {
+            command,
             request_input: request_input
                 .ok_or("combined context requires --combined-request-input")?,
         }),
@@ -113,6 +125,9 @@ pub(super) fn run(host_path: &Path, arguments: &Request, stop: &AtomicBool) -> u
         Err(_) => return super::input_failure("invalid combined context request", stop),
     };
     drop(request_bytes);
+    if !arguments.operation_matches(request.operation()) {
+        return super::input_failure("combined request operation conflicts with command", stop);
+    }
     let host_bytes =
         match crate::graph::read_file(host_path, CONTEXT_COMBINED_HOST_INPUT_MAX_BYTES, stop) {
             Ok(bytes) => bytes,

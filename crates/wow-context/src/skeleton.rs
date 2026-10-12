@@ -366,12 +366,12 @@ fn missing() -> ContextError {
     ContextError::new(ContextErrorCode::MissingRequiredCustody)
 }
 
-fn input<'m, 'a>(
+fn validate_input<'m, 'a>(
     universe: &ContextUniverseSet<'a>,
     map: &'m ProjectMap<'a>,
     graph: &GraphPartitionRead<'a>,
     stop: &AtomicBool,
-) -> ContextResult<(ProjectMapView<'m, 'a>, Budget)> {
+) -> ContextResult<ProjectMapView<'m, 'a>> {
     checkpoint(stop)?;
     let view = open_project_map_view(map, stop)?;
     if !view.is_skeleton_origin() {
@@ -380,6 +380,16 @@ fn input<'m, 'a>(
     if !view.bound_to(universe) || !std::ptr::eq(graph.owner(), universe.pair.graph()) {
         return Err(ContextError::new(ContextErrorCode::UniverseMismatch));
     }
+    Ok(view)
+}
+
+fn input<'m, 'a>(
+    universe: &ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    stop: &AtomicBool,
+) -> ContextResult<(ProjectMapView<'m, 'a>, Budget)> {
+    let view = validate_input(universe, map, graph, stop)?;
     let mut budget = Budget::new(universe.limits);
     budget.work(
         usize::try_from(view.work_reserved()).map_err(|_| exhausted())?,
@@ -1318,14 +1328,59 @@ pub(crate) fn build_primary_skeletons_with_budget<'m, 'a>(
         return Err(invalid());
     }
     let (view, mut budget) = input(universe, map, graph, stop)?;
+    let result = primary_skeletons_from_view(
+        universe,
+        map,
+        graph,
+        (root, level, profile),
+        &view,
+        &mut budget,
+        stop,
+    )?;
+    Ok((result, budget))
+}
+
+/// Continue an existing construction ledger; the origin map was already charged.
+/// Only the default container/entity recipes are selected by combined inspect.
+pub(crate) fn build_primary_skeletons_on_budget<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    selection: (&L0Scope, SkeletonLevel),
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<PrimarySkeletons<'m, 'a>> {
+    budget.work(1, stop)?;
+    let view = validate_input(universe, map, graph, stop)?;
+    primary_skeletons_from_view(
+        universe,
+        map,
+        graph,
+        (selection.0, selection.1, PrimaryL0Profile::ContainersV1),
+        &view,
+        budget,
+        stop,
+    )
+}
+
+fn primary_skeletons_from_view<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    selection: (&L0Scope, SkeletonLevel, PrimaryL0Profile),
+    view: &ProjectMapView<'m, 'a>,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<PrimarySkeletons<'m, 'a>> {
+    let (root, level, profile) = selection;
     let l0 = if matches!(level, SkeletonLevel::L0 | SkeletonLevel::Both) {
         Some(l0(
             universe,
             map,
             graph,
             (root, profile),
-            &view,
-            &mut budget,
+            view,
+            budget,
             stop,
         )?)
     } else {
@@ -1340,14 +1395,14 @@ pub(crate) fn build_primary_skeletons_with_budget<'m, 'a>(
             map,
             graph,
             (id, PrimaryL1Profile::EntityV1, None),
-            &view,
-            &mut budget,
+            view,
+            budget,
             stop,
         )?)
     } else {
         None
     };
-    finish_primary_skeletons(universe, level, l0, l1, budget, stop)
+    finish_primary_skeletons_on_budget(universe, level, l0, l1, budget, stop)
 }
 
 fn finish_primary_skeletons<'m, 'a>(
@@ -1358,6 +1413,18 @@ fn finish_primary_skeletons<'m, 'a>(
     budget: Budget,
     stop: &AtomicBool,
 ) -> ContextResult<(PrimarySkeletons<'m, 'a>, Budget)> {
+    let result = finish_primary_skeletons_on_budget(universe, level, l0, l1, &budget, stop)?;
+    Ok((result, budget))
+}
+
+fn finish_primary_skeletons_on_budget<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    level: SkeletonLevel,
+    l0: Option<L0Skeleton<'m, 'a>>,
+    l1: Option<L1Skeleton<'m, 'a>>,
+    budget: &Budget,
+    stop: &AtomicBool,
+) -> ContextResult<PrimarySkeletons<'m, 'a>> {
     let result = PrimarySkeletons {
         schema: "wow-context/primary-skeleton-inspection/1",
         level,
@@ -1372,5 +1439,5 @@ fn finish_primary_skeletons<'m, 'a>(
             .ok_or_else(exhausted)?,
     };
     crate::budget::encoded_len(&result, universe.limits.max_metadata_bytes, stop)?;
-    Ok((result, budget))
+    Ok(result)
 }

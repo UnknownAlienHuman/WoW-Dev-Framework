@@ -4,17 +4,20 @@ use std::sync::atomic::AtomicBool;
 
 use serde::Serialize;
 use wow_core::ProfileIdentity;
-use wow_graph::GraphQueryState;
+use wow_graph::{GraphPartitionRead, GraphQueryState};
 use wow_project::skeleton_input::{SkeletonInputPage, SkeletonInputView};
 use wow_reference::ReferenceView;
 
 use crate::budget::{Budget, canonical, checkpoint, exhausted, identity};
 use crate::platform::{
-    PlatformMapArtifact, bind_platform_context_universe_with_budget, encode_retained,
+    PlatformContextInspectView, PlatformMapArtifact, bind_platform_context_universe_with_budget,
+    build_platform_context_inspect_on_budget, encode_retained,
 };
+use crate::skeleton::build_primary_skeletons_on_budget;
 use crate::{
-    ContextError, ContextErrorCode, ContextResult, PrimaryMapForComposition, PrimaryMapLimits,
-    ProjectMap, ProjectMapState, build_platform_context_map, open_project_map_view,
+    ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, L0Scope,
+    PrimaryMapForComposition, PrimaryMapLimits, PrimarySkeletons, ProjectMap, ProjectMapState,
+    SkeletonLevel, build_platform_context_map, open_project_map_view,
 };
 
 /// Explicit new semantics; original component schemas and IDs stay separate.
@@ -201,6 +204,151 @@ pub fn build_combined_context_map<'p, 'f>(
     Ok(CombinedContextMap {
         artifact,
         platform_map_canonical_bytes,
+        canonical_bytes,
+        budget,
+    })
+}
+
+#[derive(Serialize)]
+struct CombinedInspectCore<'m, 'p, 'f> {
+    map: &'m CombinedMapArtifact<'p, 'f>,
+    primary_skeletons: PrimarySkeletons<'m, 'p>,
+    platform_inspect: PlatformContextInspectView<'m, 'f>,
+    state: ProjectMapState,
+    absence_authoritative: bool,
+    cross_universe_relations: &'static str,
+}
+#[derive(Serialize)]
+struct CombinedInspectArtifact<'m, 'p, 'f> {
+    family: &'static str,
+    artifact_kind: &'static str,
+    inspect_id: Box<str>,
+    core: CombinedInspectCore<'m, 'p, 'f>,
+}
+
+/// Original component inspections borrowing disjoint map fields and its ledger.
+/// No self-reference or decoded receipt can construct this sealed result.
+#[derive(Serialize)]
+pub struct CombinedContextInspect<'m, 'p, 'f> {
+    #[serde(flatten)]
+    artifact: CombinedInspectArtifact<'m, 'p, 'f>,
+    #[serde(skip)]
+    canonical_bytes: Box<[u8]>,
+    #[serde(skip)]
+    budget: &'m mut Budget,
+}
+impl<'m, 'p, 'f> CombinedContextInspect<'m, 'p, 'f> {
+    #[must_use]
+    pub fn inspect_id(&self) -> &str {
+        &self.artifact.inspect_id
+    }
+    #[must_use]
+    pub fn canonical_bytes(&self) -> &[u8] {
+        &self.canonical_bytes
+    }
+    #[must_use]
+    pub const fn state(&self) -> ProjectMapState {
+        self.artifact.core.state
+    }
+    #[must_use]
+    pub fn remaining_metadata_bytes(&self) -> u64 {
+        self.artifact.core.map.core.limits.max_metadata_bytes - self.budget.retained_bytes
+    }
+    /// Continuing conservative reservations, not measured CPU work.
+    #[must_use]
+    pub fn context_work_reserved(&self) -> u64 {
+        self.budget.work
+    }
+    #[must_use]
+    pub fn primary_skeletons(&self) -> &PrimarySkeletons<'m, 'p> {
+        &self.artifact.core.primary_skeletons
+    }
+    #[must_use]
+    pub fn platform_inspect(&self) -> &PlatformContextInspectView<'m, 'f> {
+        &self.artifact.core.platform_inspect
+    }
+    #[must_use]
+    pub fn combined_map_id(&self) -> &str {
+        &self.artifact.core.map.combined_map_id
+    }
+}
+
+/// Build default Primary L0/L1/Both and the original platform inspection using
+/// the actual combined construction ledger. L1/Both require a prepared detail
+/// origin; they never widen or reconstruct the original map here.
+pub fn build_combined_context_inspect<'m, 'p, 'f>(
+    map: &'m mut CombinedContextMap<'p, 'f>,
+    universe: &'m ContextUniverseSet<'p>,
+    graph: &GraphPartitionRead<'p>,
+    root: &L0Scope,
+    level: SkeletonLevel,
+    stop: &AtomicBool,
+) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
+    checkpoint(stop)?;
+    let CombinedContextMap {
+        artifact,
+        platform_map_canonical_bytes,
+        budget,
+        ..
+    } = map;
+    let map: &'m CombinedMapArtifact<'p, 'f> = artifact;
+    let platform_map_canonical_bytes: &'m [u8] = platform_map_canonical_bytes;
+    if map.core.limits != universe.limits {
+        return Err(ContextError::new(ContextErrorCode::UniverseMismatch));
+    }
+    let primary_skeletons = build_primary_skeletons_on_budget(
+        universe,
+        &map.core.primary,
+        graph,
+        (root, level),
+        budget,
+        stop,
+    )?;
+    let platform_inspect = build_platform_context_inspect_on_budget(
+        &map.core.platform,
+        platform_map_canonical_bytes,
+        budget,
+        stop,
+    )?;
+    let state = if map.core.state == ProjectMapState::Truncated
+        || primary_skeletons.state() == ProjectMapState::Truncated
+        || platform_inspect.state() == GraphQueryState::Truncated
+    {
+        ProjectMapState::Truncated
+    } else {
+        ProjectMapState::Partial
+    };
+    budget.work(1, stop)?;
+    let core = CombinedInspectCore {
+        map,
+        primary_skeletons,
+        platform_inspect,
+        state,
+        absence_authoritative: false,
+        cross_universe_relations: "not_evaluated",
+    };
+    budget.retain(&core, stop)?;
+    let inspect_id = identity(
+        COMBINED_NATIVE_ONE_HOP_PROFILE,
+        "combined-context-inspect:sha256:",
+        &("inspect", &core),
+        map.core
+            .limits
+            .max_metadata_bytes
+            .checked_sub(budget.retained_bytes)
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    let artifact = CombinedInspectArtifact {
+        family: COMBINED_NATIVE_ONE_HOP_PROFILE,
+        artifact_kind: "inspect",
+        inspect_id,
+        core,
+    };
+    let canonical_bytes = encode_retained(&artifact, budget, map.core.limits, stop)?;
+    checkpoint(stop)?;
+    Ok(CombinedContextInspect {
+        artifact,
         canonical_bytes,
         budget,
     })

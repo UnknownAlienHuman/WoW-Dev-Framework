@@ -329,3 +329,35 @@ Source/page omissions, configured Reference association and neighbor closure kee
 Selected lifecycle and CLI verification evidence is retained in
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122);
 broader acceptance remains open.
+
+## Selected combined native inspect
+
+The selected combined transport is:
+
+```text
+wow context inspect --platform combined --native-host-config <host.json>
+  --combined-request-input <inspect-request.json> [--output envelope-json]
+```
+
+Reuse the exact combined host and `wow-service/context-combined-request/1`
+request family with `operation="inspect"`,
+`profile_id="wow-context/combined-native-one-hop/1"` and required
+`inspection`, for example `{"level":"both"}`; level is exactly `l0`, `l1` or
+`both`. The platform
+subrequest remains `operation="map"`. Generations/publications, Primary root,
+platform candidate and native binding are explicit in the request. Primary argv
+selectors, standalone platform input, mixed modes, text/artifact output and
+combined build are outside this grammar; `--level` is not a combined argv option.
+
+One consuming service operation retains original default Primary L0/L1 and the
+borrowed original platform inspect under the actual continuing construction
+Budget, without a second platform read. Original maps/IDs/universes/support and
+exact shared Reference association remain distinct. Checked reverse closure and
+final remaining allowance govern payload exposure. Envelope JSON is exact service
+bytes plus one LF; Partial/Truncated exit 2 and output failure never retries.
+The service result uses the same combined /1 schema, operation
+`context_combined_inspect` and original `payload.combined_inspect`.
+Unselected map requests/artifacts remain exact. See the
+[combined owner contract](../../crates/wow-context/e3/NATIVE_COMBINED_MAP.md#selected-combined-inspection)
+for budget scope and conservative omissions. Selected verification is tracked in
+#122; combined packs, links and full acceptance remain open.

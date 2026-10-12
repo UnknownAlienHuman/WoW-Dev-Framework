@@ -368,18 +368,22 @@ pub(super) fn with_primary_composition<T>(
     read: &LiveProjectRead,
     host: &ContextMapHostInput,
     root: ContextMapRoot,
+    detail: bool,
     stop: &AtomicBool,
-    build: impl FnOnce(wow_context::PrimaryMapForComposition<'_>) -> ServiceResult<T>,
+    build: impl FnOnce(
+        wow_context::PrimaryMapForComposition<'_>,
+        &wow_graph::GraphPartitionRead<'_>,
+    ) -> ServiceResult<T>,
 ) -> ServiceResult<T> {
     with_native_map_construction(
         universe,
         read,
         host,
         root,
-        NativeMapMode::Composition,
+        NativeMapMode::Composition { detail },
         stop,
-        |output, _graph, _catalog| match output {
-            NativeMapConstruction::Composition(primary) => build(primary),
+        |output, graph, _catalog| match output {
+            NativeMapConstruction::Composition(primary) => build(primary, graph),
             NativeMapConstruction::Ordinary(_) => {
                 Err(failure(ServiceErrorCode::InternalContractViolation))
             }
@@ -393,7 +397,7 @@ enum NativeMapConstruction<'a> {
 }
 enum NativeMapMode {
     Ordinary { detail: bool },
-    Composition,
+    Composition { detail: bool },
 }
 
 // One catalog, selection and native support pipeline for both consumers.
@@ -410,7 +414,10 @@ fn with_native_map_construction<T>(
         &GraphEvidenceCatalog,
     ) -> ServiceResult<T>,
 ) -> ServiceResult<T> {
-    let detail = matches!(mode, NativeMapMode::Ordinary { detail: true });
+    let detail = matches!(
+        mode,
+        NativeMapMode::Ordinary { detail: true } | NativeMapMode::Composition { detail: true }
+    );
     let provenance = read
         .pair()
         .source_provenance()
@@ -543,7 +550,7 @@ fn with_native_map_construction<T>(
             .map_err(context_error)?;
         receipts.push(receipt);
     }
-    let output = if matches!(mode, NativeMapMode::Composition) {
+    let output = if matches!(mode, NativeMapMode::Composition { .. }) {
         NativeMapConstruction::Composition(
             wow_context::build_primary_map_for_composition(selection, &receipts, stop)
                 .map_err(context_error)?,
