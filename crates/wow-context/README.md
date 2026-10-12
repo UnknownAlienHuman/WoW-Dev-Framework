@@ -22,6 +22,8 @@ configured Reference binding, original support and load/source custody:
 - [Selected native Reference-facts L1 inspect/build](e3/NATIVE_PRIMARY_REFERENCE_FACTS.md),
   retaining original records, normalized ordered source signatures and exact support;
   source type resolution and annotation display lowering remain unevaluated.
+- [Native platform universe/map/inspect through service and CLI](e3/NATIVE_PLATFORM_MAP.md),
+  using one retained Skeleton input; broader platform and combined acceptance remain open.
 
 Selected projections remain Partial or Truncated with absence_authoritative=false;
 a bound Reference view does not imply Reference enrichment.
@@ -88,8 +90,9 @@ Cargo.toml: active root workspace member
 functional/build-verified: selected maps, L0/L1, native syntax/signature metadata,
   TOC state-root L0 inspect/build, packs/rendering and explicit native frontier
   and progressive batches
-bounded functional lifecycle/CLI: selected state-detail L1 inspect/build/render
+bounded functional lifecycle/CLI: selected state-detail L1 inspect/build/render,
+  candidate-qualified native platform map/inspect
 remaining: broader facets, automatic expansion/continuation, broader Reference/type enrichment,
-  platform/combined views, excerpts/privacy/exact tokens/continuation,
+  broader platform facets/combined views, excerpts/privacy/exact tokens/continuation,
   full fixtures, Tier A/X and the specified E6-B mapped-root handoff
 ```

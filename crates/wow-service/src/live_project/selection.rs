@@ -41,7 +41,7 @@ struct CatalogIntent {
 }
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct SelectionDocument {
+pub(crate) struct SelectionDocument {
     schema: String,
     owner_project_id: ProjectId,
     source_profile_id: ProfileId,
@@ -64,6 +64,12 @@ impl PlatformProjectSelection {
             stop,
         )
         .map_err(|failure| fail(failure.code))?;
+        Self::from_document(document, stop)
+    }
+    pub(crate) fn from_document(
+        document: SelectionDocument,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Self> {
         if document.schema != PLATFORM_PROJECT_SELECTION_SCHEMA {
             return Err(fail(ServiceErrorCode::InvalidRequest));
         }
@@ -103,16 +109,16 @@ impl PlatformProjectSelection {
             selection,
         })
     }
-    pub(super) fn owner(&self) -> &PlatformStoreSelection {
+    pub(crate) fn owner(&self) -> &PlatformStoreSelection {
         &self.selection
     }
-    pub(super) fn require_candidate(&self) -> ServiceResult<()> {
+    pub(crate) fn require_candidate(&self) -> ServiceResult<()> {
         if !self.document.catalogs.composed_candidate {
             return Err(fail(ServiceErrorCode::InvalidRequest));
         }
         Ok(())
     }
-    pub(super) fn intent(&self) -> &impl Serialize {
+    pub(crate) fn intent(&self) -> &impl Serialize {
         &self.document
     }
 }

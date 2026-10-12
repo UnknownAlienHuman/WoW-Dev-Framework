@@ -6,6 +6,7 @@ mod budget;
 mod error;
 mod map;
 mod pack;
+mod platform;
 mod profile;
 mod reference;
 mod render;
@@ -35,6 +36,11 @@ pub use pack::{
     build_context_semantic_pack_from_expansion, build_context_semantic_pack_with_l1_profile,
     build_context_semantic_pack_with_profile, build_context_semantic_pack_with_reference_facts,
     validate_context_semantic_pack,
+};
+pub use platform::{
+    PLATFORM_NATIVE_ONE_HOP_PROFILE, PLATFORM_NATIVE_ONE_HOP_PROFILE_BYTES, PlatformContextInspect,
+    PlatformContextMap, PlatformContextUniverse, bind_platform_context_universe,
+    build_platform_context_inspect, build_platform_context_map,
 };
 pub use profile::{
     PRIMARY_MAP_PROFILE, PRIMARY_MAP_PROFILE_BYTES, PRIMARY_PROJECT_MAP_PROFILE,

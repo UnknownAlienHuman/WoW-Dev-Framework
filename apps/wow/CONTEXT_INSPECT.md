@@ -1,6 +1,6 @@
 # `wow context inspect`
 
-The selected Primary-only route calls
+The selected Primary route calls
 [`execute_context_inspect`](../../crates/wow-service/src/context/inspect.rs)
 once over an existing acquired native project/graph pair and exact registered
 Reference. It does not refresh source or acquire optional platform context.
@@ -296,6 +296,36 @@ semantic retry after output begins.
 This route documents selected functionality, not full E3 or Tier A/X acceptance.
 Broader scopes/facets, control/effect enrichment, automatic expansion and retained
 cross-request continuation, broader Reference/type enrichment, excerpts/privacy/tokens
-and platform/combined context remain open. [Build/pack/render](CONTEXT_BUILD.md) consumes the native
+and combined context remain open. [Build/pack/render](CONTEXT_BUILD.md) consumes the native
 step, not a decoded inspect envelope. Existing map commands and root/profile
 selections remain in use.
+
+## Selected native platform inspect
+
+The platform route calls `execute_context_platform` once and consumes the native
+map into inspect without a second Skeleton read:
+
+```text
+wow context inspect --platform native --native-host-config <host.json>
+  --platform-request-input <request.json> [--output envelope-json|text]
+```
+
+Use the [platform host/request fields](CONTEXT_MAP.md#selected-native-platform-map),
+with `operation="inspect"` and `profile_id="wow-context/platform-native-one-hop/1"`.
+The exact candidate/publication and native Skeleton binding are required. Primary
+`--root`, `--level`, profile/guard/frontier selectors and mixed mode do not apply;
+the request supplies the exact native root/query/limits. There is no native
+platform build or artifact-output route.
+
+The `wow-service/context-platform-result/1` envelope has operation
+`context_platform_inspect` and retains the original inspect in `payload.artifact`,
+including its original map/page/support. Text projects the same bounded public
+typed summary and closure/status fields as map, without decoding canonical JSON.
+Envelope output remains exact service bytes plus LF; Partial/Truncated exit 2,
+semantic refusal 3, internal/close/output failure 4, cancellation 130 and transport
+errors 64. Checked closure failure suppresses payload; output failure never retries.
+Source/page omissions, configured Reference association and neighbor closure keep
+[their owner scope](../../crates/wow-context/e3/NATIVE_PLATFORM_MAP.md).
+Selected lifecycle and CLI verification evidence is retained in
+[#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122);
+broader acceptance remains open.

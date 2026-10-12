@@ -3,6 +3,13 @@
 use super::*;
 use crate::{
     ServiceErrorCode,
+    context::{
+        CONTEXT_MAP_RESULT_MAX_BYTES, CONTEXT_PLATFORM_HOST_INPUT_MAX_BYTES,
+        CONTEXT_PLATFORM_HOST_SCHEMA, CONTEXT_PLATFORM_REQUEST_MAX_BYTES,
+        CONTEXT_PLATFORM_REQUEST_SCHEMA, CONTEXT_PLATFORM_RESULT_SCHEMA, ContextMapStatus,
+        ContextPlatformHostInput, ContextPlatformRequest, PLATFORM_NATIVE_ONE_HOP_PROFILE_ID,
+        execute_context_platform,
+    },
     graph::{
         FunctionDirectNeighborhoodRecipe, FunctionFingerprintSelection, GRAPH_RESULT_MAX_BYTES,
         GraphBuildRequest, GraphReadStatus, XmlFingerprintSelection, XmlFingerprintTarget,
@@ -69,7 +76,11 @@ fn selected_candidate_source_absent_reopen_reaches_skeleton_and_absence_refuses(
     });
     let selected_transport =
         PlatformProjectSelection::from_json_slice(&serde_json::to_vec(&selection_wire)?, &stop)?;
-    let selected_root = root.0.join("selected-candidate-store");
+    let context_export = platform_context_export_root(&root)?;
+    let selected_root = context_export.as_ref().map_or_else(
+        || root.0.join("selected-candidate-store"),
+        |export| export.join("registered-platform-store"),
+    );
     let publish =
         LiveProjectPublishRequest::new("fixture:skeleton-selected", "absent", true, true)?;
     let published = publish_selected_local_project(
@@ -92,6 +103,8 @@ fn selected_candidate_source_absent_reopen_reaches_skeleton_and_absence_refuses(
     // candidate receipt or a raw ProjectView/graph constructor.
     let ordinary_root = root.0.join("ordinary-component-store");
     let ordinary_input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let context_reference = ordinary_input.reference_view().clone();
+    let context_profile = project.configuration().selected_profile().clone();
     let ordinary_request =
         GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
             .with_input_profile(&ordinary_input);
@@ -114,7 +127,7 @@ fn selected_candidate_source_absent_reopen_reaches_skeleton_and_absence_refuses(
     assert!(!root.0.join("UI/main.lua").exists());
     assert!(!root.0.join("UI/classification.xsd").exists());
 
-    let (request, _) = source_absent_skeleton(
+    let (request, native_skeleton) = source_absent_skeleton(
         &selected_root,
         &selected_transport,
         &selected_selection,
@@ -123,6 +136,335 @@ fn selected_candidate_source_absent_reopen_reaches_skeleton_and_absence_refuses(
         &intent,
         &stop,
     )?;
+
+    // Existing genuine #116 candidate, exact native query and source-absent page.
+    // Transport documents are inert; context reacquires the selected owner proof.
+    let native_request: Value = serde_json::from_slice(&request)?;
+    let page = &native_skeleton["page"];
+    let body = &page["body"];
+    let input = &native_request["input"];
+    let host_wire = json!({
+        "schema": CONTEXT_PLATFORM_HOST_SCHEMA,
+        "project_store_id": "project-store:fixture-context-platform",
+        "project_store_root": selected_root,
+        "selection": selection_wire,
+        "reference_profile": context_profile,
+        "reference": context_reference,
+        "limits": {
+            "neighbors": input["neighborhood"]["limits"],
+            "explain": input["limits"]["root_explanation"],
+            "evidence": input["limits"]["root_evidence"],
+            "max_direct_edges": input["neighborhood"]["query"]["max_edges"],
+            "max_input_bytes": 8_000_000,
+            "max_metadata_bytes": 8_000_000,
+            "max_context_work": 8_000_000
+        }
+    });
+    assert!(host_wire["selection"].is_object());
+    let host = ContextPlatformHostInput::from_json_slice(
+        &wow_core::canonical_json_bytes(&host_wire)?,
+        &stop,
+    )?;
+    let current_store = LiveProjectStore::open_in_namespace(&selected_root, &selected_selection)?;
+    let current_before = current_store.current()?.ok_or("platform context Current")?;
+    current_store.close()?;
+    let mut context_requests = Vec::new();
+    let mut context_results = Vec::new();
+    let mut context_envelopes = Vec::new();
+    for (operation, name) in [
+        ("map", "context_platform_map"),
+        ("inspect", "context_platform_inspect"),
+    ] {
+        let wire = json!({
+            "schema": CONTEXT_PLATFORM_REQUEST_SCHEMA,
+            "operation": operation,
+            "project_store_id": "project-store:fixture-context-platform",
+            "store_generation_id": exact,
+            "publication_set_id": native_skeleton["publication_set_id"],
+            "candidate_id": native_skeleton["candidate_id"],
+            "candidate_digest": native_skeleton["candidate_digest"],
+            "profile_id": PLATFORM_NATIVE_ONE_HOP_PROFILE_ID,
+            "input": input
+        });
+        let selected = ContextPlatformRequest::from_json_slice(
+            &wow_core::canonical_json_bytes(&wire)?,
+            &stop,
+        )?;
+        let observed = execute_context_platform(&host, &selected, &stop)?;
+        assert_eq!(observed.status(), ContextMapStatus::Partial);
+        assert_eq!(observed.failure_code(), None);
+        assert_eq!(observed.resource_closure(), "closed");
+        let envelope: Value = serde_json::from_slice(observed.canonical_bytes())?;
+        assert_eq!(envelope["schema"], CONTEXT_PLATFORM_RESULT_SCHEMA);
+        assert_eq!(envelope["operation"], name);
+        assert_eq!(envelope["resource_closure"], "closed");
+        assert!(envelope.get("failure_code").is_none());
+        let payload = &envelope["payload"];
+        assert_eq!(
+            payload["selection"],
+            serde_json::to_value(selected_transport.intent())?
+        );
+        assert_eq!(
+            payload["publication_set_id"],
+            native_skeleton["publication_set_id"]
+        );
+        assert_eq!(payload["store_generation_id"], exact);
+        assert_eq!(payload["candidate_id"], native_skeleton["candidate_id"]);
+        assert_eq!(
+            payload["candidate_digest"],
+            native_skeleton["candidate_digest"]
+        );
+        assert_eq!(
+            payload["native_project_store_id"],
+            selected_selection.namespace().id().as_str()
+        );
+        let artifact = &payload["artifact"];
+        assert_eq!(artifact["family"], PLATFORM_NATIVE_ONE_HOP_PROFILE_ID);
+        assert_eq!(artifact["artifact_kind"], operation);
+        assert_eq!(
+            payload["artifact_byte_length"],
+            wow_core::canonical_json_bytes(artifact)?.len()
+        );
+        let map = if operation == "map" {
+            artifact
+        } else {
+            &artifact["map"]
+        };
+        assert_eq!(map["family"], PLATFORM_NATIVE_ONE_HOP_PROFILE_ID);
+        assert_eq!(map["artifact_kind"], "map");
+        assert_eq!(
+            map["core"]["native"], *page,
+            "original admitted native page unchanged"
+        );
+        assert_eq!(map["core"]["absence_authoritative"], false);
+        let binding = &map["core"]["binding"];
+        assert_eq!(binding["native_request"], *input);
+        assert_eq!(
+            binding["target_profile"],
+            serde_json::to_value(&context_profile)?
+        );
+        assert_eq!(
+            binding["reference_generation"],
+            serde_json::to_value(context_reference.generation_id())?
+        );
+        assert_eq!(
+            binding["reference_view_digest"],
+            context_reference.self_digest()
+        );
+        let summary = &payload["summary"];
+        assert_eq!(
+            summary,
+            &serde_json::to_value(observed.summary().ok_or("typed native summary")?)?
+        );
+        assert_eq!(
+            summary["resolved_request_id"],
+            payload["resolved_request_id"]
+        );
+        assert_eq!(
+            summary["publication_set_id"],
+            native_skeleton["publication_set_id"]
+        );
+        assert_eq!(summary["store_generation_id"], exact);
+        assert_eq!(summary["candidate_id"], native_skeleton["candidate_id"]);
+        assert_eq!(summary["map_id"], map["map_id"]);
+        let expected_artifact_id = if operation == "map" {
+            &map["map_id"]
+        } else {
+            &artifact["inspect_id"]
+        };
+        assert_eq!(&summary["artifact_id"], expected_artifact_id);
+        assert_eq!(summary["root_id"], body["neighborhood"]["root"]["node_id"]);
+        assert_eq!(summary["counts"], body["counts"]);
+        assert_eq!(summary["not_evaluated"], body["not_evaluated"]);
+        for (field, owner, rows) in [
+            ("root_conflicts", "explanation", "conflicts"),
+            (
+                "root_unresolved_evidence",
+                "evidence_resolution",
+                "unresolved",
+            ),
+            ("root_support_truncations", "explanation", "truncations"),
+            (
+                "root_evidence_truncations",
+                "evidence_resolution",
+                "truncations",
+            ),
+        ] {
+            assert_eq!(
+                summary[field],
+                body["root_support"][owner][rows]
+                    .as_array()
+                    .ok_or("original native support records")?
+                    .len()
+            );
+        }
+        assert_eq!(summary["absence_authoritative"], false);
+        assert!(
+            !summary["not_evaluated"]
+                .as_array()
+                .ok_or("native unavailable facets")?
+                .is_empty()
+        );
+        assert_eq!(body["state"], "partial");
+        assert_eq!(
+            body["root_support"]["explanation"]["support_complete"],
+            true
+        );
+        assert_eq!(
+            body["root_support"]["evidence_resolution"]["closure_complete"],
+            true
+        );
+        let text = std::str::from_utf8(observed.canonical_bytes())?;
+        assert!(!text.contains("project_store_root"));
+        assert!(!text.contains("selection_json"));
+        for path in [&root.0, &selected_root] {
+            assert!(
+                !text.contains(&serde_json::to_string(path)?),
+                "host/source paths are excluded"
+            );
+        }
+        assert!(!observed.canonical_bytes().ends_with(b"\n"));
+        context_requests.push(selected);
+        context_results.push(observed);
+        context_envelopes.push(envelope);
+    }
+    // The owner map is identical across operations; service operation IDs differ.
+    assert_eq!(
+        context_envelopes[0]["payload"]["artifact"],
+        context_envelopes[1]["payload"]["artifact"]["map"]
+    );
+    assert_eq!(
+        context_results[0].summary().ok_or("map summary")?.map_id,
+        context_results[1]
+            .summary()
+            .ok_or("inspect summary")?
+            .map_id
+    );
+
+    // Exactly the original native component floor: every edge is scanned,
+    // including unselected edges. Prior context admission reservations must still
+    // be held, so the full operation cannot fit this component-only allowance.
+    let native_floor = body["neighborhood"]["scanned_edges"]
+        .as_u64()
+        .ok_or("native scanned edges")?
+        .checked_add(
+            input["limits"]["root_explanation"]["max_scanned_assertions"]
+                .as_u64()
+                .ok_or("native explanation ceiling")?,
+        )
+        .and_then(|n| n.checked_add(input["limits"]["root_evidence"]["max_work"].as_u64()?))
+        .and_then(|n| n.checked_add(1))
+        .ok_or("native reservation floor overflow")?;
+    assert!(native_floor < 8_000_000);
+    let mut bounded_wire = host_wire.clone();
+    bounded_wire["limits"]["max_context_work"] = json!(native_floor);
+    let bounded = ContextPlatformHostInput::from_json_slice(
+        &wow_core::canonical_json_bytes(&bounded_wire)?,
+        &stop,
+    )?;
+    let refused = execute_context_platform(&bounded, &context_requests[1], &stop)?;
+    assert_eq!(refused.status(), ContextMapStatus::Failed);
+    assert_eq!(
+        refused.failure_code(),
+        Some(ServiceErrorCode::BudgetExceeded)
+    );
+    assert_eq!(refused.resource_closure(), "closed");
+    assert!(refused.summary().is_none());
+    let refused: Value = serde_json::from_slice(refused.canonical_bytes())?;
+    assert!(refused.get("payload").is_none());
+    assert_eq!(refused["resource_closure"], "closed");
+
+    // One valid-shape inert mismatch, not manufactured candidate authority.
+    let mut mismatch_wire = serde_json::to_value(&context_requests[1])?;
+    let mut wrong_digest = mismatch_wire["candidate_digest"]
+        .as_str()
+        .ok_or("original candidate digest")?
+        .to_owned();
+    let last = wrong_digest.pop().ok_or("nonempty candidate digest")?;
+    wrong_digest.push(if last == '0' { '1' } else { '0' });
+    mismatch_wire["candidate_digest"] = json!(wrong_digest);
+    let mismatch = ContextPlatformRequest::from_json_slice(
+        &wow_core::canonical_json_bytes(&mismatch_wire)?,
+        &stop,
+    )?;
+    let refused = execute_context_platform(&host, &mismatch, &stop)?;
+    assert_eq!(refused.status(), ContextMapStatus::Failed);
+    assert_eq!(
+        refused.failure_code(),
+        Some(ServiceErrorCode::IdentityMismatch)
+    );
+    assert_eq!(refused.resource_closure(), "closed");
+    assert!(refused.summary().is_none());
+    let refused: Value = serde_json::from_slice(refused.canonical_bytes())?;
+    assert!(refused.get("payload").is_none());
+    let current_store = LiveProjectStore::open_in_namespace(&selected_root, &selected_selection)?;
+    assert_eq!(current_store.current()?, Some(current_before));
+    current_store.close()?;
+
+    if let Some(destination) = &context_export {
+        use std::io::Write;
+        let source_absent_paths = [root.0.join("UI"), root.0.join("version.txt")];
+        assert!(source_absent_paths.iter().all(|path| !path.exists()));
+        let cases = json!({
+            "authority": "synthetic_fixture_only_not_live_ketho_or_runtime",
+            "source_absent_paths": source_absent_paths,
+            "root_id": body["neighborhood"]["root"]["node_id"],
+            "candidate_id": native_skeleton["candidate_id"],
+            "candidate_digest": native_skeleton["candidate_digest"],
+            "store_generation_id": exact,
+            "cases": [
+                {"argv": ["context", "map", "--platform", "native", "--native-host-config",
+                    destination.join("host.json"), "--platform-request-input", destination.join("map-request.json"),
+                    "--output", "envelope-json"], "expected_envelope": "expected-map-envelope.json",
+                    "expected_exit": 2, "stdout": "expected service bytes followed by one LF", "resource_closure": "closed"},
+                {"argv": ["context", "inspect", "--platform", "native", "--native-host-config",
+                    destination.join("host.json"), "--platform-request-input", destination.join("inspect-request.json"),
+                    "--output", "envelope-json"], "expected_envelope": "expected-inspect-envelope.json",
+                    "expected_exit": 2, "stdout": "expected service bytes followed by one LF", "resource_closure": "closed"}
+            ]
+        });
+        for (name, bytes, limit) in [
+            (
+                "host.json",
+                wow_core::canonical_json_bytes(&host_wire)?,
+                CONTEXT_PLATFORM_HOST_INPUT_MAX_BYTES,
+            ),
+            (
+                "map-request.json",
+                wow_core::canonical_json_bytes(&context_requests[0])?,
+                CONTEXT_PLATFORM_REQUEST_MAX_BYTES,
+            ),
+            (
+                "inspect-request.json",
+                wow_core::canonical_json_bytes(&context_requests[1])?,
+                CONTEXT_PLATFORM_REQUEST_MAX_BYTES,
+            ),
+            (
+                "cli-cases.json",
+                wow_core::canonical_json_bytes(&cases)?,
+                64 * 1024,
+            ),
+            (
+                "expected-map-envelope.json",
+                context_results[0].canonical_bytes().to_vec(),
+                CONTEXT_MAP_RESULT_MAX_BYTES,
+            ),
+            (
+                "expected-inspect-envelope.json",
+                context_results[1].canonical_bytes().to_vec(),
+                CONTEXT_MAP_RESULT_MAX_BYTES,
+            ),
+        ] {
+            if bytes.len() > limit {
+                return Err("platform fixture export exceeded finite byte bound".into());
+            }
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(destination.join(name))?;
+            file.write_all(&bytes)?;
+        }
+    }
 
     let ordinary = LiveProjectStore::open_in_namespace(&ordinary_root, &ordinary_selection)?;
     let absent = ordinary.read_in_namespace(&ordinary_selection, &ReadSelector::Current, &stop)?;
@@ -1084,4 +1426,26 @@ fn export_cli_fixture_if_requested(
         std::fs::write(destination.join(file), serde_json::to_vec(query)?)?;
     }
     Ok(Some(destination))
+}
+
+// Only root opts in. Publish the genuine store here before source removal,
+// outside FixtureRoot; no store/candidate/graph copy or source materialization.
+fn platform_context_export_root(fixture: &FixtureRoot) -> TestResult<Option<std::path::PathBuf>> {
+    let Some(path) = std::env::var_os("WOW_CONTEXT_PLATFORM_FIXTURE_EXPORT") else {
+        return Ok(None);
+    };
+    let path = std::path::PathBuf::from(path);
+    if !path.is_absolute() || path.as_os_str().len() > 32768 {
+        return Err("platform context export requires a finite absolute fresh path".into());
+    }
+    let parent = path
+        .parent()
+        .ok_or("platform export parent")?
+        .canonicalize()?;
+    let path = parent.join(path.file_name().ok_or("platform export directory")?);
+    if path.starts_with(fixture.0.canonicalize()?) {
+        return Err("platform export must survive fixture/source removal".into());
+    }
+    std::fs::create_dir(&path)?;
+    Ok(Some(path))
 }

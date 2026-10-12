@@ -618,7 +618,11 @@ pub(super) fn failed_operation<R: Serialize>(
     })
 }
 
-fn preflight(value: &impl Serialize, limit: usize, stop: &AtomicBool) -> ServiceResult<usize> {
+pub(super) fn preflight(
+    value: &impl Serialize,
+    limit: usize,
+    stop: &AtomicBool,
+) -> ServiceResult<usize> {
     struct Counter<'a> {
         bytes: usize,
         limit: usize,

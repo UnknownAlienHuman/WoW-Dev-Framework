@@ -310,6 +310,19 @@ impl SkeletonInputPage<'_> {
 }
 
 impl SkeletonInputView<'_> {
+    /// Borrow the exact owners/request already admitted into this immutable view.
+    /// These references retain the original authority; no DTO can reconstruct it.
+    #[must_use]
+    pub fn context_parts(
+        &self,
+    ) -> (
+        &PlatformIndexSourceParts,
+        &GraphPartitionSnapshot,
+        &OpenSkeletonInputRequest,
+    ) {
+        (self.source, self.accepted, &self.request)
+    }
+
     pub fn read<'page>(&'page self, stop: &AtomicBool) -> ProjectResult<SkeletonInputPage<'page>> {
         crate::analyzer::checkpoint(stop)?;
         let limits = self.request.limits;

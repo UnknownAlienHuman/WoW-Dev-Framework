@@ -10,6 +10,9 @@ bounded inspect/pack/render selection, preserving original rounds and one ledger
 [Native XML handler L1 metadata](NATIVE_PRIMARY_INSPECT.md#native-xml-handler-l1-metadata)
 retains original script/unit/document/context and accepted support; runtime and
 effective receiver remain NotEvaluated.
+The [native platform route](NATIVE_PLATFORM_MAP.md) binds one retained
+Skeleton input under `wow-context/platform-native-one-hop/1` through selected
+service/CLI map and inspect; complete Primary/platform/combined acceptance remains open.
 The complete E3-B contract below remains the target; broader operations and
 acceptance are pending under Issue #122.
 

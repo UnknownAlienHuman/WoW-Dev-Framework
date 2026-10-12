@@ -17,6 +17,7 @@ mod namespace;
 pub use namespace::PlatformStoreSelection;
 mod operations;
 mod selection;
+pub(crate) use selection::SelectionDocument;
 mod skeleton;
 pub use selection::{
     PLATFORM_PROJECT_SELECTION_MAX_BYTES, PLATFORM_PROJECT_SELECTION_SCHEMA,

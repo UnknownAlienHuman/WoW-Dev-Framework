@@ -1,7 +1,8 @@
 //! Explicit logical platform-store selection, separate from source generations.
 use super::{
-    LiveProjectRead, LiveProjectResult, LiveProjectStore, LiveProjectUpdateRequest,
-    catalog_accepts_components, catalog_for, fail, store_error,
+    LiveProjectRead, LiveProjectReadFailure, LiveProjectResult, LiveProjectStore,
+    LiveProjectUpdateRequest, ReadFailureClosure, catalog_accepts_components, catalog_for, fail,
+    store_error,
 };
 use crate::{LocalProjectInput, ServiceErrorCode, ServiceResult, graph::GraphBuildRequest};
 use std::{path::Path, sync::atomic::AtomicBool};
@@ -211,7 +212,16 @@ impl LiveProjectStore {
         root: &Path,
         selection: &PlatformStoreSelection,
     ) -> ServiceResult<Self> {
-        selection.validate()?;
+        Self::open_in_namespace_checked(root, selection).map_err(|failure| failure.error)
+    }
+
+    /// Preserve exact selected admission and the explicit close outcome for a
+    /// post-open refusal. Lower open failures expose no closure receipt.
+    pub(crate) fn open_in_namespace_checked(
+        root: &Path,
+        selection: &PlatformStoreSelection,
+    ) -> Result<Self, LiveProjectReadFailure> {
+        selection.validate().map_err(namespace_unacquired)?;
         let store = Self::open_selected(
             root,
             Some((
@@ -220,8 +230,11 @@ impl LiveProjectStore {
                 selection.physical_function_signatures_catalog,
             )),
             Some(selection.composed_candidate_catalog),
-        )?;
-        store.require_namespace(selection)?;
+        )
+        .map_err(namespace_unacquired)?;
+        if let Err(error) = store.require_namespace(selection) {
+            return Err(namespace_closed_failure(error, store.close()));
+        }
         Ok(store)
     }
 
@@ -263,9 +276,23 @@ impl LiveProjectStore {
         selector: &ReadSelector,
         stop: &AtomicBool,
     ) -> ServiceResult<LiveProjectRead> {
-        self.require_namespace(selection)?;
-        let read = self.read(selector, stop)?;
-        selection.require_configuration(read.project().configuration())?;
+        self.read_in_namespace_checked(selection, selector, stop)
+            .map_err(|failure| failure.error)
+    }
+
+    /// One original checked reconstruction; never reread to obtain a close receipt.
+    pub(crate) fn read_in_namespace_checked(
+        &self,
+        selection: &PlatformStoreSelection,
+        selector: &ReadSelector,
+        stop: &AtomicBool,
+    ) -> Result<LiveProjectRead, LiveProjectReadFailure> {
+        self.require_namespace(selection)
+            .map_err(namespace_unacquired)?;
+        let read = self.read_checked(selector, stop)?;
+        if let Err(error) = selection.require_configuration(read.project().configuration()) {
+            return Err(namespace_closed_failure(error, read.close()));
+        }
         Ok(read)
     }
 
@@ -293,5 +320,27 @@ impl LiveProjectStore {
             return self.update_candidate(selection, input, graph_request, request, stop);
         }
         self.update(input, graph_request, request, stop)
+    }
+}
+
+fn namespace_unacquired(error: crate::ServiceError) -> LiveProjectReadFailure {
+    LiveProjectReadFailure {
+        error,
+        closure: ReadFailureClosure::NotEvaluated,
+    }
+}
+fn namespace_closed_failure(
+    error: crate::ServiceError,
+    closed: ServiceResult<()>,
+) -> LiveProjectReadFailure {
+    match closed {
+        Ok(()) => LiveProjectReadFailure {
+            error,
+            closure: ReadFailureClosure::Closed,
+        },
+        Err(_) => LiveProjectReadFailure {
+            error: fail(ServiceErrorCode::InternalContractViolation),
+            closure: ReadFailureClosure::Failed,
+        },
     }
 }

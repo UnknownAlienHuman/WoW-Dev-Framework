@@ -1,7 +1,7 @@
-# Native primary context map
+# Native context map
 
-`wow context map` calls one service operation over an explicitly registered
-retained primary project. It emits exact canonical service JSON followed by one
+The Primary route of `wow context map` calls one service operation over an
+explicitly registered retained primary project. It emits exact canonical service JSON followed by one
 LF. Supported profiles are `wow-context/primary-direct-navigation/1` and
 `wow-context/primary-project-navigation/1`;
 the [owner contract](../../crates/wow-context/e3/NATIVE_PRIMARY_MAP.md) defines its
@@ -102,8 +102,43 @@ remain exact service bytes. Successful output has no diagnostic text on stdout.
 
 The [frozen direct-profile request/envelope/profile](../../crates/wow-service/e3/native-primary-map/README.md)
 exercise actual native owners, rather than live source parity. Direct profile
-bytes/shape and the outer request/result /1 schemas are preserved. Text/artifact
-modes, other context commands, L0/L1, packs/rendering, excerpts/tokens/continuation,
-platform/combined maps and full Tier A/X qualification remain open. Project
-navigation covers the retained source-file projection, not complete-corpus
-qualification or full E3-B acceptance.
+bytes/shape and the outer request/result /1 schemas are preserved. Primary map
+text/artifact modes, combined maps, excerpts/tokens/continuation and full Tier A/X
+qualification remain open. Project navigation covers the retained source-file
+projection, not complete-corpus qualification or full E3-B acceptance.
+
+## Selected native platform map
+
+The platform route uses the original admitted candidate/Skeleton input through
+one `execute_context_platform` service operation:
+
+```text
+wow context map --platform native --native-host-config <host.json>
+  --platform-request-input <request.json> [--output envelope-json|text]
+```
+
+Use host schema `wow-service/context-platform-native-host/1` and request schema
+`wow-service/context-platform-request/1` with `operation="map"` and
+`profile_id="wow-context/platform-native-one-hop/1"`. The host embeds the original
+structured `selection` object, complete Reference/profile and finite limits.
+The request names the exact store generation, publication, candidate ID/digest
+and original Skeleton `input` binding/neighborhood/limits. Its root is an exact
+materialized native entity; the CLI does not reconstruct it from Primary flags.
+[Exact fields and custody](../../crates/wow-context/e3/NATIVE_PLATFORM_MAP.md#selected-service-and-application)
+are defined by the held native owners. Primary selectors, mixed selection,
+artifact output and native platform build are not supported by this route.
+
+The result is `wow-service/context-platform-result/1`, operation
+`context_platform_map`, with the original map in `payload.artifact`, exact
+`selection`, identities and bounded `summary`. Checked read/store closure is
+required before a payload escapes. Envelope output is exact service JSON plus
+one LF. Text uses the public typed summary directly: original scan/return/omitted
+counts, `not_evaluated`, root conflicts/unresolved evidence/truncations and
+`absence_authoritative=false`; it never decodes output JSON. Partial/Truncated
+exit 2, semantic refusal 3, internal/close/output failure 4, cancellation 130 and
+transport errors 64. Output failure does not repeat the service call.
+
+The configured Reference association does not establish record/type/runtime
+proof or neighbor evidence closure. Selected lifecycle and CLI verification
+evidence is retained in [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122);
+this page makes no full platform/combined acceptance claim.

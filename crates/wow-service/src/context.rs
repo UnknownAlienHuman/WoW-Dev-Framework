@@ -4,6 +4,7 @@ mod build;
 mod host;
 mod inspect;
 mod operation;
+mod platform;
 mod request;
 #[cfg(test)]
 mod tests;
@@ -20,6 +21,14 @@ pub use build::{
 pub use host::{CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_HOST_SCHEMA, ContextMapHostInput};
 pub use inspect::{ContextInspectRequest, execute_context_inspect};
 pub use operation::{ContextMapResult, ContextMapStatus, execute_context_map};
+pub use platform::{
+    CONTEXT_PLATFORM_HOST_INPUT_MAX_BYTES, CONTEXT_PLATFORM_HOST_SCHEMA,
+    CONTEXT_PLATFORM_REQUEST_MAX_BYTES, CONTEXT_PLATFORM_REQUEST_SCHEMA,
+    CONTEXT_PLATFORM_RESULT_SCHEMA, ContextPlatformCounts, ContextPlatformHostInput,
+    ContextPlatformNotEvaluated, ContextPlatformOperation, ContextPlatformRequest,
+    ContextPlatformResult, ContextPlatformSummary, PLATFORM_NATIVE_ONE_HOP_PROFILE_ID,
+    execute_context_platform,
+};
 pub use wow_context::PrimaryL0Profile as ContextL0Profile;
 pub use wow_context::PrimaryL1Profile as ContextL1Profile;
 pub use wow_context::RenderSelection as ContextRenderSelection;

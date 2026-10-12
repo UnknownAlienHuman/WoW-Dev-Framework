@@ -2,6 +2,7 @@
 //! The native host document is a separate transport input, never an E3 semantic selector.
 mod build;
 mod inspect;
+mod platform;
 
 use std::{
     ffi::{OsStr, OsString},
@@ -31,7 +32,7 @@ const HELP: &str = concat!(
     "  [--output envelope-json]\n",
     "The native host document is explicit transport configuration, separate from semantic ",
     "store IDs. No source discovery or execution. Only the reviewed primary direct-navigation ",
-    "and project-navigation map profiles, omitted platform and canonical envelope JSON are supported.\n",
+    "and project-navigation map profiles use omitted platform and canonical envelope JSON.\n",
     "Use an explicit graph-entity@ root with wow-context/primary-direct-navigation/1, ",
     "or an explicit project@ root with wow-context/primary-project-navigation/1.\n",
     "Service validates the selected profile/root pair; the CLI never infers a root.\n",
@@ -75,6 +76,11 @@ const HELP: &str = concat!(
     "  Same explicit host/root, omitted platform, optional current guards, complete reference ",
     "guard group and envelope-json output. Build supports the same explicit state-root L0 profile; ",
     "service owns profile/root/level compatibility.\n",
+    "wow context map|inspect --platform native --native-host-config <host.json> ",
+    "--platform-request-input <request.json> [--output envelope-json|text]\n",
+    "  Native map/inspect use a bounded explicit service host and request document. ",
+    "The request operation must match the command. Primary options cannot be mixed; ",
+    "native build and artifact output are unavailable.\n",
 );
 
 fn progressive_help() -> String {
@@ -109,6 +115,7 @@ enum Request {
     Map(ContextMapRequest),
     Inspect(ContextInspectRequest),
     Build(ContextBuildRequest),
+    Platform(platform::Request),
 }
 
 struct Arguments {
@@ -145,6 +152,9 @@ pub fn run(values: Vec<OsString>) -> u8 {
     let Some(stop) = crate::cancellation_flag() else {
         return 64;
     };
+    if let Request::Platform(request) = &arguments.request {
+        return platform::run(&arguments.host_config, request, &stop);
+    }
     let host_bytes = match crate::graph::read_file(
         &arguments.host_config,
         CONTEXT_MAP_HOST_INPUT_MAX_BYTES,
@@ -168,6 +178,10 @@ pub fn run(values: Vec<OsString>) -> u8 {
         Request::Map(request) => execute_context_map(&host, request, &stop),
         Request::Inspect(request) => execute_context_inspect(&host, request, &stop),
         Request::Build(request) => execute_context_build(&host, request, &stop),
+        Request::Platform(_) => {
+            crate::diagnostic("native context dispatch invariant failed");
+            return 4;
+        }
     };
     let result = match operation {
         Ok(result) => result,
@@ -223,6 +237,9 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         .ok_or("context argument size overflow")?;
     if values.len() > MAX_ARGUMENTS || bytes > MAX_ARGUMENT_BYTES {
         return Err("context argument limit exceeded");
+    }
+    if let Some(arguments) = platform::parse(&values)? {
+        return Ok(arguments);
     }
     let mut values = values.into_iter();
     if values.next().as_deref() != Some(OsStr::new("context")) {
@@ -584,6 +601,7 @@ mod tests {
             Request::Map(request) => serde_json::to_value(request),
             Request::Inspect(request) => serde_json::to_value(request),
             Request::Build(request) => serde_json::to_value(request),
+            Request::Platform(_) => return Err("native request is explicit file transport"),
         }
         .map_err(|_| "request serialization failed")
     }
