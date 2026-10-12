@@ -181,6 +181,55 @@ pub(crate) struct ReferenceRecordFacet<'a> {
     absence_authoritative: bool,
 }
 
+/// Navigation identity from the same validated association as Reference L1.
+/// Original payload and callable type observations stay in the L1 owner.
+#[derive(Serialize)]
+pub(crate) struct ReferenceRootFacet<'a> {
+    node: &'a GraphNode,
+    assertion: &'a GraphAssertionRef,
+    partition_id: &'static str,
+    partition_coverage: CoverageStatus,
+    record_key: &'a str,
+    record_digest: &'a str,
+    source: &'a SourceHandle,
+    evidence: &'a EvidenceRecord,
+    source_association: &'static str,
+    absence_authoritative: bool,
+}
+
+pub(crate) fn reference_root_facet<'a>(
+    universe: &ContextUniverseSet<'a>,
+    view: &ProjectMapView<'_, 'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &wow_graph::GraphNodeId,
+    origins: &[ReferenceOriginInput<'a>],
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<ReferenceRootFacet<'a>> {
+    // Reuse exact accepted graph/Reference/source/signature admission. Inputs
+    // cannot mint a root identity merely by naming a record or an assertion.
+    for facet in reference_facets(universe, view, graph, origins, budget, stop)? {
+        budget.work(1, stop)?;
+        if facet.node.node_id() == root {
+            let result = ReferenceRootFacet {
+                node: facet.node,
+                assertion: facet.assertion,
+                partition_id: facet.partition_id,
+                partition_coverage: facet.partition_coverage,
+                record_key: facet.record.key(),
+                record_digest: facet.record_digest,
+                source: facet.source,
+                evidence: facet.evidence,
+                source_association: facet.source_association,
+                absence_authoritative: false,
+            };
+            budget.retain(&result, stop)?;
+            return Ok(result);
+        }
+    }
+    Err(missing())
+}
+
 pub(crate) fn reference_facets<'a>(
     universe: &ContextUniverseSet<'a>,
     view: &ProjectMapView<'_, 'a>,

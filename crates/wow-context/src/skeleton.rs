@@ -24,6 +24,7 @@ pub const PRIMARY_L1_PROFILE: &str = "wow-context/primary-l1/1";
 pub const PRIMARY_STATE_ROOT_L0_PROFILE: &str = "wow-context/primary-state-root-l0/1";
 pub const PRIMARY_STATE_DETAIL_L1_PROFILE: &str = "wow-context/primary-state-detail-l1/1";
 pub const PRIMARY_REFERENCE_FACTS_L1_PROFILE: &str = "wow-context/primary-reference-facts-l1/1";
+pub const PRIMARY_REFERENCE_ROOT_L0_PROFILE: &str = "wow-context/primary-reference-root-l0/1";
 
 /// Explicit entity detail recipes over the same retained native neighborhood.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,6 +130,18 @@ const REFERENCE_FACTS_L1_PROFILE: SkeletonProfile = SkeletonProfile {
 };
 const REFERENCE_FACTS_PROFILE_BYTES: &[u8] =
     include_bytes!("../e3/native-reference-facts/profile.json");
+const REFERENCE_ROOT_L0_PROFILE: SkeletonProfile = SkeletonProfile {
+    profile_id: PRIMARY_REFERENCE_ROOT_L0_PROFILE,
+    scope_kinds: &["native_api_callable"],
+    relations: &[],
+    direction: "exact_root_only",
+    depth: 0,
+    declarations: "accepted_reference_root_identity_and_explicit_l1_route",
+    types: "not_selected",
+    ..L0_PROFILE
+};
+const REFERENCE_ROOT_L0_PROFILE_BYTES: &[u8] =
+    include_bytes!("../e3/native-reference-root/profile.json");
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "id", rename_all = "snake_case")]
@@ -284,6 +297,8 @@ struct L0Core<'m, 'a> {
     selected_member_count: usize,
     member_enumeration: &'static str,
     declarations: Vec<Declaration<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reference_root: Option<crate::reference::ReferenceRootFacet<'a>>,
     direct_relations: Vec<&'a GraphEdge>,
     detail_routes: Vec<&'a GraphNodeId>,
     not_evaluated: &'static [&'static str],
@@ -1012,10 +1027,20 @@ fn l0<'m, 'a>(
         direct_members: members,
         member_enumeration: membership,
         declarations: rows,
+        reference_root: None,
         direct_relations: relations,
         detail_routes: routes,
         not_evaluated: NOT_EVALUATED,
     };
+    finish_l0(universe, core, budget, stop)
+}
+
+fn finish_l0<'m, 'a>(
+    universe: &ContextUniverseSet<'a>,
+    core: L0Core<'m, 'a>,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<L0Skeleton<'m, 'a>> {
     let id = identity(
         core.schema,
         "l0-skeleton:sha256:",
@@ -1032,6 +1057,88 @@ fn l0<'m, 'a>(
     artifact.canonical_bytes =
         canonical(&artifact, universe.limits.max_metadata_bytes, stop)?.into_boxed_slice();
     Ok(artifact)
+}
+
+/// Exact API-root identity and an explicit route to its original Reference L1.
+/// This does not select an implicit parent or invent container membership.
+pub fn build_primary_reference_root_l0_skeleton<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &L0Scope,
+    origins: &[crate::reference::ReferenceOriginInput<'a>],
+    stop: &AtomicBool,
+) -> ContextResult<L0Skeleton<'m, 'a>> {
+    let (view, mut budget) = input(universe, map, graph, stop)?;
+    reference_root_l0(
+        universe,
+        map,
+        graph,
+        (root, origins),
+        &view,
+        &mut budget,
+        stop,
+    )
+}
+
+fn reference_root_l0<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    selection: (&L0Scope, &[crate::reference::ReferenceOriginInput<'a>]),
+    view: &ProjectMapView<'m, 'a>,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<L0Skeleton<'m, 'a>> {
+    budget.work(1, stop)?;
+    let (root, origins) = selection;
+    let L0Scope::Entity(id) = root else {
+        return Err(invalid());
+    };
+    if !view.has_detail_vocabulary() {
+        return Err(ContextError::new(ContextErrorCode::SupportMismatch));
+    }
+    let node = view
+        .root_node()
+        .filter(|node| node.node_id() == id && node.kind() == "native_api_callable")
+        .ok_or_else(invalid)?;
+    if canonical(
+        &REFERENCE_ROOT_L0_PROFILE,
+        universe.limits.max_metadata_bytes,
+        stop,
+    )? != REFERENCE_ROOT_L0_PROFILE_BYTES
+        .strip_suffix(b"\n")
+        .unwrap_or(REFERENCE_ROOT_L0_PROFILE_BYTES)
+    {
+        return Err(ContextError::new(ContextErrorCode::EncodingInvalid));
+    }
+    budget.retain(&REFERENCE_ROOT_L0_PROFILE, stop)?;
+    let reference_root =
+        crate::reference::reference_root_facet(universe, view, graph, id, origins, budget, stop)?;
+    budget.retain(id, stop)?;
+    let core = L0Core {
+        schema: "wow-context/l0-skeleton/primary-reference-root/1",
+        profile: PRIMARY_REFERENCE_ROOT_L0_PROFILE,
+        profile_descriptor: &REFERENCE_ROOT_L0_PROFILE,
+        context: context(universe, map, budget),
+        scope: Scope::Entity { node },
+        direct_members: Vec::new(),
+        selected_member_count: 0,
+        member_enumeration: "not_evaluated",
+        declarations: Vec::new(),
+        reference_root: Some(reference_root),
+        direct_relations: Vec::new(),
+        detail_routes: vec![node.node_id()],
+        not_evaluated: &[
+            "container_membership_and_api_root_children",
+            "reference_payload_and_signature_detail_in_l1_only",
+            "reference_type_resolution_and_annotation_lowering",
+            "source_excerpts_and_exact_tokens",
+            "deeper_paths_and_retained_continuation",
+            "complete_corpus_or_runtime_behavior",
+        ],
+    };
+    finish_l0(universe, core, budget, stop)
 }
 
 pub fn build_l1_skeleton<'m, 'a>(
@@ -1394,11 +1501,46 @@ pub(crate) fn build_primary_reference_facts_on_budget<'m, 'a>(
     budget: &mut Budget,
     stop: &AtomicBool,
 ) -> ContextResult<PrimarySkeletons<'m, 'a>> {
+    build_primary_reference_facts_with_level_on_budget(
+        universe,
+        map,
+        graph,
+        (root, SkeletonLevel::L1),
+        origins,
+        budget,
+        stop,
+    )
+}
+
+/// Combined Both has its own API-root L0 owner; standalone L1 stays unchanged.
+pub(crate) fn build_primary_reference_facts_with_level_on_budget<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    selection: (&L0Scope, SkeletonLevel),
+    origins: &[crate::reference::ReferenceOriginInput<'a>],
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<PrimarySkeletons<'m, 'a>> {
     budget.work(1, stop)?;
+    let (root, level) = selection;
     let L0Scope::Entity(id) = root else {
         return Err(invalid());
     };
     let view = validate_input(universe, map, graph, stop)?;
+    let l0 = match level {
+        SkeletonLevel::L1 => None,
+        SkeletonLevel::Both => Some(reference_root_l0(
+            universe,
+            map,
+            graph,
+            (root, origins),
+            &view,
+            budget,
+            stop,
+        )?),
+        SkeletonLevel::L0 => return Err(invalid()),
+    };
     let artifact = l1(
         universe,
         map,
@@ -1408,14 +1550,7 @@ pub(crate) fn build_primary_reference_facts_on_budget<'m, 'a>(
         budget,
         stop,
     )?;
-    finish_primary_skeletons_on_budget(
-        universe,
-        SkeletonLevel::L1,
-        None,
-        Some(artifact),
-        budget,
-        stop,
-    )
+    finish_primary_skeletons_on_budget(universe, level, l0, Some(artifact), budget, stop)
 }
 
 /// Continue an existing construction ledger; the origin map was already charged.

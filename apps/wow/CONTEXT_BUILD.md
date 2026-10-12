@@ -271,7 +271,10 @@ accepted non-null `l1_profile_id` values are `wow-context/primary-state-detail-l
 exact GraphEntity root. StateDetail also accepts `level="both"` for a native
 state_root, with original StateRoot L0 followed by StateDetail L1 on the same
 detail map and continuing Budget. State_path Both refuses after native kind
-validation and checked closure. ReferenceFacts Both, either L1 profile with level L0, project roots,
+validation and checked closure. ReferenceFacts also supports Both over an exact
+accepted native API root: typed Reference-root L0 then original ReferenceFacts L1
+on the same detail map/root/Budget. Wrong-kind or missing custody refuses with
+checked closure. Either L1 profile with level L0, project roots,
 null, non-string, default ID and unknown IDs refuse before owner acquisition. Mixed
 operation fields also refuse. Optional `platform_root_facet="callable_metadata"`
 is independent of any valid default or explicit Primary recipe. It adds the

@@ -181,14 +181,21 @@ fn select_l1_recipe(
         {
             Ok(Some(CombinedL1Recipe::ReferenceFacts))
         }
+        Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID)
+            if level == wow_context::SkeletonLevel::Both
+                && matches!(root, ContextMapRoot::GraphEntity(_)) =>
+        {
+            Ok(Some(CombinedL1Recipe::ReferenceFactsBoth))
+        }
         Some(_) => Err(failure(ServiceErrorCode::InvalidRequest)),
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CombinedL1Recipe {
     StateDetail,
     ReferenceFacts,
+    ReferenceFactsBoth,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -533,8 +540,12 @@ pub fn execute_context_combined(
                     .is_some_and(|level| level != wow_context::SkeletonLevel::L0),
                 stop,
                 |primary, graph| {
-                    let native_api = if request.l1_recipe == Some(CombinedL1Recipe::ReferenceFacts)
-                    {
+                    let native_api = if matches!(
+                        request.l1_recipe,
+                        Some(
+                            CombinedL1Recipe::ReferenceFacts | CombinedL1Recipe::ReferenceFactsBoth
+                        )
+                    ) {
                         Some(
                             primary_read
                                 .native_api()
@@ -593,6 +604,14 @@ pub fn execute_context_combined(
                                             }
                                             (None, Some(CombinedL1Recipe::ReferenceFacts)) => {
                                                 wow_context::CombinedPrimaryInspection::ReferenceFacts {
+                                                    root: &scope,
+                                                    origins: origins.as_deref().ok_or_else(|| {
+                                                        failure(ServiceErrorCode::InternalContractViolation)
+                                                    })?,
+                                                }
+                                            }
+                                            (None, Some(CombinedL1Recipe::ReferenceFactsBoth)) => {
+                                                wow_context::CombinedPrimaryInspection::ReferenceFactsBoth {
                                                     root: &scope,
                                                     origins: origins.as_deref().ok_or_else(|| {
                                                         failure(ServiceErrorCode::InternalContractViolation)

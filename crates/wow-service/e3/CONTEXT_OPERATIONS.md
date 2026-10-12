@@ -164,13 +164,17 @@ each with `level="l1"` and an exact GraphEntity root. StateDetail also admits
 `level="both"`: the existing StateRoot L0 precedes StateDetail L1 under the same
 continuing Budget and exact map/root. Only a native state_root is eligible;
 state_path refuses after native kind validation with checked resource closure.
-Omission of all recipe/facet fields preserves default request/artifact bytes. ReferenceFacts Both,
-either L1 profile with level L0, project roots, null, the default ID and unknown IDs refuse before
+ReferenceFacts also admits Both for an exact accepted native API root: the typed
+Reference-root L0 identity/navigation precedes original ReferenceFacts L1 on the
+same detail map/root/Budget. Wrong-kind or missing custody refuses after owner
+validation with checked closure. Omission of all recipe/facet fields preserves
+default request/artifact bytes.
+Either L1 profile with level L0, project roots, null, the default ID and unknown IDs refuse before
 owner acquisition. The held native API
 supplies original `reference_origins` to the existing L1 Reference engine.
 Origin-vector construction, graph reconstruction, exact Reference lookup and
 signature digest work are precharged to the continuing construction Budget before
-L1; earlier acquisition retains its existing bounds. The original ReferenceFacts
+the selected L0/L1 work; earlier acquisition retains its existing bounds. The original ReferenceFacts
 L1 schema, origins and identity survive combined semantic-pack construction and
 rendering. Request/result, pack and renderer schemas remain /1. See the
 [combined contract](../../wow-context/e3/NATIVE_COMBINED_MAP.md).

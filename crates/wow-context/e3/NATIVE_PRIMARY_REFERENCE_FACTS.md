@@ -13,6 +13,12 @@ normative. This page records the selected scope, not full E3-B/Tier A/X acceptan
 L1 with an exact Primary GraphEntity is supported. Project roots, L0/Both and
 frontier composition refuse; no API node or record is selected by name.
 
+Combined Inspect/Build additionally supports ReferenceFacts Both through the
+[Reference-root L0 owner](NATIVE_REFERENCE_ROOT_L0.md). That selection requires
+an exact accepted `native_api_callable` root and places its navigation identity
+before original ReferenceFacts L1 on the same detail map and continuing Budget.
+The standalone L1 route and its bytes remain unchanged.
+
 The acquired ordinary publication must genuinely select
 `native_api_uses=reference_v1`. Retained source-absent reopening requalifies the
 original native Library/API/call owners; decoded endpoint data cannot replace

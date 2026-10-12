@@ -6,6 +6,8 @@ use std::sync::atomic::AtomicBool;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
+mod reference_root;
+
 // Synthetic, project-owned values with the complete typed platform request shape.
 const FIXTURE: &str = r#"{
   "schema":"wow-service/context-combined-request/1",
@@ -134,7 +136,7 @@ fn supported_l1_decode_preserves_compatibility_and_refuses_invalid_admission() -
         );
     }
 
-    // Both state detail and the two L1 recipes roundtrip for both operations.
+    // Both state detail and ReferenceFacts L1/Both roundtrip for both operations.
     for (profile, level, value) in [
         (
             PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
@@ -155,6 +157,16 @@ fn supported_l1_decode_preserves_compatibility_and_refuses_invalid_admission() -
             PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
             "l1",
             build("l1", Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID))?,
+        ),
+        (
+            PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
+            "both",
+            inspect("both", Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID))?,
+        ),
+        (
+            PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
+            "both",
+            build("both", Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID))?,
         ),
         (
             PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
@@ -178,6 +190,18 @@ fn supported_l1_decode_preserves_compatibility_and_refuses_invalid_admission() -
         };
         assert_eq!(selection["l1_profile_id"], profile);
         assert_eq!(selection["level"], level);
+        assert_eq!(
+            request.l1_recipe,
+            Some(
+                if profile == PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID && level == "both" {
+                    CombinedL1Recipe::ReferenceFactsBoth
+                } else if profile == PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID {
+                    CombinedL1Recipe::ReferenceFacts
+                } else {
+                    CombinedL1Recipe::StateDetail
+                }
+            ),
+        );
         let roundtrip = ContextCombinedRequest::from_json_slice(&encoded, &AtomicBool::new(false))?;
         assert_eq!(
             wow_core::canonical_json_bytes(&request)?,
@@ -208,7 +232,6 @@ fn supported_l1_decode_preserves_compatibility_and_refuses_invalid_admission() -
 
     for (level, profile) in [
         ("l0", PRIMARY_STATE_DETAIL_L1_PROFILE_ID),
-        ("both", PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID),
         ("l0", PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID),
     ] {
         refused(
@@ -219,6 +242,18 @@ fn supported_l1_decode_preserves_compatibility_and_refuses_invalid_admission() -
             &build(level, Some(profile))?,
             ServiceErrorCode::InvalidRequest,
         )?;
+    }
+    for mut value in [
+        inspect("both", Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID))?,
+        build("both", Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID))?,
+    ] {
+        let key = if value["operation"] == "inspect" {
+            "inspection"
+        } else {
+            "build"
+        };
+        value[key]["l0_profile_id"] = json!(PRIMARY_STATE_ROOT_L0_PROFILE_ID);
+        refused(&value, ServiceErrorCode::InvalidRequest)?;
     }
     for mut value in [
         inspect("l1", Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID))?,
@@ -378,6 +413,13 @@ fn platform_root_facets_compose_with_valid_primary_recipes_in_inspect_and_build(
             None,
             Some(CombinedL1Recipe::ReferenceFacts),
         ),
+        (
+            "both",
+            "l1_profile_id",
+            PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
+            None,
+            Some(CombinedL1Recipe::ReferenceFactsBoth),
+        ),
     ];
     for facet in ["callable_metadata", "xml_handler_metadata"] {
         for operation in ["inspect", "build"] {
@@ -435,11 +477,7 @@ fn platform_root_facets_compose_with_valid_primary_recipes_in_inspect_and_build(
 
             for (level, field, profile) in [
                 ("l1", "l0_profile_id", PRIMARY_STATE_ROOT_L0_PROFILE_ID),
-                (
-                    "both",
-                    "l1_profile_id",
-                    PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
-                ),
+                ("l0", "l1_profile_id", PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID),
                 ("l0", "l1_profile_id", PRIMARY_STATE_DETAIL_L1_PROFILE_ID),
             ] {
                 let mut invalid = if operation == "inspect" {

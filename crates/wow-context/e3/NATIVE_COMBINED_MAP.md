@@ -119,7 +119,11 @@ accepted non-null `l1_profile_id` values are `wow-context/primary-state-detail-l
 exact `GraphEntity` root. StateDetail additionally accepts `level="both"` for an
 original `state_root`, using StateRoot L0 followed by StateDetail L1. A state_path
 cannot supply that L0 and refuses after native kind validation with checked closure.
-ReferenceFacts Both, either L1 profile with level L0, project roots, null, non-string, the default ID
+ReferenceFacts also accepts Both for an exact native API root through the
+[Reference-root L0 owner](NATIVE_REFERENCE_ROOT_L0.md), followed by original
+ReferenceFacts L1 on the same detail map/root and continuing Budget. Acquired
+wrong-kind or missing API/Reference custody refuses with checked closure.
+Either L1 profile with level L0, project roots, null, non-string, the default ID
 and unknown IDs refuse before either owner read is acquired.
 The combined map operation does not accept this selection.
 Missing inspection for inspect, explicit null, unknown fields/levels and inspection
@@ -245,7 +249,10 @@ bytes. The only accepted non-null `l1_profile_id` values are
 exact `GraphEntity` root. StateDetail also accepts `level="both"` over a genuine
 state_root, with original StateRoot L0 then StateDetail L1 on the same detail map.
 State_path Both refuses after native kind validation and checked closure.
-ReferenceFacts Both, either L1 profile with level `l0`, project roots, null, non-string, the default ID
+ReferenceFacts also accepts `level="both"` over an exact accepted native API root,
+with typed Reference-root L0 then original ReferenceFacts L1 on the same map/root
+and Budget. Wrong-kind or missing custody refuses with checked closure.
+Either L1 profile with level `l0`, project roots, null, non-string, the default ID
 and unknown IDs refuse before owner acquisition. The
 context profile is the pack
 ID above. The required renderer array is empty for None, contains one reviewed

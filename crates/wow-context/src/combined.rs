@@ -16,8 +16,8 @@ use crate::platform::{
     build_platform_root_xml_handler_facet_on_budget, encode_retained,
 };
 use crate::skeleton::{
-    build_primary_reference_facts_on_budget, build_primary_skeletons_on_budget,
-    build_primary_state_detail_on_budget,
+    build_primary_reference_facts_on_budget, build_primary_reference_facts_with_level_on_budget,
+    build_primary_skeletons_on_budget, build_primary_state_detail_on_budget,
 };
 use crate::{
     ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, L0Scope, PrimaryL0Profile,
@@ -508,6 +508,11 @@ pub enum CombinedPrimaryInspection<'r, 'p> {
         root: &'r L0Scope,
         origins: &'r [crate::ReferenceOriginInput<'p>],
     },
+    /// Typed API-root L0 followed by original ReferenceFacts L1 at the same root.
+    ReferenceFactsBoth {
+        root: &'r L0Scope,
+        origins: &'r [crate::ReferenceOriginInput<'p>],
+    },
 }
 
 /// Compose one original Primary recipe with an independent selected platform-root
@@ -567,6 +572,17 @@ pub fn build_combined_context_inspect_with_selection_and_platform_root_facet<'m,
                 &map.core.primary,
                 graph,
                 root,
+                origins,
+                budget,
+                stop,
+            )?
+        }
+        CombinedPrimaryInspection::ReferenceFactsBoth { root, origins } => {
+            build_primary_reference_facts_with_level_on_budget(
+                universe,
+                &map.core.primary,
+                graph,
+                (root, SkeletonLevel::Both),
                 origins,
                 budget,
                 stop,

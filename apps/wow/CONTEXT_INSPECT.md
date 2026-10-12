@@ -354,7 +354,10 @@ L0/L1 recipe fields cannot coexist. The optional `inspection.l1_profile_id` acce
 exact GraphEntity root. StateDetail also supports `level="both"` for a genuine
 state_root: original StateRoot L0 precedes StateDetail L1 on the same detail map
 and continuing Budget. State_path Both refuses after native kind validation and
-checked closure; ReferenceFacts Both refuses before acquisition. Omission of all recipe/facet fields
+checked closure. ReferenceFacts also supports Both over an exact accepted native
+API root, through typed Reference-root L0 then original ReferenceFacts L1 on the
+same detail map/root/Budget. Wrong-kind or missing custody refuses with checked
+closure. Omission of all recipe/facet fields
 preserves default recipe request/artifact bytes. Null, non-string, the default ID,
 unknown IDs and incompatible level/root or mixed operation fields refuse before
 owner acquisition. The platform
