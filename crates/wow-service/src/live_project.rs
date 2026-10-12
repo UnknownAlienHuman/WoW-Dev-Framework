@@ -101,7 +101,6 @@ impl LiveProjectRead {
     pub fn candidate(&self) -> Option<&crate::graph::BlizzardUiIndexCandidate> {
         self.candidate.as_ref()
     }
-    #[cfg(test)]
     pub(crate) fn native_api(&self) -> Option<&crate::graph::NativeApiProvenance> {
         self.native_api.as_ref()
     }

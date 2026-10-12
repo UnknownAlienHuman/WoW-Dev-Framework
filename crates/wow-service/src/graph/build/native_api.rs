@@ -138,9 +138,49 @@ fn serialize_bindings<S: serde::Serializer>(
 }
 
 impl NativeApiProvenance {
-    #[cfg(test)]
-    pub const fn source_handles(&self) -> &BTreeMap<StableHandleId, SourceHandle> {
+    pub(crate) const fn context(&self) -> &GenerationContext {
+        &self.context
+    }
+
+    pub(crate) const fn evidence(&self) -> &BTreeMap<EvidenceId, EvidenceRecord> {
+        &self.evidence
+    }
+
+    pub(crate) const fn source_handles(&self) -> &BTreeMap<StableHandleId, SourceHandle> {
         &self.source_handles
+    }
+
+    /// Compare with the actual rebuilt owner, never a serialized endpoint identity.
+    pub(crate) fn matches_reference(
+        &self,
+        profile: &wow_core::ProfileIdentity,
+        reference: &wow_reference::ReferenceView,
+    ) -> bool {
+        self.library.profile() == profile && &self.library.reference().view == reference
+    }
+
+    /// The held native proof supplies the producer declaration; graph admission
+    /// independently binds the exact original support to accepted final entities.
+    pub(crate) fn source_observations<'a>(
+        &'a self,
+        graph: &wow_graph::GraphPartitionRead<'a>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<wow_graph::GraphPartitionSourceObservations<'a>> {
+        let producer = wow_core::ProducerVersionEntry::new(
+            "wow.service.native_api"
+                .parse::<ProducerId>()
+                .map_err(|_| incompatible())?,
+            ToolVersion::parse(env!("CARGO_PKG_VERSION")).map_err(|_| incompatible())?,
+        );
+        wow_graph::GraphPartitionSourceObservations::new(
+            graph,
+            NATIVE_API_PARTITION,
+            producer,
+            &self.evidence,
+            &self.source_handles,
+            stop,
+        )
+        .map_err(graph_error)
     }
 
     /// Bounded by the used, deduplicated call targets admitted in publish().

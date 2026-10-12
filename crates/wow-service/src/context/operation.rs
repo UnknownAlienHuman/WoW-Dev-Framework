@@ -352,26 +352,82 @@ pub(super) fn with_native_origins_with_catalog<T>(
     // One aggregate borrowed reservation includes every encoded input view
     // before the necessary catalog copy; separate owner ceilings cannot prove
     // the combined input fits the selected service budget.
-    preflight(
-        &(
-            &host.reference,
-            read.graph().snapshot(),
-            provenance.context(),
-            provenance.evidence(),
-            provenance.source_handles(),
-        ),
-        usize::try_from(host.limits.max_input_bytes)
-            .map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?,
-        stop,
-    )?;
-    let catalog = GraphEvidenceCatalog::new(
-        provenance.context().clone(),
-        provenance.evidence().clone(),
-        provenance.source_handles().clone(),
-        stop,
-    )
-    .map_err(graph_error)?;
+    let inputs = (
+        &host.reference,
+        read.graph().snapshot(),
+        provenance.context(),
+        provenance.evidence(),
+        provenance.source_handles(),
+    );
+    let input_limit = usize::try_from(host.limits.max_input_bytes)
+        .map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
+    let native_api = read.native_api();
+    if let Some(api) = native_api {
+        // Fence every context consumer to the held, genuinely requalified view.
+        // A caller-associated generation alone does not attest Reference content.
+        checkpoint(stop)?;
+        let compatible = api.context() == provenance.context()
+            && api.matches_reference(&host.reference_profile, &host.reference);
+        checkpoint(stop)?;
+        if !compatible {
+            return Err(failure(ServiceErrorCode::IdentityMismatch));
+        }
+        preflight(
+            &(&inputs, api.context(), api.evidence(), api.source_handles()),
+            input_limit,
+            stop,
+        )?;
+    } else {
+        // Preserve the exact aggregate reservation of existing unselected input.
+        preflight(&inputs, input_limit, stop)?;
+    }
+    let mut evidence = provenance.evidence().clone();
+    let mut source_handles = provenance.source_handles().clone();
+    if let Some(api) = native_api {
+        for (id, record) in api.evidence() {
+            checkpoint(stop)?;
+            match evidence.entry(*id) {
+                std::collections::btree_map::Entry::Occupied(existing) => {
+                    if existing.get() != record {
+                        return Err(failure(ServiceErrorCode::IdentityMismatch));
+                    }
+                }
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(record.clone());
+                }
+            }
+        }
+        for (id, handle) in api.source_handles() {
+            checkpoint(stop)?;
+            match source_handles.entry(*id) {
+                std::collections::btree_map::Entry::Occupied(existing) => {
+                    if existing.get() != handle {
+                        return Err(failure(ServiceErrorCode::IdentityMismatch));
+                    }
+                }
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(handle.clone());
+                }
+            }
+        }
+    }
     let graph = read.pair().graph_read(stop).map_err(graph_error)?;
+    let catalog = match native_api {
+        Some(api) => {
+            let observations = api.source_observations(&graph, stop)?;
+            GraphEvidenceCatalog::new_with_partition_source_observations(
+                provenance.context().clone(),
+                evidence,
+                source_handles,
+                &observations,
+                stop,
+            )
+        }
+        None => {
+            GraphEvidenceCatalog::new(provenance.context().clone(), evidence, source_handles, stop)
+        }
+    }
+    .map_err(graph_error)?;
     let mut selection = match root {
         ContextMapRoot::GraphEntity(id) => {
             let query = if detail {

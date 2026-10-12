@@ -137,6 +137,38 @@ empty. Bodies and SourceFunctionFact.shape never enter this metadata projection.
 Lua/XML occurrence rows retain their exact original IDs, proposals and source /
 evidence handles. The owner does not invent richer XML/type/role summaries.
 
+## Selected native UsesApi evidence
+
+The existing L1 detail vocabulary consumes `UsesApi` when the ordinary acquired
+Project configuration selects `native_api_uses=reference_v1`. It requires the
+genuine reopened native API proof and accepted graph producer records; decoded
+provenance, an endpoint name or a Reference record key cannot replace them.
+Service requalification reruns retained native producers, compares their complete
+accepted API/call partitions and checks rebound membership in the final graph.
+
+Before projecting context, service requires the host Reference profile,
+generation and view digest to equal the held requalified native Reference.
+It preflights the aggregate native input before merging original Project/API
+source handles and evidence into one catalog. Context mismatch and conflicting
+records for an existing evidence/handle ID refuse. The normal bounded graph
+explanation/evidence path then retains actual accepted endpoints and original
+caller, call-site and API source support; context does not mint replacement
+evidence or infer an API edge from a name.
+
+L1 and its existing structural pack and JSON/Markdown consumers preserve this
+static `UsesApi` assertion separately from `Calls`. Original API source handles
+retain their identity, digest and span. Structured Reference record/type
+enrichment remains `NotEvaluated`, including the existing
+`ReferenceContractNotEvaluated` source-custody state; no Reference association or
+source bytes are manufactured in context. Existing native signature observations
+keep their captured uncertainty. Rendering does not prove runtime execution,
+loaded state, API legality, protected/Secret behavior or combat safety.
+
+This handoff introduces no context profile/schema or changed request recipe.
+Absent native API selection preserves the previous route and bytes. Output stays
+Partial/Truncated with nonauthoritative absence and existing cumulative bounds;
+broader Reference enrichment and Tier A/X qualification remain open.
+
 ## Bounds and remaining qualification
 
 `PrimaryMapLimits::new` requires validated native neighbor/explanation limits,

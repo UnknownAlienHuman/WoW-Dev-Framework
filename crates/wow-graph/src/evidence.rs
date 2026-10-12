@@ -1,12 +1,15 @@
 //! Validated, context-bound retained evidence. No source acquisition or inference.
 mod resolve;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use wow_core::{EvidenceId, EvidenceRecord, GenerationContext, SourceHandle, StableHandleId};
+use wow_core::{
+    ClaimScope, EvidenceConfidence, EvidenceId, EvidenceRecord, GenerationContext,
+    GenerationContextId, ProducerVersionEntry, ProvenanceClass, SourceHandle, StableHandleId,
+};
 
 use crate::{GraphError, GraphErrorCode, GraphResult};
 pub use resolve::{
@@ -17,6 +20,117 @@ pub use resolve::{
 const MAX_RECORDS: usize = 131_072;
 const MAX_REFERENCES: usize = 1_000_000;
 const MAX_CATALOG_BYTES: usize = 32 * 1024 * 1024;
+
+/// Exact source observations owned by an accepted entity producer. Construction
+/// requires the graph-owned read proof, original proposals and final membership.
+/// This admits retained support integrity, not native source authenticity.
+pub struct GraphPartitionSourceObservations<'a> {
+    partition: &'a crate::GraphProducerPartition,
+    context_id: GenerationContextId,
+    producer: ProducerVersionEntry,
+    evidence: &'a BTreeMap<EvidenceId, EvidenceRecord>,
+    source_handles: &'a BTreeMap<StableHandleId, SourceHandle>,
+}
+
+impl<'a> GraphPartitionSourceObservations<'a> {
+    pub fn new(
+        read: &crate::GraphPartitionRead<'a>,
+        partition_id: &str,
+        producer: ProducerVersionEntry,
+        evidence: &'a BTreeMap<EvidenceId, EvidenceRecord>,
+        source_handles: &'a BTreeMap<StableHandleId, SourceHandle>,
+        stop: &AtomicBool,
+    ) -> GraphResult<Self> {
+        checkpoint(stop)?;
+        if evidence.len() > MAX_RECORDS || source_handles.len() > MAX_RECORDS {
+            return Err(budget());
+        }
+        encoded_len(&(evidence, source_handles), MAX_CATALOG_BYTES)?;
+        checkpoint(stop)?;
+        let owner = read.owner();
+        let partition = owner.partition(partition_id).ok_or_else(invalid)?;
+        if !partition.report().ready_for_publication()
+            || partition.producer_version() != producer.version().to_string()
+            || !partition.report().accepted_relations().is_empty()
+            || partition.report().accepted_entities().len()
+                != partition.batch().entity_proposals().len()
+        {
+            return Err(invalid());
+        }
+        let mut used_evidence = BTreeSet::new();
+        let mut used_sources = BTreeSet::new();
+        let mut work = 0usize;
+        for accepted in partition.report().accepted_entities() {
+            observation_step(&mut work, stop)?;
+            let proposal = partition
+                .batch()
+                .entity_proposal(accepted.proposal_id())
+                .ok_or_else(invalid)?;
+            read.published_entity(partition_id, accepted.proposal_id(), stop)?;
+            let mut observation_sources = BTreeSet::new();
+            for id in proposal.evidence_ids() {
+                observation_step(&mut work, stop)?;
+                let record = evidence.get(id).ok_or_else(invalid)?;
+                for source in record.source_handle_ids() {
+                    observation_step(&mut work, stop)?;
+                    observation_sources.insert(*source);
+                }
+                used_evidence.insert(*id);
+            }
+            if observation_sources
+                .iter()
+                .ne(proposal.source_handle_ids().iter())
+            {
+                return Err(invalid());
+            }
+            for id in proposal.source_handle_ids() {
+                observation_step(&mut work, stop)?;
+                if !source_handles.contains_key(id) {
+                    return Err(invalid());
+                }
+                used_sources.insert(*id);
+            }
+        }
+        if used_evidence.len() != evidence.len() || used_sources.len() != source_handles.len() {
+            return Err(invalid());
+        }
+        for record in evidence.values() {
+            observation_step(&mut work, stop)?;
+            record.validate().map_err(|_| invalid())?;
+            if record.context_id() != owner.source_context_id()
+                || record.producer_id() != producer.producer_id()
+                || record.producer_version() != producer.version()
+                || record.provenance() != ProvenanceClass::PlatformSource
+                || record.confidence() != EvidenceConfidence::Proven
+                || record.claim_scope() != ClaimScope::SourceObservation
+                || !record.derivation_input_ids().is_empty()
+                || record.source_handle_ids().is_empty()
+                || record
+                    .source_handle_ids()
+                    .iter()
+                    .any(|id| !source_handles.contains_key(id))
+            {
+                return Err(invalid());
+            }
+        }
+        Ok(Self {
+            partition,
+            context_id: owner.source_context_id(),
+            producer,
+            evidence,
+            source_handles,
+        })
+    }
+}
+
+fn observation_step(work: &mut usize, stop: &AtomicBool) -> GraphResult<()> {
+    checkpoint(stop)?;
+    *work = work
+        .checked_add(1)
+        .filter(|work| *work <= MAX_REFERENCES)
+        .ok_or_else(budget)?;
+    Ok(())
+}
 
 /// Construction validates every retained record, not only the requested roots.
 /// Missing graph references remain query outcomes. Retained EvidenceRecords must
@@ -36,6 +150,29 @@ impl GraphEvidenceCatalog {
         source_handles: BTreeMap<StableHandleId, SourceHandle>,
         stop: &AtomicBool,
     ) -> GraphResult<Self> {
+        Self::build(context, evidence, source_handles, None, stop)
+    }
+
+    /// Add only the exact source observations admitted by a held partition proof.
+    /// Original contexts, records and IDs are preserved; the catalog digest binds
+    /// the selected producer/partition. The existing constructor stays exact.
+    pub fn new_with_partition_source_observations(
+        context: GenerationContext,
+        evidence: BTreeMap<EvidenceId, EvidenceRecord>,
+        source_handles: BTreeMap<StableHandleId, SourceHandle>,
+        observations: &GraphPartitionSourceObservations<'_>,
+        stop: &AtomicBool,
+    ) -> GraphResult<Self> {
+        Self::build(context, evidence, source_handles, Some(observations), stop)
+    }
+
+    fn build(
+        context: GenerationContext,
+        evidence: BTreeMap<EvidenceId, EvidenceRecord>,
+        source_handles: BTreeMap<StableHandleId, SourceHandle>,
+        observations: Option<&GraphPartitionSourceObservations<'_>>,
+        stop: &AtomicBool,
+    ) -> GraphResult<Self> {
         checkpoint(stop)?;
         if evidence.len() > MAX_RECORDS || source_handles.len() > MAX_RECORDS {
             return Err(budget());
@@ -43,6 +180,28 @@ impl GraphEvidenceCatalog {
         let identity = (&context, &evidence, &source_handles);
         encoded_len(&("graph-evidence-catalog/1", &identity), MAX_CATALOG_BYTES)?;
         context.validate().map_err(|_| invalid())?;
+        if let Some(observations) = observations {
+            if observations.context_id != context.context_id()
+                || context.producer_versions().iter().any(|entry| {
+                    entry.producer_id() == observations.producer.producer_id()
+                        && entry.version() != observations.producer.version()
+                })
+            {
+                return Err(invalid());
+            }
+            for (id, record) in observations.evidence {
+                checkpoint(stop)?;
+                if evidence.get(id) != Some(record) {
+                    return Err(invalid());
+                }
+            }
+            for (id, handle) in observations.source_handles {
+                checkpoint(stop)?;
+                if source_handles.get(id) != Some(handle) {
+                    return Err(invalid());
+                }
+            }
+        }
         for (id, handle) in &source_handles {
             checkpoint(stop)?;
             if *id != handle.handle_id()
@@ -67,7 +226,9 @@ impl GraphEvidenceCatalog {
             checkpoint(stop)?;
             if *id != record.evidence_id()
                 || record.context_id() != context.context_id()
-                || producers.get(record.producer_id()).copied() != Some(record.producer_version())
+                || (producers.get(record.producer_id()).copied() != Some(record.producer_version())
+                    && !observations
+                        .is_some_and(|support| support.evidence.get(id) == Some(record)))
             {
                 return Err(invalid());
             }
@@ -98,7 +259,19 @@ impl GraphEvidenceCatalog {
         let records: Vec<_> = evidence.values().cloned().collect();
         wow_core::validate_evidence_derivation_graph(&records).map_err(|_| invalid())?;
         checkpoint(stop)?;
-        let digest = digest("graph-evidence-catalog/1", &identity)?;
+        let digest = match observations {
+            Some(support) => {
+                let identity = (
+                    &identity,
+                    support.partition.partition_digest(),
+                    &support.producer,
+                );
+                const DOMAIN: &str = "graph-evidence-catalog/partition-source-observations/1";
+                encoded_len(&(DOMAIN, &identity), MAX_CATALOG_BYTES)?;
+                digest(DOMAIN, &identity)?
+            }
+            None => digest("graph-evidence-catalog/1", &identity)?,
+        };
         checkpoint(stop)?;
         Ok(Self {
             context,

@@ -114,6 +114,35 @@ source-absent inspect lifecycle passes; this does not imply full E3-B/Tier A/X
 acceptance. See the
 [native expansion contract](../../crates/wow-context/e3/NATIVE_PRIMARY_EXPANSION.md).
 
+## Selected native UsesApi evidence
+
+An ordinary published project with retained configuration
+`native_api_uses=reference_v1` supplies native API source evidence to the existing
+L1 route after genuine reopen. This is a Project input selection, not a new CLI
+flag or context profile. Select an exact graph entity whose admitted native
+neighborhood contains the relevant `UsesApi` relation.
+
+Source-absent reopen reruns the retained native Library producers and compares
+the accepted API/call producer partitions and final graph membership. The host's
+configured Reference profile, generation and view digest must match that held
+requalified native Reference exactly. A mismatch refuses before context
+projection; optional Reference guards do not replace this mandatory fence.
+
+Service admits original Project and API support through one bounded evidence
+catalog after aggregate input preflight. Different contexts or conflicting
+records under the same IDs refuse. L1 preserves the actual accepted `UsesApi`
+edge and its original caller, call-site and API source evidence, including exact
+source handles, digests and spans. `UsesApi` remains distinct from `Calls`.
+
+The same evidence reaches structural [build/pack/JSON/Markdown](CONTEXT_BUILD.md)
+through the native owner path. Structured Reference record/type enrichment and
+Reference source excerpts remain `NotEvaluated`; existing captured native
+signature observations retain their original availability. Static accepted
+relations and source observations do not prove runtime execution, API legality,
+loaded state, protected/Secret behavior, combat safety or authoritative absence.
+Existing context profiles, request/schema recipes and unselected bytes remain
+unchanged; this route does not claim full E3 or Tier A/X acceptance.
+
 ## Host input and service result
 
 Inspect reuses the strict `wow-service/context-map-native-host/1` transport

@@ -93,6 +93,6 @@ pub use direct::{
 
 pub use evidence::{
     GraphEvidenceCatalog, GraphEvidenceResolution, GraphEvidenceResolveLimits,
-    GraphEvidenceTruncation, GraphResolvedExplanation, GraphUnresolvedEvidence,
-    GraphUnresolvedEvidenceReason,
+    GraphEvidenceTruncation, GraphPartitionSourceObservations, GraphResolvedExplanation,
+    GraphUnresolvedEvidence, GraphUnresolvedEvidenceReason,
 };

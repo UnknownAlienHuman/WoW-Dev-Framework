@@ -54,6 +54,44 @@ There is no `--render` flag, standalone render/import route, auto profile select
 or text/artifact stdout mode. Requested renderers are required: refusal suppresses
 the delivery payload rather than returning a pack-only fallback.
 
+## Native API evidence in structural L1 packs
+
+An ordinary native project may explicitly select
+`"native_api_uses": "reference_v1"` in its native input manifest. The selection
+is admitted into the published project configuration and replay. Context reads
+that exact selected publication; it does not select this producer through a new
+context option.
+
+Use the existing `--level l1`, `--context-profile-id wow-context/primary-structural-pack/1`
+and default `wow-context/primary-l1/1` with an exact graph-entity root whose
+bounded native neighborhood contains the accepted UsesApi assertion. Existing
+L1 inspect, semantic pack construction and zero/one/both structural renderers
+retain the original physical Main function, accepted `native_api_callable`
+endpoint and UsesApi relation. The endpoint comes from the
+`wow-service.native-api-callables` producer; the relation stays in the existing
+calls partition. API endpoint identity retains the exact native Reference
+profile/generation/view and original record key/digest.
+
+The host's complete `reference_profile` and `reference` must equal the profile
+and ReferenceView held by the genuinely requalified native owner. Matching a
+generation alone is insufficient; a mismatched host refuses with IdentityMismatch.
+The existing optional three-part Reference guard remains an additional exact
+assertion. Store reopening requalifies retained native producer inputs even after
+the original source directory has been deleted.
+
+One bounded evidence catalog combines original Project function/call support
+with original API source handles and evidence. The service checks the common
+GenerationContext, preflights the combined encoded inputs before catalog copies,
+and rejects unequal records sharing an evidence or handle ID. Native explanation
+receipts carry that genuine support into the existing skeleton, pack and render
+records; they do not reconstruct authority from endpoint labels.
+
+This evidence handoff leaves Reference record/signature enrichment NotEvaluated.
+It adds no source excerpts, source-inclusion permission, runtime authority or
+clean-negative claim; failed or missing native documents retain their Partial
+coverage and omissions. Existing context/pack/render profiles, schemas, commands
+and unselected bytes remain unchanged.
+
 ## Selected native state-detail L1 pack
 
 Pair `--level l1 --l1-profile-id wow-context/primary-state-detail-l1/1` with
@@ -135,7 +173,9 @@ CPU-time or tokenizer measurements. Mandatory overflow refuses, without clipping
 The service pins Current once or reads the exact store generation, checks the
 project/current/Reference guards, and uses retained native source provenance and
 graph read proof. Project-root L0 retains every selected source-file projection;
-there is no invented project graph node. No source is reparsed or executed.
+there is no invented project graph node. Context consumes original typed reports;
+selected native API store reopening requalifies retained native producer inputs.
+Source inputs remain data and are never executed.
 The private encoded draft is delivered only after checked read/store closure.
 Close failure supersedes a successful draft or earlier semantic refusal.
 

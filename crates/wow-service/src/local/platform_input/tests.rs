@@ -548,11 +548,23 @@ fn native_library_inputs_requalify_after_published_source_absent_reopen() -> Tes
 #[test]
 fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResult {
     use crate::{
+        ServiceErrorCode,
+        context::{
+            CONTEXT_MAP_HOST_SCHEMA, ContextBuildRequest, ContextInspectLevel,
+            ContextInspectRequest, ContextMapHostInput, ContextMapPublication,
+            ContextMapReferenceGuard, ContextMapResult, ContextMapRoot, ContextMapStatus,
+            ContextRenderSelection, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+            PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_PACK_PROFILE_ID,
+            execute_context_build, execute_context_inspect,
+        },
         graph::GraphBuildRequest,
         live_project::{LiveProjectPublishRequest, LiveProjectStore, publish_local_project},
     };
     use wow_emmy::function_calls::SourceCallTarget;
-    use wow_graph::{GraphProposalValue, GraphRelationKind};
+    use wow_graph::{
+        GraphEvidenceResolveLimits, GraphExplainLimits, GraphNeighborReadLimits,
+        GraphProposalValue, GraphRelationKind,
+    };
     use wow_project::{NativeApiUseRecipe, ProjectPublisher, replay::ProjectReplay};
     use wow_store::project::ReadSelector;
 
@@ -904,10 +916,370 @@ fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResu
     assert_eq!(final_uses.len(), 1);
     assert_eq!(final_uses[0].from(), final_caller.node_id());
     assert_eq!(final_uses[0].to(), final_api.node_id());
+    // Context host and expectations come from this source-absent native proof.
+    // Serialized values below are assertions only, never acquired authority.
+    fn rows(value: &Value) -> TestResult<&[Value]> {
+        value
+            .as_array()
+            .map(Vec::as_slice)
+            .ok_or_else(|| "expected context array".into())
+    }
+    const CONTEXT_STORE_ID: &str = "fixture-selected-native-api-context";
+    let reference = &rebuilt.reference().view;
+    let profile = rebuilt.profile();
+    let native_api = read.native_api().ok_or("held native API proof")?;
+    // The old context-only constructor must still reject this independent
+    // producer. Only exact accepted-partition support may supplement it.
+    assert!(
+        wow_graph::GraphEvidenceCatalog::new(
+            native_api.context().clone(),
+            native_api.evidence().clone(),
+            native_api.source_handles().clone(),
+            &stop,
+        )
+        .is_err()
+    );
+    for producer in [
+        wow_core::ProducerVersionEntry::new(
+            "wow.service.unrelated".parse()?,
+            wow_core::ToolVersion::parse(env!("CARGO_PKG_VERSION"))?,
+        ),
+        wow_core::ProducerVersionEntry::new(
+            "wow.service.native_api".parse()?,
+            wow_core::ToolVersion::parse("0.0.0")?,
+        ),
+    ] {
+        let refusal = wow_graph::GraphPartitionSourceObservations::new(
+            &graph_read,
+            api.partition_id(),
+            producer,
+            native_api.evidence(),
+            native_api.source_handles(),
+            &stop,
+        )
+        .err()
+        .ok_or("foreign source observation producer/version was admitted")?;
+        assert_eq!(refusal.code(), wow_graph::GraphErrorCode::EvidenceInvalid);
+    }
+    let expected_caller = serde_json::to_value(final_caller)?;
+    let expected_supports = [
+        (
+            "entity",
+            serde_json::to_value(final_api)?,
+            api.partition_id().to_owned(),
+            serde_json::to_value(api_proposal)?,
+            serde_json::to_value(accepted_api)?,
+        ),
+        (
+            "relation",
+            serde_json::to_value(final_uses[0])?,
+            calls.partition_id().to_owned(),
+            serde_json::to_value(use_proposal)?,
+            serde_json::to_value(uses.0)?,
+        ),
+    ];
+    let expected_api_handle = serde_json::to_value(api_handle)?;
+    let expected_api_evidence = serde_json::to_value(
+        native_api
+            .evidence()
+            .get(&api_proposal.evidence_ids()[0])
+            .ok_or("original native API evidence")?,
+    )?;
+    // Match the actual selected aggregate preflight. Both borrowed components
+    // fit in isolation; accepting their combined frame would exceed this limit.
+    let project_inputs = (
+        reference,
+        owner.snapshot(),
+        provenance.context(),
+        provenance.evidence(),
+        provenance.source_handles(),
+    );
+    let api_inputs = (
+        native_api.context(),
+        native_api.evidence(),
+        native_api.source_handles(),
+    );
+    let isolated_limit = wow_core::canonical_json_bytes(&project_inputs)?
+        .len()
+        .max(wow_core::canonical_json_bytes(&api_inputs)?.len());
+    let aggregate_bytes = wow_core::canonical_json_bytes(&(
+        &project_inputs,
+        native_api.context(),
+        native_api.evidence(),
+        native_api.source_handles(),
+    ))?
+    .len();
+    assert!(aggregate_bytes > isolated_limit);
+    let host_json = json!({
+        "schema": CONTEXT_MAP_HOST_SCHEMA,
+        "project_store_id": CONTEXT_STORE_ID,
+        "project_store_root": store_path,
+        "project_id": read.project().configuration().project_id(),
+        "reference_profile": profile,
+        "reference": reference,
+        "limits": {
+            "neighbors": GraphNeighborReadLimits::default(),
+            "explain": GraphExplainLimits {
+                max_output_bytes: 64 * 1024,
+                ..GraphExplainLimits::default()
+            },
+            "evidence": GraphEvidenceResolveLimits::default(),
+            "max_direct_edges": 16,
+            "max_input_bytes": 4 * 1024 * 1024,
+            "max_metadata_bytes": 4 * 1024 * 1024,
+            "max_context_work": 8_000_000
+        }
+    });
+    let host = ContextMapHostInput::from_json_slice(&serde_json::to_vec(&host_json)?, &stop)?;
+    let publication = ContextMapPublication::store_generation(read.store_generation_id().as_str())?;
+    let context_root = ContextMapRoot::graph_entity(final_caller.node_id().as_str())?;
+    let requests = |view: &wow_reference::ReferenceView| -> TestResult<(ContextInspectRequest, ContextBuildRequest)> {
+        let guard = ContextMapReferenceGuard::new(
+            profile.profile_id().as_str(),
+            view.generation_id(),
+            view.self_digest(),
+        )?;
+        Ok((
+            ContextInspectRequest::primary(
+                CONTEXT_STORE_ID,
+                publication.clone(),
+                ContextInspectLevel::L1,
+                context_root.clone(),
+                None,
+                Some(guard.clone()),
+            )?,
+            ContextBuildRequest::primary(
+                CONTEXT_STORE_ID,
+                publication.clone(),
+                ContextInspectLevel::L1,
+                context_root.clone(),
+                ContextRenderSelection::Both,
+                None,
+                Some(guard),
+            )?,
+        ))
+    };
+    let (inspect_request, build_request) = requests(reference)?;
+    let wrong_reference =
+        wow_reference::ReferenceView::new(reference.generation_id(), Vec::new(), Vec::new())?;
+    wrong_reference.validate()?;
+    assert_eq!(wrong_reference.generation_id(), reference.generation_id());
+    assert_ne!(wrong_reference.self_digest(), reference.self_digest());
+    // The wrong view remains valid and its guard agrees with its own host.
+    // Only actual native Reference content custody can explain this refusal.
+    let (wrong_inspect_request, wrong_build_request) = requests(&wrong_reference)?;
+    let mut wrong_host_json = host_json.clone();
+    wrong_host_json["reference"] = serde_json::to_value(&wrong_reference)?;
+    let wrong_host =
+        ContextMapHostInput::from_json_slice(&serde_json::to_vec(&wrong_host_json)?, &stop)?;
+    let mut small_host_json = host_json;
+    small_host_json["limits"]["max_input_bytes"] = json!(isolated_limit);
+    let small_host =
+        ContextMapHostInput::from_json_slice(&serde_json::to_vec(&small_host_json)?, &stop)?;
     drop(resolver);
     drop(rebuilt);
     read.close()?;
     store.close()?;
+
+    // Close the witness acquisition first. Each actual service operation opens
+    // the selected publication independently, with the source still absent.
+    assert!(!root.0.exists());
+    let assert_native_l1 = |skeletons: &Value| -> TestResult {
+        assert_eq!(skeletons["level"], "l1");
+        assert!(skeletons.get("l0").is_none());
+        let core = &skeletons["l1"]["core"];
+        assert_eq!(core["schema"], "wow-context/l1-skeleton/primary/1");
+        assert_eq!(core["root"], expected_caller);
+        assert!(rows(&core["local_entities"])?.contains(&expected_supports[0].1));
+        assert!(rows(&core["direct_relations"])?.contains(&expected_supports[1].1));
+        assert!(rows(&core["not_evaluated"])?.contains(&json!("reference_fact_enrichment")));
+        let origins = &core["context"]["origins"]["core"];
+        assert!(
+            rows(&origins["source_custody"])?
+                .iter()
+                .any(|custody| custody["handle"] == expected_api_handle)
+        );
+        for (kind, record, partition, proposal, accepted) in &expected_supports {
+            let field = if *kind == "entity" { "node" } else { "edge" };
+            let receipts = rows(&origins["supports"])?
+                .iter()
+                .filter(|receipt| {
+                    let explained = &receipt["explanation"]["record"];
+                    explained["kind"] == *kind && &explained[field] == record
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(receipts.len(), 1, "exact API/UsesApi native record support");
+            let receipt = receipts[0];
+            let explanation = &receipt["explanation"];
+            assert_eq!(explanation["support_complete"], true);
+            assert!(rows(&explanation["truncations"])?.is_empty());
+            let origin = if *kind == "entity" {
+                "producer_entity"
+            } else {
+                "producer_relation"
+            };
+            assert!(rows(&explanation["supports"])?.iter().any(|support| {
+                support["origin"] == origin
+                    && support["producer"]["partition_id"] == partition.as_str()
+                    && &support["proposal"] == proposal
+                    && &support["accepted"] == accepted
+            }));
+            let resolution = &receipt["evidence_resolution"];
+            assert_eq!(resolution["closure_complete"], true);
+            assert!(rows(&resolution["unresolved"])?.is_empty());
+            assert!(rows(&resolution["truncations"])?.is_empty());
+            assert!(rows(&resolution["source_handles"])?.contains(&expected_api_handle));
+            assert!(rows(&resolution["evidence_records"])?.contains(&expected_api_evidence));
+        }
+        Ok(())
+    };
+    let inspected = execute_context_inspect(&host, &inspect_request, &stop)?;
+    assert_eq!(inspected.status(), ContextMapStatus::Partial);
+    assert_eq!(inspected.failure_code(), None);
+    let inspected_json: Value = serde_json::from_slice(inspected.canonical_bytes())?;
+    assert_eq!(
+        inspected_json["schema"],
+        "wow-service/context-inspect-result/1"
+    );
+    assert_eq!(inspected_json["operation"], "context_inspect");
+    assert_eq!(inspected_json["resource_closure"], "closed");
+    assert_native_l1(&inspected_json["payload"]["skeletons"])?;
+
+    let built = execute_context_build(&host, &build_request, &stop)?;
+    assert_eq!(built.status(), ContextMapStatus::Partial);
+    assert_eq!(built.failure_code(), None);
+    let built_json: Value = serde_json::from_slice(built.canonical_bytes())?;
+    assert_eq!(built_json["schema"], "wow-service/context-build-result/1");
+    assert_eq!(built_json["operation"], "context_build");
+    assert_eq!(built_json["resource_closure"], "closed");
+    let payload = &built_json["payload"];
+    let pack = &payload["semantic_pack"];
+    assert_eq!(
+        pack["core"]["schema"],
+        "wow-context/semantic-pack/primary/1"
+    );
+    assert_eq!(
+        pack["core"]["profile"]["profile_id"],
+        PRIMARY_CONTEXT_PACK_PROFILE_ID
+    );
+    assert_native_l1(&pack["core"]["skeletons"])?;
+    let items = rows(&pack["core"]["items"])?;
+    for (kind, record, _, _, _) in &expected_supports {
+        let field = if *kind == "entity" { "node" } else { "edge" };
+        assert_eq!(
+            items
+                .iter()
+                .filter(|item| {
+                    let item_payload = &item["core"]["payload"];
+                    item_payload["kind"] == *kind && &item_payload[field] == record
+                })
+                .count(),
+            1,
+            "accepted API endpoint and UsesApi edge each enter the structural pack"
+        );
+    }
+    let artifacts = rows(&payload["rendered_artifacts"])?;
+    assert_eq!(artifacts.len(), 2);
+    for (artifact, profile_id) in artifacts.iter().zip([
+        PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+    ]) {
+        let core = &artifact["core"];
+        assert_eq!(core["profile"]["profile_id"], profile_id);
+        assert_eq!(core["semantic_pack_id"], pack["semantic_pack_id"]);
+        let content = core["content"].as_str().ok_or("rendered context content")?;
+        assert_eq!(core["byte_length"], content.len());
+        assert_eq!(
+            core["content_digest"],
+            ContentDigest::<CanonicalResult>::from_bytes(Sha256::digest(content.as_bytes()).into())
+                .to_string()
+        );
+    }
+    let json_content = artifacts[0]["core"]["content"]
+        .as_str()
+        .ok_or("JSON artifact")?;
+    assert_eq!(
+        json_content.as_bytes(),
+        wow_core::canonical_json_bytes(pack)?
+    );
+    let markdown = &artifacts[1]["core"];
+    let skeleton_records = rows(&markdown["trace"])?
+        .iter()
+        .filter(|record| record["template_id"] == "native_skeletons")
+        .collect::<Vec<_>>();
+    assert_eq!(skeleton_records.len(), 1);
+    let record = skeleton_records[0];
+    let start = usize::try_from(record["byte_start"].as_u64().ok_or("trace start")?)?;
+    let end = usize::try_from(record["byte_end"].as_u64().ok_or("trace end")?)?;
+    let line = markdown["content"]
+        .as_str()
+        .and_then(|content| content.get(start..end))
+        .ok_or("UTF-8 skeleton trace")?;
+    let quoted = line
+        .strip_prefix("SKELETONS ")
+        .and_then(|value| value.strip_suffix('\n'))
+        .ok_or("fixed Markdown skeleton framing")?;
+    let inner: String = serde_json::from_str(quoted)?;
+    let rendered_skeletons: Value = serde_json::from_str(&inner)?;
+    assert_eq!(rendered_skeletons, pack["core"]["skeletons"]);
+
+    let assert_refused = |result: &ContextMapResult,
+                          operation: &str,
+                          schema: &str,
+                          code: ServiceErrorCode,
+                          closure: &str|
+     -> TestResult {
+        assert_eq!(result.failure_code(), Some(code));
+        assert_eq!(
+            result.status(),
+            if code == ServiceErrorCode::Cancelled {
+                ContextMapStatus::Cancelled
+            } else {
+                ContextMapStatus::Failed
+            }
+        );
+        let value: Value = serde_json::from_slice(result.canonical_bytes())?;
+        assert_eq!(value["schema"], schema);
+        assert_eq!(value["operation"], operation);
+        assert_eq!(value["resource_closure"], closure);
+        assert!(value.get("payload").is_none());
+        Ok(())
+    };
+    for (operation, schema, result) in [
+        (
+            "context_inspect",
+            "wow-service/context-inspect-result/1",
+            execute_context_inspect(&wrong_host, &wrong_inspect_request, &stop)?,
+        ),
+        (
+            "context_build",
+            "wow-service/context-build-result/1",
+            execute_context_build(&wrong_host, &wrong_build_request, &stop)?,
+        ),
+    ] {
+        assert_refused(
+            &result,
+            operation,
+            schema,
+            ServiceErrorCode::IdentityMismatch,
+            "closed",
+        )?;
+    }
+    assert_refused(
+        &execute_context_build(&small_host, &build_request, &stop)?,
+        "context_build",
+        "wow-service/context-build-result/1",
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+    )?;
+    assert_refused(
+        &execute_context_build(&host, &build_request, &AtomicBool::new(true))?,
+        "context_build",
+        "wow-service/context-build-result/1",
+        ServiceErrorCode::Cancelled,
+        "not_acquired",
+    )?;
+    assert!(!root.0.exists());
     Ok(())
 }
 

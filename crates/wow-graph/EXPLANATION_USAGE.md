@@ -119,3 +119,19 @@ truncation remain explicit. This resolves retained core evidence, not full
 conflict/inference-rule records, source authenticity or runtime. Existing
 `execute` and its bytes are unchanged. Service/CLI usage and exact bounds:
 [GRAPH_EVIDENCE.md](../../apps/wow/GRAPH_EVIDENCE.md).
+
+An independently versioned accepted entity producer can supply original
+PlatformSource/Proven SourceObservation support through
+`GraphPartitionSourceObservations`. This sealed admission requires a genuine
+`GraphPartitionRead`, exact accepted proposal and final entity membership,
+matching partition implementation version, and exact evidence/source-handle sets.
+Derivations, other producer records and surplus support refuse. The native
+service caller separately qualifies original source authenticity.
+
+`GraphEvidenceCatalog::new_with_partition_source_observations` preserves the
+original context and evidence IDs and validates the combined catalog under the
+existing generation, record, source and DAG bounds. Only that exact admitted
+support can supplement the context's producer list. Its digest domain is
+`graph-evidence-catalog/partition-source-observations/1`, binding the partition
+digest and declared producer/version. The original `new` constructor, producer
+invariant and `graph-evidence-catalog/1` digest recipe remain unchanged.
