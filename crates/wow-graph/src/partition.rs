@@ -162,6 +162,17 @@ impl<'a> GraphPartitionRead<'a> {
         query.execute_on_read(self, stop)
     }
 
+    /// Evaluate a finite set of exact one-hop reads with one physical edge scan.
+    /// Results retain the original query order and each query's logical full-scan
+    /// counters, filters, truncation and coverage semantics.
+    pub fn neighbors_batch(
+        &self,
+        queries: &[crate::GraphNeighborReadQuery],
+        stop: &AtomicBool,
+    ) -> GraphResult<Vec<crate::GraphNeighborView<'a>>> {
+        crate::GraphNeighborReadQuery::execute_batch_on_read(queries, self, stop)
+    }
+
     /// Original retained support and admitted evidence; no source is reopened.
     pub fn explain_with_evidence(
         &self,
