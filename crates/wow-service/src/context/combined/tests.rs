@@ -487,3 +487,76 @@ fn platform_callable_selection_refuses_invalid_and_mixed_intent_before_acquisiti
     }
     Ok(())
 }
+
+#[test]
+fn platform_xml_handler_selection_is_closed_additive_and_recipe_incompatible() -> TestResult {
+    for level in ["l0", "l1", "both"] {
+        for omitted in [inspect(level, None)?, build(level, None)?] {
+            let request = ContextCombinedRequest::from_json_slice(
+                &serde_json::to_vec(&omitted)?,
+                &AtomicBool::new(false),
+            )?;
+            assert!(request.platform_root_facet.is_none());
+            assert_eq!(
+                wow_core::canonical_json_bytes(&request)?,
+                wow_core::canonical_json_bytes(&omitted)?,
+            );
+
+            let mut selected = omitted;
+            let key = if selected["operation"] == "inspect" {
+                "inspection"
+            } else {
+                "build"
+            };
+            selected[key]["platform_root_facet"] = json!("xml_handler_metadata");
+            let request = ContextCombinedRequest::from_json_slice(
+                &serde_json::to_vec(&selected)?,
+                &AtomicBool::new(false),
+            )?;
+            assert_eq!(
+                request.platform_root_facet,
+                Some(wow_context::PlatformRootFacet::XmlHandlerMetadata),
+            );
+            assert!(request.l0_recipe.is_none() && request.l1_recipe.is_none());
+            let expected = wow_core::canonical_json_bytes(&selected)?;
+            assert_eq!(wow_core::canonical_json_bytes(&request)?, expected);
+            let roundtrip =
+                ContextCombinedRequest::from_json_slice(&expected, &AtomicBool::new(false))?;
+            assert_eq!(wow_core::canonical_json_bytes(&roundtrip)?, expected);
+        }
+
+        for mut value in [inspect(level, None)?, build(level, None)?] {
+            let key = if value["operation"] == "inspect" {
+                "inspection"
+            } else {
+                "build"
+            };
+            for invalid in [
+                Value::Null,
+                json!(false),
+                json!(1),
+                json!([]),
+                json!({"xml_handler_metadata": null}),
+                json!("default"),
+                json!("unknown"),
+            ] {
+                value[key]["platform_root_facet"] = invalid;
+                refused(&value, ServiceErrorCode::InvalidRequest)?;
+            }
+            value[key]["platform_root_facet"] = json!("xml_handler_metadata");
+            for (field, profile) in [
+                ("l0_profile_id", PRIMARY_STATE_ROOT_L0_PROFILE_ID),
+                ("l1_profile_id", PRIMARY_STATE_DETAIL_L1_PROFILE_ID),
+                ("l1_profile_id", PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID),
+            ] {
+                value[key][field] = json!(profile);
+                refused(&value, ServiceErrorCode::InvalidRequest)?;
+                value[key]
+                    .as_object_mut()
+                    .ok_or("selection object")?
+                    .remove(field);
+            }
+        }
+    }
+    Ok(())
+}

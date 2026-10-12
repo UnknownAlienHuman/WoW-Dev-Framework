@@ -13,7 +13,11 @@ use wow_graph::{
 use wow_project::skeleton_input::{
     OpenSkeletonInputRequest, SkeletonInputNotEvaluated, SkeletonInputPage, SkeletonInputView,
 };
-use wow_project::{ProjectError, ProjectErrorCode, ProjectKind, graph::ProjectCallableMetadata};
+use wow_project::{
+    ProjectError, ProjectErrorCode, ProjectKind,
+    graph::{ProjectCallableMetadata, ProjectGraphInlineHandler, ProjectGraphScriptSource},
+    load::XmlScriptSource,
+};
 use wow_reference::{ReferenceConflict, ReferenceView, ReferenceViewError};
 
 use crate::budget::{Budget, canonical, checkpoint, encoded_len, exhausted, identity};
@@ -29,6 +33,7 @@ pub const PLATFORM_NATIVE_ONE_HOP_PROFILE_BYTES: &[u8] = br#"{"native":"genuine_
 #[serde(rename_all = "snake_case")]
 pub enum PlatformRootFacet {
     CallableMetadata,
+    XmlHandlerMetadata,
 }
 
 #[derive(Serialize)]
@@ -770,6 +775,266 @@ pub(crate) fn build_platform_root_callable_facet_on_budget<'m, 'a>(
         assertion,
         root: final_node,
         metadata,
+        source_handle,
+        evidence,
+        root_support,
+    };
+    budget.retain(&facet, stop)?;
+    Ok(facet)
+}
+
+/// Original accepted inline-handler metadata and custody; the borrowed source
+/// record contains identity/span metadata only and never a body.
+#[derive(Serialize)]
+pub(crate) struct PlatformRootXmlHandlerFacet<'m, 'a> {
+    selection: PlatformRootFacet,
+    interpretation: &'static str,
+    source_context: &'a GenerationContext,
+    assertion: &'a GraphAssertionRef,
+    root: &'a GraphNode,
+    handler: &'a ProjectGraphInlineHandler,
+    script_source: &'a ProjectGraphScriptSource,
+    source_handle: &'a SourceHandle,
+    evidence: &'a EvidenceRecord,
+    root_support: &'m GraphResolvedExplanation<'m>,
+}
+
+pub(crate) fn build_platform_root_xml_handler_facet_on_budget<'m, 'a>(
+    map: &'m PlatformMapArtifact<'a>,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<PlatformRootXmlHandlerFacet<'m, 'a>> {
+    checkpoint(stop)?;
+    let native_view: &'a SkeletonInputView<'a> = map.native_view;
+    let (native, accepted, _) = native_view.context_parts();
+    let source = native.source();
+    let root = map.page().neighborhood().root();
+    let root_support = map.page().root_support();
+    if root.kind() != "xml_source_handler" {
+        return Err(ContextError::new(ContextErrorCode::RootInvalid));
+    }
+    if source.context().context_id() != accepted.source_context_id()
+        || source.context().context_id() != native.scope().source_context_id
+    {
+        return Err(mismatch());
+    }
+    let explanation = root_support.explanation();
+    if !explanation.support_complete() || !explanation.derivation_complete() {
+        return Err(facet_missing());
+    }
+    if !explanation.conflicts().is_empty() {
+        return Err(facet_mismatch());
+    }
+
+    // Search only the exact root's original ProducerEntity receipts and native
+    // handler records. Reserve the complete cross-product before visiting it.
+    let supports = explanation.supports();
+    let handlers = source.inline_handlers();
+    budget.work(
+        handlers
+            .len()
+            .checked_add(1)
+            .and_then(|n| n.checked_mul(supports.len()))
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    let depth = |count: usize| count.max(1).ilog2() as usize + 1;
+    let address_depth = depth(native.charged_metadata_bytes());
+    let mut selected = None;
+    for support in supports {
+        checkpoint(stop)?;
+        let GraphAssertionSupport::ProducerEntity {
+            producer,
+            proposal,
+            accepted: receipt,
+            ..
+        } = support
+        else {
+            continue;
+        };
+        if receipt.node().kind() != root.kind() || receipt.node().owner_key() != root.owner_key() {
+            continue;
+        }
+        for handler in handlers {
+            checkpoint(stop)?;
+            budget.work(
+                handler
+                    .proposal_id
+                    .len()
+                    .checked_add(address_depth)
+                    .ok_or_else(exhausted)?,
+                stop,
+            )?;
+            if handler.proposal_id != proposal.proposal_id() {
+                continue;
+            }
+            if !handler.semantic_context.admits_static_source_association() {
+                return Err(facet_mismatch());
+            }
+            budget.retain(handler, stop)?;
+            let local = GraphLocalAssertion {
+                kind: GraphAssertionKind::Entity,
+                proposal_id: handler.proposal_id.clone().into(),
+            };
+            let assertion = native.assertion(&local).ok_or_else(facet_missing)?;
+            let GraphAssertionRef::Producer {
+                partition_id,
+                batch_id,
+                assertion: retained_local,
+            } = assertion
+            else {
+                return Err(facet_mismatch());
+            };
+            if partition_id.as_ref() != producer.partition_id
+                || batch_id.as_ref() != producer.batch_id
+            {
+                continue;
+            }
+            if retained_local != &local
+                || receipt.proposal_id() != proposal.proposal_id()
+                || proposal.proposal_id() != handler.proposal_id
+                || proposal.entity_kind_id() != "xml_source_handler"
+                || receipt.node().universe() != &native.scope().universe
+                || receipt.node().generation() != &native.scope().generation
+            {
+                return Err(facet_mismatch());
+            }
+            if selected
+                .replace((handler, assertion, *proposal, *receipt))
+                .is_some()
+            {
+                return Err(facet_mismatch());
+            }
+        }
+    }
+    let (handler, assertion, proposal, receipt) = selected.ok_or_else(facet_missing)?;
+
+    // Rebind this original accepted root into the held final candidate snapshot.
+    let snapshot = accepted.snapshot();
+    let evidence_count = receipt.node().evidence_ids().len();
+    let node_work = depth(snapshot.nodes().len())
+        .checked_add(8)
+        .and_then(|n| {
+            evidence_count
+                .checked_mul(depth(evidence_count) + 1)
+                .and_then(|e| n.checked_add(e))
+        })
+        .ok_or_else(exhausted)?;
+    budget.work(node_work, stop)?;
+    let original = receipt.node();
+    let node_material = (original, snapshot.universe(), snapshot.generation());
+    budget.retain(&node_material, stop)?;
+    let node_bytes = encoded_len(&node_material, budget.remaining_context_work(), stop)?;
+    budget.work(usize::try_from(node_bytes).map_err(|_| exhausted())?, stop)?;
+    let rebound = GraphNode::new(
+        snapshot.universe().clone(),
+        snapshot.generation().clone(),
+        original.kind(),
+        original.owner_key(),
+        original.evidence_ids().to_vec(),
+        snapshot.limits(),
+    )
+    .map_err(crate::error::graph_error)?;
+    let final_node = snapshot.node(rebound.node_id()).ok_or_else(facet_missing)?;
+    if !std::ptr::eq(final_node, root) {
+        return Err(facet_mismatch());
+    }
+
+    let script_sources = source.script_sources();
+    budget.work(script_sources.len(), stop)?;
+    let script_comparison_work = handler
+        .script_id
+        .len()
+        .checked_add(handler.document.len())
+        .and_then(|per_candidate| per_candidate.checked_mul(script_sources.len()))
+        .ok_or_else(exhausted)?;
+    budget.work(script_comparison_work, stop)?;
+    let mut matched_source = None;
+    for script_source in script_sources {
+        checkpoint(stop)?;
+        budget.work(1, stop)?;
+        if script_source.script_id == handler.script_id
+            && script_source.document == handler.document
+            && script_source.source_kind == XmlScriptSource::InlineBody
+            && script_source.source_handle_id == handler.source_handle_id
+            && script_source.evidence_id == handler.evidence_id
+            && matched_source.replace(script_source).is_some()
+        {
+            return Err(facet_mismatch());
+        }
+    }
+    let script_source = matched_source.ok_or_else(facet_missing)?;
+
+    // Charge both native catalog lookups and all support-membership comparisons
+    // before running them; the output keeps only the original borrowed records.
+    let handles = source.source_handles();
+    let evidence_records = source.evidence();
+    budget.work(
+        depth(handles.len())
+            .checked_add(depth(evidence_records.len()))
+            .and_then(|n| n.checked_add(script_source.source_handle_id.as_hash().len()))
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    let source_handle = handles
+        .get(&handler.source_handle_id)
+        .ok_or_else(facet_missing)?;
+    let evidence = evidence_records
+        .get(&handler.evidence_id)
+        .ok_or_else(facet_missing)?;
+    let evidence_resolution = root_support.evidence_resolution();
+    let contains_work = evidence_resolution
+        .source_handles()
+        .len()
+        .checked_add(evidence_resolution.evidence_records().len())
+        .and_then(|n| n.checked_add(proposal.source_handle_ids().len()))
+        .and_then(|n| n.checked_add(proposal.evidence_ids().len()))
+        .and_then(|n| n.checked_add(evidence.source_handle_ids().len()))
+        .ok_or_else(exhausted)?;
+    budget.work(contains_work, stop)?;
+    let comparison_bytes = encoded_len(
+        &(
+            handler,
+            script_source,
+            source_handle,
+            evidence,
+            evidence_resolution,
+        ),
+        budget
+            .remaining_metadata_bytes()?
+            .min(budget.remaining_context_work()),
+        stop,
+    )?;
+    budget.work(
+        usize::try_from(comparison_bytes).map_err(|_| exhausted())?,
+        stop,
+    )?;
+    if script_source.span != source_handle.span()
+        || source_handle.path().as_str() != handler.document
+        || evidence.context_id() != source.context().context_id()
+        || !proposal
+            .source_handle_ids()
+            .contains(&source_handle.handle_id())
+        || !proposal.evidence_ids().contains(&evidence.evidence_id())
+        || !evidence
+            .source_handle_ids()
+            .contains(&source_handle.handle_id())
+        || !evidence_resolution
+            .source_handles()
+            .contains(&source_handle)
+        || !evidence_resolution.evidence_records().contains(&evidence)
+    {
+        return Err(facet_mismatch());
+    }
+
+    let facet = PlatformRootXmlHandlerFacet {
+        selection: PlatformRootFacet::XmlHandlerMetadata,
+        interpretation: "original_accepted_root_xml_handler_metadata_no_receiver_or_runtime_resolution",
+        source_context: source.context(),
+        assertion,
+        root: final_node,
+        handler,
+        script_source,
         source_handle,
         evidence,
         root_support,

@@ -144,6 +144,13 @@ the selected facet; renderers preserve original states and semantic-pack identit
 Original native-page omissions remain page-scoped; no Reference/cross-universe
 link or runtime claim is added.
 
+The closed alternate value `xml_handler_metadata` selects an exact native
+`xml_source_handler` under the same admission/closure/Budget contract. It retains
+original `ProjectGraphInlineHandler`, matching `ProjectGraphScriptSource`, native
+handle/evidence and root support without source bodies or inferred receiver/runtime
+dispatch. The new facet stays in original Inspect/Build origins; omission and
+existing callable-selected bytes remain unchanged.
+
 The optional non-null `l0_profile_id` selects only
 `wow-context/primary-state-root-l0/1` with L0/GraphEntity. It invokes the original
 StateRootV1 L0 on the ordinary navigation map and continuing Budget. Native

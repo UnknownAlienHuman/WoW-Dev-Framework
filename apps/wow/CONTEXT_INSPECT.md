@@ -388,3 +388,10 @@ refuses with checked closure. Original declaration/signature states and support
 remain qualified to that root; unselected signatures remain `NotSelected`.
 Omission preserves existing bytes. The same explicit JSON-file transport and
 envelope output apply; the CLI does not resolve or reconstruct the facet.
+
+`inspection.platform_root_facet="xml_handler_metadata"` uses the same transport,
+default-Primary recipe and Budget for an exact native `xml_source_handler` root.
+It retains the original inline-handler/script-source records, native support,
+handle and evidence without source bodies or inferred receiver/runtime dispatch.
+Wrong-kind or missing custody refuses with checked closure; omission and the
+existing callable selection preserve their bytes.

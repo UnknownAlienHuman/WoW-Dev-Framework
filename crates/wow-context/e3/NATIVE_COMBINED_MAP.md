@@ -160,7 +160,7 @@ Selected behavioral verification is tracked in #122; full E3 acceptance remains 
 
 `inspection.platform_root_facet="callable_metadata"` explicitly requests the
 selected platform root's original native callable metadata. The closed optional
-field accepts this string only; null, other values and coexistence with explicit
+field accepts `callable_metadata` or `xml_handler_metadata`; null, other values and coexistence with explicit
 L0/L1 recipes refuse before acquisition. The ordinary Primary level/root rules
 remain: project roots use default L0, and L1/Both require an eligible GraphEntity.
 The platform root is independently supplied by the existing native query.
@@ -183,6 +183,24 @@ cross-universe bridge. Native joins and accepted-node lookup are precharged befo
 execution to the same construction Budget; retention, identity, pack, rendering
 and final delivery continue that ledger. Static callable metadata cannot prove
 runtime execution, loaded state, combat or taint safety.
+
+### Selected platform-root XML handler facet
+
+`inspection.platform_root_facet="xml_handler_metadata"` selects one exact native
+`xml_source_handler` root under the same default-Primary admission and continuing
+Budget. The supplemental `platform_root_xml_handler` retains original
+`ProjectGraphInlineHandler` and matching `ProjectGraphScriptSource` records,
+source context, assertion, accepted root, handle, evidence and root support.
+The join binds document, script ID and original support pair; it does not select
+an effective receiver or infer runtime dispatch. These records contain no source
+bodies. Original semantic context and conservative states remain unchanged.
+
+The already held Skeleton view supplies original producer receipts/native
+assertion addresses and exact final-node membership. Joins, identity checks and
+retention use the same Budget without another read, map or graph reconstruction.
+The original page's typed-metadata omission remains page-scoped. Missing custody,
+incompatible support or a wrong-kind root refuses with checked closure. Omission
+and the existing callable selection preserve their previous bytes.
 
 ## Selected combined semantic pack and rendering
 
@@ -213,7 +231,7 @@ Recipe fields cannot coexist. Explicit `l0_profile_id` selects only
 StateRootV1 owner on the navigation map and continuing Budget. Its kind/custody
 checks and original L0 schema/identity also govern pack/render; no L1 is emitted.
 Other explicit L0 profile/level/root combinations refuse before acquisition.
-`build.platform_root_facet="callable_metadata"` uses the same default-Primary
+`build.platform_root_facet="callable_metadata"` or `"xml_handler_metadata"` uses the same default-Primary
 admission and original platform-root facet described above. Explicit L0/L1 recipes
 cannot accompany it. The consuming pack retains it in original Inspect origins;
 None/JSON/Markdown share one semantic pack identity and never rebuild that facet.

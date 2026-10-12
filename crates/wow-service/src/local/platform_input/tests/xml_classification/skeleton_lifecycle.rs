@@ -3132,6 +3132,7 @@ fn combined_context_export_root(fixture: &FixtureRoot) -> TestResult<Option<Path
 }
 mod combined_reference_facts;
 mod combined_state_detail;
+mod xml_handler_preparation;
 
 // This witness reopens retained native owners only. It never recreates source,
 // runs an analyzer, publishes a fixture, or invokes a CLI/control campaign.

@@ -280,6 +280,12 @@ under the same continuing Budget. Acquired wrong-kind or missing native custody
 refuses with checked closure. Original states/support remain qualified to that
 root; None/JSON/Markdown retain the same original facet and semantic pack identity.
 Null/unknown values refuse before acquisition; omission preserves existing bytes.
+The alternate `platform_root_facet="xml_handler_metadata"` selects an exact native
+`xml_source_handler` and retains its original inline-handler/script-source
+metadata, handle/evidence and support in those same Inspect origins. It uses the
+same admission, continuing Budget and None/JSON/Markdown identity rules without
+source bodies or inferred receiver/runtime dispatch. The existing callable
+selection preserves its bytes.
 StateDetail retains its original nested
 `wow-context/l1-skeleton/primary-state-detail/1` schema and artifact ID;
 ReferenceFacts retains `wow-context/l1-skeleton/primary-reference-facts/1`,

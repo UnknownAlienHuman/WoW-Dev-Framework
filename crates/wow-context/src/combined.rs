@@ -11,8 +11,9 @@ use wow_reference::ReferenceView;
 use crate::budget::{Budget, canonical, checkpoint, exhausted, identity};
 use crate::platform::{
     PlatformContextInspectView, PlatformMapArtifact, PlatformRootCallableFacet, PlatformRootFacet,
-    bind_platform_context_universe_with_budget, build_platform_context_inspect_on_budget,
-    build_platform_root_callable_facet_on_budget, encode_retained,
+    PlatformRootXmlHandlerFacet, bind_platform_context_universe_with_budget,
+    build_platform_context_inspect_on_budget, build_platform_root_callable_facet_on_budget,
+    build_platform_root_xml_handler_facet_on_budget, encode_retained,
 };
 use crate::skeleton::{
     build_primary_reference_facts_on_budget, build_primary_skeletons_on_budget,
@@ -236,6 +237,8 @@ struct CombinedInspectCore<'m, 'p, 'f> {
     platform_inspect: PlatformContextInspectView<'m, 'f>,
     #[serde(skip_serializing_if = "Option::is_none")]
     platform_root_callable: Option<PlatformRootCallableFacet<'m, 'f>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    platform_root_xml_handler: Option<PlatformRootXmlHandlerFacet<'m, 'f>>,
     state: ProjectMapState,
     absence_authoritative: bool,
     cross_universe_relations: &'static str,
@@ -579,6 +582,13 @@ fn build_combined_inspect<'m, 'p, 'f>(
             build_platform_root_callable_facet_on_budget(&map.core.platform, budget, stop)?,
         ),
         None => None,
+        Some(PlatformRootFacet::XmlHandlerMetadata) => None,
+    };
+    let platform_root_xml_handler = match platform_root_facet {
+        Some(PlatformRootFacet::XmlHandlerMetadata) => Some(
+            build_platform_root_xml_handler_facet_on_budget(&map.core.platform, budget, stop)?,
+        ),
+        _ => None,
     };
     let state = if map.core.state == ProjectMapState::Truncated
         || primary_skeletons.state() == ProjectMapState::Truncated
@@ -594,6 +604,7 @@ fn build_combined_inspect<'m, 'p, 'f>(
         primary_skeletons,
         platform_inspect,
         platform_root_callable,
+        platform_root_xml_handler,
         state,
         absence_authoritative: false,
         cross_universe_relations: "not_evaluated",
