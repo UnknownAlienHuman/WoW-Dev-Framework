@@ -43,7 +43,7 @@ const HELP: &str = concat!(
     "  [--expansion-profile-id wow-context/primary-native-frontier/1 ",
     "--frontier graph-entity@<base64url-id> ...]\n",
     "  Expansion requires l1, an exact graph-entity@ root and 1..32 distinct frontiers; ",
-    "service validates initial-map membership. Inspect only.\n",
+    "service validates initial-map membership.\n",
     "  Same omitted-platform, complete reference/current guards and envelope-json transport. ",
     "Default L0 accepts project@ or an exact container graph-entity@. Select ",
     "wow-context/primary-state-root-l0/1 for an exact SavedVariables state-root graph-entity@; ",
@@ -52,11 +52,15 @@ const HELP: &str = concat!(
     "wow context build --native-host-config <host.json> --project-store <registration-key> ",
     "--publication current|store-generation:<ProjectStoreGenerationId> ",
     "--root <exact-root-token> --level l0|l1|both\n",
-    "  --context-profile-id wow-context/primary-structural-pack/1\n",
+    "  --context-profile-id wow-context/primary-structural-pack/1|wow-context/primary-frontier-pack/1\n",
     "  [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1] ",
     "[--l1-profile-id wow-context/primary-l1/1]\n",
-    "  [--renderer-profile-id wow-context/primary-pack-json/1]\n",
-    "  [--renderer-profile-id wow-context/primary-pack-markdown/1]\n",
+    "  [--renderer-profile-id wow-context/primary-pack-json/1|wow-context/primary-frontier-pack-json/1]\n",
+    "  [--renderer-profile-id wow-context/primary-pack-markdown/1|wow-context/primary-frontier-pack-markdown/1]\n",
+    "  [--expansion-profile-id wow-context/primary-native-frontier/1 ",
+    "--frontier graph-entity@<base64url-id> ...]\n",
+    "  Frontier pack requires expansion, l1 and an exact graph-entity@ root. ",
+    "Renderer IDs must match the selected pack family; frontiers follow the inspect bounds.\n",
     "  Select zero or one of each renderer; a duplicate renderer refuses syntax. ",
     "Both renderers are ordered JSON then Markdown independent of argv order.\n",
     "  Same explicit host/root, omitted platform, optional current guards, complete reference ",
@@ -237,7 +241,11 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             Command::Inspect => {
                 inspect::Options::accepts(option) || inspect::Options::accepts_expansion(option)
             }
-            Command::Build => inspect::Options::accepts(option) || build::Options::accepts(option),
+            Command::Build => {
+                inspect::Options::accepts(option)
+                    || inspect::Options::accepts_expansion(option)
+                    || build::Options::accepts(option)
+            }
         };
         if !common && !selected {
             return Err(match command {
@@ -876,8 +884,16 @@ mod tests {
         ] {
             let mut build = expansion_base.clone();
             *build.get_mut(1).ok_or("missing fixture command")? = "build".into();
+            push(
+                &mut build,
+                "--context-profile-id",
+                wow_service::context::PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID,
+            );
             push(&mut build, flag, value);
-            assert!(matches!(parse(build), Err("unknown context build option")));
+            assert!(matches!(
+                parse(build),
+                Err("context build expansion requires profile and frontier together")
+            ));
             let mut map = arguments();
             push(&mut map, flag, value);
             assert!(matches!(parse(map), Err("unknown context map option")));
@@ -1076,8 +1092,10 @@ mod tests {
         use wow_service::context::{
             ContextBuildRequest, ContextInspectLevel, ContextRenderSelection,
             PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
-            PRIMARY_CONTEXT_PACK_PROFILE_ID, PRIMARY_L0_PROFILE_ID,
-            PRIMARY_STATE_ROOT_L0_PROFILE_ID,
+            PRIMARY_CONTEXT_PACK_PROFILE_ID, PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
+            PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+            PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID, PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+            PRIMARY_L0_PROFILE_ID, PRIMARY_STATE_ROOT_L0_PROFILE_ID,
         };
 
         let mut values = arguments();
@@ -1248,6 +1266,185 @@ mod tests {
         assert!(matches!(
             parse(missing_profile),
             Err("context build requires --context-profile-id")
+        ));
+
+        // Syntax data only; acquired-map membership remains service-owned.
+        let frontier = format!(
+            "graph-entity@Z3JhcGgtbm9kZTpzaGEyNTY6{}Yg",
+            "YmJi".repeat(21)
+        );
+        let mut frontier_base = values.clone();
+        replace(&mut frontier_base, "--root", GRAPH_ROOT)?;
+        replace(&mut frontier_base, "--level", "l1")?;
+        replace(
+            &mut frontier_base,
+            "--context-profile-id",
+            PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID,
+        )?;
+        let mut frontier_pack = frontier_base.clone();
+        push(
+            &mut frontier_pack,
+            "--expansion-profile-id",
+            PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+        );
+        push(&mut frontier_pack, "--frontier", &frontier);
+        let expected_frontier = |render| -> Result<serde_json::Value, &'static str> {
+            let request = ContextBuildRequest::primary(
+                "context-cli-store",
+                ContextMapPublication::Current,
+                ContextInspectLevel::L1,
+                parse_root(GRAPH_ROOT)?,
+                render,
+                None,
+                None,
+            )
+            .map_err(|_| "expected frontier build fixture request refused")?
+            .with_frontier_expansion(vec![parse_root(&frontier)?])
+            .map_err(|_| "expected frontier build fixture request refused")?;
+            serde_json::to_value(request).map_err(|_| "request serialization failed")
+        };
+        let no_frontier_renderer = request_json(frontier_pack.clone())?;
+        assert_eq!(
+            no_frontier_renderer,
+            expected_frontier(ContextRenderSelection::None)?
+        );
+        assert_eq!(
+            no_frontier_renderer["context_profile_id"],
+            PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID
+        );
+        assert_eq!(
+            no_frontier_renderer["renderer_profile_ids"],
+            serde_json::json!([])
+        );
+        let mut rendered_frontier = frontier_pack.clone();
+        push(
+            &mut rendered_frontier,
+            "--renderer-profile-id",
+            PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+        );
+        push(
+            &mut rendered_frontier,
+            "--renderer-profile-id",
+            PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        );
+        let rendered = request_json(rendered_frontier.clone())?;
+        assert_eq!(rendered, expected_frontier(ContextRenderSelection::Both)?);
+        assert_eq!(
+            rendered["renderer_profile_ids"],
+            serde_json::json!([
+                PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
+                PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+            ])
+        );
+
+        let mut mixed_renderer = frontier_pack.clone();
+        push(
+            &mut mixed_renderer,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        );
+        assert!(matches!(
+            parse(mixed_renderer),
+            Err("context build renderer profile conflicts with context pack profile")
+        ));
+        let mut wrong_family = frontier_pack.clone();
+        replace(
+            &mut wrong_family,
+            "--context-profile-id",
+            PRIMARY_CONTEXT_PACK_PROFILE_ID,
+        )?;
+        assert!(matches!(
+            parse(wrong_family),
+            Err("context build pack profile conflicts with expansion selection")
+        ));
+        assert!(matches!(
+            parse(frontier_base.clone()),
+            Err("context build pack profile conflicts with expansion selection")
+        ));
+        let mut structural_with_frontier_renderer = values.clone();
+        push(
+            &mut structural_with_frontier_renderer,
+            "--renderer-profile-id",
+            PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        );
+        assert!(matches!(
+            parse(structural_with_frontier_renderer),
+            Err("context build renderer profile conflicts with context pack profile")
+        ));
+        push(
+            &mut rendered_frontier,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        );
+        assert!(matches!(
+            parse(rendered_frontier),
+            Err("duplicate context build option")
+        ));
+        let mut duplicate_frontier = frontier_pack.clone();
+        push(&mut duplicate_frontier, "--frontier", &frontier);
+        assert!(matches!(
+            parse(duplicate_frontier),
+            Err("duplicate context build frontier")
+        ));
+        let mut own_root = frontier_pack.clone();
+        replace(&mut own_root, "--frontier", GRAPH_ROOT)?;
+        assert!(matches!(
+            parse(own_root),
+            Err("context build frontier must exclude its initial root")
+        ));
+        let mut invalid_frontier = frontier_pack.clone();
+        replace(&mut invalid_frontier, "--frontier", PROJECT_ROOT)?;
+        assert!(matches!(
+            parse(invalid_frontier),
+            Err("context build frontier requires graph-entity token")
+        ));
+        let mut empty_frontier = frontier_pack.clone();
+        replace(&mut empty_frontier, "--frontier", "")?;
+        assert!(matches!(
+            parse(empty_frontier),
+            Err("invalid context option length")
+        ));
+        let mut project_scope = frontier_pack.clone();
+        replace(&mut project_scope, "--root", PROJECT_ROOT)?;
+        assert!(matches!(
+            parse(project_scope),
+            Err("context build expansion requires l1 and graph-entity root")
+        ));
+        for level in ["l0", "both"] {
+            let mut wrong_level = frontier_pack.clone();
+            replace(&mut wrong_level, "--level", level)?;
+            assert!(matches!(
+                parse(wrong_level),
+                Err("context build expansion requires l1 and graph-entity root")
+            ));
+        }
+
+        // One exact boundary: 32 distinct canonical IDs, then a 33rd refusal.
+        let mut bounded_frontier = frontier_base;
+        push(
+            &mut bounded_frontier,
+            "--expansion-profile-id",
+            PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+        );
+        for index in 0..33 {
+            let mut token = String::from("graph-entity@Z3JhcGgtbm9kZTpzaGEyNTY6");
+            for bit in 0..6 {
+                token.push_str(if index & (1 << bit) == 0 {
+                    "YmJi"
+                } else {
+                    "Y2Nj"
+                });
+            }
+            token.push_str(&"YmJi".repeat(15));
+            token.push_str("Yg");
+            push(&mut bounded_frontier, "--frontier", &token);
+            if index == 31 {
+                assert!(parse(bounded_frontier.clone()).is_ok());
+            }
+        }
+        assert!(matches!(
+            parse(bounded_frontier),
+            Err("context build frontier limit exceeded")
         ));
 
         // Individually valid Project+Both syntax reaches the service refusal boundary.

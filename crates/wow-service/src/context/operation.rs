@@ -16,6 +16,45 @@ use crate::{
     live_project::{LiveProjectRead, LiveProjectStore, ReadFailureClosure},
 };
 
+#[derive(Debug, Clone, Serialize)]
+pub(super) struct FrontierExpansion {
+    profile_id: &'static str,
+    frontier: Vec<wow_graph::GraphNodeId>,
+}
+
+impl FrontierExpansion {
+    pub(super) fn new(
+        level: super::ContextInspectLevel,
+        root: &ContextMapRoot,
+        frontier: Vec<ContextMapRoot>,
+    ) -> ServiceResult<Self> {
+        if level != super::ContextInspectLevel::L1
+            || !matches!(root, ContextMapRoot::GraphEntity(_))
+            || frontier.is_empty()
+            || frontier.len() > 32
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        let mut ids = frontier
+            .into_iter()
+            .map(|root| match root {
+                ContextMapRoot::GraphEntity(id) => Ok(id),
+                ContextMapRoot::Project(_) => Err(failure(ServiceErrorCode::InvalidRequest)),
+            })
+            .collect::<ServiceResult<Vec<_>>>()?;
+        ids.sort();
+        if ids.windows(2).any(|pair| pair[0] == pair[1])
+            || matches!(root, ContextMapRoot::GraphEntity(root) if ids.contains(root))
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        Ok(Self {
+            profile_id: super::PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+            frontier: ids,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ContextMapStatus {
@@ -383,6 +422,64 @@ pub(super) fn with_native_origins_with_catalog<T>(
     }
     let map = wow_context::build_project_map(selection, &receipts, stop).map_err(context_error)?;
     build(&map, &graph, &catalog)
+}
+
+/// Keep additional native receipts stable until the consuming callback returns.
+pub(super) fn with_native_frontier<T>(
+    universe: &wow_context::ContextUniverseSet<'_>,
+    read: &LiveProjectRead,
+    host: &ContextMapHostInput,
+    root: ContextMapRoot,
+    expansion: &FrontierExpansion,
+    stop: &AtomicBool,
+    build: impl FnOnce(wow_context::ContextExpansionStep<'_>) -> ServiceResult<T>,
+) -> ServiceResult<T> {
+    with_native_origins_with_catalog(
+        universe,
+        read,
+        host,
+        root,
+        true,
+        stop,
+        |map, graph, catalog| {
+            let mut plan = wow_context::plan_context_expansion(
+                universe,
+                map,
+                graph,
+                &expansion.frontier,
+                stop,
+            )
+            .map_err(context_error)?;
+            for index in 0..plan.navigation_queries().len() {
+                checkpoint(stop)?;
+                let view = graph
+                    .neighbors(&plan.navigation_queries()[index], stop)
+                    .map_err(graph_error)?;
+                plan.admit_neighborhood(view, stop).map_err(context_error)?;
+            }
+            let mut prepared =
+                wow_context::prepare_context_expansion(plan, stop).map_err(context_error)?;
+            let mut receipts = Vec::with_capacity(prepared.explanation_queries().len());
+            for index in 0..prepared.explanation_queries().len() {
+                checkpoint(stop)?;
+                let receipt = graph
+                    .explain_with_evidence(
+                        &prepared.explanation_queries()[index],
+                        catalog,
+                        host.limits.evidence,
+                        stop,
+                    )
+                    .map_err(graph_error)?;
+                prepared
+                    .admit_explanation(&receipt, stop)
+                    .map_err(context_error)?;
+                receipts.push(receipt);
+            }
+            let step = wow_context::expand_context_frontier(prepared, &receipts, stop)
+                .map_err(context_error)?;
+            build(step)
+        },
+    )
 }
 
 /// Digest of the exact native CurrentPublication canonical observation, not

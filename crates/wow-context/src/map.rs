@@ -26,6 +26,7 @@ pub const PRIMARY_PROJECT_MAP_SCHEMA: &str = "wow-context/project-map/primary-pr
 
 mod expansion;
 mod project_navigation;
+pub(crate) use expansion::{ContextExpansionArtifact, ExpansionItem};
 pub use expansion::{
     ContextExpansionPlan, ContextExpansionPreparation, ContextExpansionStep,
     PRIMARY_FRONTIER_EXPANSION_PROFILE, expand_context_frontier, plan_context_expansion,

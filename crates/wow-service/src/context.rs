@@ -11,7 +11,9 @@ mod tests;
 pub use build::{
     ContextBuildRequest, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_PACK_PROFILE_ID,
-    execute_context_build,
+    PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
+    PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+    PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID, execute_context_build,
 };
 pub use host::{CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_HOST_SCHEMA, ContextMapHostInput};
 pub use inspect::{ContextInspectRequest, execute_context_inspect};

@@ -32,7 +32,11 @@ No source reparsing, source excerpts or runtime observations are added.
 `ContextExpansionStep` exposes the original `skeletons()`, `expansion_id()`,
 `canonical_bytes()` and `state()`; decoded rows are not owner authority.
 `remaining_metadata_bytes()` exposes the actual post-artifact allowance for the
-one final service-envelope preflight, without changing canonical artifact bytes.
+inspect service-envelope preflight, without changing canonical artifact bytes.
+The consuming [frontier pack API](NATIVE_PRIMARY_FRONTIER_PACK.md) moves the
+original skeletons, exact expansion artifact and actual private Budget once;
+packing/rendering continues that ledger rather than reconstructing it from this
+scalar allowance. Original inspect bytes remain unchanged.
 
 The expansion artifact schema is `wow-context/primary-frontier-expansion/1`.
 The initial L1 and its origin map remain unchanged. Aggregate origins have schema
@@ -71,7 +75,7 @@ The one-round profile bound ends the operation, including an empty added set.
 It does not classify that outcome as NoNewEvidence, CompleteForRequest or an
 authoritative negative about other neighborhoods, generations or runtime.
 
-## Inspect consumer and compatibility
+## Inspect and pack consumers
 
 The [inspect route](../../../apps/wow/CONTEXT_INSPECT.md) requires
 `--expansion-profile-id wow-context/primary-native-frontier/1` together with
@@ -85,6 +89,8 @@ frontiers/profile; absent selection fields are omitted. Original initial
 skeleton, map and unselected inspect transport bytes remain unchanged. No
 project/graph/Reference producer, registry, persistence or replay recipe changes.
 
-Expanded build/pack/continue is the next consumer under #122, not implemented
-by this inspect selection. Broader stages, progressive expansion, Reference
-enrichment, platform composition and full Goal qualification remain open.
+The [selected frontier build/pack/render consumer](NATIVE_PRIMARY_FRONTIER_PACK.md)
+consumes this native step under its own named family; its functional verification
+is pending root. Inspect still returns its unchanged artifact, not a pack.
+Further rounds/continuation, broader stages, Reference enrichment, platform
+composition and full E3-B/Tier A/X/Goal qualification remain open under #122.

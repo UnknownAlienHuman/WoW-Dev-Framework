@@ -8,7 +8,10 @@ use sha2::{Digest as _, Sha256};
 use wow_core::{CanonicalResult, ContentDigest};
 
 use crate::budget::{Budget, canonical, checkpoint, exhausted};
-use crate::pack::{ContextSemanticPack, JSON_PROFILE, MARKDOWN_PROFILE, PackCore, RendererProfile};
+use crate::pack::{
+    ContextSemanticPack, FRONTIER_JSON_PROFILE, FRONTIER_MARKDOWN_PROFILE, JSON_PROFILE,
+    MARKDOWN_PROFILE, PackCore, RendererProfile,
+};
 use crate::{ContextError, ContextErrorCode, ContextResult};
 
 const SCHEMA: &str = "wow-context/rendered-context-artifact/primary/1";
@@ -103,10 +106,12 @@ enum Format {
     Markdown,
 }
 impl Format {
-    fn profile(self) -> &'static RendererProfile {
-        match self {
-            Self::Json => &JSON_PROFILE,
-            Self::Markdown => &MARKDOWN_PROFILE,
+    fn profile(self, frontier: bool) -> &'static RendererProfile {
+        match (self, frontier) {
+            (Self::Json, false) => &JSON_PROFILE,
+            (Self::Markdown, false) => &MARKDOWN_PROFILE,
+            (Self::Json, true) => &FRONTIER_JSON_PROFILE,
+            (Self::Markdown, true) => &FRONTIER_MARKDOWN_PROFILE,
         }
     }
 }
@@ -364,6 +369,16 @@ fn prepare<'p>(
             None,
             &core.skeletons,
         )?;
+        if let Some(expansion) = &core.expansion {
+            planner.add(
+                expansion.expansion_id(),
+                "native_frontier_expansion",
+                "EXPANSION",
+                &["core.expansion"],
+                None,
+                expansion,
+            )?;
+        }
         for (index, item) in core.items.iter().enumerate() {
             checkpoint(stop)?;
             let (template, label) = match item.core.payload.template() {
@@ -497,13 +512,13 @@ struct CoreRef<'p, 'r, 's> {
 fn core_ref<'p, 'r, 's>(
     id: &'p str,
     plan: &'r Plan<'r>,
-    format: Format,
+    profile: &'static RendererProfile,
     stop: &'s AtomicBool,
 ) -> CoreRef<'p, 'r, 's> {
     CoreRef {
         schema: SCHEMA,
         semantic_pack_id: id,
-        profile: format.profile(),
+        profile,
         content: Content {
             records: &plan.records,
         },
@@ -595,8 +610,9 @@ fn render(
         core,
         canonical_bytes,
     };
+    let profile = format.profile(core.expansion.is_some());
     let plan = prepare(&input, format, budget, limit, stop)?;
-    let core = core_ref(id, &plan, format, stop);
+    let core = core_ref(id, &plan, profile, stop);
     pass(&plan, budget, stop)?;
     budget.retain(&core, stop)?;
     pass(&plan, budget, stop)?;
@@ -633,7 +649,7 @@ fn render(
     let complete_core = CompleteCoreRef {
         schema: SCHEMA,
         semantic_pack_id: id,
-        profile: format.profile(),
+        profile,
         content: &output.text,
         byte_length: plan.byte_length,
         content_digest: plan.digest,
@@ -679,7 +695,7 @@ fn render(
         core: RenderCore {
             schema: SCHEMA,
             semantic_pack_id: id.into(),
-            profile: format.profile(),
+            profile,
             content: output.text.into_boxed_str(),
             byte_length: plan.byte_length,
             content_digest: plan.digest,
@@ -760,14 +776,17 @@ pub fn validate_rendered_context_artifact(
         return Err(encoding());
     }
     let format = match artifact.core.profile.profile_id {
-        crate::pack::PRIMARY_CONTEXT_JSON_RENDERER_PROFILE => Format::Json,
-        crate::pack::PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE => Format::Markdown,
+        crate::pack::PRIMARY_CONTEXT_JSON_RENDERER_PROFILE
+        | crate::pack::PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE => Format::Json,
+        crate::pack::PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE
+        | crate::pack::PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE => Format::Markdown,
         _ => return Err(encoding()),
     };
     // Profiles are exact compiled descriptors, not caller-selectable templates.
-    budget.work(format.profile().templates.len(), stop)?;
-    budget.retain(&(artifact.core.profile, format.profile()), stop)?;
-    if canonical(artifact.core.profile, limit, stop)? != canonical(format.profile(), limit, stop)? {
+    let profile = format.profile(core.expansion.is_some());
+    budget.work(profile.templates.len(), stop)?;
+    budget.retain(&(artifact.core.profile, profile), stop)?;
+    if canonical(artifact.core.profile, limit, stop)? != canonical(profile, limit, stop)? {
         return Err(encoding());
     }
     let expected = prepare(&input, format, budget, limit, stop)?;

@@ -355,7 +355,7 @@ pub fn prepare_context_expansion<'a>(
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize)]
-struct InclusionReason<'a> {
+pub(crate) struct InclusionReason<'a> {
     kind: &'static str,
     root_id: &'a GraphNodeId,
 }
@@ -378,7 +378,7 @@ fn reason<'a>(
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-enum ExpansionItem<'a> {
+pub(crate) enum ExpansionItem<'a> {
     Entity {
         node: &'a GraphNode,
         previously_selected: bool,
@@ -429,7 +429,7 @@ pub struct ContextExpansionStep<'a> {
     #[serde(skip)]
     canonical_bytes: Box<[u8]>,
     #[serde(skip)]
-    remaining_metadata_bytes: u64,
+    budget: Budget,
 }
 impl<'a> ContextExpansionStep<'a> {
     pub fn skeletons(&self) -> &PrimarySkeletons<'a, 'a> {
@@ -447,7 +447,64 @@ impl<'a> ContextExpansionStep<'a> {
     /// Remaining cumulative allowance for the consumer envelope, after the
     /// original artifacts, aggregate rows and canonical expansion are retained.
     pub fn remaining_metadata_bytes(&self) -> u64 {
-        self.remaining_metadata_bytes
+        self.core
+            .budget
+            .max_metadata_bytes
+            .saturating_sub(self.budget.retained_bytes)
+    }
+    pub(crate) fn into_pack_parts(
+        self,
+        universe: &ContextUniverseSet<'a>,
+        root: &crate::L0Scope,
+        stop: &AtomicBool,
+    ) -> ContextResult<(
+        ContextExpansionArtifact<'a>,
+        PrimarySkeletons<'a, 'a>,
+        Budget,
+    )> {
+        checkpoint(stop)?;
+        if !open_project_map_view(&self.core.origins, stop)?.bound_to(universe) {
+            return Err(ContextError::new(ContextErrorCode::UniverseMismatch));
+        }
+        if !matches!(root, crate::L0Scope::Entity(id) if id == self.core.root.node_id()) {
+            return Err(ContextError::new(ContextErrorCode::RootInvalid));
+        }
+        Ok((
+            ContextExpansionArtifact {
+                expansion_id: self.expansion_id,
+                core: self.core,
+                canonical_bytes: self.canonical_bytes,
+            },
+            self.skeletons,
+            self.budget,
+        ))
+    }
+}
+
+/// The unchanged immutable native artifact moved from its sealed step. It has
+/// no public constructor and never stores references into its own fields.
+#[derive(Serialize)]
+pub(crate) struct ContextExpansionArtifact<'a> {
+    expansion_id: Box<str>,
+    core: ExpansionCore<'a>,
+    #[serde(skip)]
+    canonical_bytes: Box<[u8]>,
+}
+impl<'a> ContextExpansionArtifact<'a> {
+    pub(crate) fn expansion_id(&self) -> &str {
+        &self.expansion_id
+    }
+    pub(crate) fn origins(&self) -> &ProjectMap<'a> {
+        &self.core.origins
+    }
+    pub(crate) fn items(&self) -> &[ExpansionItem<'a>] {
+        &self.core.items
+    }
+    pub(crate) fn state(&self) -> ProjectMapState {
+        self.core.state
+    }
+    pub(crate) fn canonical_bytes(&self) -> &[u8] {
+        &self.canonical_bytes
     }
 }
 
@@ -611,18 +668,25 @@ pub fn expand_context_frontier<'a>(
         limits.max_metadata_bytes,
         stop,
     )?;
+    #[derive(Serialize)]
+    struct ArtifactRef<'p, 'a> {
+        expansion_id: &'p str,
+        core: &'p ExpansionCore<'a>,
+    }
+    budget.retain(
+        &ArtifactRef {
+            expansion_id: &expansion_id,
+            core: &core,
+        },
+        stop,
+    )?;
     let mut step = ContextExpansionStep {
         expansion_id,
         core,
         skeletons: prepared.skeletons,
         canonical_bytes: Box::new([]),
-        remaining_metadata_bytes: 0,
+        budget,
     };
-    budget.retain(&step, stop)?;
-    step.remaining_metadata_bytes = limits
-        .max_metadata_bytes
-        .checked_sub(budget.retained_bytes)
-        .ok_or_else(exhausted)?;
     step.canonical_bytes = canonical(&step, limits.max_metadata_bytes, stop)?.into_boxed_slice();
     Ok(step)
 }

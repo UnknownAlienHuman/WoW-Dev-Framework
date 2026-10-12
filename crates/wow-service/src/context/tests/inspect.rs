@@ -1684,6 +1684,363 @@ fn assert_state_frontier_expansion(
     Ok(payload.clone())
 }
 
+const FRONTIER_PACK_PROFILE: &str = "wow-context/primary-frontier-pack/1";
+const FRONTIER_JSON_PROFILE: &str = "wow-context/primary-frontier-pack-json/1";
+const FRONTIER_MARKDOWN_PROFILE: &str = "wow-context/primary-frontier-pack-markdown/1";
+
+fn assert_frontier_pack(
+    result: &ContextMapResult,
+    inspected: &Value,
+    native: &StateConsumerExpected,
+    scratch: &Scratch,
+) -> TestResult<Value> {
+    assert_eq!(
+        result.status(),
+        ContextMapStatus::Partial,
+        "selected build refusal: {:?}",
+        result.failure_code()
+    );
+    assert_eq!(result.failure_code(), None);
+    let envelope: Value = serde_json::from_slice(result.canonical_bytes())?;
+    assert_eq!(envelope["schema"], "wow-service/context-build-result/1");
+    assert_eq!(envelope["operation"], "context_build");
+    assert_eq!(envelope["resource_closure"], "closed");
+    assert!(envelope.get("failure_code").is_none());
+    let payload = &envelope["payload"];
+    assert_eq!(
+        payload["publication_set_id"],
+        native.records["publication_set_id"]
+    );
+    assert_eq!(
+        payload["store_generation_id"],
+        inspected["store_generation_id"]
+    );
+    assert_eq!(
+        payload["current_at_acquisition"],
+        serde_json::to_value(&native.current)?
+    );
+    assert_eq!(
+        payload["current_record_digest"],
+        observed_current_digest(&native.current)?
+    );
+    let pack = &payload["semantic_pack"];
+    assert_eq!(
+        payload["semantic_pack_byte_length"],
+        wow_core::canonical_json_bytes(pack)?.len()
+    );
+    let core = &pack["core"];
+    assert_eq!(
+        core["schema"],
+        "wow-context/semantic-pack/primary-frontier/1"
+    );
+    assert_eq!(core["profile"]["profile_id"], FRONTIER_PACK_PROFILE);
+    assert_eq!(core["profile"]["source_bodies"], "excluded");
+    assert_eq!(core["state"], "partial");
+    assert_eq!(core["absence_authoritative"], false);
+    assert_eq!(core["skeletons"], inspected["skeletons"]);
+    assert_eq!(
+        core["expansion"], inspected["expansion"],
+        "exact original Step, including all reasons, native support and omissions"
+    );
+    let expansion = &core["expansion"];
+    assert_eq!(
+        core["request"]["core"]["expansion_id"],
+        expansion["expansion_id"]
+    );
+    let origins = &expansion["core"]["origins"];
+    assert_eq!(core["universe_set_id"], origins["core"]["universe_set_id"]);
+    let selected = rows(&core["items"])?;
+    let original = rows(&expansion["core"]["items"])?;
+    let trace = rows(&core["selection_trace"])?;
+    assert_eq!(selected.len(), original.len());
+    assert_eq!(trace.len(), selected.len());
+    let mut seen = BTreeSet::new();
+    for (index, (item, selection)) in selected.iter().zip(trace).enumerate() {
+        let item_core = &item["core"];
+        let binding = json!({"expansion_id":expansion["expansion_id"],"item_index":index});
+        assert_eq!(
+            item_core["schema"],
+            "wow-context/context-item/primary-frontier/1"
+        );
+        assert_eq!(item_core["expansion"], binding);
+        assert_eq!(selection["expansion"], binding);
+        assert_eq!(item_core["origin_map_id"], origins["project_map_id"]);
+        assert_eq!(selection["origin_map_id"], origins["project_map_id"]);
+        assert_eq!(selection["item_id"], item["context_item_id"]);
+        assert_eq!(selection["reason"], item_core["inclusion_reason"]);
+        assert_eq!(selection["required"], true);
+        assert_eq!(item_core["root"], core["request"]["core"]["root"]);
+        assert_eq!(item_core["universe_set_id"], core["universe_set_id"]);
+        let row = &original[index];
+        let expected_payload = match row["kind"].as_str() {
+            Some("entity") => json!({"kind":"entity","node":row["node"]}),
+            Some("relation") => json!({"kind":"relation","edge":row["edge"]}),
+            _ => return Err("non-native expansion item".into()),
+        };
+        assert_eq!(item_core["payload"], expected_payload);
+        assert_eq!(
+            item_core["payload_digest"],
+            ContentDigest::<CanonicalResult>::from_bytes(wow_core::domain_separated_digest(
+                "wow-context/context-item-payload/1",
+                &expected_payload
+            )?)
+            .to_string()
+        );
+        assert!(seen.insert(item["context_item_id"].as_str().ok_or("item ID")?));
+        assert!(!rows(&row["reasons"])?.is_empty());
+        assert!(row["previously_selected"].is_boolean());
+    }
+    assert_eq!(
+        core["budget"]["reservation_basis"],
+        "before_semantic_pack_finalization"
+    );
+    assert_eq!(
+        payload["operation_budget_usage"]["reservation_basis"],
+        "before_service_delivery"
+    );
+    for resource in ["work_reserved", "bytes_reserved"] {
+        assert!(
+            core["budget"][resource]
+                .as_u64()
+                .ok_or("pack reservation")?
+                > expansion["core"]["budget"][resource]
+                    .as_u64()
+                    .ok_or("Step reservation")?
+        );
+        assert!(
+            payload["operation_budget_usage"][resource]
+                .as_u64()
+                .ok_or("delivery usage")?
+                >= core["budget"][resource]
+                    .as_u64()
+                    .ok_or("pack reservation")?
+        );
+    }
+    let text = std::str::from_utf8(result.canonical_bytes())?;
+    let root = serde_json::to_string(&scratch.root.to_string_lossy())?;
+    assert!(!text.contains(root.trim_matches('"')));
+    assert!(!text.contains("project_store_root"));
+    for body in [STATE_TOC, STATE_LUA] {
+        assert!(!text.contains(&serde_json::to_string(body)?));
+    }
+    Ok(payload.clone())
+}
+
+fn assert_frontier_render(artifact: &Value, pack: &Value, markdown: bool) -> TestResult {
+    let core = &artifact["core"];
+    let content = core["content"].as_str().ok_or("rendered content")?;
+    assert_eq!(
+        core["schema"],
+        "wow-context/rendered-context-artifact/primary/1"
+    );
+    assert_eq!(core["semantic_pack_id"], pack["semantic_pack_id"]);
+    assert_eq!(core["byte_length"], content.len());
+    assert_eq!(
+        core["content_digest_basis"],
+        "sha256_exact_rendered_utf8_bytes"
+    );
+    assert_eq!(
+        core["content_digest"],
+        ContentDigest::<CanonicalResult>::from_bytes(Sha256::digest(content.as_bytes()).into())
+            .to_string()
+    );
+    assert_eq!(core["profile"]["rendering_loss"], "none");
+    assert_eq!(core["profile"]["semantic_schema"], pack["core"]["schema"]);
+    assert_eq!(
+        core["profile"]["profile_id"],
+        if markdown {
+            FRONTIER_MARKDOWN_PROFILE
+        } else {
+            FRONTIER_JSON_PROFILE
+        }
+    );
+    let trace = rows(&core["trace"])?;
+    let mut end = 0usize;
+    for record in trace {
+        let start = usize::try_from(record["byte_start"].as_u64().ok_or("range start")?)?;
+        let next = usize::try_from(record["byte_end"].as_u64().ok_or("range end")?)?;
+        assert_eq!(start, end);
+        assert!(next > start);
+        content.get(start..next).ok_or("UTF-8 record boundary")?;
+        end = next;
+    }
+    assert_eq!(end, content.len());
+    if !markdown {
+        assert_eq!(content.as_bytes(), wow_core::canonical_json_bytes(pack)?);
+        assert_eq!(serde_json::from_str::<Value>(content)?, *pack);
+        assert_eq!(
+            core["trace"],
+            json!([{
+                "record_id":pack["semantic_pack_id"], "template_id":"canonical_pack_json",
+                "semantic_fields":["semantic_pack_id","core"], "byte_start":0, "byte_end":content.len()
+            }])
+        );
+        return Ok(());
+    }
+    let mut specifications = vec![
+        (
+            "pack_header",
+            "PACK",
+            vec!["semantic_pack_id", "core.schema"],
+            None,
+        ),
+        ("pack_profile", "PROFILE", vec!["core.profile"], None),
+        (
+            "universe_binding",
+            "UNIVERSE",
+            vec!["core.universe_set_id", "core.binding"],
+            None,
+        ),
+        ("pack_request", "REQUEST", vec!["core.request"], None),
+        (
+            "boundary_notice",
+            "BOUNDARY",
+            vec!["core.boundary_notice"],
+            None,
+        ),
+        (
+            "native_skeletons",
+            "SKELETONS",
+            vec!["core.skeletons"],
+            None,
+        ),
+        (
+            "native_frontier_expansion",
+            "EXPANSION",
+            vec!["core.expansion"],
+            None,
+        ),
+    ];
+    for (index, item) in rows(&pack["core"]["items"])?.iter().enumerate() {
+        let (template, label) = match item["core"]["payload"]["kind"].as_str() {
+            Some("entity") => ("native_entity_item", "ENTITY"),
+            Some("relation") => ("native_relation_item", "RELATION"),
+            _ => return Err("non-native pack item".into()),
+        };
+        specifications.push((template, label, vec!["core.items"], Some(index)));
+    }
+    specifications.extend([
+        (
+            "selection_trace",
+            "SELECTION_TRACE",
+            vec!["core.selection_trace"],
+            None,
+        ),
+        (
+            "coverage_and_omissions",
+            "COVERAGE",
+            vec!["core.omissions", "core.state", "core.absence_authoritative"],
+            None,
+        ),
+        ("pack_budget", "BUDGET", vec!["core.budget"], None),
+    ]);
+    assert_eq!(trace.len(), specifications.len());
+    let mut reconstructed = json!({"semantic_pack_id":"","core":{"items":[]}});
+    for (record, (template, label, fields, item_index)) in trace.iter().zip(specifications) {
+        assert_eq!(record["template_id"], template);
+        assert_eq!(record["semantic_fields"], json!(fields));
+        assert_eq!(
+            record.get("item_index"),
+            item_index.map(|index| json!(index)).as_ref()
+        );
+        let expected_id = if template == "native_frontier_expansion" {
+            &pack["core"]["expansion"]["expansion_id"]
+        } else {
+            item_index.map_or(&pack["semantic_pack_id"], |index| {
+                &pack["core"]["items"][index]["context_item_id"]
+            })
+        };
+        assert_eq!(&record["record_id"], expected_id);
+        let start = usize::try_from(record["byte_start"].as_u64().ok_or("record start")?)?;
+        let end = usize::try_from(record["byte_end"].as_u64().ok_or("record end")?)?;
+        let line = content.get(start..end).ok_or("complete Markdown record")?;
+        assert_eq!(line.bytes().filter(|byte| *byte == b'\n').count(), 1);
+        let quoted = line
+            .strip_prefix(label)
+            .and_then(|rest| rest.strip_prefix(' '))
+            .and_then(|rest| rest.strip_suffix('\n'))
+            .ok_or("fixed Markdown framing")?;
+        let inner: String = serde_json::from_str(quoted)?;
+        let value: Value = serde_json::from_str(&inner)?;
+        // Decoding verifies presentation only; all authority is retained native custody.
+        let rebuilt = &mut reconstructed["core"];
+        match template {
+            "pack_header" => {
+                assert_eq!(value.as_object().ok_or("pack header")?.len(), 3);
+                assert_eq!(value["item_count"], rows(&pack["core"]["items"])?.len());
+                rebuilt["schema"] = value["schema"].clone();
+                reconstructed["semantic_pack_id"] = value["semantic_pack_id"].clone();
+            }
+            "pack_profile" => rebuilt["profile"] = value,
+            "universe_binding" => {
+                assert_eq!(rows(&value)?.len(), 2);
+                rebuilt["universe_set_id"] = value[0].clone();
+                rebuilt["binding"] = value[1].clone();
+            }
+            "pack_request" => rebuilt["request"] = value,
+            "boundary_notice" => rebuilt["boundary_notice"] = value,
+            "native_skeletons" => rebuilt["skeletons"] = value,
+            "native_frontier_expansion" => rebuilt["expansion"] = value,
+            "native_entity_item" | "native_relation_item" => {
+                assert_eq!(
+                    rows(&rebuilt["items"])?.len(),
+                    item_index.ok_or("item index")?
+                );
+                rebuilt["items"]
+                    .as_array_mut()
+                    .ok_or("reconstructed items")?
+                    .push(value);
+            }
+            "selection_trace" => rebuilt["selection_trace"] = value,
+            "coverage_and_omissions" => {
+                assert_eq!(rows(&value)?.len(), 3);
+                rebuilt["omissions"] = value[0].clone();
+                rebuilt["state"] = value[1].clone();
+                rebuilt["absence_authoritative"] = value[2].clone();
+            }
+            "pack_budget" => rebuilt["budget"] = value,
+            _ => return Err("unknown Markdown record".into()),
+        }
+    }
+    assert_eq!(
+        reconstructed, *pack,
+        "including the exact original expansion Step"
+    );
+    assert_eq!(
+        wow_core::canonical_json_bytes(&reconstructed)?,
+        wow_core::canonical_json_bytes(pack)?
+    );
+    Ok(())
+}
+
+fn assert_frontier_build_refused(
+    host: &ContextMapHostInput,
+    request: &ContextBuildRequest,
+    code: ServiceErrorCode,
+    closure: &str,
+    stop: &AtomicBool,
+) -> TestResult {
+    let result = execute_context_build(host, request, stop)?;
+    assert_eq!(result.failure_code(), Some(code));
+    assert_eq!(
+        result.status(),
+        if code == ServiceErrorCode::Cancelled {
+            ContextMapStatus::Cancelled
+        } else {
+            ContextMapStatus::Failed
+        }
+    );
+    let envelope: Value = serde_json::from_slice(result.canonical_bytes())?;
+    assert_eq!(envelope["schema"], "wow-service/context-build-result/1");
+    assert_eq!(envelope["resource_closure"], closure);
+    assert_eq!(envelope["failure_code"], serde_json::to_value(code)?);
+    assert!(
+        envelope.get("payload").is_none(),
+        "no pack or renderer draft escapes"
+    );
+    Ok(())
+}
+
 #[test]
 fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_budget() -> TestResult
 {
@@ -1725,8 +2082,8 @@ fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_bud
     let frontier: GraphNodeId = serde_json::from_value(account["node"]["node_id"].clone())?;
     let outside: GraphNodeId = serde_json::from_value(character["node"]["node_id"].clone())?;
     let mut host_json = host_value(&store_root, &profile, &reference);
-    host_json["limits"]["max_context_work"] = json!(8_000_000);
-    host_json["limits"]["max_metadata_bytes"] = json!(4 * 1024 * 1024);
+    host_json["limits"]["max_context_work"] = json!(32_000_000);
+    host_json["limits"]["max_metadata_bytes"] = json!(8 * 1024 * 1024);
     let host = decode_host(&host_json, &stop)?;
     let baseline_request = exact_inspect_request(
         &publication.generation_id,
@@ -1817,6 +2174,152 @@ fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_bud
             .any(|row| row["kind"] == "entity" && row["node"] == character["node"]),
         "one round does not expand the new TOC-file neighbor"
     );
+    // Continue this same source-absent native lifecycle through the selected
+    // pack. Identical finite caller limits apply to all renderer selections.
+    let mut build_requests = Vec::new();
+    let mut build_results = Vec::new();
+    let mut build_payloads = Vec::new();
+    for render in [
+        ContextRenderSelection::None,
+        ContextRenderSelection::Json,
+        ContextRenderSelection::Markdown,
+        ContextRenderSelection::Both,
+    ] {
+        let build_request = ContextBuildRequest::primary(
+            STORE_ID,
+            ContextMapPublication::store_generation(publication.generation_id.as_str())?,
+            ContextInspectLevel::L1,
+            ContextMapRoot::graph_entity(initial.as_str())?,
+            render,
+            None,
+            Some(reference_guard(&profile, &reference)?),
+        )?
+        .with_frontier_expansion(vec![ContextMapRoot::graph_entity(frontier.as_str())?])?;
+        let built = execute_context_build(&host, &build_request, &stop)?;
+        let built_payload = assert_frontier_pack(&built, &payload, &native, &scratch)?;
+        eprintln!(
+            "frontier-pack fixture {render:?}: pack_bytes={} work={} bytes={}",
+            built_payload["semantic_pack_byte_length"],
+            built_payload["operation_budget_usage"]["work_reserved"],
+            built_payload["operation_budget_usage"]["bytes_reserved"]
+        );
+        build_requests.push(build_request);
+        build_results.push(built);
+        build_payloads.push(built_payload);
+    }
+    let pack = &build_payloads[0]["semantic_pack"];
+    let pack_bytes = wow_core::canonical_json_bytes(pack)?;
+    for built in &build_payloads {
+        assert_eq!(
+            built["semantic_pack"]["semantic_pack_id"],
+            pack["semantic_pack_id"]
+        );
+        assert_eq!(
+            wow_core::canonical_json_bytes(&built["semantic_pack"])?,
+            pack_bytes
+        );
+    }
+    assert!(rows(&build_payloads[0]["rendered_artifacts"])?.is_empty());
+    let json_only = rows(&build_payloads[1]["rendered_artifacts"])?;
+    let markdown_only = rows(&build_payloads[2]["rendered_artifacts"])?;
+    let both = rows(&build_payloads[3]["rendered_artifacts"])?;
+    assert_eq!(json_only.len(), 1);
+    assert_eq!(markdown_only.len(), 1);
+    assert_eq!(both.len(), 2);
+    assert_frontier_render(&json_only[0], pack, false)?;
+    assert_frontier_render(&markdown_only[0], pack, true)?;
+    assert_eq!(
+        both,
+        &[json_only[0].clone(), markdown_only[0].clone()],
+        "fixed JSON then Markdown; renderer identity excludes continuing usage"
+    );
+    assert_eq!(
+        execute_context_build(&host, &build_requests[3], &stop)?.canonical_bytes(),
+        build_results[3].canonical_bytes()
+    );
+
+    // Use only this fixture's measured usage. One single-render operation fits
+    // its actual selected work bound, while Both must continue that ledger.
+    let single_work = build_payloads[..3]
+        .iter()
+        .enumerate()
+        .map(|(index, built)| {
+            built["operation_budget_usage"]["work_reserved"]
+                .as_u64()
+                .map(|work| (index, work))
+                .ok_or("measured single work")
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let (single_index, single_work) = single_work
+        .into_iter()
+        .max_by_key(|(_, work)| *work)
+        .ok_or("single work observations")?;
+    let both_work = build_payloads[3]["operation_budget_usage"]["work_reserved"]
+        .as_u64()
+        .ok_or("Both work")?;
+    assert!(single_work < both_work);
+    // Keep a measured margin for serialized limit-width changes instead of
+    // assuming the smaller request has identical byte/work reservations.
+    let single_limit = single_work + (both_work - single_work) / 2;
+    let mut shared_work = host_json.clone();
+    shared_work["limits"]["max_context_work"] = json!(single_limit);
+    let shared_work = decode_host(&shared_work, &stop)?;
+    let fits = execute_context_build(&shared_work, &build_requests[single_index], &stop)?;
+    assert_eq!(fits.failure_code(), None);
+    assert_eq!(fits.status(), ContextMapStatus::Partial);
+    let fits_envelope: Value = serde_json::from_slice(fits.canonical_bytes())?;
+    assert_eq!(fits_envelope["resource_closure"], "closed");
+    assert!(
+        fits_envelope["payload"]["operation_budget_usage"]["work_reserved"]
+            .as_u64()
+            .ok_or("selected single work")?
+            <= single_limit
+    );
+    assert_frontier_build_refused(
+        &shared_work,
+        &build_requests[3],
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+        &stop,
+    )?;
+
+    // All owner/render reservations and the final envelope each fit, but their
+    // cumulative sum must refuse at delivery without exposing a partial draft.
+    let built_usage = build_payloads[3]["operation_budget_usage"]["bytes_reserved"]
+        .as_u64()
+        .ok_or("actual post-render reservation")?;
+    let delivery_bytes = u64::try_from(build_results[3].canonical_bytes().len())?;
+    let selected_bytes = host_json["limits"]["max_metadata_bytes"]
+        .as_u64()
+        .ok_or("selected byte bound")?;
+    assert!(
+        built_usage
+            .checked_add(delivery_bytes)
+            .ok_or("delivery sum")?
+            <= selected_bytes
+    );
+    let delivery_limit = built_usage
+        .checked_add(delivery_bytes / 2)
+        .ok_or("delivery bound")?;
+    assert!(delivery_limit > built_usage && delivery_limit > delivery_bytes);
+    let mut shared_bytes = host_json.clone();
+    shared_bytes["limits"]["max_metadata_bytes"] = json!(delivery_limit);
+    assert_frontier_build_refused(
+        &decode_host(&shared_bytes, &stop)?,
+        &build_requests[3],
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+        &stop,
+    )?;
+    assert_frontier_build_refused(
+        &host,
+        &build_requests[3],
+        ServiceErrorCode::Cancelled,
+        "not_acquired",
+        &AtomicBool::new(true),
+    )?;
+    assert!(!input.exists());
+
     for frontier_selection in [
         Vec::new(),
         vec![
@@ -1940,6 +2443,60 @@ fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_bud
             "initial-envelope.json",
             baseline.canonical_bytes(),
             CONTEXT_MAP_RESULT_MAX_BYTES,
+        )?;
+        let build_arguments = json!([
+            "context",
+            "build",
+            "--native-host-config",
+            scratch.root.join("host.json"),
+            "--project-store",
+            STORE_ID,
+            "--publication",
+            format!("store-generation:{}", publication.generation_id.as_str()),
+            "--root",
+            root_token(&initial),
+            "--level",
+            "l1",
+            "--l1-profile-id",
+            PRIMARY_L1_PROFILE_ID,
+            "--context-profile-id",
+            FRONTIER_PACK_PROFILE,
+            "--renderer-profile-id",
+            FRONTIER_JSON_PROFILE,
+            "--renderer-profile-id",
+            FRONTIER_MARKDOWN_PROFILE,
+            "--expansion-profile-id",
+            FRONTIER_PROFILE,
+            "--frontier",
+            root_token(&frontier),
+            "--platform",
+            "omitted",
+            "--expect-profile",
+            profile.profile_id().as_str(),
+            "--expect-reference-generation",
+            reference.generation_id(),
+            "--expect-reference-view",
+            reference.self_digest(),
+            "--output",
+            "envelope-json"
+        ]);
+        write_export(
+            &scratch.root,
+            "build-request.json",
+            &wow_core::canonical_json_bytes(&build_requests[3])?,
+            64 * 1024,
+        )?;
+        write_export(
+            &scratch.root,
+            "expected-build-envelope.json",
+            build_results[3].canonical_bytes(),
+            CONTEXT_MAP_RESULT_MAX_BYTES,
+        )?;
+        write_export(
+            &scratch.root,
+            "build-cli-arguments.json",
+            &wow_core::canonical_json_bytes(&build_arguments)?,
+            64 * 1024,
         )?;
     }
     assert!(!input.exists());

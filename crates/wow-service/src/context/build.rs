@@ -1,8 +1,8 @@
 //! Exact primary semantic-pack acquisition and explicit owner rendering.
 //! The shared runner retains native custody through encoding and checked close.
 use super::operation::{
-    Envelope, current_record_digest, encode, failed_operation, with_checked_context_read,
-    with_native_origins,
+    Envelope, FrontierExpansion, current_record_digest, encode, failed_operation,
+    with_checked_context_read, with_native_frontier, with_native_origins,
 };
 use super::{
     ContextInspectLevel, ContextL0Profile, ContextMapCurrentGuard, ContextMapHostInput,
@@ -23,12 +23,26 @@ pub const PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID: &str =
     wow_context::PRIMARY_CONTEXT_JSON_RENDERER_PROFILE;
 pub const PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID: &str =
     wow_context::PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE;
+pub const PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID: &str =
+    wow_context::PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE;
+pub const PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID: &str =
+    wow_context::PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE;
+pub const PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID: &str =
+    wow_context::PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE;
 
 const JSON_RENDERER_PROFILE_IDS: &[&str] = &[PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID];
 const MARKDOWN_RENDERER_PROFILE_IDS: &[&str] = &[PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID];
 const BOTH_RENDERER_PROFILE_IDS: &[&str] = &[
     PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+];
+const FRONTIER_JSON_RENDERER_PROFILE_IDS: &[&str] =
+    &[PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID];
+const FRONTIER_MARKDOWN_RENDERER_PROFILE_IDS: &[&str] =
+    &[PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID];
+const FRONTIER_BOTH_RENDERER_PROFILE_IDS: &[&str] = &[
+    PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
+    PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
 ];
 
 #[derive(Debug, Clone, Serialize)]
@@ -46,6 +60,8 @@ pub struct ContextBuildRequest {
     l0_profile_id: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     l1_profile_id: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expansion: Option<FrontierExpansion>,
     #[serde(skip_serializing_if = "Option::is_none")]
     current: Option<ContextMapCurrentGuard>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -85,6 +101,7 @@ impl ContextBuildRequest {
                 .then_some(PRIMARY_L0_PROFILE_ID),
             l1_profile_id: matches!(level, ContextInspectLevel::L1 | ContextInspectLevel::Both)
                 .then_some(PRIMARY_L1_PROFILE_ID),
+            expansion: None,
             current,
             reference,
         })
@@ -98,6 +115,18 @@ impl ContextBuildRequest {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
         self.l0_profile_id = Some(profile.profile_id());
+        Ok(self)
+    }
+
+    pub fn with_frontier_expansion(mut self, frontier: Vec<ContextMapRoot>) -> ServiceResult<Self> {
+        self.expansion = Some(FrontierExpansion::new(self.level, &self.root, frontier)?);
+        self.context_profile_id = PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID;
+        self.renderer_profile_ids = match &self.render {
+            ContextRenderSelection::None => &[],
+            ContextRenderSelection::Json => FRONTIER_JSON_RENDERER_PROFILE_IDS,
+            ContextRenderSelection::Markdown => FRONTIER_MARKDOWN_RENDERER_PROFILE_IDS,
+            ContextRenderSelection::Both => FRONTIER_BOTH_RENDERER_PROFILE_IDS,
+        };
         Ok(self)
     }
 }
@@ -233,83 +262,109 @@ fn build(
         ContentDigest::<CanonicalResult>::from_bytes(resolved)
     )
     .into_boxed_str();
-    with_native_origins(
-        &universe,
-        read,
-        host,
-        request.root.clone(),
-        request.level != ContextInspectLevel::L0,
-        stop,
-        |map, graph| {
-            // Renderer selection is intentionally absent from this owner request.
-            let mut pack = wow_context::build_context_semantic_pack_with_profile(
-                &universe,
-                map,
-                graph,
-                &scope,
-                request.level,
-                l0_profile,
-                stop,
-            )
+    let deliver = |mut pack: wow_context::ContextSemanticPack<'_, '_>| {
+        wow_context::validate_context_semantic_pack(&universe, &mut pack, stop)
             .map_err(context_error)?;
-            wow_context::validate_context_semantic_pack(&universe, &mut pack, stop)
+        let mut rendered_artifacts = Vec::new();
+        if matches!(
+            &request.render,
+            ContextRenderSelection::Json | ContextRenderSelection::Both
+        ) {
+            let artifact =
+                wow_context::render_context_pack_json(&mut pack, stop).map_err(context_error)?;
+            wow_context::validate_rendered_context_artifact(&mut pack, &artifact, stop)
                 .map_err(context_error)?;
-            let mut rendered_artifacts = Vec::new();
-            if matches!(
-                &request.render,
-                ContextRenderSelection::Json | ContextRenderSelection::Both
-            ) {
-                let artifact = wow_context::render_context_pack_json(&mut pack, stop)
-                    .map_err(context_error)?;
-                wow_context::validate_rendered_context_artifact(&mut pack, &artifact, stop)
-                    .map_err(context_error)?;
-                rendered_artifacts.push(artifact);
-            }
-            if matches!(
-                &request.render,
-                ContextRenderSelection::Markdown | ContextRenderSelection::Both
-            ) {
-                let artifact = wow_context::render_context_pack_markdown(&mut pack, stop)
-                    .map_err(context_error)?;
-                wow_context::validate_rendered_context_artifact(&mut pack, &artifact, stop)
-                    .map_err(context_error)?;
-                rendered_artifacts.push(artifact);
-            }
-            // Snapshot the continuing private ledger only after every requested
-            // rendering and validation. This delivery usage is not pack identity
-            // or an exact-token/RSS measurement.
-            let operation_budget_usage = pack.operation_budget_usage();
-            let status = match pack.state() {
-                wow_context::ProjectMapState::Partial => ContextMapStatus::Partial,
-                wow_context::ProjectMapState::Truncated => ContextMapStatus::Truncated,
-            };
-            let payload = Payload {
-                resolved_request_id,
-                publication_set_id: read.publication_set_id(),
-                store_generation_id: read.store_generation_id().as_str(),
-                current_at_acquisition: current,
-                current_record_digest: current_digest,
-                configured_registration_id: &host.project_store_id,
-                native_project_store_id: read.namespace().map(|namespace| namespace.id().as_str()),
-                semantic_pack: &pack,
-                semantic_pack_byte_length: pack.canonical_bytes().len(),
-                rendered_artifacts: &rendered_artifacts,
-                operation_budget_usage,
-                validation: "exact_native_binding_and_canonical_bytes",
-            };
-            let envelope = Envelope {
-                schema: CONTEXT_BUILD_RESULT_SCHEMA,
-                operation: "context_build",
-                request_id,
-                request,
-                status,
-                resource_closure: "closed",
-                failure_code: None,
-                payload: Some(payload),
-            };
-            let limit = usize::try_from(host.limits.max_metadata_bytes)
-                .map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
-            Ok((encode(&envelope, limit, stop)?, status))
-        },
-    )
+            rendered_artifacts.push(artifact);
+        }
+        if matches!(
+            &request.render,
+            ContextRenderSelection::Markdown | ContextRenderSelection::Both
+        ) {
+            let artifact = wow_context::render_context_pack_markdown(&mut pack, stop)
+                .map_err(context_error)?;
+            wow_context::validate_rendered_context_artifact(&mut pack, &artifact, stop)
+                .map_err(context_error)?;
+            rendered_artifacts.push(artifact);
+        }
+        // Snapshot the continuing private ledger only after every requested
+        // rendering and validation. This delivery usage is not pack identity
+        // or an exact-token/RSS measurement.
+        let operation_budget_usage = pack.operation_budget_usage();
+        let status = match pack.state() {
+            wow_context::ProjectMapState::Partial => ContextMapStatus::Partial,
+            wow_context::ProjectMapState::Truncated => ContextMapStatus::Truncated,
+        };
+        let payload = Payload {
+            resolved_request_id,
+            publication_set_id: read.publication_set_id(),
+            store_generation_id: read.store_generation_id().as_str(),
+            current_at_acquisition: current,
+            current_record_digest: current_digest,
+            configured_registration_id: &host.project_store_id,
+            native_project_store_id: read.namespace().map(|namespace| namespace.id().as_str()),
+            semantic_pack: &pack,
+            semantic_pack_byte_length: pack.canonical_bytes().len(),
+            rendered_artifacts: &rendered_artifacts,
+            operation_budget_usage,
+            validation: "exact_native_binding_and_canonical_bytes",
+        };
+        let envelope = Envelope {
+            schema: CONTEXT_BUILD_RESULT_SCHEMA,
+            operation: "context_build",
+            request_id,
+            request,
+            status,
+            resource_closure: "closed",
+            failure_code: None,
+            payload: Some(payload),
+        };
+        let remaining = if request.expansion.is_some() {
+            pack.remaining_metadata_bytes()
+        } else {
+            host.limits.max_metadata_bytes
+        };
+        let limit =
+            usize::try_from(remaining).map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
+        Ok((encode(&envelope, limit, stop)?, status))
+    };
+    if let Some(expansion) = &request.expansion {
+        with_native_frontier(
+            &universe,
+            read,
+            host,
+            request.root.clone(),
+            expansion,
+            stop,
+            |step| {
+                let pack = wow_context::build_context_semantic_pack_from_expansion(
+                    &universe, &scope, step, stop,
+                )
+                .map_err(context_error)?;
+                deliver(pack)
+            },
+        )
+    } else {
+        with_native_origins(
+            &universe,
+            read,
+            host,
+            request.root.clone(),
+            request.level != ContextInspectLevel::L0,
+            stop,
+            |map, graph| {
+                // Renderer selection is intentionally absent from this owner request.
+                let pack = wow_context::build_context_semantic_pack_with_profile(
+                    &universe,
+                    map,
+                    graph,
+                    &scope,
+                    request.level,
+                    l0_profile,
+                    stop,
+                )
+                .map_err(context_error)?;
+                deliver(pack)
+            },
+        )
+    }
 }

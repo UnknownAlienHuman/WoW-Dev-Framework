@@ -15,11 +15,13 @@ wow context build --native-host-config <host.json>
   --publication current|store-generation:<exact-native-generation-id>
   --root project@<unpadded-base64url-of-exact-ProjectId>|graph-entity@<unpadded-base64url-of-exact-node-id>
   --level l0|l1|both
-  --context-profile-id wow-context/primary-structural-pack/1
+  --context-profile-id wow-context/primary-structural-pack/1|wow-context/primary-frontier-pack/1
   [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1]
   [--l1-profile-id wow-context/primary-l1/1]
-  [--renderer-profile-id wow-context/primary-pack-json/1]
-  [--renderer-profile-id wow-context/primary-pack-markdown/1]
+  [--expansion-profile-id wow-context/primary-native-frontier/1
+   --frontier graph-entity@<base64url-id> ...]
+  [--renderer-profile-id wow-context/primary-pack-json/1|wow-context/primary-frontier-pack-json/1]
+  [--renderer-profile-id wow-context/primary-pack-markdown/1|wow-context/primary-frontier-pack-markdown/1]
   [--platform omitted] [--output envelope-json]
   [--expect-current-record <id>] [--expect-current-digest <sha256:digest>]
   [--expect-profile <id> --expect-reference-generation <id> --expect-reference-view <sha256:digest>]
@@ -51,6 +53,40 @@ or Markdown; both select JSON then Markdown regardless of argument order.
 There is no `--render` flag, standalone render/import route, auto profile selection
 or text/artifact stdout mode. Requested renderers are required: refusal suppresses
 the delivery payload rather than returning a pack-only fallback.
+
+## Selected frontier pack
+
+Select `--context-profile-id wow-context/primary-frontier-pack/1` together with
+`--expansion-profile-id wow-context/primary-native-frontier/1` and repeatable
+`--frontier graph-entity@<base64url-id>`. This family requires `--level l1` and
+an explicit exact graph-entity root. The 1..32 distinct frontier IDs must already
+belong to the initial detail map and exclude its root. Profile/frontier options
+are paired; duplicates, nonmembers, incompatible levels or mixed pack/renderer
+families refuse.
+
+Optional renderers are `wow-context/primary-frontier-pack-json/1` and
+`wow-context/primary-frontier-pack-markdown/1`; zero/one/both keeps the existing
+selection and fixed JSON-then-Markdown ordering. The service performs one native
+frontier batch under the same acquisition, then consumes its exact step, original
+L1 and actual Budget into the sealed pack. It does not invoke inspect as another
+service call or rebuild the graph/map/skeletons.
+
+Pack schema is `wow-context/semantic-pack/primary-frontier/1`; items use
+`wow-context/context-item/primary-frontier/1`. The embedded expansion preserves
+its exact artifact bytes/ID. Each item and selection trace binds the expansion
+ID and exact item index, retaining every original inclusion reason through that
+native record; origin_map_id names the aggregate origins. Original support,
+source/load custody, coverage, conflicts and omissions remain explicit.
+
+JSON emits the same exact canonical selected pack. Markdown adds one typed
+EXPANSION record immediately after SKELETONS, before entity/relation items, using
+the existing metadata-safe encoding and exact content-byte trace ranges.
+The selected final service envelope must fit the actual remaining metadata budget
+after all requested rendering/validation; it cannot reset the allowance.
+Mandatory overflow suppresses the payload. The default family and absent selection
+fields retain their original bytes. The focused source-absent lifecycle and actual
+Windows CLI verify this selected consumer, including cumulative refusal; see the
+[owner contract](../../crates/wow-context/e3/NATIVE_PRIMARY_FRONTIER_PACK.md).
 
 ## Host, bounds and custody
 
@@ -86,8 +122,10 @@ selection, exact context profile and normalized renderer-profile array. Selected
 L0/L1 profiles are recorded; absent guard/profile fields are omitted. The native
 pack request's selected l0_profile_id binds the explicit state-root selection
 into its request/pack identity. Default ContainersV1 retains None, omitted from
-serialization, preserving old pack bytes. Pack/renderer profile IDs stay the
-existing choices; no source, producer, storage or replay selection is introduced.
+serialization, preserving old pack bytes. Default pack/renderer profile IDs stay the
+existing choices. Frontier selection binds its normalized profile/frontier and
+named pack/renderer family; absent frontier fields are omitted. No source,
+producer, storage or replay selection is introduced.
 
 The envelope retains request identity/bytes, status, resource closure and optional
 failure/payload. Payload contains resolved request, publication/store generation,
@@ -118,8 +156,8 @@ unknown native closure is not treated as success.
 
 Every returned pack is Partial or Truncated with `absence_authoritative=false`.
 Original producer omissions remain scoped to their embedded maps/layers. Native
-additional recipe admission, Reference enrichment, excerpts/tokens, deeper expansion /
-continuation, platform composition and complete-corpus/runtime qualification
+additional recipe admission, Reference enrichment, excerpts/tokens, progressive
+rounds/continuation, platform composition and complete-corpus/runtime qualification
 remain open. The [default-profile synthetic fixture](../../crates/wow-service/e3/native-primary-pack/README.md)
 freezes the actual pack/render bytes; broad E3/Tier A/X acceptance remains open.
 Executed gate evidence belongs to the canonical #122 milestone.

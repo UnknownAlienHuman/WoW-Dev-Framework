@@ -1,16 +1,25 @@
 //! Sealed selected context, with native origins and a continuing private ledger.
-use std::sync::atomic::AtomicBool;
+use std::{borrow::Cow, sync::atomic::AtomicBool};
 
 use serde::Serialize;
 use wow_graph::{GraphEdge, GraphNode, GraphPartitionRead};
 
 use crate::budget::{Budget, canonical, checkpoint, exhausted, identity};
+use crate::map::ContextExpansionArtifact;
 use crate::skeleton::build_primary_skeletons_with_budget;
 use crate::universe::UniverseBinding;
 use crate::{
     ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, L0Scope, PrimaryL0Profile,
     PrimaryMapLimits, PrimarySkeletons, ProjectMap, ProjectMapState, SkeletonLevel,
     open_project_map_view,
+};
+
+mod frontier;
+pub(crate) use frontier::{FRONTIER_JSON_PROFILE, FRONTIER_MARKDOWN_PROFILE};
+pub use frontier::{
+    PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE,
+    PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE,
+    build_context_semantic_pack_from_expansion,
 };
 
 pub const PRIMARY_CONTEXT_PACK_PROFILE: &str = "wow-context/primary-structural-pack/1";
@@ -139,6 +148,8 @@ pub(crate) struct PackRequestCore<'m> {
     limits: PrimaryMapLimits,
     #[serde(skip_serializing_if = "Option::is_none")]
     l0_profile_id: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expansion_id: Option<Box<str>>,
 }
 #[derive(Serialize)]
 pub(crate) struct PackRequest<'m> {
@@ -165,13 +176,20 @@ pub(crate) struct ItemCore<'m, 'a> {
     schema: &'static str,
     universe_set_id: &'m str,
     root: &'m L0Scope,
-    origin_map_id: &'m str,
+    origin_map_id: Cow<'m, str>,
     pub(crate) payload: ContextItemPayload<'a>,
     payload_digest: Box<str>,
     inclusion_reason: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expansion: Option<ExpansionItemOrigin>,
     privacy: &'static str,
     license: &'static str,
     source_boundary: &'static str,
+}
+#[derive(Clone, Serialize)]
+struct ExpansionItemOrigin {
+    expansion_id: Box<str>,
+    item_index: usize,
 }
 #[derive(Serialize)]
 pub(crate) struct ContextItem<'m, 'a> {
@@ -186,9 +204,11 @@ impl ContextItem<'_, '_> {
 #[derive(Serialize)]
 pub(crate) struct SelectionRecord<'m> {
     item_id: Box<str>,
-    origin_map_id: &'m str,
+    origin_map_id: Cow<'m, str>,
     reason: &'static str,
     required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expansion: Option<ExpansionItemOrigin>,
 }
 #[derive(Serialize)]
 struct UpstreamOmissionRef {
@@ -220,6 +240,8 @@ pub(crate) struct PackCore<'m, 'a> {
     pub(crate) request: PackRequest<'m>,
     pub(crate) boundary_notice: &'static str,
     pub(crate) skeletons: PrimarySkeletons<'m, 'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) expansion: Option<ContextExpansionArtifact<'a>>,
     pub(crate) items: Vec<ContextItem<'m, 'a>>,
     pub(crate) selection_trace: Vec<SelectionRecord<'m>>,
     pub(crate) omissions: PackOmissions,
@@ -264,6 +286,12 @@ impl<'m, 'a> ContextSemanticPack<'m, 'a> {
             bytes_reserved: self.budget.retained_bytes,
         }
     }
+    pub fn remaining_metadata_bytes(&self) -> u64 {
+        self.universe
+            .limits
+            .max_metadata_bytes
+            .saturating_sub(self.budget.retained_bytes)
+    }
     pub(crate) const fn render_limit(&self) -> u64 {
         self.universe.limits.max_metadata_bytes
     }
@@ -287,12 +315,17 @@ fn encoding() -> ContextError {
     ContextError::new(ContextErrorCode::EncodingInvalid)
 }
 
+struct ItemOrigin<'m> {
+    map_id: Cow<'m, str>,
+    reason: &'static str,
+    expansion: Option<ExpansionItemOrigin>,
+}
+
 fn item<'m, 'a>(
     universe: &'m ContextUniverseSet<'a>,
-    map: &'m ProjectMap<'a>,
+    origin: ItemOrigin<'m>,
     root: &'m L0Scope,
     payload: ContextItemPayload<'a>,
-    reason: &'static str,
     budget: &mut Budget,
     stop: &AtomicBool,
 ) -> ContextResult<ContextItem<'m, 'a>> {
@@ -306,13 +339,18 @@ fn item<'m, 'a>(
         stop,
     )?;
     let core = ItemCore {
-        schema: "wow-context/context-item/primary/1",
+        schema: if origin.expansion.is_some() {
+            "wow-context/context-item/primary-frontier/1"
+        } else {
+            "wow-context/context-item/primary/1"
+        },
         universe_set_id: universe.universe_set_id(),
         root,
-        origin_map_id: map.project_map_id(),
+        origin_map_id: origin.map_id,
         payload,
         payload_digest,
-        inclusion_reason: reason,
+        inclusion_reason: origin.reason,
+        expansion: origin.expansion,
         privacy: "local_metadata_only",
         license: "source_inclusion_not_permitted",
         source_boundary: "untrusted_native_metadata",
@@ -372,6 +410,7 @@ pub fn build_context_semantic_pack_with_profile<'m, 'a>(
         profile_id: PRIMARY_CONTEXT_PACK_PROFILE,
         limits: universe.limits,
         l0_profile_id: (profile != PrimaryL0Profile::ContainersV1).then_some(profile.profile_id()),
+        expansion_id: None,
     };
     budget.retain(&request_core, stop)?;
     let context_request_id = identity(
@@ -401,10 +440,13 @@ pub fn build_context_semantic_pack_with_profile<'m, 'a>(
         };
         items.push(item(
             universe,
-            map,
+            ItemOrigin {
+                map_id: Cow::Borrowed(map.project_map_id()),
+                reason,
+                expansion: None,
+            },
             root,
             ContextItemPayload::Entity { node },
-            reason,
             &mut budget,
             stop,
         )?);
@@ -412,40 +454,18 @@ pub fn build_context_semantic_pack_with_profile<'m, 'a>(
     for edge in view.edges() {
         items.push(item(
             universe,
-            map,
+            ItemOrigin {
+                map_id: Cow::Borrowed(map.project_map_id()),
+                reason: "original_selected_direct_native_assertion",
+                expansion: None,
+            },
             root,
             ContextItemPayload::Relation { edge },
-            "original_selected_direct_native_assertion",
             &mut budget,
             stop,
         )?);
     }
-    let mut selection_trace = Vec::new();
-    #[derive(Serialize)]
-    struct SelectionRef<'p> {
-        item_id: &'p str,
-        origin_map_id: &'p str,
-        reason: &'static str,
-        required: bool,
-    }
-    for selected in &items {
-        budget.work(1, stop)?;
-        budget.retain(
-            &SelectionRef {
-                item_id: selected.context_item_id(),
-                origin_map_id: map.project_map_id(),
-                reason: selected.core.inclusion_reason,
-                required: true,
-            },
-            stop,
-        )?;
-        selection_trace.push(SelectionRecord {
-            item_id: selected.context_item_id().into(),
-            origin_map_id: map.project_map_id(),
-            reason: selected.core.inclusion_reason,
-            required: true,
-        });
-    }
+    let selection_trace = build_selection_trace(&items, &mut budget, stop)?;
     let mut upstream = Vec::new();
     #[derive(Serialize)]
     struct OmissionRef<'p> {
@@ -481,6 +501,7 @@ pub fn build_context_semantic_pack_with_profile<'m, 'a>(
         request,
         boundary_notice: BOUNDARY_NOTICE,
         skeletons,
+        expansion: None,
         items,
         selection_trace,
         omissions: PackOmissions {
@@ -508,8 +529,17 @@ pub fn build_context_semantic_pack_with_profile<'m, 'a>(
         state,
         absence_authoritative: false,
     };
+    finalize_pack(universe, core, budget, stop)
+}
+
+fn finalize_pack<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    core: PackCore<'m, 'a>,
+    budget: Budget,
+    stop: &AtomicBool,
+) -> ContextResult<ContextSemanticPack<'m, 'a>> {
     let semantic_pack_id = identity(
-        PACK_SCHEMA,
+        core.schema,
         "context-pack:sha256:",
         &core,
         universe.limits.max_metadata_bytes,
@@ -540,6 +570,44 @@ pub fn build_context_semantic_pack_with_profile<'m, 'a>(
     Ok(result)
 }
 
+fn build_selection_trace<'m, 'a>(
+    items: &[ContextItem<'m, 'a>],
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<Vec<SelectionRecord<'m>>> {
+    #[derive(Serialize)]
+    struct SelectionRef<'p> {
+        item_id: &'p str,
+        origin_map_id: &'p str,
+        reason: &'static str,
+        required: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        expansion: Option<&'p ExpansionItemOrigin>,
+    }
+    let mut trace = Vec::new();
+    for selected in items {
+        budget.work(1, stop)?;
+        budget.retain(
+            &SelectionRef {
+                item_id: selected.context_item_id(),
+                origin_map_id: &selected.core.origin_map_id,
+                reason: selected.core.inclusion_reason,
+                required: true,
+                expansion: selected.core.expansion.as_ref(),
+            },
+            stop,
+        )?;
+        trace.push(SelectionRecord {
+            item_id: selected.context_item_id().into(),
+            origin_map_id: selected.core.origin_map_id.clone(),
+            reason: selected.core.inclusion_reason,
+            required: true,
+            expansion: selected.core.expansion.clone(),
+        });
+    }
+    Ok(trace)
+}
+
 pub fn validate_context_semantic_pack(
     universe: &ContextUniverseSet<'_>,
     pack: &mut ContextSemanticPack<'_, '_>,
@@ -558,8 +626,9 @@ pub fn validate_context_semantic_pack(
     {
         return Err(ContextError::new(ContextErrorCode::UniverseMismatch));
     }
+    frontier::validate_expansion(pack, stop)?;
     let id = identity(
-        PACK_SCHEMA,
+        pack.core.schema,
         "context-pack:sha256:",
         &pack.core,
         universe.limits.max_metadata_bytes,

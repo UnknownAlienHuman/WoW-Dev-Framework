@@ -19,7 +19,7 @@ wow context inspect --native-host-config <host.json>
   [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1]
   [--l1-profile-id wow-context/primary-l1/1]
   [--expansion-profile-id wow-context/primary-native-frontier/1
-   --frontier <exact-GraphEntity-token> ...]
+   --frontier graph-entity@<base64url-id> ...]
   [--platform omitted] [--output envelope-json]
   [--expect-current-record <id>] [--expect-current-digest <digest>]
   [--expect-profile <id> --expect-reference-generation <id> --expect-reference-view <id>]
@@ -80,9 +80,12 @@ retained records/support and final output. Mandatory overflow refuses; native
 query limits/truncation remain visible. The selected one-round bound ends
 expansion even when nothing is added; it does not establish NoNewEvidence,
 absence or completeness. No recursive round or inferred edge is emitted.
-This selection is inspect-only: expanded build/pack/continue remains a next
-consumer in #122. The focused source-absent native lifecycle passes; this does
-not imply full E3-B/Tier A/X acceptance. See the
+Inspect retains its original result bytes. The separate
+[selected frontier build/pack/render family](CONTEXT_BUILD.md#selected-frontier-pack)
+consumes the native step with its continuing Budget; functional verification of
+that consumer is pending root. Progressive continuation remains open. The focused
+source-absent inspect lifecycle passes; this does not imply full E3-B/Tier A/X
+acceptance. See the
 [native expansion contract](../../crates/wow-context/e3/NATIVE_PRIMARY_EXPANSION.md).
 
 ## Host input and service result
@@ -142,8 +145,8 @@ or output failure exits 4; argv/host-input failure exits 64; cancellation exits
 semantic retry after output begins.
 
 This route documents selected functionality, not full E3 or Tier A/X acceptance.
-Broader scopes/facets, control/effect enrichment, wider expansion, expanded
-build/pack/continuation, excerpts/privacy/tokens and platform/combined context
-remain open. Existing [build/pack/render](CONTEXT_BUILD.md) selections remain
-separate; the frontier result is not a pack input. Existing map commands/profile
-bytes are unchanged by this route.
+Broader scopes/facets, control/effect enrichment, progressive expansion /
+continuation, Reference enrichment, excerpts/privacy/tokens and platform/combined
+context remain open. [Build/pack/render](CONTEXT_BUILD.md) consumes the native
+step, not a decoded inspect envelope. Existing map commands/profile and unselected
+inspect bytes remain unchanged.

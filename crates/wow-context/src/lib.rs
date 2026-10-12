@@ -25,7 +25,9 @@ pub use map::{
 pub use pack::{
     ContextOperationBudgetUsage, ContextSemanticPack, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE,
     PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_CONTEXT_PACK_PROFILE,
-    PRIMARY_CONTEXT_PROFILES_BYTES, build_context_semantic_pack,
+    PRIMARY_CONTEXT_PROFILES_BYTES, PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE,
+    PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE,
+    build_context_semantic_pack, build_context_semantic_pack_from_expansion,
     build_context_semantic_pack_with_profile, validate_context_semantic_pack,
 };
 pub use profile::{

@@ -7,6 +7,13 @@ use wow_service::context::{
     PRIMARY_STATE_ROOT_L0_PROFILE_ID,
 };
 
+pub(super) struct Selection {
+    pub(super) level: ContextInspectLevel,
+    pub(super) root: ContextMapRoot,
+    pub(super) l0_profile: Option<ContextL0Profile>,
+    pub(super) frontier: Option<Vec<ContextMapRoot>>,
+}
+
 #[derive(Default)]
 pub(super) struct Options {
     level: Option<ContextInspectLevel>,
@@ -60,23 +67,32 @@ impl Options {
                 }
                 set(&mut self.l1_profile, (), command)
             }
-            "--expansion-profile-id" if matches!(command, Command::Inspect) => {
+            "--expansion-profile-id" if matches!(command, Command::Inspect | Command::Build) => {
                 if value != PRIMARY_FRONTIER_EXPANSION_PROFILE_ID {
                     return Err("unsupported exact context expansion profile");
                 }
                 set(&mut self.expansion_profile, (), command)
             }
-            "--frontier" if matches!(command, Command::Inspect) => {
-                // This is the sole repeatable inspect option; exact IDs remain unique.
+            "--frontier" if matches!(command, Command::Inspect | Command::Build) => {
+                // Repeatable frontier tokens still require distinct exact IDs.
                 if self.frontier.len() >= 32 {
-                    return Err("context inspect frontier limit exceeded");
+                    return Err(match command {
+                        Command::Build => "context build frontier limit exceeded",
+                        _ => "context inspect frontier limit exceeded",
+                    });
                 }
                 let root = parse_root(value)?;
                 if !matches!(&root, ContextMapRoot::GraphEntity(_)) {
-                    return Err("context inspect frontier requires graph-entity token");
+                    return Err(match command {
+                        Command::Build => "context build frontier requires graph-entity token",
+                        _ => "context inspect frontier requires graph-entity token",
+                    });
                 }
                 if self.frontier.contains(&root) {
-                    return Err("duplicate context inspect frontier");
+                    return Err(match command {
+                        Command::Build => "duplicate context build frontier",
+                        _ => "duplicate context inspect frontier",
+                    });
                 }
                 self.frontier.push(root);
                 Ok(())
@@ -92,14 +108,7 @@ impl Options {
         self,
         root: Option<ContextMapRoot>,
         command: Command,
-    ) -> Result<
-        (
-            ContextInspectLevel,
-            ContextMapRoot,
-            Option<ContextL0Profile>,
-        ),
-        &'static str,
-    > {
+    ) -> Result<Selection, &'static str> {
         let level = self.level.ok_or(match command {
             Command::Build => "context build requires --level",
             _ => "context inspect requires --level",
@@ -123,32 +132,52 @@ impl Options {
             }
             _ => {}
         }
-        Ok((level, root, self.l0_profile))
+        if self.expansion_profile.is_some() == self.frontier.is_empty() {
+            return Err(match command {
+                Command::Build => "context build expansion requires profile and frontier together",
+                _ => "context inspect expansion requires profile and frontier together",
+            });
+        }
+        let frontier = if self.expansion_profile.is_some() {
+            if level != ContextInspectLevel::L1 || !matches!(&root, ContextMapRoot::GraphEntity(_))
+            {
+                return Err(match command {
+                    Command::Build => "context build expansion requires l1 and graph-entity root",
+                    _ => "context inspect expansion requires l1 and graph-entity root",
+                });
+            }
+            if self.frontier.contains(&root) {
+                return Err(match command {
+                    Command::Build => "context build frontier must exclude its initial root",
+                    _ => "context inspect frontier must exclude its initial root",
+                });
+            }
+            Some(self.frontier)
+        } else {
+            None
+        };
+        Ok(Selection {
+            level,
+            root,
+            l0_profile: self.l0_profile,
+            frontier,
+        })
     }
 
     pub(super) fn request(
-        mut self,
+        self,
         store: &str,
         publication: ContextMapPublication,
         root: Option<ContextMapRoot>,
         current: Option<ContextMapCurrentGuard>,
         reference: Option<ContextMapReferenceGuard>,
     ) -> Result<ContextInspectRequest, &'static str> {
-        let expansion_profile = self.expansion_profile;
-        let frontier = std::mem::take(&mut self.frontier);
-        let (level, root, l0_profile) = self.selection(root, Command::Inspect)?;
-        if expansion_profile.is_some() == frontier.is_empty() {
-            return Err("context inspect expansion requires profile and frontier together");
-        }
-        if expansion_profile.is_some() {
-            if level != ContextInspectLevel::L1 || !matches!(&root, ContextMapRoot::GraphEntity(_))
-            {
-                return Err("context inspect expansion requires l1 and graph-entity root");
-            }
-            if frontier.contains(&root) {
-                return Err("context inspect frontier must exclude its initial root");
-            }
-        }
+        let Selection {
+            level,
+            root,
+            l0_profile,
+            frontier,
+        } = self.selection(root, Command::Inspect)?;
         // The service selects the fixed recipes and validates level/root compatibility.
         // No graph kind, owner existence or root selection is inferred here.
         let request =
@@ -160,13 +189,12 @@ impl Options {
                 .map_err(|_| "invalid context inspect request syntax")?,
             None => request,
         };
-        if expansion_profile.is_some() {
+        match frontier {
             // Service normalizes the finite frontier and validates native membership later.
-            request
+            Some(frontier) => request
                 .with_frontier_expansion(frontier)
-                .map_err(|_| "invalid context inspect expansion syntax")
-        } else {
-            Ok(request)
+                .map_err(|_| "invalid context inspect expansion syntax"),
+            None => Ok(request),
         }
     }
 }
