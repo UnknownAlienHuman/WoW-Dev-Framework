@@ -40,7 +40,7 @@ const HELP: &str = concat!(
     "--root <exact-root-token> --level l0|l1|both\n",
     "  [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1] ",
     "[--l1-profile-id wow-context/primary-l1/1|wow-context/primary-state-detail-l1/1]\n",
-    "  State-detail L1 is inspect-only, requires l1 plus an exact graph-entity@ root, ",
+    "  State-detail L1 requires l1 plus an exact graph-entity@ root, ",
     "and cannot be combined with frontier expansion.\n",
     "  [--expansion-profile-id wow-context/primary-native-frontier/1 ",
     "--frontier graph-entity@<base64url-id> ...]\n",
@@ -56,13 +56,15 @@ const HELP: &str = concat!(
     "--root <exact-root-token> --level l0|l1|both\n",
     "  --context-profile-id wow-context/primary-structural-pack/1|wow-context/primary-frontier-pack/1\n",
     "  [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1] ",
-    "[--l1-profile-id wow-context/primary-l1/1]\n",
+    "[--l1-profile-id wow-context/primary-l1/1|wow-context/primary-state-detail-l1/1]\n",
     "  [--renderer-profile-id wow-context/primary-pack-json/1|wow-context/primary-frontier-pack-json/1]\n",
     "  [--renderer-profile-id wow-context/primary-pack-markdown/1|wow-context/primary-frontier-pack-markdown/1]\n",
     "  [--expansion-profile-id wow-context/primary-native-frontier/1 ",
     "--frontier graph-entity@<base64url-id> ...]\n",
     "  Frontier pack requires expansion, l1 and an exact graph-entity@ root. ",
     "Renderer IDs must match the selected pack family; frontiers follow the inspect bounds.\n",
+    "  State-detail L1 requires l1, an exact graph-entity@ root and the structural pack; ",
+    "use its existing renderers without frontier expansion.\n",
     "  Select zero or one of each renderer; a duplicate renderer refuses syntax. ",
     "Both renderers are ordered JSON then Markdown independent of argv order.\n",
     "  Same explicit host/root, omitted platform, optional current guards, complete reference ",
@@ -993,10 +995,10 @@ mod tests {
             "--context-profile-id",
             wow_service::context::PRIMARY_CONTEXT_PACK_PROFILE_ID,
         );
-        assert!(matches!(
-            parse(build_detail),
-            Err("unsupported exact context L1 profile")
-        ));
+        assert_eq!(
+            request_json(build_detail)?["l1_profile_id"],
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID
+        );
         let mut default_build = expansion_base;
         *default_build.get_mut(1).ok_or("missing fixture command")? = "build".into();
         push(
@@ -1209,12 +1211,13 @@ mod tests {
     fn context_build_grammar_preserves_profiles_render_order_and_service_fences()
     -> Result<(), &'static str> {
         use wow_service::context::{
-            ContextBuildRequest, ContextInspectLevel, ContextRenderSelection,
+            ContextBuildRequest, ContextInspectLevel, ContextL1Profile, ContextRenderSelection,
             PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
             PRIMARY_CONTEXT_PACK_PROFILE_ID, PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
             PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
             PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID, PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
-            PRIMARY_L0_PROFILE_ID, PRIMARY_STATE_ROOT_L0_PROFILE_ID,
+            PRIMARY_L0_PROFILE_ID, PRIMARY_L1_PROFILE_ID, PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+            PRIMARY_STATE_ROOT_L0_PROFILE_ID,
         };
 
         let mut values = arguments();
@@ -1392,6 +1395,162 @@ mod tests {
             "graph-entity@Z3JhcGgtbm9kZTpzaGEyNTY6{}Yg",
             "YmJi".repeat(21)
         );
+        // Exact profile transport only; the service checks native state custody.
+        let mut detail_base = values.clone();
+        replace(&mut detail_base, "--root", GRAPH_ROOT)?;
+        replace(&mut detail_base, "--level", "l1")?;
+        let Request::Build(default_l1) = parse(detail_base.clone())?.request else {
+            return Err("build parser selected the wrong typed operation");
+        };
+        let mut explicit_entity = detail_base.clone();
+        push(
+            &mut explicit_entity,
+            "--l1-profile-id",
+            PRIMARY_L1_PROFILE_ID,
+        );
+        let Request::Build(entity_l1) = parse(explicit_entity)?.request else {
+            return Err("build parser selected the wrong typed operation");
+        };
+        assert_eq!(
+            serde_json::to_vec(&default_l1).map_err(|_| "request serialization failed")?,
+            serde_json::to_vec(&entity_l1).map_err(|_| "request serialization failed")?
+        );
+        let expected_detail = |render| -> Result<serde_json::Value, &'static str> {
+            let request = ContextBuildRequest::primary(
+                "context-cli-store",
+                ContextMapPublication::Current,
+                ContextInspectLevel::L1,
+                parse_root(GRAPH_ROOT)?,
+                render,
+                None,
+                None,
+            )
+            .map_err(|_| "expected state-detail build request refused")?
+            .with_l1_profile(ContextL1Profile::StateDetailV1)
+            .map_err(|_| "expected state-detail build profile refused")?;
+            serde_json::to_value(request).map_err(|_| "request serialization failed")
+        };
+        let mut state_detail = detail_base.clone();
+        push(
+            &mut state_detail,
+            "--l1-profile-id",
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+        );
+        let selected = request_json(state_detail.clone())?;
+        assert_eq!(selected, expected_detail(ContextRenderSelection::None)?);
+        assert_eq!(
+            selected["l1_profile_id"],
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID
+        );
+        assert_eq!(
+            selected["context_profile_id"],
+            PRIMARY_CONTEXT_PACK_PROFILE_ID
+        );
+        assert_eq!(selected["renderer_profile_ids"], serde_json::json!([]));
+        assert!(selected.get("expansion").is_none());
+        let mut rendered_detail = state_detail.clone();
+        push(
+            &mut rendered_detail,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+        );
+        push(
+            &mut rendered_detail,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        );
+        assert_eq!(
+            request_json(rendered_detail)?,
+            expected_detail(ContextRenderSelection::Both)?
+        );
+        for (level, message) in [
+            ("l0", "L1 profile conflicts with context build level l0"),
+            (
+                "both",
+                "state-detail L1 requires context build l1 and graph-entity root",
+            ),
+        ] {
+            let mut wrong_level = state_detail.clone();
+            replace(&mut wrong_level, "--level", level)?;
+            assert!(matches!(parse(wrong_level), Err(actual) if actual == message));
+        }
+        let mut project_detail = state_detail.clone();
+        replace(&mut project_detail, "--root", PROJECT_ROOT)?;
+        assert!(matches!(
+            parse(project_detail),
+            Err("state-detail L1 requires context build l1 and graph-entity root")
+        ));
+        let mut duplicate_detail = state_detail.clone();
+        push(
+            &mut duplicate_detail,
+            "--l1-profile-id",
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+        );
+        assert!(matches!(
+            parse(duplicate_detail),
+            Err("duplicate context build option")
+        ));
+        for profiles in [
+            [PRIMARY_L1_PROFILE_ID, PRIMARY_STATE_DETAIL_L1_PROFILE_ID],
+            [PRIMARY_STATE_DETAIL_L1_PROFILE_ID, PRIMARY_L1_PROFILE_ID],
+        ] {
+            let mut duplicate = detail_base.clone();
+            for profile in profiles {
+                push(&mut duplicate, "--l1-profile-id", profile);
+            }
+            assert!(matches!(
+                parse(duplicate),
+                Err("duplicate context build option")
+            ));
+        }
+        let mut wrong_pack = state_detail.clone();
+        replace(
+            &mut wrong_pack,
+            "--context-profile-id",
+            PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID,
+        )?;
+        assert!(matches!(
+            parse(wrong_pack),
+            Err("context build pack profile conflicts with expansion selection")
+        ));
+        let mut wrong_renderer = state_detail.clone();
+        push(
+            &mut wrong_renderer,
+            "--renderer-profile-id",
+            PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        );
+        assert!(matches!(
+            parse(wrong_renderer),
+            Err("context build renderer profile conflicts with context pack profile")
+        ));
+        let mut detail_first = state_detail;
+        push(
+            &mut detail_first,
+            "--expansion-profile-id",
+            PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+        );
+        push(&mut detail_first, "--frontier", &frontier);
+        assert!(matches!(
+            parse(detail_first),
+            Err("state-detail L1 conflicts with context build frontier expansion")
+        ));
+        let mut expansion_first = detail_base;
+        push(
+            &mut expansion_first,
+            "--expansion-profile-id",
+            PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+        );
+        push(&mut expansion_first, "--frontier", &frontier);
+        push(
+            &mut expansion_first,
+            "--l1-profile-id",
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+        );
+        assert!(matches!(
+            parse(expansion_first),
+            Err("state-detail L1 conflicts with context build frontier expansion")
+        ));
+
         let mut frontier_base = values.clone();
         replace(&mut frontier_base, "--root", GRAPH_ROOT)?;
         replace(&mut frontier_base, "--level", "l1")?;

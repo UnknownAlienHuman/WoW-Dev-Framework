@@ -28,7 +28,8 @@ pub use pack::{
     PRIMARY_CONTEXT_PROFILES_BYTES, PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE,
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE,
     build_context_semantic_pack, build_context_semantic_pack_from_expansion,
-    build_context_semantic_pack_with_profile, validate_context_semantic_pack,
+    build_context_semantic_pack_with_l1_profile, build_context_semantic_pack_with_profile,
+    validate_context_semantic_pack,
 };
 pub use profile::{
     PRIMARY_MAP_PROFILE, PRIMARY_MAP_PROFILE_BYTES, PRIMARY_PROJECT_MAP_PROFILE,

@@ -61,9 +61,9 @@ the CLI performs no selector resolution, search, alias lookup or retry.
 
 Pass `--level l1 --l1-profile-id wow-context/primary-state-detail-l1/1` with an
 exact `graph-entity@` root for an original ordinary TOC state_root or state_path.
-This first consumer is non-frontier inspect only: Project/L0/Both, frontier
-options and context build selection refuse. It does not infer a SavedVariables
-root from a global name.
+This selection requires non-frontier L1: Project/L0/Both and frontier options
+refuse. The same profile also has a structural [build/pack/render consumer](CONTEXT_BUILD.md#selected-native-state-detail-l1-pack).
+Neither route infers a SavedVariables root from a global name.
 
 The named L1 schema is `wow-context/l1-skeleton/primary-state-detail/1`.
 It retains original roots/paths and typed literal keys, every exact supporting
@@ -74,9 +74,10 @@ state facet is not a fallback. Other native omissions remain visible.
 
 One owner ledger covers the immutable selected skeleton and its custody;
 the selected final envelope must fit the actual remaining metadata allowance
-after construction. Default inspect bytes remain unchanged. Behavioral
+after construction. Default inspect bytes remain unchanged. Inspect behavioral
 verification passes on the bounded source-absent lifecycle and Windows CLI byte
-checks. This metadata projection does not attest runtime
+checks. The selected build consumer has its own bounded lifecycle and CLI checks.
+This metadata projection does not attest runtime
 values, loaded state, combat safety, API parity or current-source qualification.
 See [Native Primary state detail](../../crates/wow-context/e3/NATIVE_PRIMARY_STATE_DETAIL.md).
 

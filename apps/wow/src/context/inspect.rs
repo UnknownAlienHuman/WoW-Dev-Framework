@@ -65,7 +65,9 @@ impl Options {
             "--l1-profile-id" => {
                 let profile = match value {
                     PRIMARY_L1_PROFILE_ID => ContextL1Profile::EntityV1,
-                    PRIMARY_STATE_DETAIL_L1_PROFILE_ID if matches!(command, Command::Inspect) => {
+                    PRIMARY_STATE_DETAIL_L1_PROFILE_ID
+                        if matches!(command, Command::Inspect | Command::Build) =>
+                    {
                         ContextL1Profile::StateDetailV1
                     }
                     _ => return Err("unsupported exact context L1 profile"),
@@ -138,14 +140,22 @@ impl Options {
             _ => {}
         }
         if matches!(&self.l1_profile, Some(ContextL1Profile::StateDetailV1)) {
-            if !matches!(command, Command::Inspect)
-                || level != ContextInspectLevel::L1
-                || !matches!(&root, ContextMapRoot::GraphEntity(_))
+            if level != ContextInspectLevel::L1 || !matches!(&root, ContextMapRoot::GraphEntity(_))
             {
-                return Err("state-detail L1 requires context inspect l1 and graph-entity root");
+                return Err(match command {
+                    Command::Build => {
+                        "state-detail L1 requires context build l1 and graph-entity root"
+                    }
+                    _ => "state-detail L1 requires context inspect l1 and graph-entity root",
+                });
             }
             if self.expansion_profile.is_some() || !self.frontier.is_empty() {
-                return Err("state-detail L1 conflicts with context frontier expansion");
+                return Err(match command {
+                    Command::Build => {
+                        "state-detail L1 conflicts with context build frontier expansion"
+                    }
+                    _ => "state-detail L1 conflicts with context frontier expansion",
+                });
             }
         }
         if self.expansion_profile.is_some() == self.frontier.is_empty() {

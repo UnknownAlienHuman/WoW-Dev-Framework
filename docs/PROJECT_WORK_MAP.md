@@ -35,7 +35,8 @@ strict files manifest and a separately registered replay/catalog. Source-absent
 reopen and update/removal retain those observations in the same context routes.
 Selected ordinary TOC state-root L0 reaches inspect/build; explicit
 [state-detail L1](../crates/wow-context/e3/NATIVE_PRIMARY_STATE_DETAIL.md) preserves
-native roots, typed literal paths and their mandatory TOC custody in inspect.
+native roots, typed literal paths and their mandatory TOC custody in inspect and
+structural build/JSON/Markdown, using the original L1 construction budget.
 The [explicit frontier](../crates/wow-context/e3/NATIVE_PRIMARY_EXPANSION.md)
 also reaches inspect and the
 [frontier pack/render route](../crates/wow-context/e3/NATIVE_PRIMARY_FRONTIER_PACK.md)

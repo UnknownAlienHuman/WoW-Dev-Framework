@@ -6,12 +6,14 @@ use wow_graph::{GraphEdge, GraphNode, GraphPartitionRead};
 
 use crate::budget::{Budget, canonical, checkpoint, exhausted, identity};
 use crate::map::ContextExpansionArtifact;
-use crate::skeleton::build_primary_skeletons_with_budget;
+use crate::skeleton::{
+    build_primary_l1_skeletons_with_budget, build_primary_skeletons_with_budget,
+};
 use crate::universe::UniverseBinding;
 use crate::{
     ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, L0Scope, PrimaryL0Profile,
-    PrimaryMapLimits, PrimarySkeletons, ProjectMap, ProjectMapState, SkeletonLevel,
-    open_project_map_view,
+    PrimaryL1Profile, PrimaryMapLimits, PrimarySkeletons, ProjectMap, ProjectMapState,
+    SkeletonLevel, open_project_map_view,
 };
 
 mod frontier;
@@ -148,6 +150,8 @@ pub(crate) struct PackRequestCore<'m> {
     limits: PrimaryMapLimits,
     #[serde(skip_serializing_if = "Option::is_none")]
     l0_profile_id: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    l1_profile_id: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     expansion_id: Option<Box<str>>,
 }
@@ -398,10 +402,54 @@ pub fn build_context_semantic_pack_with_profile<'m, 'a>(
     profile: PrimaryL0Profile,
     stop: &AtomicBool,
 ) -> ContextResult<ContextSemanticPack<'m, 'a>> {
+    build_context_semantic_pack_with_selection(
+        universe,
+        map,
+        graph,
+        root,
+        (level, profile, PrimaryL1Profile::EntityV1),
+        stop,
+    )
+}
+
+/// Build a selected L1 pack with the original skeleton construction ledger.
+pub fn build_context_semantic_pack_with_l1_profile<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &'m L0Scope,
+    profile: PrimaryL1Profile,
+    stop: &AtomicBool,
+) -> ContextResult<ContextSemanticPack<'m, 'a>> {
+    build_context_semantic_pack_with_selection(
+        universe,
+        map,
+        graph,
+        root,
+        (SkeletonLevel::L1, PrimaryL0Profile::ContainersV1, profile),
+        stop,
+    )
+}
+
+fn build_context_semantic_pack_with_selection<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &'m L0Scope,
+    selection: (SkeletonLevel, PrimaryL0Profile, PrimaryL1Profile),
+    stop: &AtomicBool,
+) -> ContextResult<ContextSemanticPack<'m, 'a>> {
+    let (level, profile, l1_profile) = selection;
     checkpoint(stop)?;
     validate_profiles(universe.limits.max_metadata_bytes, stop)?;
-    let (skeletons, mut budget) =
-        build_primary_skeletons_with_budget(universe, map, graph, root, level, profile, stop)?;
+    let (skeletons, mut budget) = match l1_profile {
+        PrimaryL1Profile::EntityV1 => {
+            build_primary_skeletons_with_budget(universe, map, graph, root, level, profile, stop)?
+        }
+        PrimaryL1Profile::StateDetailV1 => {
+            build_primary_l1_skeletons_with_budget(universe, map, graph, root, l1_profile, stop)?
+        }
+    };
     let request_core = PackRequestCore {
         schema: "wow-context/primary-pack-request/1",
         universe_set_id: universe.universe_set_id(),
@@ -410,6 +458,8 @@ pub fn build_context_semantic_pack_with_profile<'m, 'a>(
         profile_id: PRIMARY_CONTEXT_PACK_PROFILE,
         limits: universe.limits,
         l0_profile_id: (profile != PrimaryL0Profile::ContainersV1).then_some(profile.profile_id()),
+        l1_profile_id: (l1_profile != PrimaryL1Profile::EntityV1)
+            .then_some(l1_profile.profile_id()),
         expansion_id: None,
     };
     budget.retain(&request_core, stop)?;
@@ -627,6 +677,25 @@ pub fn validate_context_semantic_pack(
         return Err(ContextError::new(ContextErrorCode::UniverseMismatch));
     }
     frontier::validate_expansion(pack, stop)?;
+    let expected_l1 = match pack.core.request.core.l1_profile_id {
+        None => PrimaryL1Profile::EntityV1,
+        Some(id)
+            if id == crate::PRIMARY_STATE_DETAIL_L1_PROFILE
+                && pack.core.request.core.level == SkeletonLevel::L1
+                && pack.core.expansion.is_none() =>
+        {
+            PrimaryL1Profile::StateDetailV1
+        }
+        _ => return Err(encoding()),
+    };
+    let expected_l1 = (pack.core.request.core.level != SkeletonLevel::L0).then_some(expected_l1);
+    if !pack.core.skeletons.matches_l1_selection(
+        pack.core.request.core.root,
+        pack.core.request.core.level,
+        expected_l1,
+    ) {
+        return Err(encoding());
+    }
     let id = identity(
         pack.core.schema,
         "context-pack:sha256:",

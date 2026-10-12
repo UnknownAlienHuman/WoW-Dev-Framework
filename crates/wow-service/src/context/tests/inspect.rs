@@ -1799,6 +1799,284 @@ fn retained_native_state_root_l0_preserves_toc_scopes_paths_and_source_absent_cu
             execute_context_inspect(&host, &detail_requests[index], &stop)?.canonical_bytes()
         );
     }
+    // W26 continues this same source-absent publication; no fresh native fixture.
+    let selected_skeletons = &detail_payloads[detail_path_index]["skeletons"];
+    let build_request = |level, root, render| -> TestResult<ContextBuildRequest> {
+        Ok(ContextBuildRequest::primary(
+            STORE_ID,
+            ContextMapPublication::store_generation(publication.generation_id.as_str())?,
+            level,
+            root,
+            render,
+            None,
+            Some(reference_guard(&profile, &reference)?),
+        )?)
+    };
+    let path_root = || ContextMapRoot::graph_entity(path_id.as_str());
+    let mut state_build_requests = Vec::new();
+    let mut state_build_results = Vec::new();
+    let mut state_build_payloads = Vec::new();
+    for render in [
+        ContextRenderSelection::None,
+        ContextRenderSelection::Json,
+        ContextRenderSelection::Markdown,
+        ContextRenderSelection::Both,
+    ] {
+        let request = build_request(ContextInspectLevel::L1, path_root()?, render)?
+            .with_l1_profile(ContextL1Profile::StateDetailV1)?;
+        let result = execute_context_build(&host, &request, &stop)?;
+        assert_eq!(result.status(), ContextMapStatus::Partial);
+        assert_eq!(result.failure_code(), None);
+        let envelope: Value = serde_json::from_slice(result.canonical_bytes())?;
+        assert_eq!(envelope["schema"], "wow-service/context-build-result/1");
+        assert_eq!(envelope["resource_closure"], "closed");
+        assert!(envelope.get("failure_code").is_none());
+        let payload = &envelope["payload"];
+        for field in [
+            "publication_set_id",
+            "store_generation_id",
+            "current_at_acquisition",
+            "current_record_digest",
+        ] {
+            assert_eq!(payload[field], detail_payloads[detail_path_index][field]);
+        }
+        let pack = &payload["semantic_pack"];
+        let core = &pack["core"];
+        assert_eq!(core["skeletons"], *selected_skeletons);
+        assert_eq!(
+            core["request"]["core"]["l1_profile_id"],
+            STATE_DETAIL_L1_PROFILE
+        );
+        assert_eq!(core["request"]["core"]["level"], "l1");
+        assert_eq!(
+            core["profile"]["profile_id"],
+            PRIMARY_CONTEXT_PACK_PROFILE_ID
+        );
+        assert!(core["request"]["core"].get("expansion_id").is_none());
+        assert_eq!(core["state"], "partial");
+        assert_eq!(core["absence_authoritative"], false);
+        let bytes = wow_core::canonical_json_bytes(pack)?;
+        assert_eq!(payload["semantic_pack_byte_length"], bytes.len());
+        if let Some(previous) = state_build_payloads.first() {
+            let previous: &Value = previous;
+            assert_eq!(
+                wow_core::canonical_json_bytes(&previous["semantic_pack"])?,
+                bytes
+            );
+        }
+        state_build_requests.push(request);
+        state_build_payloads.push(payload.clone());
+        state_build_results.push(result);
+    }
+    let selected_pack = &state_build_payloads[0]["semantic_pack"];
+    let pack_core = &selected_pack["core"];
+    let native = &selected_skeletons["l1"]["core"];
+    let mut expected_payloads = Vec::new();
+    for node in rows(&native["local_entities"])? {
+        expected_payloads.push(json!({"kind":"entity","node":node}));
+    }
+    for edge in rows(&native["direct_relations"])? {
+        expected_payloads.push(json!({"kind":"relation","edge":edge}));
+    }
+    let items = rows(&pack_core["items"])?;
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| item["core"]["payload"].clone())
+            .collect::<Vec<_>>(),
+        expected_payloads
+    );
+    assert_eq!(
+        pack_core["omissions"]["upstream"],
+        json!([
+            {"producer":"project_map","artifact_id":native["context"]["origin_map_id"]},
+            {"producer":"l1_skeleton","artifact_id":selected_skeletons["l1"]["l1_skeleton_id"]}
+        ])
+    );
+    let trace = rows(&pack_core["selection_trace"])?;
+    assert_eq!(trace.len(), items.len());
+    for (item, selection) in items.iter().zip(trace) {
+        assert_eq!(selection["item_id"], item["context_item_id"]);
+        assert_eq!(
+            selection["origin_map_id"],
+            native["context"]["origin_map_id"]
+        );
+        assert_eq!(item["core"]["origin_map_id"], selection["origin_map_id"]);
+        let reason = match item["core"]["payload"]["kind"].as_str() {
+            Some("entity")
+                if item["core"]["payload"]["node"]["node_id"] == native["root"]["node_id"] =>
+            {
+                "exact_native_root"
+            }
+            Some("entity") => "selected_direct_native_neighbor",
+            Some("relation") => "original_selected_direct_native_assertion",
+            _ => return Err("non-native selected item".into()),
+        };
+        assert_eq!(selection["reason"], reason);
+        assert_eq!(item["core"]["inclusion_reason"], reason);
+        assert_eq!(selection["required"], true);
+        assert!(item["core"].get("expansion").is_none());
+    }
+    assert!(rows(&state_build_payloads[0]["rendered_artifacts"])?.is_empty());
+    let json_only = rows(&state_build_payloads[1]["rendered_artifacts"])?;
+    let markdown_only = rows(&state_build_payloads[2]["rendered_artifacts"])?;
+    let both = rows(&state_build_payloads[3]["rendered_artifacts"])?;
+    assert_eq!(
+        (json_only.len(), markdown_only.len(), both.len()),
+        (1, 1, 2)
+    );
+    assert_eq!(both, &[json_only[0].clone(), markdown_only[0].clone()]);
+    assert_eq!(
+        json_only[0]["core"]["profile"]["profile_id"],
+        PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID
+    );
+    let json_content = json_only[0]["core"]["content"]
+        .as_str()
+        .ok_or("JSON content")?;
+    assert_eq!(
+        json_content.as_bytes(),
+        wow_core::canonical_json_bytes(selected_pack)?
+    );
+    assert_eq!(serde_json::from_str::<Value>(json_content)?, *selected_pack);
+    super::build::assert_markdown_lossless(&markdown_only[0], selected_pack)?;
+    // Observed post-Both reservations + one final envelope share the same cap.
+    let usage = state_build_payloads[3]["operation_budget_usage"]["bytes_reserved"]
+        .as_u64()
+        .ok_or("post-Both reservation")?;
+    let delivery = u64::try_from(state_build_results[3].canonical_bytes().len())?;
+    let cap = host_json["limits"]["max_metadata_bytes"]
+        .as_u64()
+        .ok_or("caller byte cap")?;
+    assert!(usage.checked_add(delivery).ok_or("cumulative bytes")? <= cap);
+    let delivery_limit = usage.checked_add(delivery / 2).ok_or("delivery witness")?;
+    assert!(delivery_limit > usage && delivery_limit > delivery);
+    let mut envelope_bound = host_json.clone();
+    envelope_bound["limits"]["max_metadata_bytes"] = json!(delivery_limit);
+    assert_frontier_build_refused(
+        &decode_host(&envelope_bound, &stop)?,
+        &state_build_requests[3],
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+        &stop,
+    )?;
+    for field in ["max_context_work", "max_metadata_bytes"] {
+        let mut low = host_json.clone();
+        low["limits"][field] = json!(1);
+        assert_frontier_build_refused(
+            &decode_host(&low, &stop)?,
+            &state_build_requests[3],
+            ServiceErrorCode::BudgetExceeded,
+            "closed",
+            &stop,
+        )?;
+    }
+    assert_frontier_build_refused(
+        &host,
+        &state_build_requests[3],
+        ServiceErrorCode::Cancelled,
+        "not_acquired",
+        &AtomicBool::new(true),
+    )?;
+    for level in [ContextInspectLevel::L0, ContextInspectLevel::Both] {
+        assert_eq!(
+            build_request(level, path_root()?, ContextRenderSelection::None)?
+                .with_l1_profile(ContextL1Profile::StateDetailV1)
+                .err()
+                .ok_or("incompatible state build level admitted")?
+                .code(),
+            ServiceErrorCode::InvalidRequest
+        );
+    }
+    assert_eq!(
+        build_request(
+            ContextInspectLevel::L1,
+            ContextMapRoot::project(host_json["project_id"].as_str().ok_or("project ID")?)?,
+            ContextRenderSelection::None
+        )?
+        .with_l1_profile(ContextL1Profile::StateDetailV1)
+        .err()
+        .ok_or("project state build admitted")?
+        .code(),
+        ServiceErrorCode::InvalidRequest
+    );
+    let base_build = build_request(
+        ContextInspectLevel::L1,
+        path_root()?,
+        ContextRenderSelection::None,
+    )?;
+    assert_eq!(
+        base_build
+            .clone()
+            .with_frontier_expansion(vec![ContextMapRoot::graph_entity(account_id.as_str())?])?
+            .with_l1_profile(ContextL1Profile::StateDetailV1)
+            .err()
+            .ok_or("frontier then selected L1 build admitted")?
+            .code(),
+        ServiceErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        base_build
+            .with_l1_profile(ContextL1Profile::StateDetailV1)?
+            .with_frontier_expansion(vec![ContextMapRoot::graph_entity(account_id.as_str())?])
+            .err()
+            .ok_or("selected L1 then frontier build admitted")?
+            .code(),
+        ServiceErrorCode::InvalidRequest
+    );
+    if scratch.export {
+        let arguments = json!([
+            "context",
+            "build",
+            "--native-host-config",
+            scratch.root.join("host.json"),
+            "--project-store",
+            STORE_ID,
+            "--publication",
+            format!("store-generation:{}", publication.generation_id.as_str()),
+            "--root",
+            root_token(&path_id),
+            "--level",
+            "l1",
+            "--l1-profile-id",
+            STATE_DETAIL_L1_PROFILE,
+            "--context-profile-id",
+            PRIMARY_CONTEXT_PACK_PROFILE_ID,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+            "--renderer-profile-id",
+            PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+            "--platform",
+            "omitted",
+            "--expect-profile",
+            profile.profile_id().as_str(),
+            "--expect-reference-generation",
+            reference.generation_id(),
+            "--expect-reference-view",
+            reference.self_digest(),
+            "--output",
+            "envelope-json"
+        ]);
+        for (name, bytes, limit) in [
+            (
+                "state-detail-path-build-request.json",
+                wow_core::canonical_json_bytes(&state_build_requests[3])?,
+                64 * 1024,
+            ),
+            (
+                "state-detail-path-build-cli-arguments.json",
+                wow_core::canonical_json_bytes(&arguments)?,
+                64 * 1024,
+            ),
+            (
+                "state-detail-path-build-expected-envelope.json",
+                state_build_results[3].canonical_bytes().to_vec(),
+                CONTEXT_MAP_RESULT_MAX_BYTES,
+            ),
+        ] {
+            write_export(&scratch.root, name, &bytes, limit)?;
+        }
+    }
+    assert!(!input.exists());
     let legacy_root = exact_inspect_request(
         &publication.generation_id,
         ContextInspectLevel::L1,

@@ -483,7 +483,7 @@ fn assert_json(artifact: &Value, pack: &Value) -> TestResult {
     Ok(())
 }
 
-fn assert_markdown(artifact: &Value, pack: &Value) -> TestResult {
+pub(super) fn assert_markdown_lossless(artifact: &Value, pack: &Value) -> TestResult {
     assert_artifact(artifact, pack)?;
     let artifact_core = &artifact["core"];
     assert_eq!(
@@ -611,6 +611,14 @@ fn assert_markdown(artifact: &Value, pack: &Value) -> TestResult {
         wow_core::canonical_json_bytes(&reconstructed)?,
         wow_core::canonical_json_bytes(pack)?
     );
+    Ok(())
+}
+
+fn assert_markdown(artifact: &Value, pack: &Value) -> TestResult {
+    assert_markdown_lossless(artifact, pack)?;
+    let content = artifact["core"]["content"]
+        .as_str()
+        .ok_or("Markdown content")?;
     assert!(
         !content.contains(ADMITTED_PATH),
         "admitted source metadata cannot alter Markdown framing"

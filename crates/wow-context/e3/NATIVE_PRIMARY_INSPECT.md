@@ -13,7 +13,7 @@ The normative [L0](L0_SKELETON.md), [L1](L1_SKELETON.md) and
 | `wow-context/primary-l0/1` | Exact acquired ProjectId, or an exact `source_file` / `source_package` graph container | Contains, Defines, DependsOn, OptionalDependsOn, Owns, Loads, LoadsBefore |
 | `wow-context/primary-l1/1` | Exact admitted Primary graph entity | All 27 reviewed native direct relation kinds |
 | `wow-context/primary-state-root-l0/1` | Exact original ordinary selected-TOC `state_root` graph entity | Same seven structural kinds as default L0 |
-| `wow-context/primary-state-detail-l1/1` | Exact original ordinary selected-TOC `state_root` / `state_path`; non-frontier inspect L1 only | Same 27 direct kinds as default L1 |
+| `wow-context/primary-state-detail-l1/1` | Exact original ordinary selected-TOC `state_root` / `state_path`; non-frontier L1 inspect or structural pack build | Same 27 direct kinds as default L1 |
 
 The default L0/L1 descriptors select both directions, depth 1, native node-ID then edge-ID
 ordering, local metadata, excluded source bodies, unavailable tokens and
@@ -81,10 +81,12 @@ roots/paths, literal typed keys, plural supporting TOC declarations and
 scope/ambiguity while retaining the original direct neighborhood and custody.
 Required native root/path/support missing or omitted by truncation refuses.
 The [state-detail contract](NATIVE_PRIMARY_STATE_DETAIL.md) defines the closed
-input and cumulative envelope boundary. The bounded source-absent lifecycle,
+input and cumulative envelope boundary. Inspect's bounded source-absent lifecycle,
 missing-root refusal, cumulative delivery bounds and Windows CLI byte checks pass.
-This first selected consumer is inspect L1 only; build/frontier/combined-level
-selection remains unsupported. Default EntityV1 and old /1 bytes remain unchanged.
+The same selected L1 also feeds structural pack build and its existing JSON/Markdown
+renderers, with bounded source-absent lifecycle and Windows CLI checks. Frontier,
+L0/Both/Project and other root kinds remain unsupported for this profile.
+Default EntityV1 and old /1 bytes remain unchanged.
 
 ## Native API and custody
 

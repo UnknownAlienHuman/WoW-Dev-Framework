@@ -20,7 +20,7 @@
     ],
     "route": "crates/wow-context/README.md",
     "tracker": "https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122",
-    "scope": "functional/build-verified selected exact Primary maps, L0/L1 with native syntax/signature metadata, ordinary TOC state-root L0 inspect/build, sealed packs/JSON/Markdown and one explicit native frontier inspect/build; selected state-detail L1 inspect has bounded source-absent lifecycle and CLI validation",
+    "scope": "functional/build-verified selected exact Primary maps, L0/L1 with native syntax/signature metadata, ordinary TOC state-root L0 inspect/build, sealed packs/JSON/Markdown and one explicit native frontier inspect/build; selected state-detail L1 inspect/build/render has bounded source-absent lifecycle and CLI validation",
     "acceptance": "pending",
     "remaining": [
       "broader L0/L1 scopes and facets",

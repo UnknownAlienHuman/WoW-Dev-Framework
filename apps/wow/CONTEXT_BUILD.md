@@ -17,7 +17,7 @@ wow context build --native-host-config <host.json>
   --level l0|l1|both
   --context-profile-id wow-context/primary-structural-pack/1|wow-context/primary-frontier-pack/1
   [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1]
-  [--l1-profile-id wow-context/primary-l1/1]
+  [--l1-profile-id wow-context/primary-l1/1|wow-context/primary-state-detail-l1/1]
   [--expansion-profile-id wow-context/primary-native-frontier/1
    --frontier graph-entity@<base64url-id> ...]
   [--renderer-profile-id wow-context/primary-pack-json/1|wow-context/primary-frontier-pack-json/1]
@@ -42,7 +42,7 @@ added. Bounded execution evidence is recorded in #122.
 
 Root tokens are canonical unpadded base64url UTF-8 IDs, with no lookup or search.
 L0 options select one closed profile; omission/default preserves primary-l0/1.
-The L1 option remains an optional exact assertion for the selected level.
+The L1 option selects a closed profile; omission/default preserves primary-l1/1.
 Current guards require `--publication current`; Reference guards form one complete
 three-option group. Unknown options/profiles, duplicate options and incompatible
 level/profile assertions refuse before invocation.
@@ -53,6 +53,34 @@ or Markdown; both select JSON then Markdown regardless of argument order.
 There is no `--render` flag, standalone render/import route, auto profile selection
 or text/artifact stdout mode. Requested renderers are required: refusal suppresses
 the delivery payload rather than returning a pack-only fallback.
+
+## Selected native state-detail L1 pack
+
+Pair `--level l1 --l1-profile-id wow-context/primary-state-detail-l1/1` with
+`--context-profile-id wow-context/primary-structural-pack/1` and an exact
+GraphEntity root for an original ordinary selected-TOC state_root or state_path.
+Project, L0/Both, other root kinds and frontier selections refuse. Root/path
+custody must come from the genuine native owner; names cannot substitute for it.
+
+The embedded L1 retains its existing state-detail profile/schema, original
+literal keys, plural supporting TOC declarations, scope/ambiguity and unchanged
+direct graph/source/load/evidence custody. Required root/path/support missing
+or omitted by truncation refuses; no empty successful facet is substituted.
+The [state-detail owner contract](../../crates/wow-context/e3/NATIVE_PRIMARY_STATE_DETAIL.md)
+defines those same joins for inspect and build.
+
+Zero/one/both renderers use the existing structural JSON/Markdown family.
+Native skeleton construction hands its actual Budget into pack finalization,
+validation and each requested renderer; build does not call inspect or reconstruct
+a ledger from serialized counters. The selected final service envelope must fit
+the actual remaining metadata allowance after rendering/validation. Mandatory
+overflow or cancellation suppresses delivery.
+
+The optional selected l1_profile_id in the nested native pack request binds
+this selection. Its default None is omitted, preserving old pack bytes; no new
+pack/render profile or version is introduced. Metadata does not attest state
+values, loaded state, combat safety or runtime behavior. The bounded source-absent
+build lifecycle, cumulative refusal and actual Windows CLI pass in #122.
 
 ## Selected frontier pack
 
@@ -120,10 +148,11 @@ is `wow-service/context-build-request/1`; result schema is
 The request retains store/publication, `platform="omitted"`, level/root, render
 selection, exact context profile and normalized renderer-profile array. Selected
 L0/L1 profiles are recorded; absent guard/profile fields are omitted. The native
-pack request's selected l0_profile_id binds the explicit state-root selection
-into its request/pack identity. Default ContainersV1 retains None, omitted from
-serialization, preserving old pack bytes. Default pack/renderer profile IDs stay the
-existing choices. Frontier selection binds its normalized profile/frontier and
+pack request's selected l0_profile_id binds state-root L0; its optional selected
+l1_profile_id binds state-detail L1 into request/pack identity. Default
+ContainersV1/EntityV1 retain None for these native pack fields, omitted from
+serialization to preserve old pack bytes. Default pack/renderer profile IDs stay
+the existing choices. Frontier selection binds its normalized profile/frontier and
 named pack/renderer family; absent frontier fields are omitted. No source,
 producer, storage or replay selection is introduced.
 

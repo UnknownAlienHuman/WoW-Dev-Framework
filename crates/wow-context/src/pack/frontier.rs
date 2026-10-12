@@ -90,6 +90,7 @@ pub fn build_context_semantic_pack_from_expansion<'m, 'a: 'm>(
         profile_id: PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE,
         limits: universe.limits,
         l0_profile_id: None,
+        l1_profile_id: None,
         expansion_id: Some(expansion.expansion_id().into()),
     };
     budget.retain(&request_core, stop)?;

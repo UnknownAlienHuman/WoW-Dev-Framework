@@ -1,8 +1,8 @@
 //! Closed build-only grammar. Shared transport, level/root parsing and output stay in the parent.
 use super::{Command, inspect::Selection, set};
 use wow_service::context::{
-    ContextBuildRequest, ContextMapCurrentGuard, ContextMapPublication, ContextMapReferenceGuard,
-    ContextRenderSelection, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+    ContextBuildRequest, ContextL1Profile, ContextMapCurrentGuard, ContextMapPublication,
+    ContextMapReferenceGuard, ContextRenderSelection, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_PACK_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
@@ -75,7 +75,7 @@ impl Options {
             level,
             root,
             l0_profile,
-            l1_profile: _,
+            l1_profile,
             frontier,
         } = selection;
         if (family == Family::Frontier) != frontier.is_some() {
@@ -116,6 +116,13 @@ impl Options {
                 .with_l0_profile(profile)
                 .map_err(|_| "invalid context build request syntax")?,
             None => request,
+        };
+        let request = match l1_profile {
+            Some(ContextL1Profile::StateDetailV1) => request
+                .with_l1_profile(ContextL1Profile::StateDetailV1)
+                .map_err(|_| "invalid context build request syntax")?,
+            // Entity remains an optional assertion of the existing primary constructor.
+            Some(ContextL1Profile::EntityV1) | None => request,
         };
         match frontier {
             Some(frontier) => request

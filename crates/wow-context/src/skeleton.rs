@@ -40,6 +40,12 @@ impl PrimaryL1Profile {
             Self::StateDetailV1 => &STATE_DETAIL_L1_PROFILE,
         }
     }
+    const fn schema(self) -> &'static str {
+        match self {
+            Self::EntityV1 => "wow-context/l1-skeleton/primary/1",
+            Self::StateDetailV1 => "wow-context/l1-skeleton/primary-state-detail/1",
+        }
+    }
 }
 
 /// Closed container selections. The existing descriptor and default bytes are
@@ -61,7 +67,7 @@ impl PrimaryL0Profile {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialEq, Eq)]
 struct SkeletonProfile {
     profile_id: &'static str,
     scope_kinds: &'static [&'static str],
@@ -151,6 +157,31 @@ impl PrimarySkeletons<'_, '_> {
     }
     pub(crate) fn l1_id(&self) -> Option<&str> {
         self.l1.as_ref().map(L1Skeleton::l1_skeleton_id)
+    }
+    pub(crate) fn matches_l1_selection(
+        &self,
+        root: &L0Scope,
+        level: SkeletonLevel,
+        profile: Option<PrimaryL1Profile>,
+    ) -> bool {
+        if self.level != level
+            || self.l0.is_some() != matches!(level, SkeletonLevel::L0 | SkeletonLevel::Both)
+        {
+            return false;
+        }
+        match (&self.l1, profile, root) {
+            (None, None, _) => level == SkeletonLevel::L0,
+            (Some(skeleton), Some(profile), L0Scope::Entity(id)) => {
+                skeleton.core.root.node_id() == id
+                    && skeleton.core.schema == profile.schema()
+                    && skeleton.core.profile == profile.profile_id()
+                    && skeleton.core.profile_descriptor == profile.descriptor()
+                    && (profile == PrimaryL1Profile::EntityV1
+                        || (level == SkeletonLevel::L1
+                            && matches!(skeleton.core.root.kind(), "state_root" | "state_path")))
+            }
+            _ => false,
+        }
     }
     pub fn state(&self) -> ProjectMapState {
         if self
@@ -970,10 +1001,7 @@ fn l1<'m, 'a>(
         return Err(missing());
     }
     let core = L1Core {
-        schema: match profile {
-            PrimaryL1Profile::EntityV1 => "wow-context/l1-skeleton/primary/1",
-            PrimaryL1Profile::StateDetailV1 => "wow-context/l1-skeleton/primary-state-detail/1",
-        },
+        schema: profile.schema(),
         profile: descriptor.profile_id,
         profile_descriptor: descriptor,
         context: context(universe, map, budget),
@@ -1012,6 +1040,18 @@ pub fn build_primary_l1_skeletons_with_profile<'m, 'a>(
     profile: PrimaryL1Profile,
     stop: &AtomicBool,
 ) -> ContextResult<PrimarySkeletons<'m, 'a>> {
+    build_primary_l1_skeletons_with_budget(universe, map, graph, root, profile, stop)
+        .map(|(result, _)| result)
+}
+
+pub(crate) fn build_primary_l1_skeletons_with_budget<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &L0Scope,
+    profile: PrimaryL1Profile,
+    stop: &AtomicBool,
+) -> ContextResult<(PrimarySkeletons<'m, 'a>, Budget)> {
     let L0Scope::Entity(id) = root else {
         return Err(invalid());
     };
@@ -1033,7 +1073,6 @@ pub fn build_primary_l1_skeletons_with_profile<'m, 'a>(
         budget,
         stop,
     )
-    .map(|(result, _)| result)
 }
 
 /// One fixed-order inspection with a shared aggregate work/output reservation.

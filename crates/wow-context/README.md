@@ -14,7 +14,7 @@ configured Reference binding, original support and load/source custody:
 - [Sealed semantic packs and canonical JSON/metadata-safe Markdown](e3/NATIVE_PRIMARY_PACK.md).
 - [One explicit native frontier round](e3/NATIVE_PRIMARY_EXPANSION.md) and its
   [build/pack/JSON/Markdown consumer](e3/NATIVE_PRIMARY_FRONTIER_PACK.md).
-- [Selected native state-detail L1 inspection](e3/NATIVE_PRIMARY_STATE_DETAIL.md),
+- [Selected native state-detail L1 inspect/build](e3/NATIVE_PRIMARY_STATE_DETAIL.md),
   retaining literal state keys, plural TOC declarations, scope and ambiguity.
 
 Selected projections remain Partial or Truncated with absence_authoritative=false;
@@ -81,7 +81,7 @@ No direct dependency on `wow-store`, `wow-emmy`, `wow-recognizers`, `wow-rules`,
 Cargo.toml: active root workspace member
 functional/build-verified: selected maps, L0/L1, native syntax/signature metadata,
   TOC state-root L0 inspect/build, packs/rendering and one native frontier round
-bounded functional lifecycle/CLI: selected state-detail L1 inspect
+bounded functional lifecycle/CLI: selected state-detail L1 inspect/build/render
 remaining: broader facets, deeper/progressive expansion, Reference enrichment,
   platform/combined views, excerpts/privacy/exact tokens/continuation,
   full fixtures, Tier A/X and the specified E6-B mapped-root handoff

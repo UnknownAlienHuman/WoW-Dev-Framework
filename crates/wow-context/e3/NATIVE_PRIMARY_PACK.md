@@ -24,13 +24,26 @@ container admitted by L0. L0 direct relations remain its seven structural kinds,
 even when Both shares L1's broader detail-origin map. Existing native direct
 queries supply records and truncation; packing does not expand paths.
 
+Explicit PrimaryL1Profile::StateDetailV1 selects the existing
+[ordinary TOC state-detail L1](NATIVE_PRIMARY_STATE_DETAIL.md) for non-frontier
+L1 build over an exact native state_root/state_path GraphEntity. Project,
+L0/Both, other root kinds and frontier selection refuse. Original root/path,
+literal keys, plural supporting declarations and custody remain mandatory;
+missing/truncated required support refuses rather than yielding an empty facet.
+This uses the existing structural pack and JSON/Markdown family.
+
 ## Native construction and immutable records
 
 After `bind_context_universe_set`,
 `build_context_semantic_pack(universe, map, graph, root, level, stop)` consumes the
 exact bound universe, immutable ProjectMap, native GraphPartitionRead and typed
-L0Scope/SkeletonLevel. `validate_context_semantic_pack(universe, &mut pack, stop)`
-checks native binding and canonical bytes using the continuing budget.
+L0Scope/SkeletonLevel.
+`build_context_semantic_pack_with_l1_profile(universe, map, graph, root, profile, stop)`
+selects L1 over those same native owners. StateDetailV1 carries the actual Budget
+returned with its native skeletons into pack construction; it does not rebuild
+from an inspect artifact or derive a new ledger from serialized usage.
+`validate_context_semantic_pack(universe, &mut pack, stop)` checks native binding
+and canonical bytes using that continuing budget.
 `ContextSemanticPack` is sealed and Serialize-only. Its public accessors are
 `semantic_pack_id()`, `canonical_bytes()`, `state()` and
 `operation_budget_usage()`; serialized bytes cannot reconstruct native custody.
@@ -39,6 +52,10 @@ Pack schema is `wow-context/semantic-pack/primary/1`; the owner request schema i
 `wow-context/primary-pack-request/1`. The core retains the frozen profile, exact
 universe/binding/request, boundary notice, original PrimarySkeletons, typed
 items, selection trace, scoped omissions, budget and state.
+Optional selected l1_profile_id in the nested native pack request binds
+StateDetailV1; EntityV1 retains None and omits the field, preserving old bytes.
+Validation requires the exact selected root, L1 profile/descriptor and schema.
+State-detail schema/profile and structural pack/render versions remain unchanged.
 Original layer maps preserve project/configuration/graph/Reference identities,
 source/artifact handles and digests/spans, package/TOC/load custody, original
 support/evidence, confidence, coverage and conflicts. Optional platform absence
@@ -102,7 +119,9 @@ The skipped private ledger continues through rendering/validation;
 operation_budget_usage uses `before_service_delivery`; the service separately
 bounds its final delivery envelope. These values are bounded
 work/encoded reservations, not physical memory, elapsed time or exact tokens.
-No renderer resets limits. Mandatory overflow or cancellation refuses.
+No renderer resets limits. For selected state-detail build, the final service
+envelope must fit the actual remaining metadata allowance after all requested
+rendering/validation. Mandatory overflow or cancellation refuses.
 
 Returned state is Partial or Truncated and `absence_authoritative=false`.
 Upstream omission references keep producer/artifact identity, interpreted as
@@ -117,5 +136,6 @@ not_evaluated. Partial/truncated coverage never proves absence or a clean negati
 The [service/CLI route](../../../apps/wow/CONTEXT_BUILD.md) pins publication,
 validates guards, requires explicit profiles and closes native resources before
 delivery. The [selected synthetic fixture](../../wow-service/e3/native-primary-pack/README.md)
-freezes exact bytes; broad E3/Tier A/X acceptance remains open. This contract does not claim source
+freezes exact default bytes. State-detail build has bounded source-absent lifecycle
+and Windows CLI verification; broad E3/Tier A/X acceptance remains open. This contract does not claim source
 permission, model/token fit, runtime semantics, lineage or full package acceptance.
