@@ -122,6 +122,28 @@ impl GraphNeighborReadQuery {
         self.collect(snapshot, stop)
     }
 
+    // A sealed owner can preflight several exact queries and physically scan its
+    // immutable edge vector once. Each returned view retains the same logical
+    // full-scan counters and output semantics as an independent query.
+    pub(crate) fn execute_batch_on_read<'a>(
+        queries: &[Self],
+        read: &crate::GraphPartitionRead<'a>,
+        stop: &AtomicBool,
+    ) -> GraphResult<Vec<GraphNeighborView<'a>>> {
+        let snapshot = read.owner().snapshot();
+        checkpoint(stop)?;
+        if queries.is_empty() {
+            return Ok(Vec::new());
+        }
+        if queries.len() > snapshot.limits().max_nodes as usize {
+            return Err(budget());
+        }
+        for query in queries {
+            query.preflight(snapshot, stop)?;
+        }
+        collect_batch(queries, snapshot, stop)
+    }
+
     fn preflight(&self, snapshot: &GraphSnapshot, stop: &AtomicBool) -> GraphResult<()> {
         checkpoint(stop)?;
         self.validate()?;
@@ -145,13 +167,72 @@ impl GraphNeighborReadQuery {
         snapshot: &'a GraphSnapshot,
         stop: &AtomicBool,
     ) -> GraphResult<GraphNeighborView<'a>> {
+        collect_batch(std::slice::from_ref(self), snapshot, stop)?
+            .pop()
+            .ok_or_else(|| invalid("neighbor read batch lost its result"))
+    }
+}
+
+fn collect_batch<'a>(
+    queries: &[GraphNeighborReadQuery],
+    snapshot: &'a GraphSnapshot,
+    stop: &AtomicBool,
+) -> GraphResult<Vec<GraphNeighborView<'a>>> {
+    let mut collectors = Vec::with_capacity(queries.len());
+    let mut roots = BTreeMap::<&str, Vec<usize>>::new();
+    for query in queries {
+        checkpoint(stop)?;
+        let index = collectors.len();
+        roots
+            .entry(query.query().node_id().as_str())
+            .or_default()
+            .push(index);
+        collectors.push(GraphNeighborCollector::new(query, snapshot, stop)?);
+    }
+    for edge in snapshot.edges() {
+        checkpoint(stop)?;
+        if let Some(indices) = roots.get(edge.from().as_str()) {
+            for &index in indices {
+                checkpoint(stop)?;
+                collectors[index].observe(snapshot, edge, stop)?;
+            }
+        }
+        if edge.to() != edge.from()
+            && let Some(indices) = roots.get(edge.to().as_str())
+        {
+            for &index in indices {
+                checkpoint(stop)?;
+                collectors[index].observe(snapshot, edge, stop)?;
+            }
+        }
+    }
+    let scanned_edges = u32::try_from(snapshot.edges().len()).map_err(|_| budget())?;
+    collectors
+        .into_iter()
+        .map(|collector| collector.finish(scanned_edges, stop))
+        .collect()
+}
+
+struct GraphNeighborCollector<'a> {
+    result: GraphNeighborView<'a>,
+    nodes: BTreeMap<&'a GraphNodeId, &'a GraphNode>,
+    used: usize,
+    limit: usize,
+}
+
+impl<'a> GraphNeighborCollector<'a> {
+    fn new(
+        query: &GraphNeighborReadQuery,
+        snapshot: &'a GraphSnapshot,
+        stop: &AtomicBool,
+    ) -> GraphResult<Self> {
         let root = snapshot
-            .node(self.query.node_id())
+            .node(query.query().node_id())
             .ok_or_else(|| invalid("neighbor root is absent from the selected snapshot"))?;
         let mut result = GraphNeighborView {
             schema: GRAPH_NEIGHBOR_READ_SCHEMA,
-            query: self.clone(),
-            query_digest: query_digest(GRAPH_NEIGHBOR_READ_SCHEMA, self)?,
+            query: query.clone(),
+            query_digest: query_digest(GRAPH_NEIGHBOR_READ_SCHEMA, query)?,
             universe: snapshot.universe(),
             generation: snapshot.generation(),
             root,
@@ -167,89 +248,107 @@ impl GraphNeighborReadQuery {
             no_new_evidence: true,
             absence_authoritative: false,
         };
-        for relation in self.query.relations() {
+        for relation in query.query().relations() {
             match snapshot.coverage_for(*relation) {
                 Some(record) => result.coverage.push(record),
                 None => result.missing_coverage.push(*relation),
             }
         }
-        let limit = self.limits.max_output_bytes as usize;
-        // Full exact metadata plus fixed reserve for counters and stop reasons.
-        let mut used = encoded_len(&result, limit, stop)?
+        let limit = query.limits().max_output_bytes as usize;
+        let used = encoded_len(&result, limit, stop)?
             .ok_or_else(budget)?
             .checked_add(2048)
             .ok_or_else(budget)?;
         if used > limit {
             return Err(budget());
         }
-        let mut nodes = BTreeMap::<&GraphNodeId, &GraphNode>::new();
-        for edge in snapshot.edges() {
-            checkpoint(stop)?;
-            result.scanned_edges += 1;
-            if !self.query.matches_edge(edge) || !self.confidence.admits(edge.confidence()) {
-                continue;
-            }
-            result.matching_edges += 1;
-            // Keep counting, but never serialize or allocate omitted supports.
-            if !result.truncations.is_empty() {
-                continue;
-            }
-            if result.edges.len() >= self.query.max_edges() as usize {
-                result.truncations.push(GraphNeighborTruncation::Edges);
-                continue;
-            }
-            let adjacent_id = if edge.from() == self.query.node_id() {
-                edge.to()
-            } else {
-                edge.from()
-            };
-            let new_node = if nodes.contains_key(adjacent_id) {
-                None
-            } else {
-                Some(
-                    snapshot
-                        .node(adjacent_id)
-                        .ok_or_else(|| invalid("neighbor endpoint is missing"))?,
-                )
-            };
-            let edge_size = encoded_len(edge, limit - used, stop)?;
-            let node_size = match new_node {
-                Some(node) => encoded_len(node, limit - used, stop)?,
-                None => Some(0),
-            };
-            let size = edge_size
-                .zip(node_size)
-                .and_then(|(e, n)| e.checked_add(n)?.checked_add(2));
-            let Some(size) = size.filter(|size| *size <= limit - used) else {
-                result
-                    .truncations
-                    .push(GraphNeighborTruncation::OutputBytes);
-                continue;
-            };
-            // Admit the edge and its newly required endpoint atomically.
-            used += size;
-            result.edges.push(edge);
-            if let Some(node) = new_node {
-                nodes.insert(adjacent_id, node);
-            }
+        Ok(Self {
+            result,
+            nodes: BTreeMap::new(),
+            used,
+            limit,
+        })
+    }
+
+    fn observe(
+        &mut self,
+        snapshot: &'a GraphSnapshot,
+        edge: &'a GraphEdge,
+        stop: &AtomicBool,
+    ) -> GraphResult<()> {
+        if !self.result.query.query().matches_edge(edge)
+            || !self.result.query.confidence().admits(edge.confidence())
+        {
+            return Ok(());
         }
-        result.adjacent_nodes = nodes.into_values().collect();
-        result.omitted_edges = result.matching_edges - result.edges.len() as u32;
-        result.no_new_evidence = result.edges.is_empty();
-        result.state = crate::query::query_state(
-            !result.truncations.is_empty(),
-            !result.missing_coverage.is_empty(),
-            result.coverage.iter().copied(),
+        self.result.matching_edges += 1;
+        if !self.result.truncations.is_empty() {
+            return Ok(());
+        }
+        if self.result.edges.len() >= self.result.query.query().max_edges() as usize {
+            self.result.truncations.push(GraphNeighborTruncation::Edges);
+            return Ok(());
+        }
+        let adjacent_id = if edge.from() == self.result.query.query().node_id() {
+            edge.to()
+        } else {
+            edge.from()
+        };
+        let new_node = if self.nodes.contains_key(adjacent_id) {
+            None
+        } else {
+            Some(
+                snapshot
+                    .node(adjacent_id)
+                    .ok_or_else(|| invalid("neighbor endpoint is missing"))?,
+            )
+        };
+        let edge_size = encoded_len(edge, self.limit - self.used, stop)?;
+        let node_size = match new_node {
+            Some(node) => encoded_len(node, self.limit - self.used, stop)?,
+            None => Some(0),
+        };
+        let size = edge_size
+            .zip(node_size)
+            .and_then(|(edge, node)| edge.checked_add(node)?.checked_add(2));
+        let Some(size) = size.filter(|size| *size <= self.limit - self.used) else {
+            self.result
+                .truncations
+                .push(GraphNeighborTruncation::OutputBytes);
+            return Ok(());
+        };
+        self.used += size;
+        self.result.edges.push(edge);
+        if let Some(node) = new_node {
+            self.nodes.insert(adjacent_id, node);
+        }
+        Ok(())
+    }
+
+    fn finish(
+        mut self,
+        scanned_edges: u32,
+        stop: &AtomicBool,
+    ) -> GraphResult<GraphNeighborView<'a>> {
+        self.result.scanned_edges = scanned_edges;
+        self.result.adjacent_nodes = self.nodes.into_values().collect();
+        self.result.omitted_edges = self.result.matching_edges - self.result.edges.len() as u32;
+        self.result.no_new_evidence = self.result.edges.is_empty();
+        self.result.state = crate::query::query_state(
+            !self.result.truncations.is_empty(),
+            !self.result.missing_coverage.is_empty(),
+            self.result.coverage.iter().copied(),
         );
-        result.absence_authoritative = result.no_new_evidence
-            && result.state == GraphQueryState::Complete
-            && self.confidence != GraphPathConfidence::IncludeCandidate
-            && result
+        self.result.absence_authoritative = self.result.no_new_evidence
+            && self.result.state == GraphQueryState::Complete
+            && self.result.query.confidence() != GraphPathConfidence::IncludeCandidate
+            && self
+                .result
                 .coverage
                 .iter()
                 .all(|record| record.negative_authority());
-        ensure_fits(&result, limit, stop)?;
-        Ok(result)
+        ensure_fits(&self.result, self.limit, stop)?;
+        Ok(self.result)
     }
 }
 

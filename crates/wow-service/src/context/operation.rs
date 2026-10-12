@@ -522,11 +522,11 @@ fn with_native_map_construction<T>(
             let mut request =
                 wow_context::primary_project_navigation_queries(universe, &id, &graph, stop)
                     .map_err(context_error)?;
-            for index in 0..request.navigation_queries().len() {
+            let neighborhoods = graph
+                .neighbors_batch(request.navigation_queries(), stop)
+                .map_err(graph_error)?;
+            for view in neighborhoods {
                 checkpoint(stop)?;
-                let view = graph
-                    .neighbors(&request.navigation_queries()[index], stop)
-                    .map_err(graph_error)?;
                 request
                     .admit_neighborhood(view, stop)
                     .map_err(context_error)?;
