@@ -54,7 +54,7 @@ pub(super) fn validate(
                 stop,
             )
             .map_err(graph_error)?;
-        rebuilt = prepared.candidate().clone();
+        rebuilt = prepared.into_candidate();
     }
     crate::analyzer::checkpoint(stop)?;
     for &producer in plan.producer_order() {
@@ -74,7 +74,7 @@ pub(super) fn validate(
                 stop,
             )
             .map_err(graph_error)?;
-        rebuilt = prepared.candidate().clone();
+        rebuilt = prepared.into_candidate();
         crate::analyzer::checkpoint(stop)?;
     }
     // Finish owns only this rebuilt raw/direct closure. Independent recognizer

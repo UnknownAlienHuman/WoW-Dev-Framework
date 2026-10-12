@@ -327,7 +327,7 @@ fn publish_families(
                     ),
                 )
             })?;
-        snapshot = prepared.candidate().clone();
+        snapshot = prepared.into_candidate();
         recognitions.push(proposals.recognition);
     }
     checkpoint(stop)?;

@@ -97,7 +97,7 @@ pub(super) fn publish(
                     ),
                 )
             })?;
-        snapshot = prepared.candidate().clone();
+        snapshot = prepared.into_candidate();
         recognitions.push(proposals.recognition);
     }
     Ok((snapshot, recognitions))
@@ -242,7 +242,7 @@ pub(super) fn publish_bound(
                     ),
                 )
             })?;
-        snapshot = prepared.candidate().clone();
+        snapshot = prepared.into_candidate();
         checkpoint(stop)?;
         recognitions.push(proposals.recognition);
     }

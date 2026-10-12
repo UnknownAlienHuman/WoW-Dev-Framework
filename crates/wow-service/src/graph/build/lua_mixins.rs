@@ -171,7 +171,7 @@ pub(super) fn publish(
         )
         .map_err(graph_error)?;
     Ok((
-        assignment_candidate.candidate().clone(),
+        assignment_candidate.into_candidate(),
         construction.recognition,
         assignment.recognition,
     ))

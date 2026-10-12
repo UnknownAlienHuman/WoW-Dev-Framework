@@ -89,8 +89,9 @@ require unfinished producers to pass final capacity qualification before coding
 them. Equally, do not close acceptance debt just to resume implementation. Keep
 actual incompatible interfaces blocked; work on independent paths meanwhile.
 
-The current W17 queue is Issue #106. Its immediate capacity repair is #121;
-final corpus qualification remains #113. Read their current bodies, not copied
+The active implementation queue is Issue #122; #106 tracks W17 acceptance.
+The immediate capacity repair is #121; final corpus qualification remains #113.
+Read their current bodies, not copied
 historical SHAs or obsolete ordering in an audit index.
 
 ## 5. Validation: code first, smallest sufficient gate

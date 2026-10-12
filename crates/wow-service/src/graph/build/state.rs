@@ -130,7 +130,7 @@ pub(super) fn publish(
             stop,
         )
         .map_err(graph_error)?;
-    Ok((prepared.candidate().clone(), result.recognition))
+    Ok((prepared.into_candidate(), result.recognition))
 }
 
 pub(super) fn maps(
@@ -317,7 +317,7 @@ pub(super) fn publish_bound(
             stop,
         )
         .map_err(graph_error)?;
-    let snapshot = prepared.candidate().clone();
+    let snapshot = prepared.into_candidate();
     checkpoint(stop)?;
     Ok((snapshot, StateRecognition::Assertions(result.recognition)))
 }

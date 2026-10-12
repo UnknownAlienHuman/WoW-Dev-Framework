@@ -273,6 +273,14 @@ impl GraphPartitionReplacementPlan {
         &self.candidate
     }
 
+    /// Consume the prepared plan and move its candidate without copying it.
+    /// This does not publish the candidate or bypass the receiving owner's
+    /// validation and expected-snapshot checks.
+    #[must_use]
+    pub fn into_candidate(self) -> GraphPartitionSnapshot {
+        self.candidate
+    }
+
     #[must_use]
     pub fn changes(&self) -> &[GraphPartitionChange] {
         &self.changes

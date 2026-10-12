@@ -71,7 +71,7 @@ fn replacement(
             },
             stop,
         )
-        .map(|plan| plan.candidate().clone())
+        .map(|plan| plan.into_candidate())
         .map_err(graph_error)
 }
 

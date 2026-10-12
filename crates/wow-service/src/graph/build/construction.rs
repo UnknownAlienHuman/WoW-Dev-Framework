@@ -72,7 +72,7 @@ pub(super) fn publish(
             stop,
         )
         .map_err(graph_error)?;
-    Ok((candidate.candidate().clone(), result.recognition))
+    Ok((candidate.into_candidate(), result.recognition))
 }
 
 pub(super) fn maps(

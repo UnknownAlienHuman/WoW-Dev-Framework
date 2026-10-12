@@ -323,7 +323,7 @@ pub(super) fn publish(
                 stop,
             )
             .map_err(graph_error)?;
-        snapshot = prepared.candidate().clone();
+        snapshot = prepared.into_candidate();
         recognitions.push(proposals.recognition);
     }
     Ok((snapshot, recognitions))
@@ -422,7 +422,7 @@ pub(super) fn publish_bound(
                 stop,
             )
             .map_err(graph_error)?;
-        snapshot = prepared.candidate().clone();
+        snapshot = prepared.into_candidate();
         recognitions.push(proposals.recognition);
         checkpoint(stop)?;
     }

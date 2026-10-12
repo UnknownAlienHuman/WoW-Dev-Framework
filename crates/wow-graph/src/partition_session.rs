@@ -43,7 +43,7 @@ impl GraphPartitionSession {
         }
         plan.candidate().validate(cancelled)?;
         if plan.candidate() != self.current.as_ref() {
-            let next = Arc::new(plan.candidate().clone());
+            let next = Arc::new(plan.into_candidate());
             check_cancelled(cancelled)?;
             self.current = next;
         } else {

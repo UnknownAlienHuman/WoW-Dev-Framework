@@ -115,7 +115,7 @@ fn admit(
             stop,
         )
         .map_err(graph_error)?;
-    let owner = prepared.candidate().clone();
+    let owner = prepared.into_candidate();
     checkpoint(stop)?;
     Ok(owner)
 }

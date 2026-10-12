@@ -84,6 +84,13 @@ Create the session with `GraphPartitionSession::new(initial, cancelled)`. It req
 
 The plan is built without changing current state. Publish rechecks its expected snapshot and validates the candidate before a single Arc assignment. Validation failure, stale state or cancellation before that assignment preserves the current Arc. Cancellation after an accepted assignment cannot retroactively undo it. Reapplying identical partition content returns the same current Arc.
 
+When an in-memory construction or replay consumer needs only the prepared
+candidate, use `plan.into_candidate()` to move that exact snapshot without
+cloning it. Keep `plan.candidate()` for borrowed inspection while the plan is
+still needed. Consuming the plan is not publication: a receiving session or
+store retains its own validation and expected-snapshot checks. Session
+publication also moves the candidate after those checks.
+
 ## Atomic replacement sets
 
 `prepare_replacements(requests, cancelled)` prepares one plan for 1–64 independent producer partitions. Every request must name the same current `expected_snapshot_id` and the exact previous digest for its own partition (`None` remains create-only). Duplicate partition IDs are rejected, not merged or applied last-wins.
