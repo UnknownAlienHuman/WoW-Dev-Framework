@@ -391,11 +391,30 @@ pub fn build_combined_state_detail_inspect<'m, 'p, 'f>(
     root: &L0Scope,
     stop: &AtomicBool,
 ) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
+    build_combined_state_detail_inspect_with_level(
+        map,
+        universe,
+        graph,
+        root,
+        SkeletonLevel::L1,
+        stop,
+    )
+}
+
+/// Explicit Primary StateDetail L1 or Both, retaining the original components.
+pub fn build_combined_state_detail_inspect_with_level<'m, 'p, 'f>(
+    map: &'m mut CombinedContextMap<'p, 'f>,
+    universe: &'m ContextUniverseSet<'p>,
+    graph: &GraphPartitionRead<'p>,
+    root: &L0Scope,
+    level: SkeletonLevel,
+    stop: &AtomicBool,
+) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
     build_combined_inspect(
         map,
         universe,
         graph,
-        CombinedInspection::StateDetail { root },
+        CombinedInspection::StateDetail { root, level },
         stop,
     )
 }
@@ -426,6 +445,7 @@ enum CombinedInspection<'r, 'p> {
     },
     StateDetail {
         root: &'r L0Scope,
+        level: SkeletonLevel,
     },
     ReferenceFacts {
         root: &'r L0Scope,
@@ -461,11 +481,11 @@ fn build_combined_inspect<'m, 'p, 'f>(
             budget,
             stop,
         )?,
-        CombinedInspection::StateDetail { root } => build_primary_state_detail_on_budget(
+        CombinedInspection::StateDetail { root, level } => build_primary_state_detail_on_budget(
             universe,
             &map.core.primary,
             graph,
-            root,
+            (root, level),
             budget,
             stop,
         )?,

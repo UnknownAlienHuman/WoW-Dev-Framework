@@ -1340,21 +1340,37 @@ pub(crate) fn build_primary_skeletons_with_budget<'m, 'a>(
     Ok((result, budget))
 }
 
-/// Continue the admitted StateDetail L1 engine on a held construction ledger.
-/// The prepared detail map is neither rebuilt nor charged a second time.
+/// Continue StateDetail L1, optionally preceded by the original StateRoot L0.
+/// Both accepts only state_root and uses the same prepared map and ledger.
 pub(crate) fn build_primary_state_detail_on_budget<'m, 'a>(
     universe: &'m ContextUniverseSet<'a>,
     map: &'m ProjectMap<'a>,
     graph: &GraphPartitionRead<'a>,
-    root: &L0Scope,
+    selection: (&L0Scope, SkeletonLevel),
     budget: &mut Budget,
     stop: &AtomicBool,
 ) -> ContextResult<PrimarySkeletons<'m, 'a>> {
     budget.work(1, stop)?;
+    let (root, level) = selection;
     let L0Scope::Entity(id) = root else {
         return Err(invalid());
     };
     let view = validate_input(universe, map, graph, stop)?;
+    let l0 = if level == SkeletonLevel::Both {
+        Some(l0(
+            universe,
+            map,
+            graph,
+            (root, PrimaryL0Profile::StateRootV1),
+            &view,
+            budget,
+            stop,
+        )?)
+    } else if level == SkeletonLevel::L1 {
+        None
+    } else {
+        return Err(invalid());
+    };
     let artifact = l1(
         universe,
         map,
@@ -1364,14 +1380,7 @@ pub(crate) fn build_primary_state_detail_on_budget<'m, 'a>(
         budget,
         stop,
     )?;
-    finish_primary_skeletons_on_budget(
-        universe,
-        SkeletonLevel::L1,
-        None,
-        Some(artifact),
-        budget,
-        stop,
-    )
+    finish_primary_skeletons_on_budget(universe, level, l0, Some(artifact), budget, stop)
 }
 
 /// Continue the explicit ReferenceFacts L1 recipe on the held construction ledger.

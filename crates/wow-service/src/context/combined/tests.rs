@@ -122,23 +122,37 @@ fn supported_l1_decode_preserves_compatibility_and_refuses_invalid_admission() -
         );
     }
 
-    // Explicit selection survives actual decode/serialize/decode for both operations.
-    for (profile, value) in [
+    // Both state detail and the two L1 recipes roundtrip for both operations.
+    for (profile, level, value) in [
         (
             PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+            "l1",
             inspect("l1", Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID))?,
         ),
         (
             PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+            "l1",
             build("l1", Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID))?,
         ),
         (
             PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
+            "l1",
             inspect("l1", Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID))?,
         ),
         (
             PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
+            "l1",
             build("l1", Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID))?,
+        ),
+        (
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+            "both",
+            inspect("both", Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID))?,
+        ),
+        (
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+            "both",
+            build("both", Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID))?,
         ),
     ] {
         let bytes = serde_json::to_vec(&value)?;
@@ -151,6 +165,7 @@ fn supported_l1_decode_preserves_compatibility_and_refuses_invalid_admission() -
             &encoded_value["build"]
         };
         assert_eq!(selection["l1_profile_id"], profile);
+        assert_eq!(selection["level"], level);
         let roundtrip = ContextCombinedRequest::from_json_slice(&encoded, &AtomicBool::new(false))?;
         assert_eq!(
             wow_core::canonical_json_bytes(&request)?,
@@ -181,9 +196,8 @@ fn supported_l1_decode_preserves_compatibility_and_refuses_invalid_admission() -
 
     for (level, profile) in [
         ("l0", PRIMARY_STATE_DETAIL_L1_PROFILE_ID),
-        ("both", PRIMARY_STATE_DETAIL_L1_PROFILE_ID),
-        ("l0", PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID),
         ("both", PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID),
+        ("l0", PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID),
     ] {
         refused(
             &inspect(level, Some(profile))?,
@@ -196,9 +210,13 @@ fn supported_l1_decode_preserves_compatibility_and_refuses_invalid_admission() -
     }
     for mut value in [
         inspect("l1", Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID))?,
+        inspect("both", Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID))?,
         build("l1", Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID))?,
+        build("both", Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID))?,
         inspect("l1", Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID))?,
+        inspect("both", Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID))?,
         build("l1", Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID))?,
+        build("both", Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID))?,
     ] {
         value["primary"]["root"] = json!({"kind":"project","id":"fixture-primary"});
         refused(&value, ServiceErrorCode::InvalidRequest)?;

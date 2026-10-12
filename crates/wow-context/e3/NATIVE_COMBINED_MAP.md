@@ -108,9 +108,12 @@ an `inspection` object with exactly `level` (`l0`, `l1` or `both`) and optional
 and an eligible exact entity root. Omitting `l1_profile_id` preserves the existing
 default Primary skeleton selection with unchanged request/artifact bytes. The only
 accepted non-null explicit values are `wow-context/primary-state-detail-l1/1` and
-`wow-context/primary-reference-facts-l1/1`; either requires `level="l1"` and an
-exact `GraphEntity` root. Explicit `both` (an L0/L1 mix), L0, project roots, null,
-non-string, the default ID and unknown IDs refuse before either owner read is acquired.
+`wow-context/primary-reference-facts-l1/1`; either accepts `level="l1"` with an
+exact `GraphEntity` root. StateDetail additionally accepts `level="both"` for an
+original `state_root`, using StateRoot L0 followed by StateDetail L1. A state_path
+cannot supply that L0 and refuses after native kind validation with checked closure.
+ReferenceFacts Both, explicit L0, project roots, null, non-string, the default ID
+and unknown IDs refuse before either owner read is acquired.
 The combined map operation does not accept this selection.
 Missing inspection for inspect, explicit null, unknown fields/levels and inspection
 on map refuse. The nested platform request still uses `operation="map"`; it
@@ -123,7 +126,11 @@ Budget. By default, Primary skeletons use the original L0/L1 engines and Both
 keeps their fixed original order. The explicit StateDetail selection uses the
 existing native Primary StateDetail L1 engine and retains its nested
 `wow-context/l1-skeleton/primary-state-detail/1` schema and original skeleton ID
-semantics. ReferenceFacts uses the original native `reference_origins` with the
+semantics. StateDetail Both invokes the original StateRootV1 L0 before that L1
+on the same detail map, root and Budget; the L0 retains
+`wow-context/l0-skeleton/primary-state-root/1` and its original identity algorithm.
+The existing L1-only helper and default recipes retain their bytes.
+ReferenceFacts uses the original native `reference_origins` with the
 existing L1 Reference engine and retains `wow-context/l1-skeleton/primary-reference-facts/1`,
 including its original origins and identity. Platform inspect borrows the admitted
 map/page/support without
@@ -169,9 +176,12 @@ root/layer admission; project roots select L0 only. Omission of `l1_profile_id`
 preserves the existing default Primary selection with unchanged request/artifact
 bytes. The only accepted non-null explicit values are
 `wow-context/primary-state-detail-l1/1` and
-`wow-context/primary-reference-facts-l1/1`; either requires `level="l1"` and an
-exact `GraphEntity` root. Explicit `both` (an L0/L1 mix), `l0`, project roots, null,
-non-string, the default ID and unknown IDs refuse before owner acquisition. The
+`wow-context/primary-reference-facts-l1/1`; either accepts `level="l1"` and an
+exact `GraphEntity` root. StateDetail also accepts `level="both"` over a genuine
+state_root, with original StateRoot L0 then StateDetail L1 on the same detail map.
+State_path Both refuses after native kind validation and checked closure.
+ReferenceFacts Both, explicit `l0`, project roots, null, non-string, the default ID
+and unknown IDs refuse before owner acquisition. The
 context profile is the pack
 ID above. The required renderer array is empty for None, contains one reviewed
 renderer, or both distinct reviewed IDs. Both renders JSON then Markdown. Unknown/

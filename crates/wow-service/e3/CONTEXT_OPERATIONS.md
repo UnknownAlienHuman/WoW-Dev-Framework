@@ -133,9 +133,13 @@ Renderer failure cannot mutate or relabel the semantic pack. Policy decides whet
 
 The combined transport accepts the explicit L1 IDs
 `wow-context/primary-state-detail-l1/1` and `wow-context/primary-reference-facts-l1/1`,
-each with `level="l1"` and an exact GraphEntity root. Omission preserves default
-recipe request/artifact bytes. An explicit profile with L0, Both or a project root
-refuses; null, the default ID and unknown IDs also refuse. The held native API
+each with `level="l1"` and an exact GraphEntity root. StateDetail also admits
+`level="both"`: the existing StateRoot L0 precedes StateDetail L1 under the same
+continuing Budget and exact map/root. Only a native state_root is eligible;
+state_path refuses after native kind validation with checked resource closure.
+Omission preserves default recipe request/artifact bytes. ReferenceFacts Both,
+explicit L0, project roots, null, the default ID and unknown IDs refuse before
+owner acquisition. The held native API
 supplies original `reference_origins` to the existing L1 Reference engine.
 Origin-vector construction, graph reconstruction, exact Reference lookup and
 signature digest work are precharged to the continuing construction Budget before

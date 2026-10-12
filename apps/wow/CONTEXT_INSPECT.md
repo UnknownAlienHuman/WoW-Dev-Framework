@@ -346,8 +346,11 @@ request family with `operation="inspect"`,
 `both`. The optional nested `inspection.l1_profile_id` accepts only
 `wow-context/primary-state-detail-l1/1` or
 `wow-context/primary-reference-facts-l1/1`, each paired with `level="l1"` and an
-exact GraphEntity root. Omission preserves the default recipe request/artifact
-bytes. Explicit `both` cannot mix L0 and L1; null, non-string, the default ID,
+exact GraphEntity root. StateDetail also supports `level="both"` for a genuine
+state_root: original StateRoot L0 precedes StateDetail L1 on the same detail map
+and continuing Budget. State_path Both refuses after native kind validation and
+checked closure; ReferenceFacts Both refuses before acquisition. Omission
+preserves default recipe request/artifact bytes. Null, non-string, the default ID,
 unknown IDs and incompatible level/root or mixed operation fields refuse before
 owner acquisition. The platform
 subrequest remains `operation="map"`. Generations/publications, Primary root,

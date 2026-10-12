@@ -261,9 +261,12 @@ The required non-null `build` object has `level` (`l0|l1|both`),
 `renderer_profile_ids` and optional `l1_profile_id`. Omission preserves the
 existing default Primary recipe with unchanged request/artifact bytes. The only
 accepted non-null explicit values are `wow-context/primary-state-detail-l1/1` and
-`wow-context/primary-reference-facts-l1/1`; either requires `level="l1"` and an
-exact GraphEntity root. Explicit L0, Both (an L0/L1 mix), project roots, null,
-non-string, default ID and unknown IDs refuse before owner acquisition. Mixed
+`wow-context/primary-reference-facts-l1/1`; either accepts `level="l1"` and an
+exact GraphEntity root. StateDetail also accepts `level="both"` for a native
+state_root, with original StateRoot L0 followed by StateDetail L1 on the same
+detail map and continuing Budget. State_path Both refuses after native kind
+validation and checked closure. ReferenceFacts Both, explicit L0, project roots,
+null, non-string, default ID and unknown IDs refuse before owner acquisition. Mixed
 operation fields also refuse. StateDetail retains its original nested
 `wow-context/l1-skeleton/primary-state-detail/1` schema and artifact ID;
 ReferenceFacts retains `wow-context/l1-skeleton/primary-reference-facts/1`,

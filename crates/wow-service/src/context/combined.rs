@@ -137,8 +137,10 @@ fn select_l1_recipe(
     match profile_id {
         None => Ok(None),
         Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)
-            if level == wow_context::SkeletonLevel::L1
-                && matches!(root, ContextMapRoot::GraphEntity(_)) =>
+            if matches!(
+                level,
+                wow_context::SkeletonLevel::L1 | wow_context::SkeletonLevel::Both
+            ) && matches!(root, ContextMapRoot::GraphEntity(_)) =>
         {
             Ok(Some(CombinedL1Recipe::StateDetail))
         }
@@ -491,8 +493,13 @@ pub fn execute_context_combined(
                                         };
                                         let inspect = match request.l1_recipe {
                                             Some(CombinedL1Recipe::StateDetail) => {
-                                                wow_context::build_combined_state_detail_inspect(
-                                                    &mut map, &universe, graph, &scope, stop,
+                                                wow_context::build_combined_state_detail_inspect_with_level(
+                                                    &mut map,
+                                                    &universe,
+                                                    graph,
+                                                    &scope,
+                                                    level,
+                                                    stop,
                                                 )
                                             }
                                             Some(CombinedL1Recipe::ReferenceFacts) => {
