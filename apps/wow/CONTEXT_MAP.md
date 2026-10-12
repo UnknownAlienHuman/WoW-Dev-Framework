@@ -142,3 +142,39 @@ The configured Reference association does not establish record/type/runtime
 proof or neighbor evidence closure. Selected lifecycle and CLI verification
 evidence is retained in [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122);
 this page makes no full platform/combined acceptance claim.
+
+## Selected combined native map
+
+The selected transport calls one `execute_context_combined` operation:
+
+```text
+wow context map --platform combined --native-host-config <host.json>
+  --combined-request-input <request.json> [--output envelope-json]
+```
+
+Host schema `wow-service/context-combined-native-host/1` has `schema`, `primary`
+and `platform`, containing the complete existing Primary/platform host documents.
+Their owner/evidence limits and full Reference profile/generation/schema/view
+identities must agree. Request schema `wow-service/context-combined-request/1`
+has `operation="map"`, `profile_id="wow-context/combined-native-one-hop/1"`,
+`primary` and `platform`. Primary specifies exact registration, generation,
+publication, existing map profile and required typed root; platform supplies its
+original map-only request with exact candidate/digest and Skeleton binding/query.
+[Exact fields and budget scope](../../crates/wow-context/e3/NATIVE_COMBINED_MAP.md)
+come from the applied typed owner/service code.
+
+The closed grammar requires both input files and `--platform combined`; it admits
+only envelope-json and rejects Primary argv selectors, standalone native request
+input, mixed selection, duplicates/unknown flags and combined inspect/build.
+The result is `wow-service/context-combined-result/1`, operation
+`context_combined_map`, with original `payload.combined_map` and separate native
+read bindings. JSON framing is exact service bytes plus one LF; output failure
+never repeats the operation. Resources close before a payload escapes.
+
+Original map IDs/universes/support remain distinct. The actual construction
+Budget continues from genuine prepared Primary; earlier acquisition/universe/
+catalog preparation keeps its existing bounds. Cross-universe links remain
+NotEvaluated and absence is nonauthoritative. Existing Primary/platform grammar
+above stays intact. Selected lifecycle/CLI evidence is retained in
+[#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122);
+future inspect, packs, links and full acceptance remain open.

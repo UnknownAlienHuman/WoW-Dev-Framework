@@ -4,11 +4,16 @@ use super::*;
 use crate::{
     ServiceErrorCode,
     context::{
+        COMBINED_NATIVE_MAP_PROFILE_ID, CONTEXT_COMBINED_HOST_INPUT_MAX_BYTES,
+        CONTEXT_COMBINED_HOST_SCHEMA, CONTEXT_COMBINED_REQUEST_MAX_BYTES,
+        CONTEXT_COMBINED_REQUEST_SCHEMA, CONTEXT_COMBINED_RESULT_SCHEMA, CONTEXT_MAP_HOST_SCHEMA,
         CONTEXT_MAP_RESULT_MAX_BYTES, CONTEXT_PLATFORM_HOST_INPUT_MAX_BYTES,
         CONTEXT_PLATFORM_HOST_SCHEMA, CONTEXT_PLATFORM_REQUEST_MAX_BYTES,
-        CONTEXT_PLATFORM_REQUEST_SCHEMA, CONTEXT_PLATFORM_RESULT_SCHEMA, ContextMapStatus,
-        ContextPlatformHostInput, ContextPlatformRequest, PLATFORM_NATIVE_ONE_HOP_PROFILE_ID,
-        execute_context_platform,
+        CONTEXT_PLATFORM_REQUEST_SCHEMA, CONTEXT_PLATFORM_RESULT_SCHEMA, ContextCombinedHostInput,
+        ContextCombinedRequest, ContextMapHostInput, ContextMapPublication, ContextMapRequest,
+        ContextMapRoot, ContextMapStatus, ContextPlatformHostInput, ContextPlatformRequest,
+        PLATFORM_NATIVE_ONE_HOP_PROFILE_ID, PRIMARY_NAVIGATION_MAP_PROFILE_ID,
+        execute_context_combined, execute_context_map, execute_context_platform,
     },
     graph::{
         FunctionDirectNeighborhoodRecipe, FunctionFingerprintSelection, GRAPH_RESULT_MAX_BYTES,
@@ -19,8 +24,8 @@ use crate::{
         LIVE_SKELETON_REQUEST_SCHEMA, LIVE_SKELETON_RESULT_SCHEMA, LiveProjectLibraryMode,
         LiveProjectPublishRequest, LiveProjectStore, LiveProjectUpdateRequest,
         PLATFORM_PROJECT_SELECTION_SCHEMA, PlatformProjectSelection, PlatformStoreSelection,
-        execute_live_skeleton_read, publish_input_in_namespace, publish_selected_local_project,
-        read_selected_live_project, update_selected_local_project,
+        execute_live_skeleton_read, publish_input_in_namespace, publish_local_project,
+        publish_selected_local_project, read_selected_live_project, update_selected_local_project,
     },
 };
 use wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe;
@@ -35,9 +40,22 @@ use wow_project::{
 };
 use wow_store::project::{ReadSelector, StoreGenerationId};
 
-#[test]
-fn selected_candidate_source_absent_reopen_reaches_skeleton_and_absence_refuses() -> TestResult {
-    let stop = AtomicBool::new(false);
+struct SelectedSkeletonFixture {
+    root: FixtureRoot,
+    config: Value,
+    path: PathBuf,
+    project: ProjectView,
+    request: GraphBuildRequest,
+    ids: Vec<Box<str>>,
+    intent: RegionTypeWitness,
+    ordinary_selection: PlatformStoreSelection,
+    selected_selection: PlatformStoreSelection,
+    selection_wire: Value,
+    selected_transport: PlatformProjectSelection,
+}
+
+// Identical original candidate setup, shared by standalone and combined witnesses.
+fn selected_skeleton_fixture(stop: &AtomicBool) -> TestResult<SelectedSkeletonFixture> {
     // Reuse the existing reviewed classification fixture and its positive closed
     // TextureType shape; no second fixture manifest/schema authority is invented.
     let xsd = skeleton_xsd();
@@ -46,7 +64,7 @@ fn selected_candidate_source_absent_reopen_reaches_skeleton_and_absence_refuses(
         serde_json::to_value(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1)?;
     write_json(&root, "project.json", &config)?;
     let path = root.0.join("project.json");
-    let (project, request, ids, _, intent) = selected_skeleton_query(&path, &config, &stop)?;
+    let (project, request, ids, _, intent) = selected_skeleton_query(&path, &config, stop)?;
 
     let ordinary_selection = PlatformStoreSelection::new(
         project.configuration().project_id().clone(),
@@ -62,7 +80,7 @@ fn selected_candidate_source_absent_reopen_reaches_skeleton_and_absence_refuses(
     .with_xml_classification_catalog()
     .with_physical_function_declarations_catalog();
     let selected_selection = ordinary_selection.clone().with_composed_candidate_catalog();
-    let mut selection_wire = json!({
+    let selection_wire = json!({
         "schema": PLATFORM_PROJECT_SELECTION_SCHEMA,
         "owner_project_id": project.configuration().project_id(),
         "source_profile_id": project.configuration().platform_packages().ok_or("source profile")?
@@ -75,7 +93,38 @@ fn selected_candidate_source_absent_reopen_reaches_skeleton_and_absence_refuses(
         }
     });
     let selected_transport =
-        PlatformProjectSelection::from_json_slice(&serde_json::to_vec(&selection_wire)?, &stop)?;
+        PlatformProjectSelection::from_json_slice(&serde_json::to_vec(&selection_wire)?, stop)?;
+    Ok(SelectedSkeletonFixture {
+        root,
+        config,
+        path,
+        project,
+        request,
+        ids,
+        intent,
+        ordinary_selection,
+        selected_selection,
+        selection_wire,
+        selected_transport,
+    })
+}
+
+#[test]
+fn selected_candidate_source_absent_reopen_reaches_skeleton_and_absence_refuses() -> TestResult {
+    let stop = AtomicBool::new(false);
+    let SelectedSkeletonFixture {
+        root,
+        config: _,
+        path,
+        project,
+        request,
+        ids,
+        intent,
+        ordinary_selection,
+        selected_selection,
+        mut selection_wire,
+        selected_transport,
+    } = selected_skeleton_fixture(&stop)?;
     let context_export = platform_context_export_root(&root)?;
     let selected_root = context_export.as_ref().map_or_else(
         || root.0.join("selected-candidate-store"),
@@ -502,6 +551,380 @@ fn selected_candidate_source_absent_reopen_reaches_skeleton_and_absence_refuses(
         .code(),
         ServiceErrorCode::IdentityMismatch
     );
+    Ok(())
+}
+
+#[test]
+fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() -> TestResult {
+    let stop = AtomicBool::new(false);
+    let SelectedSkeletonFixture {
+        root,
+        config,
+        path,
+        project,
+        request,
+        ids,
+        intent,
+        ordinary_selection: _,
+        selected_selection,
+        selection_wire,
+        selected_transport,
+    } = selected_skeleton_fixture(&stop)?;
+    let input = LocalProjectInput::from_config_path(&path, &stop)?;
+    let reference = input.reference_view().clone();
+    let profile = input
+        .project_bundle()
+        .configuration()
+        .selected_profile()
+        .clone();
+    drop(input);
+    let (primary_path, primary_query) =
+        combined_primary_fixture(&root, &config, &profile, &reference, &stop)?;
+    let export = combined_context_export_root(&root)?;
+    let stores = export.as_ref().unwrap_or(&root.0);
+    let primary_store = stores.join("registered-primary-store");
+    let platform_store = stores.join("registered-platform-store");
+    let primary = serde_json::to_value(publish_local_project(
+        &primary_path,
+        &primary_query,
+        &primary_store,
+        &LiveProjectPublishRequest::new("fixture:combined-primary", "absent", true, true)?,
+        &stop,
+    )?)?;
+    let platform = serde_json::to_value(publish_selected_local_project(
+        &path,
+        &request,
+        &platform_store,
+        &selected_transport,
+        &LiveProjectPublishRequest::new("fixture:combined-platform", "absent", true, true)?,
+        &stop,
+    )?)?;
+    assert_eq!(primary["status"], "activated");
+    assert_eq!(platform["status"], "activated");
+    let primary_exact = StoreGenerationId::parse(
+        primary["operation"]["generation_id"]
+            .as_str()
+            .ok_or("Primary exact generation")?,
+    )?;
+    let platform_exact = platform["operation"]["generation_id"]
+        .as_str()
+        .ok_or("platform exact generation")?
+        .to_owned();
+    drop(project);
+    std::fs::remove_dir_all(root.0.join("UI"))?;
+    std::fs::remove_file(root.0.join("version.txt"))?;
+    std::fs::remove_dir_all(root.0.join("primary-source"))?;
+    let source_absent_paths = [
+        root.0.join("UI"),
+        root.0.join("version.txt"),
+        root.0.join("primary-source"),
+    ];
+    assert!(source_absent_paths.iter().all(|path| !path.exists()));
+    let (native_request, original_native) = source_absent_skeleton(
+        &platform_store,
+        &selected_transport,
+        &selected_selection,
+        &platform_exact,
+        &ids,
+        &intent,
+        &stop,
+    )?;
+    let native_request: Value = serde_json::from_slice(&native_request)?;
+    let native_input = &native_request["input"];
+    let (primary_root, primary_publication, primary_node, primary_proposal, primary_accepted) =
+        combined_primary_observation(&primary_store, &primary_exact, &stop)?;
+    let limits = json!({
+        "neighbors": native_input["neighborhood"]["limits"],
+        "explain": native_input["limits"]["root_explanation"],
+        "evidence": native_input["limits"]["root_evidence"],
+        "max_direct_edges": native_input["neighborhood"]["query"]["max_edges"],
+        "max_input_bytes": 8_000_000, "max_metadata_bytes": 8_000_000, "max_context_work": 8_000_000
+    });
+    let primary_host = json!({
+        "schema": CONTEXT_MAP_HOST_SCHEMA, "project_store_id": "project-store:fixture-combined-primary",
+        "project_store_root": primary_store, "project_id": "fixture-context-primary-map",
+        "reference_profile": profile, "reference": reference, "limits": limits
+    });
+    let platform_host = json!({
+        "schema": CONTEXT_PLATFORM_HOST_SCHEMA, "project_store_id": "project-store:fixture-combined-platform",
+        "project_store_root": platform_store, "selection": selection_wire,
+        "reference_profile": profile, "reference": reference, "limits": limits
+    });
+    let platform_request = json!({
+        "schema": CONTEXT_PLATFORM_REQUEST_SCHEMA, "operation": "map",
+        "project_store_id": "project-store:fixture-combined-platform", "store_generation_id": platform_exact,
+        "publication_set_id": original_native["publication_set_id"],
+        "candidate_id": original_native["candidate_id"], "candidate_digest": original_native["candidate_digest"],
+        "profile_id": PLATFORM_NATIVE_ONE_HOP_PROFILE_ID, "input": native_input
+    });
+    // Only original positive leaf reads, no repetition of their control campaigns.
+    let primary_leaf = execute_context_map(
+        &ContextMapHostInput::from_json_slice(
+            &wow_core::canonical_json_bytes(&primary_host)?,
+            &stop,
+        )?,
+        &ContextMapRequest::primary(
+            "project-store:fixture-combined-primary",
+            ContextMapPublication::StoreGeneration(primary_exact.clone()),
+            PRIMARY_NAVIGATION_MAP_PROFILE_ID,
+            Some(ContextMapRoot::GraphEntity(primary_root.clone())),
+            None,
+            None,
+        )?,
+        &stop,
+    )?;
+    let platform_leaf = execute_context_platform(
+        &ContextPlatformHostInput::from_json_slice(
+            &wow_core::canonical_json_bytes(&platform_host)?,
+            &stop,
+        )?,
+        &ContextPlatformRequest::from_json_slice(
+            &wow_core::canonical_json_bytes(&platform_request)?,
+            &stop,
+        )?,
+        &stop,
+    )?;
+    assert_eq!(primary_leaf.status(), ContextMapStatus::Partial);
+    assert_eq!(platform_leaf.status(), ContextMapStatus::Partial);
+    assert_eq!(primary_leaf.failure_code(), None);
+    assert_eq!(platform_leaf.failure_code(), None);
+    let primary_leaf: Value = serde_json::from_slice(primary_leaf.canonical_bytes())?;
+    let platform_leaf: Value = serde_json::from_slice(platform_leaf.canonical_bytes())?;
+    assert_eq!(primary_leaf["resource_closure"], "closed");
+    assert_eq!(platform_leaf["resource_closure"], "closed");
+    let original_primary_map = &primary_leaf["payload"]["project_map"];
+    let original_platform_map = &platform_leaf["payload"]["artifact"];
+    let host_wire = json!({"schema": CONTEXT_COMBINED_HOST_SCHEMA, "primary": primary_host, "platform": platform_host});
+    let request_wire = json!({
+        "schema": CONTEXT_COMBINED_REQUEST_SCHEMA, "operation": "map", "profile_id": COMBINED_NATIVE_MAP_PROFILE_ID,
+        "primary": {"project_store_id": "project-store:fixture-combined-primary",
+            "store_generation_id": primary_exact, "publication_set_id": primary_publication,
+            "map_profile_id": PRIMARY_NAVIGATION_MAP_PROFILE_ID, "root": ContextMapRoot::GraphEntity(primary_root.clone())},
+        "platform": platform_request
+    });
+    let host = ContextCombinedHostInput::from_json_slice(
+        &wow_core::canonical_json_bytes(&host_wire)?,
+        &stop,
+    )?;
+    let request = ContextCombinedRequest::from_json_slice(
+        &wow_core::canonical_json_bytes(&request_wire)?,
+        &stop,
+    )?;
+    let observed = execute_context_combined(&host, &request, &stop)?;
+    assert_eq!(observed.status(), ContextMapStatus::Partial);
+    assert_eq!(observed.failure_code(), None);
+    let envelope: Value = serde_json::from_slice(observed.canonical_bytes())?;
+    assert_eq!(envelope["schema"], CONTEXT_COMBINED_RESULT_SCHEMA);
+    assert_eq!(envelope["operation"], "context_combined_map");
+    assert_eq!(envelope["resource_closure"], "closed");
+    assert!(envelope.get("failure_code").is_none());
+    let payload = &envelope["payload"];
+    assert_eq!(
+        payload["primary"]["store_generation_id"],
+        primary_exact.as_str()
+    );
+    assert_eq!(
+        payload["primary"]["publication_set_id"],
+        primary_publication
+    );
+    assert_eq!(
+        payload["primary"]["configured_registration_id"],
+        primary_host["project_store_id"]
+    );
+    assert!(payload["primary"].get("native_project_store_id").is_none());
+    assert_eq!(payload["platform"]["store_generation_id"], platform_exact);
+    assert_eq!(
+        payload["platform"]["publication_set_id"],
+        original_native["publication_set_id"]
+    );
+    assert_eq!(
+        payload["platform"]["configured_registration_id"],
+        platform_host["project_store_id"]
+    );
+    assert_eq!(
+        payload["platform"]["native_project_store_id"],
+        selected_selection.namespace().id().as_str()
+    );
+    assert_eq!(
+        payload["platform_selection"],
+        serde_json::to_value(selected_transport.intent())?
+    );
+    let map = &payload["combined_map"];
+    assert_eq!(map["family"], COMBINED_NATIVE_MAP_PROFILE_ID);
+    assert_eq!(map["artifact_kind"], "map");
+    assert_eq!(
+        payload["combined_map_byte_length"],
+        wow_core::canonical_json_bytes(map)?.len()
+    );
+    let core = &map["core"];
+    assert_eq!(
+        core["primary"], *original_primary_map,
+        "original Primary artifact and support"
+    );
+    assert_eq!(
+        core["platform"], *original_platform_map,
+        "original platform artifact and support"
+    );
+    assert_eq!(core["platform"]["core"]["native"], original_native["page"]);
+    assert_ne!(
+        core["primary"]["project_map_id"],
+        core["platform"]["map_id"]
+    );
+    assert_ne!(
+        core["primary"]["core"]["binding"]["graph_snapshot_id"],
+        native_input["binding"]["graph_snapshot_id"]
+    );
+    assert_eq!(core["primary"]["core"]["navigation"]["root"], primary_node);
+    let root_support = core["primary"]["core"]["supports"]
+        .as_array()
+        .ok_or("original Primary supports")?
+        .iter()
+        .find(|row| row["explanation"]["record"]["node"] == primary_node)
+        .ok_or("original Primary root explanation")?;
+    assert_eq!(root_support["explanation"]["support_complete"], true);
+    assert_eq!(
+        root_support["evidence_resolution"]["closure_complete"],
+        true
+    );
+    assert!(
+        root_support["explanation"]["supports"]
+            .as_array()
+            .ok_or("original accepted root supports")?
+            .iter()
+            .any(|row| row["proposal"] == primary_proposal && row["accepted"] == primary_accepted)
+    );
+    for key in [
+        "target_profile",
+        "reference_generation",
+        "reference_schema",
+        "reference_view_digest",
+    ] {
+        assert_eq!(
+            core["primary"]["core"]["binding"][key],
+            core["platform"]["core"]["binding"][key]
+        );
+    }
+    assert_eq!(
+        core["primary"]["core"]["binding"]["target_profile"],
+        serde_json::to_value(&profile)?
+    );
+    assert_eq!(
+        core["primary"]["core"]["binding"]["reference_generation"],
+        reference.generation_id()
+    );
+    assert_eq!(
+        core["primary"]["core"]["binding"]["reference_schema"],
+        reference.schema()
+    );
+    assert_eq!(
+        core["primary"]["core"]["binding"]["reference_view_digest"],
+        reference.self_digest()
+    );
+    assert_eq!(core["state"], "partial");
+    assert_eq!(core["absence_authoritative"], false);
+    assert_eq!(core["cross_universe_relations"], "not_evaluated");
+    assert!(
+        !core["platform"]["core"]["native"]["body"]["not_evaluated"]
+            .as_array()
+            .ok_or("native omissions")?
+            .is_empty()
+    );
+    let text = std::str::from_utf8(observed.canonical_bytes())?;
+    assert!(
+        !text.contains("project_store_root") && !text.contains("local function ContextFixture")
+    );
+    for source in [&root.0, &primary_store, &platform_store] {
+        assert!(
+            !text.contains(&serde_json::to_string(source)?),
+            "host paths excluded"
+        );
+    }
+    assert!(!observed.canonical_bytes().ends_with(b"\n"));
+
+    // Original Primary reservations remain held; additional platform bind work
+    // makes this exact Primary-plus-native-scan floor insufficient on one ledger.
+    let primary_work = original_primary_map["core"]["budget"]["context_work_reserved"]
+        .as_u64()
+        .ok_or("original Primary reserved work")?;
+    let native_floor = original_native["page"]["body"]["neighborhood"]["scanned_edges"]
+        .as_u64()
+        .ok_or("original native edge census")?
+        .checked_add(
+            native_input["limits"]["root_explanation"]["max_scanned_assertions"]
+                .as_u64()
+                .ok_or("native explanation ceiling")?,
+        )
+        .and_then(|n| n.checked_add(native_input["limits"]["root_evidence"]["max_work"].as_u64()?))
+        .and_then(|n| n.checked_add(1))
+        .ok_or("native reservation overflow")?;
+    let selected_work = primary_work
+        .checked_add(native_floor)
+        .ok_or("combined work overflow")?;
+    assert!(primary_work > 0 && native_floor > 0 && selected_work < 8_000_000);
+    let mut bounded_wire = host_wire.clone();
+    bounded_wire["primary"]["limits"]["max_context_work"] = json!(selected_work);
+    bounded_wire["platform"]["limits"]["max_context_work"] = json!(selected_work);
+    let bounded = ContextCombinedHostInput::from_json_slice(
+        &wow_core::canonical_json_bytes(&bounded_wire)?,
+        &stop,
+    )?;
+    let refused = execute_context_combined(&bounded, &request, &stop)?;
+    assert_eq!(refused.status(), ContextMapStatus::Failed);
+    assert_eq!(
+        refused.failure_code(),
+        Some(ServiceErrorCode::BudgetExceeded)
+    );
+    let refused: Value = serde_json::from_slice(refused.canonical_bytes())?;
+    assert_eq!(refused["resource_closure"], "closed");
+    assert!(refused.get("payload").is_none());
+    assert!(source_absent_paths.iter().all(|path| !path.exists()));
+
+    if let Some(destination) = &export {
+        use std::io::Write;
+        let cli_case = json!({
+            "authority": "synthetic_fixture_only_not_live_ketho_or_runtime",
+            "source_absent_paths": source_absent_paths,
+            "primary": {"store_generation_id": primary_exact, "publication_set_id": primary_publication, "root_id": primary_root},
+            "platform": {"store_generation_id": platform_exact, "publication_set_id": original_native["publication_set_id"],
+                "root_id": original_native["page"]["body"]["neighborhood"]["root"]["node_id"],
+                "candidate_id": original_native["candidate_id"], "candidate_digest": original_native["candidate_digest"]},
+            "argv": ["context", "map", "--platform", "combined", "--native-host-config", destination.join("host.json"),
+                "--combined-request-input", destination.join("request.json"), "--output", "envelope-json"],
+            "expected_envelope": "expected-envelope.json", "expected_exit": 2,
+            "stdout": "expected service bytes followed by one LF", "resource_closure": "closed"
+        });
+        for (name, bytes, limit) in [
+            (
+                "host.json",
+                wow_core::canonical_json_bytes(&host_wire)?,
+                CONTEXT_COMBINED_HOST_INPUT_MAX_BYTES,
+            ),
+            (
+                "request.json",
+                wow_core::canonical_json_bytes(&request)?,
+                CONTEXT_COMBINED_REQUEST_MAX_BYTES,
+            ),
+            (
+                "cli-case.json",
+                wow_core::canonical_json_bytes(&cli_case)?,
+                64 * 1024,
+            ),
+            (
+                "expected-envelope.json",
+                observed.canonical_bytes().to_vec(),
+                CONTEXT_MAP_RESULT_MAX_BYTES,
+            ),
+        ] {
+            if bytes.len() > limit {
+                return Err("combined fixture export exceeded finite byte bound".into());
+            }
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(destination.join(name))?;
+            file.write_all(&bytes)?;
+        }
+    }
     Ok(())
 }
 
@@ -1445,6 +1868,132 @@ fn platform_context_export_root(fixture: &FixtureRoot) -> TestResult<Option<std:
     let path = parent.join(path.file_name().ok_or("platform export directory")?);
     if path.starts_with(fixture.0.canonicalize()?) {
         return Err("platform export must survive fixture/source removal".into());
+    }
+    std::fs::create_dir(&path)?;
+    Ok(Some(path))
+}
+
+// Same physical Main/Library source as context/tests.rs input_bundle/owners.
+// The shared target profile/Reference are configured BEFORE initial admission.
+fn combined_primary_fixture(
+    fixture: &FixtureRoot,
+    platform_config: &Value,
+    profile: &wow_core::ProfileIdentity,
+    reference: &wow_reference::ReferenceView,
+    stop: &AtomicBool,
+) -> TestResult<(PathBuf, GraphBuildRequest)> {
+    const MAIN: &str = "local function ContextFixture(value)\n    return value\nend\n";
+    const LIBRARY: &str = "---@meta\n---@return number\nfunction External() end\n";
+    std::fs::create_dir(fixture.0.join("primary-source"))?;
+    std::fs::create_dir(fixture.0.join("primary-source/library"))?;
+    std::fs::write(fixture.0.join("primary-source/main.lua"), MAIN)?;
+    std::fs::write(fixture.0.join("primary-source/library/Core.lua"), LIBRARY)?;
+    let profile_file = write_json(fixture, "combined-primary-profile.json", profile)?;
+    let config = json!({
+        "schema": crate::local::LOCAL_FILES_SCHEMA,
+        "project_id": "fixture-context-primary-map",
+        "workspace_id": "workspace:fixture:context-primary-map",
+        "source_origin_id": "project-origin:fixture-context-primary-map",
+        "logical_root": "fixtures/context-primary/main",
+        "profile": profile_file,
+        "reference_view": platform_config["reference_view"],
+        "analyzer": platform_config["analyzer"],
+        "main": {"root": "primary-source", "files": [
+            ProjectDiskFile::new("main.lua").with_identity(digest(MAIN.as_bytes()), MAIN.len() as u64)
+        ]},
+        "library": {"root": "primary-source", "files": [
+            ProjectDiskFile::new("library/Core.lua").with_identity(digest(LIBRARY.as_bytes()), LIBRARY.len() as u64)
+        ]}
+    });
+    write_json(fixture, "combined-primary.json", &config)?;
+    let path = fixture.0.join("combined-primary.json");
+    let input = LocalProjectInput::from_config_path(&path, stop)?;
+    assert_eq!(
+        input.project_bundle().configuration().selected_profile(),
+        profile
+    );
+    assert_eq!(input.reference_view(), reference);
+    assert_eq!(
+        input
+            .project_bundle()
+            .configuration()
+            .reference_generation()
+            .to_string(),
+        reference.generation_id()
+    );
+    let query = GraphBuildRequest::new("fixture-context-primary-map".into(), "current".into())?
+        .with_input_profile(&input);
+    Ok((path, query))
+}
+
+// Reuse context/tests.rs source_file_root: original accepted native definition,
+// then exact final-generation membership. No label/path/owner-key lookup.
+fn combined_primary_observation(
+    store_root: &std::path::Path,
+    exact: &StoreGenerationId,
+    stop: &AtomicBool,
+) -> TestResult<(wow_graph::GraphNodeId, String, Value, Value, Value)> {
+    let store = LiveProjectStore::open(store_root)?;
+    let read = store.read(&ReadSelector::Exact(exact.clone()), stop)?;
+    assert_eq!(read.store_generation_id(), exact);
+    let graph = read.graph();
+    let source = graph
+        .partition(wow_project::graph::SOURCE_GRAPH_PARTITION)
+        .ok_or("original Primary source partition")?;
+    let mut files = source
+        .batch()
+        .entity_proposals()
+        .iter()
+        .filter(|proposal| proposal.entity_kind_id() == "source_file");
+    let proposal = files
+        .next()
+        .ok_or("Primary physical source-file proposal")?;
+    assert!(files.next().is_none(), "one original Primary Main file");
+    let accepted = source.report().accepted_entities();
+    let index = accepted
+        .binary_search_by(|row| row.proposal_id().cmp(proposal.proposal_id()))
+        .map_err(|_| "Primary source-file proposal was not accepted")?;
+    let input = accepted[index].node();
+    let rebound = wow_graph::GraphNode::new(
+        graph.snapshot().universe().clone(),
+        graph.snapshot().generation().clone(),
+        input.kind(),
+        input.owner_key(),
+        input.evidence_ids().to_vec(),
+        graph.snapshot().limits(),
+    )?;
+    let node = graph
+        .snapshot()
+        .node(rebound.node_id())
+        .ok_or("accepted Primary root absent from final graph")?;
+    let result = (
+        node.node_id().clone(),
+        read.publication_set_id().to_owned(),
+        serde_json::to_value(node)?,
+        serde_json::to_value(proposal)?,
+        serde_json::to_value(&accepted[index])?,
+    );
+    read.close()?;
+    store.close()?;
+    Ok(result)
+}
+
+// Explicit root-only retained stores outside the original fixture destructor.
+fn combined_context_export_root(fixture: &FixtureRoot) -> TestResult<Option<PathBuf>> {
+    let Some(path) = std::env::var_os("WOW_CONTEXT_COMBINED_FIXTURE_EXPORT") else {
+        return Ok(None);
+    };
+    let path = PathBuf::from(path);
+    if !path.is_absolute() || path.as_os_str().len() > 32768 {
+        return Err("combined context export requires a finite absolute fresh directory".into());
+    }
+    let parent = path
+        .parent()
+        .ok_or("combined export parent")?
+        .canonicalize()?;
+    let path = parent.join(path.file_name().ok_or("combined export directory")?);
+    if path.starts_with(fixture.0.canonicalize()?) {
+        return Err("combined stores/export must survive fixture/source removal".into());
     }
     std::fs::create_dir(&path)?;
     Ok(Some(path))

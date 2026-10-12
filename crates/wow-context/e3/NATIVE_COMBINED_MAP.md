@@ -1,0 +1,95 @@
+# Combined native Primary and platform map
+
+The selected family is `wow-context/combined-native-one-hop/1`, exported as
+`COMBINED_NATIVE_ONE_HOP_PROFILE`. It composes original maps with separate
+universes, map IDs, support and omissions; each construction stage keeps its
+existing role rather than receiving another family version. Selected lifecycle/CLI
+verification is recorded separately from full acceptance under
+[#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
+
+## Consuming original owners
+
+The [owner implementation](../src/combined.rs) uses:
+
+```text
+build_primary_map_for_composition(selection, receipts, stop)
+  -> PrimaryMapForComposition
+build_combined_context_map(primary, platform_view, reference, reference_profile, stop)
+  -> CombinedContextMap
+```
+
+The sealed Primary handoff retains its original map and actual prepared-selection
+Budget. Combined construction consumes that handoff before platform binding and
+its one native Skeleton read. It does not compose separately budgeted maps or
+reconstruct authority/allowances from decoded records. The original maps
+remain distinct in `core.primary` and `core.platform`; their cached canonical
+bytes are separately retained;
+the outer artifact has its own `combined_map_id`. Original Primary platform-exclusion
+omissions remain in that component while the outer composition supplies a separate
+platform map. Both native owners stay held through construction and delivery.
+
+The full ProfileIdentity, Reference generation, schema and full-view digest must
+agree between hosts and with the held Primary binding. Platform binding checks
+its actual configured profile/generation and performs bounded native full
+Reference validation. Shared Reference association does not merge source/graph
+universes, prove record/type enrichment or mint accepted links.
+`cross_universe_relations` stays `not_evaluated`; future links require a genuine
+accepted relation owner and exact support, never names or content heuristics.
+
+## Construction budget scope
+
+One actual Budget starts with the genuine prepared Primary selection and continues
+through its map, platform validation/read/map, combined identity and encoding.
+The consuming builder has no replacement-limits argument. Earlier acquisition,
+universe validation and evidence-catalog preparation retain their existing owner
+bounds; the construction ledger does not govern work preceding its creation.
+
+Both hosts must select equal owner limits and evidence limits. Aggregate input
+preflight precedes acquisition. Construction input accounting includes both
+original tuples, conservatively counting the shared Reference twice. Checked
+arithmetic, native scan/support reservations and cancellation remain in force.
+Final service encoding must fit `remaining_metadata_bytes()` after all map work;
+this is a continuing allowance, not a reset cap. Reservations do not measure CPU,
+OS memory or tokens; mandatory overflow refuses without a prefix-success fallback.
+
+## Exact service transport
+
+[The service driver](../../wow-service/src/context/combined.rs) exposes
+`ContextCombinedHostInput::from_json_slice`,
+`ContextCombinedRequest::from_json_slice` and
+`execute_context_combined(host, request, stop) -> ServiceResult<ContextMapResult>`.
+Decoding supplies inert intent; original acquired owners supply authority.
+
+| Document | Exact schema and fields |
+|---|---|
+| Host | `wow-service/context-combined-native-host/1`: `schema`, `primary`, `platform` |
+| Request | `wow-service/context-combined-request/1`: `schema`, `operation="map"`, `profile_id="wow-context/combined-native-one-hop/1"`, `primary`, `platform` |
+| Result | `wow-service/context-combined-result/1`, operation `context_combined_map` |
+
+Host `primary` is the complete existing
+`wow-service/context-map-native-host/1` document; `platform` is the complete
+`wow-service/context-platform-native-host/1` document, including its original
+structured `selection` and mandatory composed-candidate catalog.
+Request `primary` has exactly `project_store_id`, `store_generation_id`,
+`publication_set_id`, `map_profile_id` and required typed `root`. It uses the
+existing direct/project-navigation profile and root admission.
+Request `platform` is the existing
+`wow-service/context-platform-request/1` document with `operation="map"`, exact
+candidate ID/digest and native Skeleton binding/query/limits. Unknown fields and
+null required fields refuse. Both generations/publications and roots are explicit;
+there is no Current resolution or omitted-root inference in this selection.
+
+One service operation holds the Primary read/catalog and admitted platform
+candidate together. It qualifies each exact publication and native binding,
+encodes a private draft, then closes platform and Primary reads/stores in nested
+reverse order. Failed closure suppresses payload; failures retain the actual
+`resource_closure` observation. Payload contains `resolved_request_id`, separate
+`primary`/`platform` read bindings, original `platform_selection`,
+`combined_map_byte_length` and original `combined_map`.
+
+Either truncated component makes the outer state Truncated; otherwise it is
+Partial. Original coverage/conflicts/support/NotEvaluated stay nested and
+`absence_authoritative=false`. The [explicit map CLI](../../../apps/wow/CONTEXT_MAP.md#selected-combined-native-map)
+uses envelope JSON only. Existing Primary/platform contracts remain separate;
+combined inspect, packs/rendering, cross-universe links and runtime qualification
+remain open. No behavioral or acceptance result is asserted by this contract.

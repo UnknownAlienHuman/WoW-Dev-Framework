@@ -568,6 +568,58 @@ pub fn build_project_map<'a>(
     build_project_map_with_budget(selection, receipts.iter(), false, stop).map(|(map, _)| map)
 }
 
+/// Sealed original Primary map and its continuing construction ledger.
+/// The ordinary map builder and all existing map bytes remain unchanged.
+pub struct PrimaryMapForComposition<'a> {
+    map: ProjectMap<'a>,
+    universe: &'a ContextUniverseSet<'a>,
+    budget: Budget,
+    input_bytes_reserved: u64,
+}
+impl<'a> PrimaryMapForComposition<'a> {
+    #[must_use]
+    pub fn map(&self) -> &ProjectMap<'a> {
+        &self.map
+    }
+    pub(crate) fn into_parts(self) -> (ProjectMap<'a>, &'a ContextUniverseSet<'a>, Budget, u64) {
+        (
+            self.map,
+            self.universe,
+            self.budget,
+            self.input_bytes_reserved,
+        )
+    }
+}
+
+/// Build from genuine prepared native views under the selected aggregate limits.
+/// Keep the actual ledger and reserve the original cached map before handing it
+/// to combined construction; never reconstruct a ledger from a map report.
+pub fn build_primary_map_for_composition<'a>(
+    selection: ProjectMapSelection<'a>,
+    receipts: &'a [GraphResolvedExplanation<'a>],
+    stop: &AtomicBool,
+) -> ContextResult<PrimaryMapForComposition<'a>> {
+    checkpoint(stop)?;
+    let universe = selection.universe;
+    let input_bytes_reserved = encoded_len(
+        &(
+            universe.reference,
+            universe.pair.graph().snapshot(),
+            universe.pair.project().configuration().selected_profile(),
+        ),
+        universe.limits.max_input_bytes,
+        stop,
+    )?;
+    let (map, budget) = build_project_map_with_budget(selection, receipts.iter(), true, stop)?;
+    checkpoint(stop)?;
+    Ok(PrimaryMapForComposition {
+        map,
+        universe,
+        budget,
+        input_bytes_reserved,
+    })
+}
+
 fn build_project_map_with_budget<'a>(
     mut selection: ProjectMapSelection<'a>,
     receipts: impl ExactSizeIterator<Item = &'a GraphResolvedExplanation<'a>>,

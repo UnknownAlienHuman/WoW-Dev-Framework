@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use wow_core::{ProfileId, ReferenceGenerationId};
 use wow_graph::GraphNodeId;
 use wow_project::ProjectId;
@@ -24,8 +24,13 @@ impl ContextMapPublication {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", content = "id", rename_all = "snake_case")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    content = "id",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum ContextMapRoot {
     Project(ProjectId),
     GraphEntity(GraphNodeId),

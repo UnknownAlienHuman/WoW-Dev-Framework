@@ -3,6 +3,7 @@
 //! Bounded primary navigation over exact acquired native owners.
 //! No source acquisition, parser, storage, or runtime authority.
 mod budget;
+mod combined;
 mod error;
 mod map;
 mod pack;
@@ -14,15 +15,20 @@ mod skeleton;
 mod universe;
 
 pub use budget::PrimaryMapLimits;
+pub use combined::{
+    COMBINED_NATIVE_ONE_HOP_PROFILE, COMBINED_NATIVE_ONE_HOP_PROFILE_BYTES, CombinedContextMap,
+    build_combined_context_map,
+};
 pub use error::{ContextError, ContextErrorCode, ContextResult};
 pub use map::{
     ContextExpansionPlan, ContextExpansionPreparation, ContextExpansionStep,
     PRIMARY_FRONTIER_EXPANSION_PROFILE, PRIMARY_PROGRESSIVE_EXPANSION_PROFILE,
-    PRIMARY_PROJECT_MAP_SCHEMA, PROJECT_MAP_SCHEMA, ProjectMap, ProjectMapSelection,
-    ProjectMapState, ProjectMapView, ProjectNavigationRequest, build_project_map,
-    expand_context_frontier, open_project_map_view, plan_context_expansion,
-    plan_context_progression, plan_next_context_expansion, prepare_context_expansion,
-    prepare_detail_map, prepare_primary_project_map, prepare_project_map, primary_detail_query,
+    PRIMARY_PROJECT_MAP_SCHEMA, PROJECT_MAP_SCHEMA, PrimaryMapForComposition, ProjectMap,
+    ProjectMapSelection, ProjectMapState, ProjectMapView, ProjectNavigationRequest,
+    build_primary_map_for_composition, build_project_map, expand_context_frontier,
+    open_project_map_view, plan_context_expansion, plan_context_progression,
+    plan_next_context_expansion, prepare_context_expansion, prepare_detail_map,
+    prepare_primary_project_map, prepare_project_map, primary_detail_query,
     primary_navigation_query, primary_project_navigation_queries,
 };
 pub use pack::{

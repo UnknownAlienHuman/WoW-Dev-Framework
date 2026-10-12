@@ -1,6 +1,7 @@
 //! Closed E3 context-map, inspect and build projections. Semantics are service-owned.
 //! The native host document is a separate transport input, never an E3 semantic selector.
 mod build;
+mod combined;
 mod inspect;
 mod platform;
 
@@ -15,8 +16,8 @@ use wow_service::{
     context::{
         CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_ID_MAX_BYTES, CONTEXT_MAP_RESULT_MAX_BYTES,
         ContextBuildRequest, ContextInspectRequest, ContextMapCurrentGuard, ContextMapHostInput,
-        ContextMapPublication, ContextMapReferenceGuard, ContextMapRequest, ContextMapRoot,
-        ContextMapStatus, PRIMARY_NAVIGATION_MAP_PROFILE_ID,
+        ContextMapPublication, ContextMapReferenceGuard, ContextMapRequest, ContextMapResult,
+        ContextMapRoot, ContextMapStatus, PRIMARY_NAVIGATION_MAP_PROFILE_ID,
         PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID, execute_context_build, execute_context_inspect,
         execute_context_map,
     },
@@ -81,6 +82,11 @@ const HELP: &str = concat!(
     "  Native map/inspect use a bounded explicit service host and request document. ",
     "The request operation must match the command. Primary options cannot be mixed; ",
     "native build and artifact output are unavailable.\n",
+    "wow context map --platform combined --native-host-config <combined-host.json> ",
+    "--combined-request-input <request.json> [--output envelope-json]\n",
+    "  Combined uses explicit bounded service host/request documents. Native platform ",
+    "request flags and Primary selectors cannot be mixed. Inspect, build, text and artifact ",
+    "are unavailable for this route.\n",
 );
 
 fn progressive_help() -> String {
@@ -116,6 +122,7 @@ enum Request {
     Inspect(ContextInspectRequest),
     Build(ContextBuildRequest),
     Platform(platform::Request),
+    Combined(combined::Request),
 }
 
 struct Arguments {
@@ -155,6 +162,9 @@ pub fn run(values: Vec<OsString>) -> u8 {
     if let Request::Platform(request) = &arguments.request {
         return platform::run(&arguments.host_config, request, &stop);
     }
+    if let Request::Combined(request) = &arguments.request {
+        return combined::run(&arguments.host_config, request, &stop);
+    }
     let host_bytes = match crate::graph::read_file(
         &arguments.host_config,
         CONTEXT_MAP_HOST_INPUT_MAX_BYTES,
@@ -182,6 +192,10 @@ pub fn run(values: Vec<OsString>) -> u8 {
             crate::diagnostic("native context dispatch invariant failed");
             return 4;
         }
+        Request::Combined(_) => {
+            crate::diagnostic("combined context dispatch invariant failed");
+            return 4;
+        }
     };
     let result = match operation {
         Ok(result) => result,
@@ -191,6 +205,10 @@ pub fn run(values: Vec<OsString>) -> u8 {
             return 4;
         }
     };
+    emit_json_result(&result, &stop)
+}
+
+fn emit_json_result(result: &ContextMapResult, stop: &AtomicBool) -> u8 {
     let bytes = result.canonical_bytes();
     if bytes.is_empty() || bytes.len() > CONTEXT_MAP_RESULT_MAX_BYTES {
         crate::diagnostic("context result byte limit or encoding failure");
@@ -237,6 +255,9 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         .ok_or("context argument size overflow")?;
     if values.len() > MAX_ARGUMENTS || bytes > MAX_ARGUMENT_BYTES {
         return Err("context argument limit exceeded");
+    }
+    if let Some(arguments) = combined::parse(&values)? {
+        return Ok(arguments);
     }
     if let Some(arguments) = platform::parse(&values)? {
         return Ok(arguments);
@@ -601,7 +622,9 @@ mod tests {
             Request::Map(request) => serde_json::to_value(request),
             Request::Inspect(request) => serde_json::to_value(request),
             Request::Build(request) => serde_json::to_value(request),
-            Request::Platform(_) => return Err("native request is explicit file transport"),
+            Request::Platform(_) | Request::Combined(_) => {
+                return Err("native request is explicit file transport");
+            }
         }
         .map_err(|_| "request serialization failed")
     }

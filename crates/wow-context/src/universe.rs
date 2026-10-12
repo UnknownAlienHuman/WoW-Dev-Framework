@@ -58,6 +58,20 @@ impl ContextUniverseSet<'_> {
     pub const fn limits(&self) -> PrimaryMapLimits {
         self.limits
     }
+    pub(crate) fn matches_reference(
+        &self,
+        reference: &ReferenceView,
+        profile: &ProfileIdentity,
+    ) -> bool {
+        self.binding.target_profile == profile
+            && reference
+                .generation_id()
+                .parse::<ReferenceGenerationId>()
+                .ok()
+                == Some(self.binding.reference_generation)
+            && self.binding.reference_schema == reference.schema()
+            && self.binding.reference_view_digest == reference.self_digest()
+    }
 }
 
 /// Primary-only operation; optional platform absence is selected by this closed

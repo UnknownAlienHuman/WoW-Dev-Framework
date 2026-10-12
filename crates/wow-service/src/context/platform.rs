@@ -36,7 +36,7 @@ pub const PLATFORM_NATIVE_ONE_HOP_PROFILE_ID: &str = wow_context::PLATFORM_NATIV
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct HostDocument {
+pub(super) struct HostDocument {
     schema: Box<str>,
     project_store_id: Box<str>,
     project_store_root: PathBuf,
@@ -50,12 +50,12 @@ struct HostDocument {
 /// Inert host registration. Host paths never enter semantic identity or output.
 pub struct ContextPlatformHostInput {
     schema: Box<str>,
-    project_store_id: Box<str>,
+    pub(super) project_store_id: Box<str>,
     project_store_root: PathBuf,
-    reference_profile: ProfileIdentity,
-    reference: ReferenceView,
-    limits: Limits,
-    selection: PlatformProjectSelection,
+    pub(super) reference_profile: ProfileIdentity,
+    pub(super) reference: ReferenceView,
+    pub(super) limits: Limits,
+    pub(super) selection: PlatformProjectSelection,
 }
 impl ContextPlatformHostInput {
     pub fn from_json_slice(bytes: &[u8], stop: &AtomicBool) -> ServiceResult<Self> {
@@ -67,6 +67,9 @@ impl ContextPlatformHostInput {
             stop,
         )
         .map_err(|error| failure(error.code))?;
+        Self::from_document(document, stop)
+    }
+    pub(super) fn from_document(document: HostDocument, stop: &AtomicBool) -> ServiceResult<Self> {
         let selection = PlatformProjectSelection::from_document(document.selection, stop)?;
         let host = Self {
             schema: document.schema,
@@ -80,7 +83,7 @@ impl ContextPlatformHostInput {
         host.validate(stop)?;
         Ok(host)
     }
-    fn validate(&self, stop: &AtomicBool) -> ServiceResult<()> {
+    pub(super) fn validate(&self, stop: &AtomicBool) -> ServiceResult<()> {
         checkpoint(stop)?;
         let host = self;
         if host.schema.as_ref() != CONTEXT_PLATFORM_HOST_SCHEMA
@@ -100,7 +103,7 @@ impl ContextPlatformHostInput {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ContextPlatformOperation {
     Map,
@@ -116,7 +119,7 @@ impl ContextPlatformOperation {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RequestDocument {
+pub(super) struct RequestDocument {
     schema: Box<str>,
     operation: ContextPlatformOperation,
     project_store_id: Box<str>,
@@ -131,7 +134,7 @@ struct RequestDocument {
 #[derive(Serialize)]
 pub struct ContextPlatformRequest {
     #[serde(flatten)]
-    document: RequestDocument,
+    pub(super) document: RequestDocument,
 }
 impl ContextPlatformRequest {
     pub fn from_json_slice(bytes: &[u8], stop: &AtomicBool) -> ServiceResult<Self> {
@@ -143,6 +146,12 @@ impl ContextPlatformRequest {
             stop,
         )
         .map_err(|error| failure(error.code))?;
+        Self::from_document(document, stop)
+    }
+    pub(super) fn from_document(
+        document: RequestDocument,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Self> {
         if document.schema.as_ref() != CONTEXT_PLATFORM_REQUEST_SCHEMA
             || document.profile_id.as_ref() != PLATFORM_NATIVE_ONE_HOP_PROFILE_ID
         {
@@ -283,7 +292,7 @@ pub fn execute_context_platform(
     })
 }
 
-fn with_checked_platform_read<T>(
+pub(super) fn with_checked_platform_read<T>(
     host: &ContextPlatformHostInput,
     request: &ContextPlatformRequest,
     stop: &AtomicBool,
@@ -384,6 +393,17 @@ fn build(
     request_id: &str,
     stop: &AtomicBool,
 ) -> ServiceResult<(Vec<u8>, ContextMapStatus, ContextPlatformSummary)> {
+    with_qualified_platform_input(read, request, stop, |view| {
+        build_qualified(read, host, request, request_id, view, stop)
+    })
+}
+
+pub(super) fn with_qualified_platform_input<T>(
+    read: &LiveProjectRead,
+    request: &ContextPlatformRequest,
+    stop: &AtomicBool,
+    build: impl FnOnce(&wow_project::skeleton_input::SkeletonInputView<'_>) -> ServiceResult<T>,
+) -> ServiceResult<T> {
     checkpoint(stop)?;
     let selected = &request.document;
     if read.store_generation_id() != &selected.store_generation_id
@@ -405,6 +425,24 @@ fn build(
     if selected.input.binding() != &binding {
         return Err(failure(ServiceErrorCode::IdentityMismatch));
     }
+    let view = open_skeleton_input_view(
+        candidate.native(),
+        candidate.graph(),
+        selected.input.clone(),
+        stop,
+    )
+    .map_err(project_error)?;
+    build(&view)
+}
+
+fn build_qualified(
+    read: &LiveProjectRead,
+    host: &ContextPlatformHostInput,
+    request: &ContextPlatformRequest,
+    request_id: &str,
+    view: &wow_project::skeleton_input::SkeletonInputView<'_>,
+    stop: &AtomicBool,
+) -> ServiceResult<(Vec<u8>, ContextMapStatus, ContextPlatformSummary)> {
     let limits = host.limits.owner_limits()?;
     let namespace = read
         .namespace()
@@ -430,15 +468,8 @@ fn build(
         ContentDigest::<CanonicalResult>::from_bytes(digest)
     );
     checkpoint(stop)?;
-    let view = open_skeleton_input_view(
-        candidate.native(),
-        candidate.graph(),
-        selected.input.clone(),
-        stop,
-    )
-    .map_err(project_error)?;
     let universe = wow_context::bind_platform_context_universe(
-        &view,
+        view,
         &host.reference,
         &host.reference_profile,
         limits,

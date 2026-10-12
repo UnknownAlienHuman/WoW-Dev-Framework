@@ -81,6 +81,28 @@ pub fn bind_platform_context_universe<'a>(
     limits: PrimaryMapLimits,
     stop: &AtomicBool,
 ) -> ContextResult<PlatformContextUniverse<'a>> {
+    bind_platform_context_universe_with_budget(
+        view,
+        reference,
+        reference_profile,
+        limits,
+        Budget::new(limits),
+        0,
+        stop,
+    )
+}
+
+// The standalone wrapper creates its own ledger; composition transfers the
+// actual Primary ledger here before any additional platform validation/read.
+pub(crate) fn bind_platform_context_universe_with_budget<'a>(
+    view: &'a SkeletonInputView<'a>,
+    reference: &'a ReferenceView,
+    reference_profile: &'a ProfileIdentity,
+    limits: PrimaryMapLimits,
+    mut budget: Budget,
+    prior_input_bytes: u64,
+    stop: &AtomicBool,
+) -> ContextResult<PlatformContextUniverse<'a>> {
     checkpoint(stop)?;
     let (source, accepted, request) = view.context_parts();
     let configuration = source.project().configuration();
@@ -100,11 +122,13 @@ pub fn bind_platform_context_universe<'a>(
     {
         return Err(mismatch());
     }
-    let mut budget = Budget::new(limits);
     budget.work(1, stop)?;
     let input_bytes_reserved = encoded_len(
         &(reference_profile, reference, request),
-        limits.max_input_bytes,
+        limits
+            .max_input_bytes
+            .checked_sub(prior_input_bytes)
+            .ok_or_else(exhausted)?,
         stop,
     )?;
     let profile_validation = reference_profile.validate();
@@ -191,11 +215,23 @@ struct PlatformMapCore<'a> {
     absence_authoritative: bool,
 }
 #[derive(Serialize)]
-struct PlatformMapArtifact<'a> {
+pub(crate) struct PlatformMapArtifact<'a> {
     family: &'static str,
     artifact_kind: &'static str,
     map_id: Box<str>,
     core: PlatformMapCore<'a>,
+}
+
+impl<'a> PlatformMapArtifact<'a> {
+    pub(crate) fn map_id(&self) -> &str {
+        &self.map_id
+    }
+    pub(crate) fn page(&self) -> &SkeletonInputPage<'a> {
+        &self.core.native
+    }
+    pub(crate) fn input_bytes_reserved(&self) -> u64 {
+        self.core.binding.input_bytes_reserved
+    }
 }
 
 /// Serialize-only output retaining the original native page and its view lifetime.
@@ -208,7 +244,10 @@ pub struct PlatformContextMap<'a> {
     #[serde(skip)]
     budget: Budget,
 }
-impl PlatformContextMap<'_> {
+impl<'a> PlatformContextMap<'a> {
+    pub(crate) fn into_parts(self) -> (PlatformMapArtifact<'a>, Box<[u8]>, Budget) {
+        (self.artifact, self.canonical_bytes, self.budget)
+    }
     #[must_use]
     pub fn map_id(&self) -> &str {
         &self.artifact.map_id
@@ -405,7 +444,7 @@ fn remaining(budget: &Budget, limits: PrimaryMapLimits) -> ContextResult<u64> {
         .checked_sub(budget.retained_bytes)
         .ok_or_else(exhausted)
 }
-fn encode_retained<T: Serialize + ?Sized>(
+pub(crate) fn encode_retained<T: Serialize + ?Sized>(
     artifact: &T,
     budget: &mut Budget,
     limits: PrimaryMapLimits,

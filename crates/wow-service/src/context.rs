@@ -1,6 +1,7 @@
 //! Exact primary-map orchestration over retained native owners.
 //! Host registration and filesystem locations are separate from semantic requests.
 mod build;
+mod combined;
 mod host;
 mod inspect;
 mod operation;
@@ -17,6 +18,12 @@ pub use build::{
     PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID, PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
     PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID, execute_context_build,
+};
+pub use combined::{
+    COMBINED_NATIVE_MAP_PROFILE_ID, CONTEXT_COMBINED_HOST_INPUT_MAX_BYTES,
+    CONTEXT_COMBINED_HOST_SCHEMA, CONTEXT_COMBINED_REQUEST_MAX_BYTES,
+    CONTEXT_COMBINED_REQUEST_SCHEMA, CONTEXT_COMBINED_RESULT_SCHEMA, ContextCombinedHostInput,
+    ContextCombinedRequest, execute_context_combined,
 };
 pub use host::{CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_HOST_SCHEMA, ContextMapHostInput};
 pub use inspect::{ContextInspectRequest, execute_context_inspect};

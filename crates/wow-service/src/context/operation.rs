@@ -347,6 +347,70 @@ pub(super) fn with_native_origins_with_catalog<T>(
         &GraphEvidenceCatalog,
     ) -> ServiceResult<T>,
 ) -> ServiceResult<T> {
+    with_native_map_construction(
+        universe,
+        read,
+        host,
+        root,
+        NativeMapMode::Ordinary { detail },
+        stop,
+        |output, graph, catalog| match output {
+            NativeMapConstruction::Ordinary(map) => build(&map, graph, catalog),
+            NativeMapConstruction::Composition(_) => {
+                Err(failure(ServiceErrorCode::InternalContractViolation))
+            }
+        },
+    )
+}
+
+pub(super) fn with_primary_composition<T>(
+    universe: &wow_context::ContextUniverseSet<'_>,
+    read: &LiveProjectRead,
+    host: &ContextMapHostInput,
+    root: ContextMapRoot,
+    stop: &AtomicBool,
+    build: impl FnOnce(wow_context::PrimaryMapForComposition<'_>) -> ServiceResult<T>,
+) -> ServiceResult<T> {
+    with_native_map_construction(
+        universe,
+        read,
+        host,
+        root,
+        NativeMapMode::Composition,
+        stop,
+        |output, _graph, _catalog| match output {
+            NativeMapConstruction::Composition(primary) => build(primary),
+            NativeMapConstruction::Ordinary(_) => {
+                Err(failure(ServiceErrorCode::InternalContractViolation))
+            }
+        },
+    )
+}
+
+enum NativeMapConstruction<'a> {
+    Ordinary(wow_context::ProjectMap<'a>),
+    Composition(wow_context::PrimaryMapForComposition<'a>),
+}
+enum NativeMapMode {
+    Ordinary { detail: bool },
+    Composition,
+}
+
+// One catalog, selection and native support pipeline for both consumers.
+fn with_native_map_construction<T>(
+    universe: &wow_context::ContextUniverseSet<'_>,
+    read: &LiveProjectRead,
+    host: &ContextMapHostInput,
+    root: ContextMapRoot,
+    mode: NativeMapMode,
+    stop: &AtomicBool,
+    build: impl FnOnce(
+        NativeMapConstruction<'_>,
+        &wow_graph::GraphPartitionRead<'_>,
+        &GraphEvidenceCatalog,
+    ) -> ServiceResult<T>,
+) -> ServiceResult<T> {
+    let detail = matches!(mode, NativeMapMode::Ordinary { detail: true });
     let provenance = read
         .pair()
         .source_provenance()
@@ -479,8 +543,17 @@ pub(super) fn with_native_origins_with_catalog<T>(
             .map_err(context_error)?;
         receipts.push(receipt);
     }
-    let map = wow_context::build_project_map(selection, &receipts, stop).map_err(context_error)?;
-    build(&map, &graph, &catalog)
+    let output = if matches!(mode, NativeMapMode::Composition) {
+        NativeMapConstruction::Composition(
+            wow_context::build_primary_map_for_composition(selection, &receipts, stop)
+                .map_err(context_error)?,
+        )
+    } else {
+        NativeMapConstruction::Ordinary(
+            wow_context::build_project_map(selection, &receipts, stop).map_err(context_error)?,
+        )
+    };
+    build(output, &graph, &catalog)
 }
 
 /// Keep additional native receipts stable until the consuming callback returns.
