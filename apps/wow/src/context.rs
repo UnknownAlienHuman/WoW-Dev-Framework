@@ -39,7 +39,9 @@ const HELP: &str = concat!(
     "--publication current|store-generation:<ProjectStoreGenerationId> ",
     "--root <exact-root-token> --level l0|l1|both\n",
     "  [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1] ",
-    "[--l1-profile-id wow-context/primary-l1/1]\n",
+    "[--l1-profile-id wow-context/primary-l1/1|wow-context/primary-state-detail-l1/1]\n",
+    "  State-detail L1 is inspect-only, requires l1 plus an exact graph-entity@ root, ",
+    "and cannot be combined with frontier expansion.\n",
     "  [--expansion-profile-id wow-context/primary-native-frontier/1 ",
     "--frontier graph-entity@<base64url-id> ...]\n",
     "  Expansion requires l1, an exact graph-entity@ root and 1..32 distinct frontiers; ",
@@ -658,7 +660,8 @@ mod tests {
     #[test]
     fn context_inspect_grammar_preserves_explicit_project_root() -> Result<(), &'static str> {
         use wow_service::context::{
-            PRIMARY_FRONTIER_EXPANSION_PROFILE_ID, PRIMARY_L0_PROFILE_ID,
+            ContextL1Profile, PRIMARY_FRONTIER_EXPANSION_PROFILE_ID, PRIMARY_L0_PROFILE_ID,
+            PRIMARY_L1_PROFILE_ID, PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
             PRIMARY_STATE_ROOT_L0_PROFILE_ID,
         };
 
@@ -898,6 +901,122 @@ mod tests {
             push(&mut map, flag, value);
             assert!(matches!(parse(map), Err("unknown context map option")));
         }
+
+        let mut explicit_entity = expansion_base.clone();
+        push(
+            &mut explicit_entity,
+            "--l1-profile-id",
+            PRIMARY_L1_PROFILE_ID,
+        );
+        let Request::Inspect(entity) = parse(explicit_entity)?.request else {
+            return Err("inspect parser selected the wrong typed operation");
+        };
+        assert_eq!(
+            serde_json::to_vec(&entity).map_err(|_| "request serialization failed")?,
+            serde_json::to_vec(&unexpanded).map_err(|_| "request serialization failed")?
+        );
+
+        // Exact profile syntax does not assert this inert graph ID has state custody.
+        let mut state_detail = expansion_base.clone();
+        push(
+            &mut state_detail,
+            "--l1-profile-id",
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+        );
+        let expected_detail = unexpanded
+            .clone()
+            .with_l1_profile(ContextL1Profile::StateDetailV1)
+            .map_err(|_| "expected state-detail inspect request refused")?;
+        let selected_detail = request_json(state_detail.clone())?;
+        assert_eq!(
+            selected_detail,
+            serde_json::to_value(expected_detail).map_err(|_| "request serialization failed")?
+        );
+        assert_eq!(
+            selected_detail["l1_profile_id"],
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID
+        );
+        assert_eq!(selected_detail["level"], "l1");
+        assert_eq!(
+            selected_detail["root"],
+            serde_json::json!({"kind": "graph_entity", "id": GRAPH_ID})
+        );
+        assert!(selected_detail.get("expansion").is_none());
+        let mut duplicate_l1 = state_detail.clone();
+        push(&mut duplicate_l1, "--l1-profile-id", PRIMARY_L1_PROFILE_ID);
+        assert!(matches!(
+            parse(duplicate_l1),
+            Err("duplicate context inspect option")
+        ));
+        for (level, message) in [
+            ("l0", "L1 profile conflicts with context inspect level l0"),
+            (
+                "both",
+                "state-detail L1 requires context inspect l1 and graph-entity root",
+            ),
+        ] {
+            let mut wrong_level = state_detail.clone();
+            replace(&mut wrong_level, "--level", level)?;
+            assert!(matches!(parse(wrong_level), Err(actual) if actual == message));
+        }
+        let mut project_detail = state_detail.clone();
+        replace(&mut project_detail, "--root", PROJECT_ROOT)?;
+        assert!(matches!(
+            parse(project_detail),
+            Err("state-detail L1 requires context inspect l1 and graph-entity root")
+        ));
+        let mut detail_first = state_detail.clone();
+        push(
+            &mut detail_first,
+            "--expansion-profile-id",
+            PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+        );
+        push(&mut detail_first, "--frontier", &frontier_b);
+        assert!(matches!(
+            parse(detail_first),
+            Err("state-detail L1 conflicts with context frontier expansion")
+        ));
+        let mut expansion_first = expansion.clone();
+        push(
+            &mut expansion_first,
+            "--l1-profile-id",
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+        );
+        assert!(matches!(
+            parse(expansion_first),
+            Err("state-detail L1 conflicts with context frontier expansion")
+        ));
+        let mut build_detail = state_detail;
+        *build_detail.get_mut(1).ok_or("missing fixture command")? = "build".into();
+        push(
+            &mut build_detail,
+            "--context-profile-id",
+            wow_service::context::PRIMARY_CONTEXT_PACK_PROFILE_ID,
+        );
+        assert!(matches!(
+            parse(build_detail),
+            Err("unsupported exact context L1 profile")
+        ));
+        let mut default_build = expansion_base;
+        *default_build.get_mut(1).ok_or("missing fixture command")? = "build".into();
+        push(
+            &mut default_build,
+            "--context-profile-id",
+            wow_service::context::PRIMARY_CONTEXT_PACK_PROFILE_ID,
+        );
+        let default_build_request = request_json(default_build.clone())?;
+        push(&mut default_build, "--l1-profile-id", PRIMARY_L1_PROFILE_ID);
+        assert_eq!(default_build_request, request_json(default_build)?);
+        let mut map_detail = arguments();
+        push(
+            &mut map_detail,
+            "--l1-profile-id",
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+        );
+        assert!(matches!(
+            parse(map_detail),
+            Err("unknown context map option")
+        ));
 
         let arguments = parse(values)?;
         let Request::Inspect(request) = arguments.request else {

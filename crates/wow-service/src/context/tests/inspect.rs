@@ -906,6 +906,92 @@ fn state_consumer_bundle(input: &Path, stop: &AtomicBool) -> TestResult<ProjectI
     )?)
 }
 
+// Compose the real state-access producer only for the separate custody store.
+fn state_custody_graph(
+    publisher: &ProjectPublisher,
+    source: &GraphPartitionSnapshot,
+    stop: &AtomicBool,
+) -> TestResult<GraphPartitionSnapshot> {
+    use wow_recognizers::source_state::{
+        SOURCE_STATE_PARTITION, SourceStateFact, SourceStateInput, recognize_source_state,
+    };
+    let view = publisher.open_current()?;
+    // Project held native facts from this exact publisher; no input read/parser.
+    let (registry, batch, _, provenance, _) =
+        build_source_graph_proposals(&view, stop)?.into_parts();
+    assert_eq!(source.registry(), &registry);
+    let original = source
+        .partition(SOURCE_GRAPH_PARTITION)
+        .ok_or("original source-only partition")?;
+    assert_eq!(original.batch(), &batch);
+    assert_eq!(
+        source.source_context_id(),
+        provenance.context().context_id()
+    );
+    assert!(!provenance.state_bindings().is_empty());
+    let result = recognize_source_state(
+        SourceStateInput {
+            owner: source,
+            source_partition: SOURCE_GRAPH_PARTITION,
+            report: provenance
+                .function_call_report()
+                .ok_or("same publisher native function report")?,
+            context: provenance.context(),
+            facts: provenance
+                .state_bindings()
+                .iter()
+                .map(|binding| SourceStateFact {
+                    fact_id: &binding.binding_id,
+                    access_id: &binding.access_id,
+                    root_proposal_id: &binding.root_id,
+                    caller_proposal_id: &binding.caller_proposal_id,
+                    target_proposal_id: &binding.target_proposal_id,
+                    kind: binding.kind,
+                    confidence: binding.confidence,
+                    source_handle_ids: &binding.source_handle_ids,
+                    evidence_ids: &binding.evidence_ids,
+                })
+                .collect(),
+            source_handles: provenance.source_handles(),
+            evidence: provenance.evidence(),
+        },
+        stop,
+    )?;
+    let receipt_count = result.recognition.receipts().len();
+    assert_eq!(receipt_count, provenance.state_bindings().len());
+    let prepared = source.prepare_replacement(
+        GraphPartitionReplacement {
+            expected_snapshot_id: source.snapshot().snapshot_id().clone(),
+            expected_partition_digest: None,
+            producer_version: env!("CARGO_PKG_VERSION").into(),
+            batch: result.batch,
+            coverage: result.coverage,
+        },
+        stop,
+    )?;
+    let graph = prepared.candidate().clone();
+    assert_eq!(graph.partition(SOURCE_GRAPH_PARTITION), Some(original));
+    assert_eq!(graph.snapshot().limits(), source.snapshot().limits());
+    let state = graph
+        .partition(SOURCE_STATE_PARTITION)
+        .ok_or("real saved-variable-access partition")?;
+    assert!(state.report().rejections().is_empty());
+    assert_eq!(state.report().accepted_relations().len(), receipt_count);
+    for relation in [
+        GraphRelationKind::ReadsState,
+        GraphRelationKind::WritesState,
+    ] {
+        assert!(
+            graph
+                .snapshot()
+                .edges()
+                .iter()
+                .any(|edge| edge.relation() == relation)
+        );
+    }
+    Ok(graph)
+}
+
 struct StateConsumerExpected {
     current: CurrentPublication,
     root_ids: Vec<GraphNodeId>,
@@ -1003,6 +1089,24 @@ fn retained_state_consumer(
             Ok(serde_json::to_value(proposal)?)
         })
         .collect::<TestResult<Vec<_>>>()?;
+    // Exact retained non-state facets, joined by their accepted source proposals.
+    // These serialized expectations grant no decoded admission authority.
+    let mut detail_declarations = Vec::new();
+    for function in provenance.functions() {
+        let node = proof.published_entity(SOURCE_GRAPH_PARTITION, &function.proposal_id, stop)?;
+        let metadata = provenance
+            .callable_metadata(&function.function_id)?
+            .ok_or("original native callable metadata")?;
+        detail_declarations.push(json!({"kind":"callable","node":node,"metadata":metadata}));
+    }
+    for origin in provenance.lua_declarations() {
+        let node = proof.published_entity(SOURCE_GRAPH_PARTITION, &origin.proposal_id, stop)?;
+        detail_declarations.push(json!({"kind":"lua","node":node,"origin":origin}));
+    }
+    for origin in provenance.xml_declarations() {
+        let node = proof.published_entity(SOURCE_GRAPH_PARTITION, &origin.proposal_id, stop)?;
+        detail_declarations.push(json!({"kind":"xml","node":node,"origin":origin}));
+    }
     let current = read
         .current_at_acquisition()
         .ok_or("retained Current")?
@@ -1013,6 +1117,8 @@ fn retained_state_consumer(
         "entity_proposals":source.batch().entity_proposals(),
         "accepted_entities":source.report().accepted_entities(),
         "relation_proposals":relations,"accepted_relations":source.report().accepted_relations(),
+        "detail_declarations":detail_declarations,
+        "project_coverage":read.project().project_coverage_records(),
         "evidence":provenance.evidence().values().collect::<Vec<_>>(),
         "handles":provenance.source_handles().values().collect::<Vec<_>>(),
         "load":{"digest":plan.digest(),"selected_toc":plan.selected_toc(),
@@ -1190,6 +1296,258 @@ fn assert_state_consumer_l0(
     Ok(())
 }
 
+const STATE_DETAIL_L1_PROFILE: &str = "wow-context/primary-state-detail-l1/1";
+
+fn assert_state_detail_l1(
+    result: &ContextMapResult,
+    root: &Value,
+    expected: &StateConsumerExpected,
+    scratch: &Scratch,
+) -> TestResult<Value> {
+    assert_eq!(result.status(), ContextMapStatus::Partial);
+    assert_eq!(result.failure_code(), None);
+    let envelope: Value = serde_json::from_slice(result.canonical_bytes())?;
+    assert_eq!(envelope["schema"], "wow-service/context-inspect-result/1");
+    assert_eq!(envelope["operation"], "context_inspect");
+    assert_eq!(envelope["resource_closure"], "closed");
+    assert!(envelope.get("failure_code").is_none());
+    let payload = &envelope["payload"];
+    assert_eq!(
+        payload["publication_set_id"],
+        expected.records["publication_set_id"]
+    );
+    assert_eq!(
+        payload["current_at_acquisition"],
+        serde_json::to_value(&expected.current)?
+    );
+    assert_eq!(
+        payload["current_record_digest"],
+        observed_current_digest(&expected.current)?
+    );
+    assert!(payload.get("expansion").is_none());
+    let skeletons = &payload["skeletons"];
+    assert_eq!(skeletons["level"], "l1");
+    assert!(skeletons.get("l0").is_none());
+    let core = &skeletons["l1"]["core"];
+    assert_eq!(
+        core["schema"],
+        "wow-context/l1-skeleton/primary-state-detail/1"
+    );
+    assert_eq!(core["profile"], STATE_DETAIL_L1_PROFILE);
+    assert_eq!(
+        core["profile_descriptor"]["profile_id"],
+        STATE_DETAIL_L1_PROFILE
+    );
+    assert_eq!(
+        core["profile_descriptor"]["types"],
+        "original_native_signature_state_and_symbolic_literal_keys_no_runtime_values"
+    );
+    assert_eq!(core["root"], *root);
+    assert_eq!(
+        core["relation_interpretation"],
+        "original_direct_native_assertions_no_transitive_edges"
+    );
+    let root_id = &root["node_id"];
+    let edges = rows(&expected.records["edges"])?
+        .iter()
+        .filter(|edge| &edge["from"] == root_id || &edge["to"] == root_id)
+        .cloned()
+        .collect::<Vec<_>>();
+    let nodes = rows(&expected.records["nodes"])?
+        .iter()
+        .filter(|node| {
+            &node["node_id"] == root_id
+                || edges
+                    .iter()
+                    .any(|edge| node["node_id"] == edge["from"] || node["node_id"] == edge["to"])
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    exact_rows(&core["local_entities"], &nodes)?;
+    exact_rows(&core["direct_relations"], &edges)?;
+    let mut facets = rows(&expected.records["detail_declarations"])?
+        .iter()
+        .filter(|row| nodes.contains(&row["node"]))
+        .cloned()
+        .collect::<Vec<_>>();
+    for retained_root in rows(&expected.records["roots"])? {
+        if nodes.contains(&retained_root["node"]) {
+            facets.push(json!({
+                "kind":"state_root", "node":retained_root["node"],
+                "origin":retained_root["origin"], "declarations":retained_root["declarations"]
+            }));
+        }
+        for path in rows(&retained_root["paths"])? {
+            if nodes.contains(&path["node"]) {
+                assert!(
+                    nodes.contains(&retained_root["node"]),
+                    "every selected literal path retains its exact native root locally"
+                );
+                assert_eq!(
+                    path["origin"]["root_id"],
+                    retained_root["origin"]["root_id"]
+                );
+                facets
+                    .push(json!({"kind":"state_path","node":path["node"],"origin":path["origin"]}));
+            }
+        }
+    }
+    exact_rows(&core["declarations"], &facets)?;
+    let actual = rows(&core["declarations"])?;
+    assert!(actual.iter().any(|row| row["node"] == *root));
+    assert_eq!(
+        actual
+            .iter()
+            .filter(|row| matches!(row["kind"].as_str(), Some("state_root" | "state_path")))
+            .count(),
+        nodes
+            .iter()
+            .filter(|node| matches!(node["kind"].as_str(), Some("state_root" | "state_path")))
+            .count()
+    );
+    assert!(
+        actual.windows(2).all(|pair| {
+            pair[0]["node"]["node_id"].as_str() < pair[1]["node"]["node_id"].as_str()
+        })
+    );
+    for row in actual {
+        if row["kind"] == "state_path" {
+            assert_eq!(
+                actual
+                    .iter()
+                    .filter(|candidate| {
+                        candidate["kind"] == "state_root"
+                            && candidate["origin"]["root_id"] == row["origin"]["root_id"]
+                    })
+                    .count(),
+                1,
+                "exactly one retained local original namespace root"
+            );
+        }
+        if row["kind"] == "state_root" {
+            assert!(!rows(&row["declarations"])?.is_empty());
+            assert!(row["origin"]["ambiguous"].is_boolean());
+            for declaration in rows(&row["declarations"])? {
+                assert_eq!(declaration["scope"], row["origin"]["scope"]);
+                assert_eq!(declaration["name"], row["origin"]["name"]);
+                assert_eq!(declaration["state"], "declared");
+                assert!(
+                    rows(&row["origin"]["source_handle_ids"])?
+                        .contains(&declaration["source_handle_id"])
+                );
+                assert!(
+                    rows(&row["origin"]["evidence_ids"])?.contains(&declaration["evidence_id"])
+                );
+            }
+        }
+    }
+    let context = &core["context"];
+    assert_eq!(context["state"], "partial");
+    assert_eq!(context["absence_authoritative"], false);
+    assert_eq!(context["source_bodies"], "excluded");
+    assert_eq!(context["tokens"], "unavailable");
+    assert!(rows(&core["not_evaluated"])?.contains(&json!("complete_corpus_or_runtime_behavior")));
+    let origins = &context["origins"]["core"];
+    assert_eq!(origins["absence_authoritative"], false);
+    assert_eq!(
+        origins["project_coverage"],
+        expected.records["project_coverage"]
+    );
+    assert_eq!(
+        origins["load_custody"]["selected_toc"],
+        expected.records["load"]
+    );
+    exact_rows(&origins["navigation"]["edges"], &edges)?;
+    assert_eq!(origins["navigation"]["root"], *root);
+    let mut pending = BTreeSet::new();
+    for (kind, records, field) in [
+        ("entity", nodes.as_slice(), "node_id"),
+        ("relation", edges.as_slice(), "edge_id"),
+    ] {
+        for row in records {
+            assert!(pending.insert((
+                kind.to_owned(),
+                row[field].as_str().ok_or("native ID")?.to_owned()
+            )));
+        }
+    }
+    assert_eq!(rows(&origins["supports"])?.len(), pending.len());
+    for receipt in rows(&origins["supports"])? {
+        let explanation = &receipt["explanation"];
+        assert_eq!(explanation["support_complete"], true);
+        assert_eq!(
+            explanation["source_context_id"],
+            expected.records["source_context_id"]
+        );
+        assert!(rows(&explanation["truncations"])?.is_empty());
+        let record = &explanation["record"];
+        let (kind, id) = match record["kind"].as_str() {
+            Some("entity") => {
+                assert!(nodes.contains(&record["node"]));
+                (
+                    "entity",
+                    record["node"]["node_id"].as_str().ok_or("node ID")?,
+                )
+            }
+            Some("relation") => {
+                assert!(edges.contains(&record["edge"]));
+                (
+                    "relation",
+                    record["edge"]["edge_id"].as_str().ok_or("edge ID")?,
+                )
+            }
+            _ => return Err("non-native support record".into()),
+        };
+        assert!(pending.remove(&(kind.to_owned(), id.to_owned())));
+        assert!(!rows(&explanation["supports"])?.is_empty());
+        for support in rows(&explanation["supports"])? {
+            assert_eq!(support["producer"]["partition_id"], SOURCE_GRAPH_PARTITION);
+            let (proposals, accepted) = match support["origin"].as_str() {
+                Some("producer_entity") => ("entity_proposals", "accepted_entities"),
+                Some("producer_relation") => ("relation_proposals", "accepted_relations"),
+                _ => return Err("unexpected foundation support".into()),
+            };
+            assert!(rows(&expected.records[proposals])?.contains(&support["proposal"]));
+            assert!(rows(&expected.records[accepted])?.contains(&support["accepted"]));
+        }
+        let resolution = &receipt["evidence_resolution"];
+        assert_eq!(resolution["closure_complete"], true);
+        assert!(rows(&resolution["unresolved"])?.is_empty());
+        assert!(rows(&resolution["truncations"])?.is_empty());
+        for (field, retained) in [
+            ("evidence_records", "evidence"),
+            ("source_handles", "handles"),
+        ] {
+            assert!(!rows(&resolution[field])?.is_empty());
+            for row in rows(&resolution[field])? {
+                assert!(rows(&expected.records[retained])?.contains(row));
+            }
+        }
+    }
+    assert!(pending.is_empty());
+    for source in rows(&origins["source_custody"])? {
+        assert_eq!(source["scope"], "primary");
+        assert!(rows(&expected.records["handles"])?.contains(&source["handle"]));
+    }
+    let text = std::str::from_utf8(result.canonical_bytes())?;
+    for body in [STATE_TOC, STATE_LUA] {
+        assert!(!text.contains(&serde_json::to_string(body)?));
+    }
+    assert!(!text.contains("StateCoreAccountDB = {}"));
+    assert!(!text.contains("project_store_root"));
+    assert!(
+        !text.contains(
+            scratch
+                .root
+                .file_name()
+                .ok_or("scratch name")?
+                .to_str()
+                .ok_or("UTF-8")?
+        )
+    );
+    Ok(payload.clone())
+}
+
 #[test]
 fn retained_native_state_root_l0_preserves_toc_scopes_paths_and_source_absent_custody() -> TestResult
 {
@@ -1209,6 +1567,26 @@ fn retained_native_state_root_l0_preserves_toc_scopes_paths_and_source_absent_cu
         &stop,
     )?;
     store.close()?;
+    // Same held publisher/input, separate store. Preserve the source-only
+    // publication used by every existing positive/default/export assertion.
+    let custody_graph = state_custody_graph(&publisher, &graph, &stop)?;
+    let custody_original = json!({
+        "nodes":custody_graph.snapshot().nodes(),"edges":custody_graph.snapshot().edges()
+    });
+    let custody_store_root = scratch.root.join("state-custody-store");
+    let mut custody_store = LiveProjectStore::create(
+        &custody_store_root,
+        custody_graph.snapshot().universe().as_str(),
+    )?;
+    let custody_publication = custody_store.publish(
+        &publisher,
+        &custody_graph,
+        "fixture-context-state-custody",
+        None,
+        &stop,
+    )?;
+    custody_store.close()?;
+    drop(custody_graph);
     drop(graph);
     drop(publisher);
     std::fs::remove_dir_all(&input)?;
@@ -1360,6 +1738,337 @@ fn retained_native_state_root_l0_preserves_toc_scopes_paths_and_source_absent_cu
         .ok_or("JSON renderer content")?;
     assert_eq!(serde_json::from_str::<Value>(content)?, *pack);
     assert_eq!(content.as_bytes(), wow_core::canonical_json_bytes(pack)?);
+    // Selected L1 uses the same retained publication after the original inputs
+    // were removed. Caller limits remain the existing 8M work / 4MiB selection.
+    let account = rows(&expected.records["roots"])?
+        .iter()
+        .find(|row| row["origin"]["scope"] == "account")
+        .ok_or("native account root")?;
+    let literal_path = rows(&account["paths"])?
+        .iter()
+        .find(|row| row["origin"]["keys"] == json!([{"kind":"string","value":"profile"}]))
+        .ok_or("native literal profile path")?;
+    let account_id: GraphNodeId = serde_json::from_value(account["node"]["node_id"].clone())?;
+    let path_id: GraphNodeId = serde_json::from_value(literal_path["node"]["node_id"].clone())?;
+    let mut detail_targets = expected
+        .root_ids
+        .iter()
+        .zip(rows(&expected.records["roots"])?)
+        .map(|(id, row)| (id.clone(), row["node"].clone()))
+        .collect::<Vec<_>>();
+    let detail_account_index = detail_targets
+        .iter()
+        .position(|(_, node)| node == &account["node"])
+        .ok_or("exact account target")?;
+    let detail_path_index = detail_targets.len();
+    detail_targets.push((path_id.clone(), literal_path["node"].clone()));
+    let mut detail_requests = Vec::new();
+    let mut detail_results = Vec::new();
+    let mut detail_payloads = Vec::new();
+    for (id, node) in &detail_targets {
+        let base = exact_inspect_request(
+            &publication.generation_id,
+            ContextInspectLevel::L1,
+            ContextMapRoot::graph_entity(id.as_str())?,
+            &profile,
+            &reference,
+        )?;
+        assert_eq!(
+            wow_core::canonical_json_bytes(&base)?,
+            wow_core::canonical_json_bytes(
+                &base.clone().with_l1_profile(ContextL1Profile::EntityV1)?
+            )?
+        );
+        let selected = base.with_l1_profile(ContextL1Profile::StateDetailV1)?;
+        let inspected = execute_context_inspect(&host, &selected, &stop)?;
+        let detail = assert_state_detail_l1(&inspected, node, &expected, &scratch)?;
+        eprintln!(
+            "state-detail fixture {}: skeleton_bytes={} reserved={} envelope_bytes={}",
+            node["kind"],
+            wow_core::canonical_json_bytes(&detail["skeletons"])?.len(),
+            detail["skeletons"]["bytes_reserved"],
+            inspected.canonical_bytes().len()
+        );
+        detail_requests.push(selected);
+        detail_results.push(inspected);
+        detail_payloads.push(detail);
+    }
+    for index in [detail_account_index, detail_path_index] {
+        assert_eq!(
+            detail_results[index].canonical_bytes(),
+            execute_context_inspect(&host, &detail_requests[index], &stop)?.canonical_bytes()
+        );
+    }
+    let legacy_root = exact_inspect_request(
+        &publication.generation_id,
+        ContextInspectLevel::L1,
+        ContextMapRoot::graph_entity(account_id.as_str())?,
+        &profile,
+        &reference,
+    )?;
+    let legacy_result = execute_context_inspect(&host, &legacy_root, &stop)?;
+    assert_eq!(legacy_result.failure_code(), None);
+    assert_eq!(legacy_result.status(), ContextMapStatus::Partial);
+    let legacy_envelope: Value = serde_json::from_slice(legacy_result.canonical_bytes())?;
+    assert_eq!(legacy_envelope["resource_closure"], "closed");
+    let legacy_core = &legacy_envelope["payload"]["skeletons"]["l1"]["core"];
+    assert_eq!(legacy_core["schema"], "wow-context/l1-skeleton/primary/1");
+    assert_eq!(legacy_core["profile"], PRIMARY_L1_PROFILE_ID);
+    assert!(
+        !rows(&legacy_core["declarations"])?
+            .iter()
+            .any(|row| { matches!(row["kind"].as_str(), Some("state_root" | "state_path")) })
+    );
+    let base_path = exact_inspect_request(
+        &publication.generation_id,
+        ContextInspectLevel::L1,
+        ContextMapRoot::graph_entity(path_id.as_str())?,
+        &profile,
+        &reference,
+    )?;
+    assert_eq!(
+        base_path
+            .clone()
+            .with_frontier_expansion(vec![ContextMapRoot::graph_entity(account_id.as_str())?])?
+            .with_l1_profile(ContextL1Profile::StateDetailV1)
+            .err()
+            .ok_or("frontier then state-detail admitted")?
+            .code(),
+        ServiceErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        detail_requests[detail_path_index]
+            .clone()
+            .with_frontier_expansion(vec![ContextMapRoot::graph_entity(account_id.as_str())?])
+            .err()
+            .ok_or("state-detail then frontier admitted")?
+            .code(),
+        ServiceErrorCode::InvalidRequest
+    );
+    for level in [ContextInspectLevel::L0, ContextInspectLevel::Both] {
+        assert_eq!(
+            exact_inspect_request(
+                &publication.generation_id,
+                level,
+                ContextMapRoot::graph_entity(account_id.as_str())?,
+                &profile,
+                &reference,
+            )?
+            .with_l1_profile(ContextL1Profile::StateDetailV1)
+            .err()
+            .ok_or("incompatible state-detail level admitted")?
+            .code(),
+            ServiceErrorCode::InvalidRequest
+        );
+    }
+    assert_eq!(
+        exact_inspect_request(
+            &publication.generation_id,
+            ContextInspectLevel::L1,
+            ContextMapRoot::project(
+                host_json["project_id"]
+                    .as_str()
+                    .ok_or("actual project ID")?
+            )?,
+            &profile,
+            &reference,
+        )?
+        .with_l1_profile(ContextL1Profile::StateDetailV1)
+        .err()
+        .ok_or("project state-detail admitted")?
+        .code(),
+        ServiceErrorCode::InvalidRequest
+    );
+    let unrelated_detail = exact_inspect_request(
+        &publication.generation_id,
+        ContextInspectLevel::L1,
+        ContextMapRoot::graph_entity(expected.unrelated.as_str())?,
+        &profile,
+        &reference,
+    )?
+    .with_l1_profile(ContextL1Profile::StateDetailV1)?;
+    assert_inspect_refused(
+        &host,
+        &unrelated_detail,
+        ServiceErrorCode::InvalidRequest,
+        "closed",
+        &stop,
+    )?;
+
+    // Preserve R1's failed source-only witness. Its paths have only Owns;
+    // this separate native publication includes genuine ReadsState/WritesState.
+    let custody_native = retained_state_consumer(
+        &custody_store_root,
+        &ReadSelector::Exact(custody_publication.generation_id.clone()),
+        &stop,
+    )?;
+    assert!(!input.exists());
+    assert_eq!(custody_native.records["nodes"], custody_original["nodes"]);
+    assert_eq!(custody_native.records["edges"], custody_original["edges"]);
+    // Derive ONE prefix from reopened native edges; no ID/budget loop.
+    let mut custody_prefix = None;
+    for namespace in rows(&custody_native.records["roots"])? {
+        for path in rows(&namespace["paths"])? {
+            let mut incident = rows(&custody_native.records["edges"])?
+                .iter()
+                .filter(|edge| {
+                    edge["from"] == path["node"]["node_id"] || edge["to"] == path["node"]["node_id"]
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            incident.sort_by(|a, b| a["edge_id"].as_str().cmp(&b["edge_id"].as_str()));
+            let owns = incident
+                .iter()
+                .position(|edge| {
+                    edge["relation"] == "owns"
+                        && edge["from"] == namespace["node"]["node_id"]
+                        && edge["to"] == path["node"]["node_id"]
+                })
+                .ok_or("original root-to-path Owns")?;
+            if owns > 0
+                && incident[..owns].iter().all(|edge| {
+                    edge["from"] != namespace["node"]["node_id"]
+                        && edge["to"] != namespace["node"]["node_id"]
+                        && matches!(
+                            edge["relation"].as_str(),
+                            Some("reads_state" | "writes_state")
+                        )
+                })
+            {
+                custody_prefix = Some((
+                    path["node"].clone(),
+                    namespace["node"].clone(),
+                    incident[..owns].to_vec(),
+                ));
+                break;
+            }
+        }
+        if custody_prefix.is_some() {
+            break;
+        }
+    }
+    let (prefix_path, omitted_namespace, prefix_edges) = custody_prefix.ok_or(
+        "W25 missing-root custody prefix not demonstrated by real retained state-access edges",
+    )?;
+    let prefix_path_id: GraphNodeId = serde_json::from_value(prefix_path["node_id"].clone())?;
+    let mut prefix_host = host_json.clone();
+    prefix_host["project_store_root"] = json!(custody_store_root);
+    prefix_host["limits"]["max_direct_edges"] = json!(u32::try_from(prefix_edges.len())?);
+    prefix_host["limits"]["neighbors"]["max_scanned_edges"] = json!(u32::try_from(
+        rows(&custody_native.records["edges"])?.len()
+    )?);
+    let prefix_host = decode_host(&prefix_host, &stop)?;
+    let prefix_request = exact_inspect_request(
+        &custody_publication.generation_id,
+        ContextInspectLevel::L1,
+        ContextMapRoot::graph_entity(prefix_path_id.as_str())?,
+        &profile,
+        &reference,
+    )?;
+    let prefix_result = execute_context_inspect(&prefix_host, &prefix_request, &stop)?;
+    assert_eq!(prefix_result.status(), ContextMapStatus::Truncated);
+    assert_eq!(prefix_result.failure_code(), None);
+    let prefix_envelope: Value = serde_json::from_slice(prefix_result.canonical_bytes())?;
+    assert_eq!(prefix_envelope["resource_closure"], "closed");
+    let prefix_core = &prefix_envelope["payload"]["skeletons"]["l1"]["core"];
+    assert_eq!(prefix_core["schema"], "wow-context/l1-skeleton/primary/1");
+    assert_eq!(prefix_core["root"], prefix_path);
+    let prefix_nodes = rows(&prefix_core["local_entities"])?;
+    let native_prefix_nodes = rows(&custody_native.records["nodes"])?
+        .iter()
+        .filter(|node| {
+            node["node_id"] == prefix_path["node_id"]
+                || prefix_edges
+                    .iter()
+                    .any(|edge| node["node_id"] == edge["from"] || node["node_id"] == edge["to"])
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    exact_rows(&prefix_core["local_entities"], &native_prefix_nodes)?;
+    assert!(prefix_nodes.contains(&prefix_path));
+    assert!(!prefix_nodes.contains(&omitted_namespace));
+    exact_rows(&prefix_core["direct_relations"], &prefix_edges)?;
+    assert_eq!(prefix_core["context"]["absence_authoritative"], false);
+    assert!(
+        prefix_core["context"]["origins"]["core"]["navigation"]["omitted_edges"]
+            .as_u64()
+            .ok_or("native omitted-edge count")?
+            > 0
+    );
+    assert_inspect_refused(
+        &prefix_host,
+        &prefix_request.with_l1_profile(ContextL1Profile::StateDetailV1)?,
+        ServiceErrorCode::ComponentUnavailable,
+        "closed",
+        &stop,
+    )?;
+
+    // Service calls retain the separate native publication without mutating Current.
+    let custody_store = LiveProjectStore::open(&custody_store_root)?;
+    assert_eq!(
+        custody_store.current()?,
+        Some(custody_native.current.clone())
+    );
+    custody_store.close()?;
+
+    let detail_request = &detail_requests[detail_account_index];
+    let detail_result = &detail_results[detail_account_index];
+    // The owner records its actual post-artifact allowance. Do not charge an
+    // invented second skeleton copy: the final consumer adds its envelope.
+    let held = detail_payloads[detail_account_index]["skeletons"]["bytes_reserved"]
+        .as_u64()
+        .ok_or("recorded skeleton reservation")?;
+    let envelope_len = u64::try_from(detail_result.canonical_bytes().len())?;
+    assert!(
+        held.checked_add(envelope_len).ok_or("delivery sum")?
+            <= host_json["limits"]["max_metadata_bytes"]
+                .as_u64()
+                .ok_or("metadata bound")?
+    );
+    let final_limit = held
+        .checked_add(envelope_len / 2)
+        .ok_or("final delivery bound")?;
+    assert!(final_limit > held && final_limit > envelope_len);
+    let mut final_bound = host_json.clone();
+    final_bound["limits"]["max_metadata_bytes"] = json!(final_limit);
+    assert_inspect_refused(
+        &decode_host(&final_bound, &stop)?,
+        detail_request,
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+        &stop,
+    )?;
+    for field in ["max_context_work", "max_metadata_bytes"] {
+        let mut low = host_json.clone();
+        low["limits"][field] = json!(1);
+        assert_inspect_refused(
+            &decode_host(&low, &stop)?,
+            detail_request,
+            ServiceErrorCode::BudgetExceeded,
+            "closed",
+            &stop,
+        )?;
+    }
+    assert_inspect_refused(
+        &host,
+        detail_request,
+        ServiceErrorCode::Cancelled,
+        "not_acquired",
+        &AtomicBool::new(true),
+    )?;
+    let after_detail = retained_state_consumer(&store_root, &ReadSelector::Current, &stop)?;
+    assert_eq!(after_detail.current, expected.current);
+    assert_eq!(after_detail.records, expected.records);
+    assert_eq!(
+        result.canonical_bytes(),
+        execute_context_inspect(&host, request, &stop)?.canonical_bytes()
+    );
+    assert_eq!(
+        built.canonical_bytes(),
+        execute_context_build(&host, &build, &stop)?.canonical_bytes()
+    );
+    assert!(!input.exists());
+
     if scratch.export {
         let common = json!([
             "--native-host-config",
@@ -1421,6 +2130,52 @@ fn retained_native_state_root_l0_preserves_toc_scopes_paths_and_source_absent_cu
             ),
         ] {
             write_export(&scratch.root, name, &bytes, limit)?;
+        }
+        for (label, index) in [("root", detail_account_index), ("path", detail_path_index)] {
+            let arguments = json!([
+                "context",
+                "inspect",
+                "--native-host-config",
+                scratch.root.join("host.json"),
+                "--project-store",
+                STORE_ID,
+                "--publication",
+                format!("store-generation:{}", publication.generation_id.as_str()),
+                "--root",
+                root_token(&detail_targets[index].0),
+                "--level",
+                "l1",
+                "--l1-profile-id",
+                STATE_DETAIL_L1_PROFILE,
+                "--platform",
+                "omitted",
+                "--expect-profile",
+                profile.profile_id().as_str(),
+                "--expect-reference-generation",
+                reference.generation_id(),
+                "--expect-reference-view",
+                reference.self_digest(),
+                "--output",
+                "envelope-json"
+            ]);
+            write_export(
+                &scratch.root,
+                &format!("state-detail-{label}-request.json"),
+                &wow_core::canonical_json_bytes(&detail_requests[index])?,
+                64 * 1024,
+            )?;
+            write_export(
+                &scratch.root,
+                &format!("state-detail-{label}-expected-envelope.json"),
+                detail_results[index].canonical_bytes(),
+                CONTEXT_MAP_RESULT_MAX_BYTES,
+            )?;
+            write_export(
+                &scratch.root,
+                &format!("state-detail-{label}-cli-arguments.json"),
+                &wow_core::canonical_json_bytes(&arguments)?,
+                64 * 1024,
+            )?;
         }
     }
     assert!(!input.exists());

@@ -1,16 +1,17 @@
 //! Closed inspect grammar and shared typed level/root extraction for build.
 use super::{Command, parse_root, set};
 use wow_service::context::{
-    ContextInspectLevel, ContextInspectRequest, ContextL0Profile, ContextMapCurrentGuard,
-    ContextMapPublication, ContextMapReferenceGuard, ContextMapRoot,
+    ContextInspectLevel, ContextInspectRequest, ContextL0Profile, ContextL1Profile,
+    ContextMapCurrentGuard, ContextMapPublication, ContextMapReferenceGuard, ContextMapRoot,
     PRIMARY_FRONTIER_EXPANSION_PROFILE_ID, PRIMARY_L0_PROFILE_ID, PRIMARY_L1_PROFILE_ID,
-    PRIMARY_STATE_ROOT_L0_PROFILE_ID,
+    PRIMARY_STATE_DETAIL_L1_PROFILE_ID, PRIMARY_STATE_ROOT_L0_PROFILE_ID,
 };
 
 pub(super) struct Selection {
     pub(super) level: ContextInspectLevel,
     pub(super) root: ContextMapRoot,
     pub(super) l0_profile: Option<ContextL0Profile>,
+    pub(super) l1_profile: Option<ContextL1Profile>,
     pub(super) frontier: Option<Vec<ContextMapRoot>>,
 }
 
@@ -18,7 +19,7 @@ pub(super) struct Selection {
 pub(super) struct Options {
     level: Option<ContextInspectLevel>,
     l0_profile: Option<ContextL0Profile>,
-    l1_profile: Option<()>,
+    l1_profile: Option<ContextL1Profile>,
     expansion_profile: Option<()>,
     frontier: Vec<ContextMapRoot>,
 }
@@ -62,10 +63,14 @@ impl Options {
                 set(&mut self.l0_profile, profile, command)
             }
             "--l1-profile-id" => {
-                if value != PRIMARY_L1_PROFILE_ID {
-                    return Err("unsupported exact context L1 profile");
-                }
-                set(&mut self.l1_profile, (), command)
+                let profile = match value {
+                    PRIMARY_L1_PROFILE_ID => ContextL1Profile::EntityV1,
+                    PRIMARY_STATE_DETAIL_L1_PROFILE_ID if matches!(command, Command::Inspect) => {
+                        ContextL1Profile::StateDetailV1
+                    }
+                    _ => return Err("unsupported exact context L1 profile"),
+                };
+                set(&mut self.l1_profile, profile, command)
             }
             "--expansion-profile-id" if matches!(command, Command::Inspect | Command::Build) => {
                 if value != PRIMARY_FRONTIER_EXPANSION_PROFILE_ID {
@@ -132,6 +137,17 @@ impl Options {
             }
             _ => {}
         }
+        if matches!(&self.l1_profile, Some(ContextL1Profile::StateDetailV1)) {
+            if !matches!(command, Command::Inspect)
+                || level != ContextInspectLevel::L1
+                || !matches!(&root, ContextMapRoot::GraphEntity(_))
+            {
+                return Err("state-detail L1 requires context inspect l1 and graph-entity root");
+            }
+            if self.expansion_profile.is_some() || !self.frontier.is_empty() {
+                return Err("state-detail L1 conflicts with context frontier expansion");
+            }
+        }
         if self.expansion_profile.is_some() == self.frontier.is_empty() {
             return Err(match command {
                 Command::Build => "context build expansion requires profile and frontier together",
@@ -160,6 +176,7 @@ impl Options {
             level,
             root,
             l0_profile: self.l0_profile,
+            l1_profile: self.l1_profile,
             frontier,
         })
     }
@@ -176,6 +193,7 @@ impl Options {
             level,
             root,
             l0_profile,
+            l1_profile,
             frontier,
         } = self.selection(root, Command::Inspect)?;
         // The service selects the fixed recipes and validates level/root compatibility.
@@ -188,6 +206,13 @@ impl Options {
                 .with_l0_profile(profile)
                 .map_err(|_| "invalid context inspect request syntax")?,
             None => request,
+        };
+        let request = match l1_profile {
+            Some(ContextL1Profile::StateDetailV1) => request
+                .with_l1_profile(ContextL1Profile::StateDetailV1)
+                .map_err(|_| "invalid context inspect request syntax")?,
+            // Entity is an optional assertion of the existing primary constructor.
+            Some(ContextL1Profile::EntityV1) | None => request,
         };
         match frontier {
             // Service normalizes the finite frontier and validates native membership later.

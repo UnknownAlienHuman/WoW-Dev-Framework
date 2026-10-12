@@ -4,12 +4,32 @@
   "state": "partial-functional-freeze-open",
   "implemented_slice": {
     "profile_id": "wow-context/primary-direct-navigation/1",
-    "additional_profile_ids": ["wow-context/primary-project-navigation/1", "wow-context/primary-l0/1", "wow-context/primary-l1/1"],
-    "route": "crates/wow-context/e3/NATIVE_PRIMARY_MAP.md",
+    "additional_profile_ids": [
+      "wow-context/primary-project-navigation/1",
+      "wow-context/primary-l0/1",
+      "wow-context/primary-l1/1",
+      "wow-context/primary-state-root-l0/1",
+      "wow-context/primary-structural-pack/1",
+      "wow-context/primary-pack-json/1",
+      "wow-context/primary-pack-markdown/1",
+      "wow-context/primary-native-frontier/1",
+      "wow-context/primary-frontier-pack/1",
+      "wow-context/primary-frontier-pack-json/1",
+      "wow-context/primary-frontier-pack-markdown/1",
+      "wow-context/primary-state-detail-l1/1"
+    ],
+    "route": "crates/wow-context/README.md",
     "tracker": "https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122",
-    "scope": "exact primary universe, direct and retained project-root maps, immutable reads and native L0/L1 inspection",
+    "scope": "functional/build-verified selected exact Primary maps, L0/L1 with native syntax/signature metadata, ordinary TOC state-root L0 inspect/build, sealed packs/JSON/Markdown and one explicit native frontier inspect/build; selected state-detail L1 inspect has bounded source-absent lifecycle and CLI validation",
     "acceptance": "pending",
-    "remaining": ["broader L0/L1 scopes and facets", "primary declaration/signature recipe admission", "platform and combined maps", "semantic pack", "rendering", "Tier A and required Tier X"]
+    "remaining": [
+      "broader L0/L1 scopes and facets",
+      "deeper/progressive expansion",
+      "Reference enrichment",
+      "platform and combined maps",
+      "source excerpts, privacy, exact tokens and continuation",
+      "complete fixtures, Tier A and required Tier X"
+    ]
   },
   "work_package": "E3-B",
   "crate": "wow-context",

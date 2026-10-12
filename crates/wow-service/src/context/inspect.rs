@@ -5,10 +5,10 @@ use super::operation::{
     with_checked_context_read, with_native_frontier, with_native_origins,
 };
 use super::{
-    ContextInspectLevel, ContextL0Profile, ContextMapCurrentGuard, ContextMapHostInput,
-    ContextMapPublication, ContextMapReferenceGuard, ContextMapResult, ContextMapRoot,
-    ContextMapStatus, PRIMARY_L0_PROFILE_ID, PRIMARY_L1_PROFILE_ID, checkpoint, context_error,
-    failure,
+    ContextInspectLevel, ContextL0Profile, ContextL1Profile, ContextMapCurrentGuard,
+    ContextMapHostInput, ContextMapPublication, ContextMapReferenceGuard, ContextMapResult,
+    ContextMapRoot, ContextMapStatus, PRIMARY_L0_PROFILE_ID, PRIMARY_L1_PROFILE_ID,
+    PRIMARY_STATE_DETAIL_L1_PROFILE_ID, checkpoint, context_error, failure,
 };
 use crate::{ServiceErrorCode, ServiceResult, live_project::LiveProjectRead};
 use serde::Serialize;
@@ -78,7 +78,28 @@ impl ContextInspectRequest {
         Ok(self)
     }
 
+    pub fn with_l1_profile(mut self, profile: ContextL1Profile) -> ServiceResult<Self> {
+        if !matches!(
+            self.level,
+            ContextInspectLevel::L1 | ContextInspectLevel::Both
+        ) || (matches!(profile, ContextL1Profile::StateDetailV1)
+            && (self.level != ContextInspectLevel::L1
+                || !matches!(&self.root, ContextMapRoot::GraphEntity(_))
+                || self.expansion.is_some()))
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        self.l1_profile_id = Some(match profile {
+            ContextL1Profile::EntityV1 => PRIMARY_L1_PROFILE_ID,
+            ContextL1Profile::StateDetailV1 => PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+        });
+        Ok(self)
+    }
+
     pub fn with_frontier_expansion(mut self, frontier: Vec<ContextMapRoot>) -> ServiceResult<Self> {
+        if self.l1_profile_id == Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID) {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
         self.expansion = Some(FrontierExpansion::new(self.level, &self.root, frontier)?);
         Ok(self)
     }
@@ -90,6 +111,7 @@ pub fn execute_context_inspect(
     stop: &AtomicBool,
 ) -> ServiceResult<ContextMapResult> {
     let l0_profile = super::l0_profile_from_id(request.l0_profile_id)?;
+    let l1_profile = super::l1_profile_from_id(request.l1_profile_id)?;
     let digest =
         wow_core::domain_separated_digest("wow-service/context-inspect-request/1", request)
             .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
@@ -103,7 +125,7 @@ pub fn execute_context_inspect(
     };
     let (result, closure) =
         with_checked_context_read(host, &request.project_store_id, &selector, stop, |read| {
-            build(read, host, request, &id, l0_profile, stop)
+            build(read, host, request, &id, l0_profile, l1_profile, stop)
         });
     match result {
         Ok((bytes, status)) => Ok(ContextMapResult {
@@ -145,6 +167,7 @@ fn build(
     request: &ContextInspectRequest,
     request_id: &str,
     l0_profile: ContextL0Profile,
+    l1_profile: ContextL1Profile,
     stop: &AtomicBool,
 ) -> ServiceResult<(Vec<u8>, ContextMapStatus)> {
     checkpoint(stop)?;
@@ -243,9 +266,13 @@ fn build(
             failure_code: None,
             payload: Some(payload),
         };
-        let remaining = expansion.map_or(host.limits.max_metadata_bytes, |step| {
-            step.remaining_metadata_bytes()
-        });
+        let remaining = match expansion {
+            Some(step) => step.remaining_metadata_bytes(),
+            None if matches!(l1_profile, ContextL1Profile::StateDetailV1) => {
+                skeletons.remaining_metadata_bytes()
+            }
+            None => host.limits.max_metadata_bytes,
+        };
         let limit =
             usize::try_from(remaining).map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
         Ok((encode(&envelope, limit, stop)?, status))
@@ -269,15 +296,21 @@ fn build(
             request.level != ContextInspectLevel::L0,
             stop,
             |map, graph| {
-                let skeletons = wow_context::build_primary_skeletons_with_profile(
-                    &universe,
-                    map,
-                    graph,
-                    &scope,
-                    request.level,
-                    l0_profile,
-                    stop,
-                )
+                let skeletons = if matches!(l1_profile, ContextL1Profile::StateDetailV1) {
+                    wow_context::build_primary_l1_skeletons_with_profile(
+                        &universe, map, graph, &scope, l1_profile, stop,
+                    )
+                } else {
+                    wow_context::build_primary_skeletons_with_profile(
+                        &universe,
+                        map,
+                        graph,
+                        &scope,
+                        request.level,
+                        l0_profile,
+                        stop,
+                    )
+                }
                 .map_err(context_error)?;
                 deliver(&skeletons, None)
             },

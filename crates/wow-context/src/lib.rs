@@ -40,8 +40,9 @@ pub use render::{
 };
 pub use skeleton::{
     L0Scope, L0Skeleton, L1Skeleton, PRIMARY_L0_PROFILE, PRIMARY_L1_PROFILE,
-    PRIMARY_STATE_ROOT_L0_PROFILE, PrimaryL0Profile, PrimarySkeletons, SkeletonLevel,
-    build_l0_skeleton, build_l0_skeleton_with_profile, build_l1_skeleton, build_primary_skeletons,
-    build_primary_skeletons_with_profile,
+    PRIMARY_STATE_DETAIL_L1_PROFILE, PRIMARY_STATE_ROOT_L0_PROFILE, PrimaryL0Profile,
+    PrimaryL1Profile, PrimarySkeletons, SkeletonLevel, build_l0_skeleton,
+    build_l0_skeleton_with_profile, build_l1_skeleton, build_primary_l1_skeletons_with_profile,
+    build_primary_skeletons, build_primary_skeletons_with_profile,
 };
 pub use universe::{ContextUniverseSet, bind_context_universe_set};

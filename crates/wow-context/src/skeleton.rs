@@ -22,6 +22,25 @@ use crate::{
 pub const PRIMARY_L0_PROFILE: &str = "wow-context/primary-l0/1";
 pub const PRIMARY_L1_PROFILE: &str = "wow-context/primary-l1/1";
 pub const PRIMARY_STATE_ROOT_L0_PROFILE: &str = "wow-context/primary-state-root-l0/1";
+pub const PRIMARY_STATE_DETAIL_L1_PROFILE: &str = "wow-context/primary-state-detail-l1/1";
+
+/// Explicit entity detail recipes over the same retained native neighborhood.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrimaryL1Profile {
+    EntityV1,
+    StateDetailV1,
+}
+impl PrimaryL1Profile {
+    pub const fn profile_id(self) -> &'static str {
+        self.descriptor().profile_id
+    }
+    const fn descriptor(self) -> &'static SkeletonProfile {
+        match self {
+            Self::EntityV1 => &L1_PROFILE,
+            Self::StateDetailV1 => &STATE_DETAIL_L1_PROFILE,
+        }
+    }
+}
 
 /// Closed container selections. The existing descriptor and default bytes are
 /// preserved; the state-root descriptor adds only original native state facets.
@@ -84,6 +103,14 @@ const STATE_ROOT_L0_PROFILE: SkeletonProfile = SkeletonProfile {
     types: "symbolic_literal_keys_only_no_runtime_values",
     ..L0_PROFILE
 };
+const STATE_DETAIL_L1_PROFILE: SkeletonProfile = SkeletonProfile {
+    profile_id: PRIMARY_STATE_DETAIL_L1_PROFILE,
+    scope_kinds: &["state_root", "state_path"],
+    declarations: "selected_native_callable_lua_xml_and_saved_variable_root_literal_path_metadata",
+    types: "original_native_signature_state_and_symbolic_literal_keys_no_runtime_values",
+    ..L1_PROFILE
+};
+const STATE_DETAIL_PROFILE_BYTES: &[u8] = include_bytes!("../e3/native-state-detail/profile.json");
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "id", rename_all = "snake_case")]
@@ -110,8 +137,15 @@ pub struct PrimarySkeletons<'m, 'a> {
     l1: Option<L1Skeleton<'m, 'a>>,
     work_reserved: u64,
     bytes_reserved: u64,
+    #[serde(skip)]
+    remaining_metadata_bytes: u64,
 }
 impl PrimarySkeletons<'_, '_> {
+    /// Actual allowance after immutable inspection construction. This snapshot
+    /// is only for final delivery; it cannot reconstruct a continuing ledger.
+    pub const fn remaining_metadata_bytes(&self) -> u64 {
+        self.remaining_metadata_bytes
+    }
     pub(crate) fn l0_id(&self) -> Option<&str> {
         self.l0.as_ref().map(L0Skeleton::l0_skeleton_id)
     }
@@ -443,6 +477,55 @@ fn declaration_node<'a>(row: &Declaration<'a>) -> &'a GraphNode {
     }
 }
 
+fn state_root_declaration<'a>(
+    root_node: &'a GraphNode,
+    root: &'a ProjectGraphStateRoot,
+    provenance: &'a wow_project::graph::ProjectGraphProvenance,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<Declaration<'a>> {
+    let declaration_work = root
+        .source_handle_ids
+        .len()
+        .checked_add(root.evidence_ids.len())
+        .and_then(|n| n.checked_add(3))
+        .ok_or_else(exhausted)?;
+    budget.work(
+        provenance
+            .state_declarations()
+            .len()
+            .checked_mul(declaration_work)
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    let mut declarations = Vec::new();
+    for declaration in provenance.state_declarations() {
+        budget.work(1, stop)?;
+        // Preserve each original declared TOC support pair and multiplicity.
+        if declaration.name == root.name
+            && declaration.scope == root.scope
+            && declaration.state == wow_project::load::TocSavedVariableState::Declared
+            && root
+                .source_handle_ids
+                .contains(&declaration.source_handle_id)
+            && root.evidence_ids.contains(&declaration.evidence_id)
+        {
+            budget.retain(declaration, stop)?;
+            declarations.push(declaration);
+        }
+    }
+    if declarations.is_empty() {
+        return Err(missing());
+    }
+    let row = Declaration::StateRoot {
+        node: root_node,
+        origin: root,
+        declarations,
+    };
+    budget.retain(&row, stop)?;
+    Ok(row)
+}
+
 fn state_declarations<'a>(
     universe: &ContextUniverseSet<'a>,
     view: &ProjectMapView<'_, 'a>,
@@ -473,46 +556,7 @@ fn state_declarations<'a>(
         }
     }
     let root = root.ok_or_else(missing)?;
-    let declaration_work = root
-        .source_handle_ids
-        .len()
-        .checked_add(root.evidence_ids.len())
-        .and_then(|n| n.checked_add(3))
-        .ok_or_else(exhausted)?;
-    budget.work(
-        provenance
-            .state_declarations()
-            .len()
-            .checked_mul(declaration_work)
-            .ok_or_else(exhausted)?,
-        stop,
-    )?;
-    let mut declarations = Vec::new();
-    for declaration in provenance.state_declarations() {
-        budget.work(1, stop)?;
-        // This is the exact native producer join, including each original
-        // support pair. Repeated declarations and ambiguity are preserved.
-        if declaration.name == root.name
-            && declaration.scope == root.scope
-            && declaration.state == wow_project::load::TocSavedVariableState::Declared
-            && root
-                .source_handle_ids
-                .contains(&declaration.source_handle_id)
-            && root.evidence_ids.contains(&declaration.evidence_id)
-        {
-            budget.retain(declaration, stop)?;
-            declarations.push(declaration);
-        }
-    }
-    if declarations.is_empty() {
-        return Err(missing());
-    }
-    let row = Declaration::StateRoot {
-        node: root_node,
-        origin: root,
-        declarations,
-    };
-    budget.retain(&row, stop)?;
+    let row = state_root_declaration(root_node, root, provenance, budget, stop)?;
     let mut rows = vec![row];
     let path_lookup_work = lookup_work
         .checked_add(members.len().max(1).ilog2() as usize + 2)
@@ -569,6 +613,120 @@ fn state_declarations<'a>(
         .any(|pair| declaration_node(&pair[0]).node_id() == declaration_node(&pair[1]).node_id())
     {
         return Err(ContextError::new(ContextErrorCode::SupportMismatch));
+    }
+    Ok(rows)
+}
+
+fn local_state_node<'a>(
+    graph: &GraphPartitionRead<'a>,
+    view: &ProjectMapView<'_, 'a>,
+    proposal_id: &str,
+    stop: &AtomicBool,
+) -> ContextResult<Option<&'a GraphNode>> {
+    checkpoint(stop)?;
+    let accepted = graph
+        .owner()
+        .partition(SOURCE_GRAPH_PARTITION)
+        .ok_or_else(missing)?
+        .report()
+        .accepted_entities();
+    // An unaccepted outside proposal is not a published local facet. A
+    // required local state node without original custody is refused below.
+    if accepted
+        .binary_search_by(|entry| entry.proposal_id().cmp(proposal_id))
+        .is_err()
+    {
+        return Ok(None);
+    }
+    let node = graph
+        .published_entity(SOURCE_GRAPH_PARTITION, proposal_id, stop)
+        .map_err(crate::error::graph_error)?;
+    match view.node(node.node_id()) {
+        Some(selected) if std::ptr::eq(selected, node) => Ok(Some(node)),
+        Some(_) => Err(ContextError::new(ContextErrorCode::SupportMismatch)),
+        None => Ok(None),
+    }
+}
+
+fn state_detail_declarations<'a>(
+    universe: &ContextUniverseSet<'a>,
+    view: &ProjectMapView<'_, 'a>,
+    graph: &GraphPartitionRead<'a>,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<Vec<Declaration<'a>>> {
+    let provenance = universe.pair.source_provenance().ok_or_else(missing)?;
+    let accepted_count = graph
+        .owner()
+        .partition(SOURCE_GRAPH_PARTITION)
+        .ok_or_else(missing)?
+        .report()
+        .accepted_entities()
+        .len();
+    let lookup_work = published_lookup_work(graph)?
+        .checked_add(accepted_count.max(1).ilog2() as usize + 1)
+        .and_then(|work| work.checked_add(view.nodes().len().max(1).ilog2() as usize + 2))
+        .ok_or_else(exhausted)?;
+    budget.work(
+        provenance
+            .state_roots()
+            .len()
+            .checked_add(provenance.state_paths().len())
+            .and_then(|count| count.checked_mul(lookup_work))
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    let mut roots = Vec::new();
+    let mut rows = Vec::new();
+    for origin in provenance.state_roots() {
+        budget.work(1, stop)?;
+        if let Some(node) = local_state_node(graph, view, &origin.proposal_id, stop)? {
+            if node.kind() != "state_root" {
+                return Err(ContextError::new(ContextErrorCode::SupportMismatch));
+            }
+            rows.push(state_root_declaration(
+                node, origin, provenance, budget, stop,
+            )?);
+            roots.push(origin);
+        }
+    }
+    budget.work(
+        provenance
+            .state_paths()
+            .len()
+            .checked_mul(roots.len())
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    for origin in provenance.state_paths() {
+        budget.work(1, stop)?;
+        if let Some(node) = local_state_node(graph, view, &origin.proposal_id, stop)? {
+            if node.kind() != "state_path" {
+                return Err(ContextError::new(ContextErrorCode::SupportMismatch));
+            }
+            // Exact producer root identity, never a name/field inference. Its
+            // published local root and complete TOC support must be retained.
+            if roots
+                .iter()
+                .filter(|root| root.root_id == origin.root_id)
+                .count()
+                != 1
+            {
+                return Err(missing());
+            }
+            let row = Declaration::StatePath { node, origin };
+            budget.retain(&row, stop)?;
+            rows.push(row);
+        }
+    }
+    budget.work(view.nodes().len(), stop)?;
+    let required = view
+        .nodes()
+        .iter()
+        .filter(|node| matches!(node.kind(), "state_root" | "state_path"))
+        .count();
+    if rows.len() != required {
+        return Err(missing());
     }
     Ok(rows)
 }
@@ -738,26 +896,70 @@ pub fn build_l1_skeleton<'m, 'a>(
     stop: &AtomicBool,
 ) -> ContextResult<L1Skeleton<'m, 'a>> {
     let (view, mut budget) = input(universe, map, graph, stop)?;
-    l1(universe, map, graph, root, &view, &mut budget, stop)
+    l1(
+        universe,
+        map,
+        graph,
+        (root, PrimaryL1Profile::EntityV1),
+        &view,
+        &mut budget,
+        stop,
+    )
 }
 fn l1<'m, 'a>(
     universe: &'m ContextUniverseSet<'a>,
     map: &'m ProjectMap<'a>,
     graph: &GraphPartitionRead<'a>,
-    root: &GraphNodeId,
+    selection: (&GraphNodeId, PrimaryL1Profile),
     view: &ProjectMapView<'m, 'a>,
     budget: &mut Budget,
     stop: &AtomicBool,
 ) -> ContextResult<L1Skeleton<'m, 'a>> {
+    let (root, profile) = selection;
     if !view.has_detail_vocabulary() {
         return Err(ContextError::new(ContextErrorCode::SupportMismatch));
     }
-    budget.retain(&L1_PROFILE, stop)?;
+    let descriptor = profile.descriptor();
+    if profile == PrimaryL1Profile::StateDetailV1
+        && canonical(descriptor, universe.limits.max_metadata_bytes, stop)?
+            != STATE_DETAIL_PROFILE_BYTES
+                .strip_suffix(b"\n")
+                .unwrap_or(STATE_DETAIL_PROFILE_BYTES)
+    {
+        return Err(ContextError::new(ContextErrorCode::EncodingInvalid));
+    }
+    budget.retain(descriptor, stop)?;
     let root = view
         .root_node()
         .filter(|node| node.node_id() == root)
         .ok_or_else(invalid)?;
-    let rows = declarations(universe, view, graph, budget, stop)?;
+    if profile == PrimaryL1Profile::StateDetailV1
+        && !matches!(root.kind(), "state_root" | "state_path")
+    {
+        return Err(invalid());
+    }
+    let mut rows = declarations(universe, view, graph, budget, stop)?;
+    if profile == PrimaryL1Profile::StateDetailV1 {
+        rows.extend(state_detail_declarations(
+            universe, view, graph, budget, stop,
+        )?);
+        budget.work(
+            rows.len()
+                .checked_mul(rows.len().max(1).ilog2() as usize + 1)
+                .ok_or_else(exhausted)?,
+            stop,
+        )?;
+        rows.sort_by(|a, b| {
+            declaration_node(a)
+                .node_id()
+                .cmp(declaration_node(b).node_id())
+        });
+        if rows.windows(2).any(|pair| {
+            declaration_node(&pair[0]).node_id() == declaration_node(&pair[1]).node_id()
+        }) {
+            return Err(ContextError::new(ContextErrorCode::SupportMismatch));
+        }
+    }
     if matches!(
         root.kind(),
         "lua_source_function" | "lua_source_declaration" | "xml_source_declaration"
@@ -768,9 +970,12 @@ fn l1<'m, 'a>(
         return Err(missing());
     }
     let core = L1Core {
-        schema: "wow-context/l1-skeleton/primary/1",
-        profile: PRIMARY_L1_PROFILE,
-        profile_descriptor: &L1_PROFILE,
+        schema: match profile {
+            PrimaryL1Profile::EntityV1 => "wow-context/l1-skeleton/primary/1",
+            PrimaryL1Profile::StateDetailV1 => "wow-context/l1-skeleton/primary-state-detail/1",
+        },
+        profile: descriptor.profile_id,
+        profile_descriptor: descriptor,
         context: context(universe, map, budget),
         root,
         local_entities: map.native_nodes(),
@@ -795,6 +1000,40 @@ fn l1<'m, 'a>(
     artifact.canonical_bytes =
         canonical(&artifact, universe.limits.max_metadata_bytes, stop)?.into_boxed_slice();
     Ok(artifact)
+}
+
+/// An explicit L1 recipe uses the same typed engine and immutable inspection
+/// envelope. It never creates an L0 artifact or silently selects an expansion.
+pub fn build_primary_l1_skeletons_with_profile<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &L0Scope,
+    profile: PrimaryL1Profile,
+    stop: &AtomicBool,
+) -> ContextResult<PrimarySkeletons<'m, 'a>> {
+    let L0Scope::Entity(id) = root else {
+        return Err(invalid());
+    };
+    let (view, mut budget) = input(universe, map, graph, stop)?;
+    let artifact = l1(
+        universe,
+        map,
+        graph,
+        (id, profile),
+        &view,
+        &mut budget,
+        stop,
+    )?;
+    finish_primary_skeletons(
+        universe,
+        SkeletonLevel::L1,
+        None,
+        Some(artifact),
+        budget,
+        stop,
+    )
+    .map(|(result, _)| result)
 }
 
 /// One fixed-order inspection with a shared aggregate work/output reservation.
@@ -865,10 +1104,29 @@ pub(crate) fn build_primary_skeletons_with_budget<'m, 'a>(
         let L0Scope::Entity(id) = root else {
             return Err(invalid());
         };
-        Some(l1(universe, map, graph, id, &view, &mut budget, stop)?)
+        Some(l1(
+            universe,
+            map,
+            graph,
+            (id, PrimaryL1Profile::EntityV1),
+            &view,
+            &mut budget,
+            stop,
+        )?)
     } else {
         None
     };
+    finish_primary_skeletons(universe, level, l0, l1, budget, stop)
+}
+
+fn finish_primary_skeletons<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    level: SkeletonLevel,
+    l0: Option<L0Skeleton<'m, 'a>>,
+    l1: Option<L1Skeleton<'m, 'a>>,
+    budget: Budget,
+    stop: &AtomicBool,
+) -> ContextResult<(PrimarySkeletons<'m, 'a>, Budget)> {
     let result = PrimarySkeletons {
         schema: "wow-context/primary-skeleton-inspection/1",
         level,
@@ -876,6 +1134,11 @@ pub(crate) fn build_primary_skeletons_with_budget<'m, 'a>(
         l1,
         work_reserved: budget.work,
         bytes_reserved: budget.retained_bytes,
+        remaining_metadata_bytes: universe
+            .limits
+            .max_metadata_bytes
+            .checked_sub(budget.retained_bytes)
+            .ok_or_else(exhausted)?,
     };
     crate::budget::encoded_len(&result, universe.limits.max_metadata_bytes, stop)?;
     Ok((result, budget))

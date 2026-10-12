@@ -75,6 +75,7 @@ impl Options {
             level,
             root,
             l0_profile,
+            l1_profile: _,
             frontier,
         } = selection;
         if (family == Family::Frontier) != frontier.is_some() {

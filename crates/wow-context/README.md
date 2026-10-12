@@ -1,12 +1,24 @@
 # `wow-context` contract router
 
-**Status:** partial executable E3-B primary Project Map. L0/L1, context packs, renderers and the E6-B mapped-root handoff remain specified and unimplemented.
+**Status:** partial executable E3-B selected Primary maps, L0/L1 inspection,
+semantic packs/rendering and one explicit native frontier round. Full E3-B and
+launch acceptance remain open in
+[#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
 
-The first implemented profile is documented in
-[`e3/NATIVE_PRIMARY_MAP.md`](e3/NATIVE_PRIMARY_MAP.md). It binds genuine retained
-project/graph owners and an exact configured Reference view, then preserves native
-direct nodes, edges, support and load/source custody in one immutable bounded map.
-Broader E3-B and launch acceptance remain open in Issue #122.
+Selected contract routes preserve genuine retained project/graph owners, exact
+configured Reference binding, original support and load/source custody:
+
+- [Direct/project-root maps](e3/NATIVE_PRIMARY_MAP.md).
+- [L0/L1 inspection](e3/NATIVE_PRIMARY_INSPECT.md), including selected native
+  syntax/signature metadata and ordinary TOC state-root L0 inspect/build.
+- [Sealed semantic packs and canonical JSON/metadata-safe Markdown](e3/NATIVE_PRIMARY_PACK.md).
+- [One explicit native frontier round](e3/NATIVE_PRIMARY_EXPANSION.md) and its
+  [build/pack/JSON/Markdown consumer](e3/NATIVE_PRIMARY_FRONTIER_PACK.md).
+- [Selected native state-detail L1 inspection](e3/NATIVE_PRIMARY_STATE_DETAIL.md),
+  retaining literal state keys, plural TOC declarations, scope and ambiguity.
+
+Selected projections remain Partial or Truncated with absence_authoritative=false;
+a bound Reference view does not imply Reference enrichment.
 
 `wow-context` converts exact published project, Blizzard UI source, graph, analyzer-derived, and reference views into deterministic bounded context artifacts. It does not parse source, own graph/search/storage, infer facts with a model, consume external-provider semantics, or mutate projects.
 
@@ -66,9 +78,11 @@ No direct dependency on `wow-store`, `wow-emmy`, `wow-recognizers`, `wow-rules`,
 ## Current implementation state
 
 ```text
-documentation frontier: E6-B exact mapped-root handoff seam
-implementation frontier: bounded primary direct navigation
 Cargo.toml: active root workspace member
-Rust source: universe, profile, map, budget and typed errors
-remaining scope: L0/L1, packs/rendering, platform/combined maps and acceptance
+functional/build-verified: selected maps, L0/L1, native syntax/signature metadata,
+  TOC state-root L0 inspect/build, packs/rendering and one native frontier round
+bounded functional lifecycle/CLI: selected state-detail L1 inspect
+remaining: broader facets, deeper/progressive expansion, Reference enrichment,
+  platform/combined views, excerpts/privacy/exact tokens/continuation,
+  full fixtures, Tier A/X and the specified E6-B mapped-root handoff
 ```

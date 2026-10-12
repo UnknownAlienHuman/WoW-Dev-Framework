@@ -13,8 +13,9 @@ The normative [L0](L0_SKELETON.md), [L1](L1_SKELETON.md) and
 | `wow-context/primary-l0/1` | Exact acquired ProjectId, or an exact `source_file` / `source_package` graph container | Contains, Defines, DependsOn, OptionalDependsOn, Owns, Loads, LoadsBefore |
 | `wow-context/primary-l1/1` | Exact admitted Primary graph entity | All 27 reviewed native direct relation kinds |
 | `wow-context/primary-state-root-l0/1` | Exact original ordinary selected-TOC `state_root` graph entity | Same seven structural kinds as default L0 |
+| `wow-context/primary-state-detail-l1/1` | Exact original ordinary selected-TOC `state_root` / `state_path`; non-frontier inspect L1 only | Same 27 direct kinds as default L1 |
 
-The existing L0/L1 descriptors select both directions, depth 1, native node-ID then edge-ID
+The default L0/L1 descriptors select both directions, depth 1, native node-ID then edge-ID
 ordering, local metadata, excluded source bodies, unavailable tokens and
 NotEvaluated continuation. Their declaration policy is
 `selected_native_callable_and_lua_xml_occurrence_metadata`; their type policy is
@@ -71,6 +72,20 @@ field/type claims remain unavailable. The focused source-absent native lifecycle
 and Windows CLI inspect/build pass; broad E3-B/Tier A/X acceptance remains open
 in #122.
 
+## Explicit state-detail L1
+
+`PrimaryL1Profile::StateDetailV1` selects
+`wow-context/primary-state-detail-l1/1` and schema
+`wow-context/l1-skeleton/primary-state-detail/1`. It projects genuine native
+roots/paths, literal typed keys, plural supporting TOC declarations and
+scope/ambiguity while retaining the original direct neighborhood and custody.
+Required native root/path/support missing or omitted by truncation refuses.
+The [state-detail contract](NATIVE_PRIMARY_STATE_DETAIL.md) defines the closed
+input and cumulative envelope boundary. The bounded source-absent lifecycle,
+missing-root refusal, cumulative delivery bounds and Windows CLI byte checks pass.
+This first selected consumer is inspect L1 only; build/frontier/combined-level
+selection remains unsupported. Default EntityV1 and old /1 bytes remain unchanged.
+
 ## Native API and custody
 
 After `bind_context_universe_set`, `build_l0_skeleton`, `build_l1_skeleton` and
@@ -82,6 +97,11 @@ The combined API shares one aggregate reservation and builds L0 before L1.
 `build_l0_skeleton_with_profile` and `build_primary_skeletons_with_profile`
 accept the closed PrimaryL0Profile selection over those same owners. Existing
 builders default to ContainersV1; old /1 behavior and bytes remain unchanged.
+`build_primary_l1_skeletons_with_profile(universe, map, graph, root, profile, stop)`
+accepts the closed PrimaryL1Profile over the same native owners. StateDetailV1
+returns the existing PrimarySkeletons wrapper with only L1; EntityV1 retains the
+default L1 recipe. Selected immutable `remaining_metadata_bytes()` supplies the
+actual post-build allowance for the single service envelope.
 
 L0 emits schema `wow-context/l0-skeleton/primary/1`, exact scope, descriptor,
 selected members/count, declaration rows, direct relations, detail routes and
