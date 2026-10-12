@@ -20,6 +20,8 @@ wow context inspect --native-host-config <host.json>
   [--l1-profile-id wow-context/primary-l1/1|wow-context/primary-state-detail-l1/1|wow-context/primary-reference-facts-l1/1]
   [--expansion-profile-id wow-context/primary-native-frontier/1
    --frontier graph-entity@<base64url-id> ...]
+  [--expansion-profile-id wow-context/primary-native-progressive/1
+   --frontier-round '<token>[,<token>...]' ...]
   [--platform omitted] [--output envelope-json]
   [--expect-current-record <id>] [--expect-current-digest <digest>]
   [--expect-profile <id> --expect-reference-generation <id> --expect-reference-view <id>]
@@ -49,8 +51,8 @@ Bounded execution evidence is recorded in #122.
 An omitted/default L1 flag preserves primary-l1/1; state detail and Reference
 facts require explicit
 selection. An L1 flag conflicts with level l0,
-and an L0 flag conflicts with level l1. Unknown/duplicate options and other
-profiles/platform/output modes refuse; map-target/profile flags are not inspect
+and an L0 flag conflicts with level l1. Unknown options, repeated non-repeatable
+options and other profiles/platform/output modes refuse; map-target/profile flags are not inspect
 options. Service checks actual root kind/existence, original custody and project
 identity after acquisition. A method/function cannot silently become an L0
 container. Old default /1 requests and artifacts retain their behavior/bytes.
@@ -145,10 +147,46 @@ absence or completeness. No recursive round or inferred edge is emitted.
 Inspect retains its original result bytes. The separate
 [selected frontier build/pack/render family](CONTEXT_BUILD.md#selected-frontier-pack)
 consumes the native step with its continuing Budget. Its bounded source-absent
-service/CLI path is verified in #122. Progressive continuation remains open. The focused
-source-absent inspect lifecycle passes; this does not imply full E3-B/Tier A/X
+service/CLI path is verified in #122. Explicit additional batches use the
+separate progressive profile below. The focused source-absent inspect lifecycle
+passes; this does not imply full E3-B/Tier A/X
 acceptance. See the
 [native expansion contract](../../crates/wow-context/e3/NATIVE_PRIMARY_EXPANSION.md).
+
+## Selected native progressive expansion
+
+With `--level l1`, the default `wow-context/primary-l1/1` selection and an exact
+graph-entity root, select
+`--expansion-profile-id wow-context/primary-native-progressive/1` and repeat
+`--frontier-round '<token>[,<token>...]'` once per explicit batch. Each token is
+`graph-entity@<base64url-id>` using the existing exact root encoding. Supply
+1..4 ordered batches, each with 1..32 distinct exact retained endpoints. Batch
+order is semantic; the CLI does not choose or discover roots.
+
+The first batch selects from the initial native detail map; subsequent batches
+select endpoints already retained by earlier rounds. The initial root and every
+previously queried expansion root are excluded. Empty/excess batches, duplicate
+roots within or across batches, nonmembers, mixed `--frontier`/`--frontier-round`
+selections and incompatible profiles/levels refuse. L0/Both/Project and selected
+state-detail/Reference-facts L1 are outside this expansion profile.
+
+Every round queries original native direct neighborhoods under the same held
+project/graph/Reference binding. Original skeletons, immutable round history,
+native receipts, inclusion reasons, evidence and scoped omissions survive.
+No inferred transitive edge or automatic frontier selection is added.
+
+One actual private Budget continues through every round and final encoding;
+per-query limits still apply. Mandatory overflow or cancellation suppresses the
+payload, with checked resource closure. The final explicit batch or four-round
+profile bound ends the request. An empty added set does not infer NoNewEvidence,
+absence or completeness; Partial/Truncated and absence_authoritative=false remain.
+There is no background or retained cross-request continuation.
+
+The [selected progressive pack/render family](CONTEXT_BUILD.md#selected-progressive-pack)
+consumes this genuine history and continuing ledger. See
+[Native Primary progressive expansion](../../crates/wow-context/e3/NATIVE_PRIMARY_PROGRESSIVE.md).
+Existing one-round/default/state/Reference routes retain their profiles and bytes;
+broader facets and runtime qualification remain open.
 
 ## Selected native UsesApi evidence
 
@@ -190,8 +228,10 @@ publication, explicit root, level, platform="omitted", applicable selected profi
 IDs and optional guards. ContextInspectRequest::primary keeps the default /1 choice.
 Absent profiles/guards are omitted. There is no arbitrary-profile JSON authority.
 Selected expansion additionally binds its exact profile and normalized frontier
-in the request/identity. Unselected expansion fields are omitted, preserving old
-inspect transport bytes and original L1/map bytes.
+in the request/identity. Progressive selection binds its named profile and
+ordered batches to the same acquired universe and native round history.
+Unselected expansion fields are omitted, preserving old inspect transport bytes
+and original L1/map bytes.
 
 The result schema is `wow-service/context-inspect-result/1`, operation
 `context_inspect`. Its payload retains resolved_request_id, publication-set /
@@ -239,8 +279,8 @@ or output failure exits 4; argv/host-input failure exits 64; cancellation exits
 semantic retry after output begins.
 
 This route documents selected functionality, not full E3 or Tier A/X acceptance.
-Broader scopes/facets, control/effect enrichment, progressive expansion /
-continuation, broader Reference/type enrichment, excerpts/privacy/tokens and platform/combined
-context remain open. [Build/pack/render](CONTEXT_BUILD.md) consumes the native
+Broader scopes/facets, control/effect enrichment, automatic expansion and retained
+cross-request continuation, broader Reference/type enrichment, excerpts/privacy/tokens
+and platform/combined context remain open. [Build/pack/render](CONTEXT_BUILD.md) consumes the native
 step, not a decoded inspect envelope. Existing map commands/profile and unselected
 inspect bytes remain unchanged.

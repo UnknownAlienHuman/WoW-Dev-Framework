@@ -4,8 +4,8 @@ use wow_service::context::{
     ContextInspectLevel, ContextInspectRequest, ContextL0Profile, ContextL1Profile,
     ContextMapCurrentGuard, ContextMapPublication, ContextMapReferenceGuard, ContextMapRoot,
     PRIMARY_FRONTIER_EXPANSION_PROFILE_ID, PRIMARY_L0_PROFILE_ID, PRIMARY_L1_PROFILE_ID,
-    PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID, PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
-    PRIMARY_STATE_ROOT_L0_PROFILE_ID,
+    PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID, PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
+    PRIMARY_STATE_DETAIL_L1_PROFILE_ID, PRIMARY_STATE_ROOT_L0_PROFILE_ID,
 };
 
 pub(super) struct Selection {
@@ -14,6 +14,13 @@ pub(super) struct Selection {
     pub(super) l0_profile: Option<ContextL0Profile>,
     pub(super) l1_profile: Option<ContextL1Profile>,
     pub(super) frontier: Option<Vec<ContextMapRoot>>,
+    pub(super) progressive: Option<Vec<Vec<ContextMapRoot>>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ExpansionProfile {
+    Frontier,
+    Progressive,
 }
 
 #[derive(Default)]
@@ -21,8 +28,9 @@ pub(super) struct Options {
     level: Option<ContextInspectLevel>,
     l0_profile: Option<ContextL0Profile>,
     l1_profile: Option<ContextL1Profile>,
-    expansion_profile: Option<()>,
+    expansion_profile: Option<ExpansionProfile>,
     frontier: Vec<ContextMapRoot>,
+    frontier_rounds: Vec<Vec<ContextMapRoot>>,
 }
 
 impl Options {
@@ -31,7 +39,10 @@ impl Options {
     }
 
     pub(super) fn accepts_expansion(option: &str) -> bool {
-        matches!(option, "--expansion-profile-id" | "--frontier")
+        matches!(
+            option,
+            "--expansion-profile-id" | "--frontier" | "--frontier-round"
+        )
     }
 
     pub(super) fn option(
@@ -81,10 +92,12 @@ impl Options {
                 set(&mut self.l1_profile, profile, command)
             }
             "--expansion-profile-id" if matches!(command, Command::Inspect | Command::Build) => {
-                if value != PRIMARY_FRONTIER_EXPANSION_PROFILE_ID {
-                    return Err("unsupported exact context expansion profile");
-                }
-                set(&mut self.expansion_profile, (), command)
+                let profile = match value {
+                    PRIMARY_FRONTIER_EXPANSION_PROFILE_ID => ExpansionProfile::Frontier,
+                    PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID => ExpansionProfile::Progressive,
+                    _ => return Err("unsupported exact context expansion profile"),
+                };
+                set(&mut self.expansion_profile, profile, command)
             }
             "--frontier" if matches!(command, Command::Inspect | Command::Build) => {
                 // Repeatable frontier tokens still require distinct exact IDs.
@@ -108,6 +121,34 @@ impl Options {
                     });
                 }
                 self.frontier.push(root);
+                Ok(())
+            }
+            "--frontier-round" if matches!(command, Command::Inspect | Command::Build) => {
+                if self.frontier_rounds.len() >= 4 {
+                    return Err("context progressive round limit exceeded");
+                }
+                let mut round = Vec::new();
+                for token in value.split(',') {
+                    if round.len() >= 32 {
+                        return Err("context progressive frontier batch limit exceeded");
+                    }
+                    let root = parse_root(token)?;
+                    if !matches!(&root, ContextMapRoot::GraphEntity(_)) {
+                        return Err("context progressive frontier requires graph-entity token");
+                    }
+                    if round.contains(&root)
+                        || self
+                            .frontier_rounds
+                            .iter()
+                            .flatten()
+                            .any(|prior| prior == &root)
+                    {
+                        return Err("duplicate context progressive frontier");
+                    }
+                    round.push(root);
+                }
+                // Preserve batch order. The service owns normalization and native admission.
+                self.frontier_rounds.push(round);
                 Ok(())
             }
             _ => Err(match command {
@@ -155,7 +196,10 @@ impl Options {
                     _ => "state-detail L1 requires context inspect l1 and graph-entity root",
                 });
             }
-            if self.expansion_profile.is_some() || !self.frontier.is_empty() {
+            if self.expansion_profile.is_some()
+                || !self.frontier.is_empty()
+                || !self.frontier_rounds.is_empty()
+            {
                 return Err(match command {
                     Command::Build => {
                         "state-detail L1 conflicts with context build frontier expansion"
@@ -174,7 +218,10 @@ impl Options {
                     _ => "reference-facts L1 requires context inspect l1 and graph-entity root",
                 });
             }
-            if self.expansion_profile.is_some() || !self.frontier.is_empty() {
+            if self.expansion_profile.is_some()
+                || !self.frontier.is_empty()
+                || !self.frontier_rounds.is_empty()
+            {
                 return Err(match command {
                     Command::Build => {
                         "reference-facts L1 conflicts with context build frontier expansion"
@@ -182,6 +229,44 @@ impl Options {
                     _ => "reference-facts L1 conflicts with context frontier expansion",
                 });
             }
+        }
+        if self.expansion_profile == Some(ExpansionProfile::Progressive)
+            || !self.frontier_rounds.is_empty()
+        {
+            if !self.frontier.is_empty()
+                || self.expansion_profile == Some(ExpansionProfile::Frontier)
+            {
+                return Err("context expansion families cannot be mixed");
+            }
+            if self.expansion_profile != Some(ExpansionProfile::Progressive)
+                || self.frontier_rounds.is_empty()
+            {
+                return Err("context progressive expansion requires profile and rounds together");
+            }
+            if level != ContextInspectLevel::L1
+                || !matches!(&root, ContextMapRoot::GraphEntity(_))
+                || !matches!(&self.l1_profile, None | Some(ContextL1Profile::EntityV1))
+            {
+                return Err(
+                    "context progressive expansion requires l1 entity and graph-entity root",
+                );
+            }
+            if self
+                .frontier_rounds
+                .iter()
+                .flatten()
+                .any(|frontier| frontier == &root)
+            {
+                return Err("context progressive frontier must exclude its initial root");
+            }
+            return Ok(Selection {
+                level,
+                root,
+                l0_profile: self.l0_profile,
+                l1_profile: self.l1_profile,
+                frontier: None,
+                progressive: Some(self.frontier_rounds),
+            });
         }
         if self.expansion_profile.is_some() == self.frontier.is_empty() {
             return Err(match command {
@@ -213,6 +298,7 @@ impl Options {
             l0_profile: self.l0_profile,
             l1_profile: self.l1_profile,
             frontier,
+            progressive: None,
         })
     }
 
@@ -230,6 +316,7 @@ impl Options {
             l0_profile,
             l1_profile,
             frontier,
+            progressive,
         } = self.selection(root, Command::Inspect)?;
         // The service selects the fixed recipes and validates level/root compatibility.
         // No graph kind, owner existence or root selection is inferred here.
@@ -252,6 +339,11 @@ impl Options {
             // Entity is an optional assertion of the existing primary constructor.
             Some(ContextL1Profile::EntityV1) | None => request,
         };
+        if let Some(rounds) = progressive {
+            return request
+                .with_progressive_expansion(rounds)
+                .map_err(|_| "invalid context inspect progressive expansion syntax");
+        }
         match frontier {
             // Service normalizes the finite frontier and validates native membership later.
             Some(frontier) => request

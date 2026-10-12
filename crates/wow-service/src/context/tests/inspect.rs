@@ -2762,11 +2762,24 @@ fn assert_frontier_pack(
         wow_core::canonical_json_bytes(pack)?.len()
     );
     let core = &pack["core"];
+    let progressive =
+        inspected["expansion"]["core"]["schema"] == "wow-context/primary-progressive-expansion/1";
     assert_eq!(
         core["schema"],
-        "wow-context/semantic-pack/primary-frontier/1"
+        if progressive {
+            "wow-context/semantic-pack/primary-progressive/1"
+        } else {
+            "wow-context/semantic-pack/primary-frontier/1"
+        }
     );
-    assert_eq!(core["profile"]["profile_id"], FRONTIER_PACK_PROFILE);
+    assert_eq!(
+        core["profile"]["profile_id"],
+        if progressive {
+            PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID
+        } else {
+            FRONTIER_PACK_PROFILE
+        }
+    );
     assert_eq!(core["profile"]["source_bodies"], "excluded");
     assert_eq!(core["state"], "partial");
     assert_eq!(core["absence_authoritative"], false);
@@ -2861,6 +2874,8 @@ fn assert_frontier_pack(
 
 fn assert_frontier_render(artifact: &Value, pack: &Value, markdown: bool) -> TestResult {
     let core = &artifact["core"];
+    let progressive =
+        pack["core"]["profile"]["profile_id"] == PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID;
     let content = core["content"].as_str().ok_or("rendered content")?;
     assert_eq!(
         core["schema"],
@@ -2881,7 +2896,11 @@ fn assert_frontier_render(artifact: &Value, pack: &Value, markdown: bool) -> Tes
     assert_eq!(core["profile"]["semantic_schema"], pack["core"]["schema"]);
     assert_eq!(
         core["profile"]["profile_id"],
-        if markdown {
+        if progressive && markdown {
+            PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID
+        } else if progressive {
+            PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID
+        } else if markdown {
             FRONTIER_MARKDOWN_PROFILE
         } else {
             FRONTIER_JSON_PROFILE
@@ -3425,6 +3444,319 @@ fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_bud
     assert_eq!(
         baseline.canonical_bytes(),
         execute_context_inspect(&host, &baseline_request, &stop)?.canonical_bytes()
+    );
+    // Continue the existing native lifecycle, without changing its source or
+    // rebuilding a graph. Freeze legacy bytes before any progressive result.
+    let legacy_initial_bytes = baseline.canonical_bytes().to_vec();
+    let legacy_request_bytes = wow_core::canonical_json_bytes(&request)?;
+    let legacy_inspect_bytes = result.canonical_bytes().to_vec();
+    let legacy_build_bytes = build_results[3].canonical_bytes().to_vec();
+    let (next, next_view) = {
+        use wow_project::load::TocSavedVariableScope;
+        let store = LiveProjectStore::open(&store_root)?;
+        let read = store.read(
+            &ReadSelector::Exact(publication.generation_id.clone()),
+            &stop,
+        )?;
+        let graph = read.pair().graph_read(&stop)?;
+        let provenance = read
+            .pair()
+            .source_provenance()
+            .ok_or("original progressive source provenance")?;
+        let account_origin = provenance
+            .state_roots()
+            .iter()
+            .find(|origin| origin.scope == TocSavedVariableScope::Account)
+            .ok_or("original account declaration")?;
+        assert_eq!(
+            graph
+                .published_entity(SOURCE_GRAPH_PARTITION, &account_origin.proposal_id, &stop)?
+                .node_id(),
+            &frontier
+        );
+        // The declaration's exact document selects its original source-file
+        // proposal. Neither a label nor an invented graph ID supplies B.
+        let files = provenance
+            .files()
+            .iter()
+            .filter(|file| file.path == account_origin.document)
+            .collect::<Vec<_>>();
+        assert_eq!(files.len(), 1);
+        let next = graph
+            .published_entity(SOURCE_GRAPH_PARTITION, &files[0].proposal_id, &stop)?
+            .node_id()
+            .clone();
+        for (from, to) in [(&frontier, &initial), (&next, &frontier), (&next, &outside)] {
+            assert!(read.graph().snapshot().edges().iter().any(|edge| {
+                edge.from() == from && edge.to() == to && edge.relation() == GraphRelationKind::Owns
+            }));
+        }
+        let universe = wow_context::bind_context_universe_set(
+            read.pair(),
+            &host.reference,
+            &host.reference_profile,
+            host.limits.owner_limits()?,
+            &stop,
+        )?;
+        let view = graph.neighbors(
+            &wow_context::primary_detail_query(&universe, next.clone(), &stop)?,
+            &stop,
+        )?;
+        assert!(
+            view.adjacent_nodes()
+                .iter()
+                .any(|node| node.node_id() == &outside)
+        );
+        let expected_view = serde_json::to_value(&view)?;
+        read.close()?;
+        store.close()?;
+        (next, expected_view)
+    };
+    assert!(
+        rows(&payload["expansion"]["core"]["items"])?
+            .iter()
+            .any(|item| item["kind"] == "entity" && item["node"]["node_id"] == next.as_str())
+    );
+    let batches = vec![
+        vec![ContextMapRoot::graph_entity(frontier.as_str())?],
+        vec![ContextMapRoot::graph_entity(next.as_str())?],
+    ];
+    // The retained two-round history and both renderers need a distinct finite
+    // caller allowance. Keep the original 8 MiB legacy controls unchanged.
+    let mut progressive_host_json = host_json.clone();
+    progressive_host_json["limits"]["max_metadata_bytes"] = json!(16 * 1024 * 1024);
+    let progressive_host = decode_host(&progressive_host_json, &stop)?;
+    let progressive_baseline =
+        execute_context_inspect(&progressive_host, &baseline_request, &stop)?;
+    assert_eq!(progressive_baseline.status(), ContextMapStatus::Partial);
+    assert_eq!(progressive_baseline.failure_code(), None);
+    let progressive_baseline_envelope: Value =
+        serde_json::from_slice(progressive_baseline.canonical_bytes())?;
+    let progressive_baseline_payload = &progressive_baseline_envelope["payload"];
+    let first_request = baseline_request
+        .clone()
+        .with_progressive_expansion(vec![batches[0].clone()])?;
+    let first = execute_context_inspect(&progressive_host, &first_request, &stop)?;
+    assert_eq!(first.status(), ContextMapStatus::Partial);
+    assert_eq!(first.failure_code(), None);
+    let first_envelope: Value = serde_json::from_slice(first.canonical_bytes())?;
+    assert_eq!(first_envelope["resource_closure"], "closed");
+    let first_payload = &first_envelope["payload"];
+    let first_expansion = &first_payload["expansion"];
+    let first_core = &first_expansion["core"];
+    assert_eq!(
+        first_payload["skeletons"],
+        progressive_baseline_payload["skeletons"]
+    );
+    assert_eq!(
+        first_core["profile"]["profile_id"],
+        "wow-context/primary-native-progressive/1"
+    );
+    assert_eq!(first_core["progression"]["round"], 1);
+    assert_eq!(first_core["stop_reason"], "explicit_batch_complete");
+    assert!(first_core["progression"].get("previous").is_none());
+    assert_eq!(first_core["items"], payload["expansion"]["core"]["items"]);
+    assert_eq!(
+        first_core["origins"]["core"]["supports"],
+        payload["expansion"]["core"]["origins"]["core"]["supports"]
+    );
+    let first_artifact_bytes = wow_core::canonical_json_bytes(first_expansion)?;
+    let progressive_request = baseline_request
+        .clone()
+        .with_progressive_expansion(batches.clone())?;
+    let progressive = execute_context_inspect(&progressive_host, &progressive_request, &stop)?;
+    assert_eq!(progressive.status(), ContextMapStatus::Partial);
+    assert_eq!(progressive.failure_code(), None);
+    let progressive_envelope: Value = serde_json::from_slice(progressive.canonical_bytes())?;
+    assert_eq!(progressive_envelope["resource_closure"], "closed");
+    let progressive_payload = &progressive_envelope["payload"];
+    let expansion = &progressive_payload["expansion"];
+    let core = &expansion["core"];
+    assert_eq!(
+        core["schema"],
+        "wow-context/primary-progressive-expansion/1"
+    );
+    assert_eq!(
+        core["profile"]["profile_id"],
+        "wow-context/primary-native-progressive/1"
+    );
+    assert_eq!(core["profile"]["rounds"], 4);
+    assert_eq!(core["progression"]["round"], 2);
+    assert_eq!(core["stop_reason"], "explicit_batch_complete");
+    assert_eq!(core["progression"]["previous"], *first_expansion);
+    assert_eq!(
+        wow_core::canonical_json_bytes(&core["progression"]["previous"])?,
+        first_artifact_bytes
+    );
+    assert_eq!(core["initial_map_id"], first_core["initial_map_id"]);
+    assert_eq!(core["initial_l1_id"], first_core["initial_l1_id"]);
+    assert_eq!(core["universe_set_id"], first_core["universe_set_id"]);
+    assert_eq!(
+        progressive_payload["skeletons"],
+        progressive_baseline_payload["skeletons"]
+    );
+    assert_eq!(core["absence_authoritative"], false);
+    assert_eq!(core["continuation"], "not_evaluated");
+    exact_rows(&core["frontier"], &[next_view["root"].clone()])?;
+    exact_rows(
+        &core["origins"]["core"]["navigation"]["neighborhoods"],
+        &[next_view],
+    )?;
+    let selected = rows(&core["items"])?;
+    for prior in rows(&first_core["items"])? {
+        let field = match prior["kind"].as_str() {
+            Some("entity") => "node",
+            Some("relation") => "edge",
+            _ => return Err("non-native progressive item".into()),
+        };
+        let matches = selected
+            .iter()
+            .filter(|row| row["kind"] == prior["kind"] && row[field] == prior[field])
+            .collect::<Vec<_>>();
+        assert_eq!(
+            matches.len(),
+            1,
+            "original native record stays exactly once"
+        );
+        for reason in rows(&prior["reasons"])? {
+            assert!(rows(&matches[0]["reasons"])?.contains(reason));
+        }
+    }
+    let character_item = selected
+        .iter()
+        .find(|row| row["kind"] == "entity" && row["node"] == character["node"])
+        .ok_or("B's genuine native neighborhood reaches character root C")?;
+    assert_eq!(character_item["previously_selected"], false);
+    assert!(
+        rows(&character_item["reasons"])?
+            .contains(&json!({"kind":"frontier_selection","root_id":next}))
+    );
+    let supports = rows(&core["origins"]["core"]["supports"])?;
+    for receipt in rows(&first_core["origins"]["core"]["supports"])? {
+        assert!(
+            supports.contains(receipt),
+            "original receipt bytes survive round two"
+        );
+    }
+    assert!(supports.iter().any(
+        |receipt| receipt["explanation"]["record"]["kind"] == "entity"
+            && receipt["explanation"]["record"]["node"] == character["node"]
+    ));
+    for receipt in supports {
+        let explanation = &receipt["explanation"];
+        assert_eq!(explanation["support_complete"], true);
+        assert_eq!(
+            explanation["source_context_id"],
+            native.records["source_context_id"]
+        );
+        assert!(!rows(&explanation["supports"])?.is_empty());
+        for support in rows(&explanation["supports"])? {
+            assert_eq!(support["producer"]["partition_id"], SOURCE_GRAPH_PARTITION);
+            let (proposals, accepted) = match support["origin"].as_str() {
+                Some("producer_entity") => ("entity_proposals", "accepted_entities"),
+                Some("producer_relation") => ("relation_proposals", "accepted_relations"),
+                _ => return Err("unexpected progressive support origin".into()),
+            };
+            assert!(rows(&native.records[proposals])?.contains(&support["proposal"]));
+            assert!(rows(&native.records[accepted])?.contains(&support["accepted"]));
+        }
+        let resolution = &receipt["evidence_resolution"];
+        assert_eq!(resolution["closure_complete"], true);
+        assert!(rows(&resolution["unresolved"])?.is_empty());
+        for (actual, retained) in [
+            ("evidence_records", "evidence"),
+            ("source_handles", "handles"),
+        ] {
+            for row in rows(&resolution[actual])? {
+                assert!(rows(&native.records[retained])?.contains(row));
+            }
+        }
+    }
+    for resource in ["work_reserved", "bytes_reserved"] {
+        assert!(
+            core["budget"][resource]
+                .as_u64()
+                .ok_or("round-two reservation")?
+                > first_core["budget"][resource]
+                    .as_u64()
+                    .ok_or("round-one reservation")?
+        );
+    }
+    let progressive_build_request = ContextBuildRequest::primary(
+        STORE_ID,
+        ContextMapPublication::store_generation(publication.generation_id.as_str())?,
+        ContextInspectLevel::L1,
+        ContextMapRoot::graph_entity(initial.as_str())?,
+        ContextRenderSelection::Both,
+        None,
+        Some(reference_guard(&profile, &reference)?),
+    )?
+    .with_progressive_expansion(batches)?;
+    assert_frontier_build_refused(
+        &host,
+        &progressive_build_request,
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+        &stop,
+    )?;
+    let progressive_build =
+        execute_context_build(&progressive_host, &progressive_build_request, &stop)?;
+    let built = assert_frontier_pack(&progressive_build, progressive_payload, &native, &scratch)?;
+    eprintln!(
+        "progressive-pack fixture Both: pack_bytes={} work={} bytes={}",
+        built["semantic_pack_byte_length"],
+        built["operation_budget_usage"]["work_reserved"],
+        built["operation_budget_usage"]["bytes_reserved"]
+    );
+    let rendered = rows(&built["rendered_artifacts"])?;
+    assert_eq!(rendered.len(), 2);
+    assert_frontier_render(&rendered[0], &built["semantic_pack"], false)?;
+    assert_frontier_render(&rendered[1], &built["semantic_pack"], true)?;
+    let held = built["operation_budget_usage"]["bytes_reserved"]
+        .as_u64()
+        .ok_or("post-progressive-render retained bytes")?;
+    let delivery = u64::try_from(progressive_build.canonical_bytes().len())?;
+    assert!(
+        held.checked_add(delivery)
+            .ok_or("progressive delivery sum")?
+            <= progressive_host_json["limits"]["max_metadata_bytes"]
+                .as_u64()
+                .ok_or("selected metadata bound")?
+    );
+    let limit = held
+        .checked_add(delivery / 2)
+        .ok_or("progressive delivery limit")?;
+    assert!(
+        limit > held && limit > delivery,
+        "each component fits; their cumulative sum cannot"
+    );
+    let mut delivery_bound = progressive_host_json.clone();
+    delivery_bound["limits"]["max_metadata_bytes"] = json!(limit);
+    assert_frontier_build_refused(
+        &decode_host(&delivery_bound, &stop)?,
+        &progressive_build_request,
+        ServiceErrorCode::BudgetExceeded,
+        "closed",
+        &stop,
+    )?;
+    let after_progressive = retained_state_consumer(&store_root, &ReadSelector::Current, &stop)?;
+    assert_eq!(after_progressive.current, native.current);
+    assert_eq!(after_progressive.records, native.records);
+    assert_eq!(
+        legacy_request_bytes,
+        wow_core::canonical_json_bytes(&request)?
+    );
+    assert_eq!(
+        legacy_initial_bytes,
+        execute_context_inspect(&host, &baseline_request, &stop)?.canonical_bytes()
+    );
+    assert_eq!(
+        legacy_inspect_bytes,
+        execute_context_inspect(&host, &request, &stop)?.canonical_bytes()
+    );
+    assert_eq!(
+        legacy_build_bytes,
+        execute_context_build(&host, &build_requests[3], &stop)?.canonical_bytes()
     );
     if scratch.export {
         let arguments = json!([

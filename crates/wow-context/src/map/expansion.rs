@@ -8,6 +8,11 @@ use wow_graph::GraphPartitionRead;
 
 pub const PRIMARY_FRONTIER_EXPANSION_PROFILE: &str = "wow-context/primary-native-frontier/1";
 const MAX_FRONTIER: usize = 32;
+mod progressive;
+pub use progressive::{
+    PRIMARY_PROGRESSIVE_EXPANSION_PROFILE, plan_context_progression, plan_next_context_expansion,
+};
+use progressive::{PROGRESSIVE_PROFILE, PreviousNavigation, Progression};
 
 #[derive(Serialize)]
 struct ExpansionProfile {
@@ -46,10 +51,17 @@ pub(super) struct ExpansionNavigation<'a> {
     neighborhoods: Vec<GraphNeighborView<'a>>,
     #[serde(skip)]
     initial: &'a ProjectMap<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    previous: Option<PreviousNavigation>,
+    #[serde(skip)]
+    progressive: bool,
 }
 impl ExpansionNavigation<'_> {
     pub(super) fn truncated(&self) -> bool {
-        self.initial.state() == ProjectMapState::Truncated
+        self.previous
+            .as_ref()
+            .map_or(self.initial.state(), |previous| previous.state)
+            == ProjectMapState::Truncated
             || self
                 .neighborhoods
                 .iter()
@@ -57,12 +69,18 @@ impl ExpansionNavigation<'_> {
     }
     pub(super) fn omitted_edges(&self) -> ContextResult<u64> {
         self.neighborhoods.iter().try_fold(
-            self.initial.core.navigation.omitted_edges()?,
+            self.previous.as_ref().map_or_else(
+                || self.initial.core.navigation.omitted_edges(),
+                |previous| Ok(previous.omitted_edges),
+            )?,
             |n, view| {
                 n.checked_add(u64::from(view.omitted_edges()))
                     .ok_or_else(exhausted)
             },
         )
+    }
+    pub(super) fn is_progressive(&self) -> bool {
+        self.progressive
     }
 }
 
@@ -77,6 +95,7 @@ pub struct ContextExpansionPlan<'a> {
     queries: Vec<GraphNeighborReadQuery>,
     neighborhoods: Vec<GraphNeighborView<'a>>,
     budget: Budget,
+    progression: Option<Progression<'a>>,
 }
 impl<'a> ContextExpansionPlan<'a> {
     pub fn navigation_queries(&self) -> &[GraphNeighborReadQuery] {
@@ -108,6 +127,17 @@ pub fn plan_context_expansion<'a>(
     frontier: &[GraphNodeId],
     stop: &AtomicBool,
 ) -> ContextResult<ContextExpansionPlan<'a>> {
+    plan_initial_expansion(universe, initial, graph, frontier, None, stop)
+}
+
+fn plan_initial_expansion<'a>(
+    universe: &'a ContextUniverseSet<'a>,
+    initial: &'a ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    frontier: &[GraphNodeId],
+    progression: Option<Progression<'a>>,
+    stop: &AtomicBool,
+) -> ContextResult<ContextExpansionPlan<'a>> {
     checkpoint(stop)?;
     let view = open_project_map_view(initial, stop)?;
     if !view.bound_to(universe)
@@ -131,21 +161,70 @@ pub fn plan_context_expansion<'a>(
         stop,
     )?;
     budget.retain(&skeletons, stop)?;
-    budget.retain(&PROFILE, stop)?;
+    budget.retain(
+        if progression.is_some() {
+            &PROGRESSIVE_PROFILE
+        } else {
+            &PROFILE
+        },
+        stop,
+    )?;
+    select_frontier(
+        ContextExpansionPlan {
+            universe,
+            initial,
+            skeletons,
+            root,
+            frontier: Vec::new(),
+            queries: Vec::new(),
+            neighborhoods: Vec::new(),
+            budget,
+            progression,
+        },
+        graph,
+        frontier,
+        stop,
+    )
+}
+
+fn select_frontier<'a>(
+    mut plan: ContextExpansionPlan<'a>,
+    graph: &GraphPartitionRead<'a>,
+    frontier: &[GraphNodeId],
+    stop: &AtomicBool,
+) -> ContextResult<ContextExpansionPlan<'a>> {
+    if frontier.is_empty() || frontier.len() > MAX_FRONTIER {
+        return Err(root_invalid());
+    }
+    let seed = plan
+        .progression
+        .as_ref()
+        .and_then(|progression| progression.previous.as_deref())
+        .map_or(plan.initial, |previous| &previous.core.origins);
+    let budget = &mut plan.budget;
     budget.work(
         frontier
             .len()
-            .checked_mul(view.nodes().len().max(1).ilog2() as usize + 2)
+            .checked_mul(seed.nodes.len().max(1).ilog2() as usize + 2)
             .ok_or_else(exhausted)?,
         stop,
     )?;
     let mut selected = Vec::new();
     for id in frontier {
         budget.work(1, stop)?;
-        let node = view
-            .node(id)
-            .filter(|node| node.node_id() != root.node_id())
+        let node = seed
+            .nodes
+            .binary_search_by(|node| node.node_id().cmp(id))
+            .ok()
+            .map(|index| seed.nodes[index])
+            .filter(|node| node.node_id() != plan.root.node_id())
             .ok_or_else(root_invalid)?;
+        if let Some(progression) = &plan.progression {
+            budget.work(progression.queried_root_count()?, stop)?;
+            if progression.was_queried(id, stop)? {
+                return Err(root_invalid());
+            }
+        }
         if !std::ptr::eq(
             node,
             graph
@@ -185,21 +264,18 @@ pub fn plan_context_expansion<'a>(
     let mut queries = Vec::new();
     for node in &selected {
         budget.work(1, stop)?;
-        let query =
-            navigation_query_for(universe, node.node_id().clone(), &DETAIL_RELATIONS, stop)?;
+        let query = navigation_query_for(
+            plan.universe,
+            node.node_id().clone(),
+            &DETAIL_RELATIONS,
+            stop,
+        )?;
         budget.retain(&query, stop)?;
         queries.push(query);
     }
-    Ok(ContextExpansionPlan {
-        universe,
-        initial,
-        skeletons,
-        root,
-        frontier: selected,
-        queries,
-        neighborhoods: Vec::new(),
-        budget,
-    })
+    plan.frontier = selected;
+    plan.queries = queries;
+    Ok(plan)
 }
 
 pub struct ContextExpansionPreparation<'a> {
@@ -208,6 +284,7 @@ pub struct ContextExpansionPreparation<'a> {
     reused: Vec<&'a GraphResolvedExplanation<'a>>,
     initial: &'a ProjectMap<'a>,
     skeletons: PrimarySkeletons<'a, 'a>,
+    progression: Option<Progression<'a>>,
 }
 impl ContextExpansionPreparation<'_> {
     pub fn explanation_queries(&self) -> &[GraphExplainQuery] {
@@ -231,16 +308,20 @@ pub fn prepare_context_expansion<'a>(
         return Err(support_mismatch());
     }
     let snapshot = plan.universe.pair.graph().snapshot();
+    let seed = plan
+        .progression
+        .as_ref()
+        .and_then(|progression| progression.previous.as_deref())
+        .map_or(plan.initial, |previous| &previous.core.origins);
     let mut nodes = BTreeMap::new();
     let mut edges = BTreeMap::new();
     let lookup_work = snapshot.nodes().len().max(1).ilog2() as usize
         + snapshot.edges().len().max(1).ilog2() as usize
         + 4;
     let row_count = plan.neighborhoods.iter().try_fold(
-        plan.initial
-            .nodes
+        seed.nodes
             .len()
-            .checked_add(plan.initial.edges.len())
+            .checked_add(seed.edges.len())
             .ok_or_else(exhausted)?,
         |count, view| {
             count
@@ -254,11 +335,11 @@ pub fn prepare_context_expansion<'a>(
         row_count.checked_mul(lookup_work).ok_or_else(exhausted)?,
         stop,
     )?;
-    for node in &plan.initial.nodes {
+    for node in &seed.nodes {
         plan.budget.work(1, stop)?;
         nodes.insert(node.node_id(), *node);
     }
-    for edge in &plan.initial.edges {
+    for edge in &seed.edges {
         plan.budget.work(1, stop)?;
         edges.insert(edge.edge_id(), *edge);
     }
@@ -295,13 +376,33 @@ pub fn prepare_context_expansion<'a>(
             edges.insert(edge.edge_id(), *edge);
         }
     }
+    let previous = if plan
+        .progression
+        .as_ref()
+        .is_some_and(|progression| progression.previous.is_some())
+    {
+        plan.budget.retain(seed.project_map_id(), stop)?;
+        Some(PreviousNavigation {
+            map_id: seed.project_map_id().into(),
+            state: seed.state(),
+            omitted_edges: seed.core.navigation.omitted_edges()?,
+        })
+    } else {
+        None
+    };
     let navigation = MapNavigation::Expansion(ExpansionNavigation {
-        schema: "wow-context/primary-frontier-navigation/1",
+        schema: if plan.progression.is_some() {
+            "wow-context/primary-progressive-navigation/1"
+        } else {
+            "wow-context/primary-frontier-navigation/1"
+        },
         initial_map_id: plan.initial.project_map_id(),
         root: plan.root,
         frontier: plan.frontier,
         neighborhoods: plan.neighborhoods,
         initial: plan.initial,
+        previous,
+        progressive: plan.progression.is_some(),
     });
     let mut selection = finish_selection(
         plan.universe,
@@ -313,7 +414,7 @@ pub fn prepare_context_expansion<'a>(
     )?;
     // Initial custody is immutable and already validated. Reuse only an exact
     // native query match; newly discovered subjects get new owner receipts.
-    let lookup_work = plan.initial.core.supports.len().max(1).ilog2() as usize + 2;
+    let lookup_work = seed.core.supports.len().max(1).ilog2() as usize + 2;
     selection.budget.work(
         selection
             .queries
@@ -327,8 +428,7 @@ pub fn prepare_context_expansion<'a>(
     for index in 0..selection.queries.len() {
         selection.budget.work(1, stop)?;
         let query = &selection.queries[index];
-        let existing = plan
-            .initial
+        let existing = seed
             .core
             .supports
             .binary_search_by(|receipt| {
@@ -336,7 +436,7 @@ pub fn prepare_context_expansion<'a>(
                     .cmp(&subject_key(query.subject()))
             })
             .ok()
-            .map(|index| plan.initial.core.supports[index]);
+            .map(|index| seed.core.supports[index]);
         if let Some(receipt) = existing.filter(|receipt| receipt.explanation().query() == query) {
             selection.admit_explanation(receipt, stop)?;
             reused.push(receipt);
@@ -351,6 +451,7 @@ pub fn prepare_context_expansion<'a>(
         reused,
         initial: plan.initial,
         skeletons: plan.skeletons,
+        progression: plan.progression,
     })
 }
 
@@ -366,8 +467,12 @@ fn reason<'a>(
     value: InclusionReason<'a>,
     budget: &mut Budget,
     stop: &AtomicBool,
+    frontier_bound: usize,
 ) -> ContextResult<()> {
-    budget.work(index.len().max(1).ilog2() as usize + MAX_FRONTIER + 2, stop)?;
+    budget.work(
+        index.len().max(1).ilog2() as usize + frontier_bound + 2,
+        stop,
+    )?;
     let rows = index.entry(key).or_default();
     if !rows.contains(&value) {
         budget.retain(&value, stop)?;
@@ -419,6 +524,8 @@ struct ExpansionCore<'a> {
     continuation: &'static str,
     not_evaluated: &'static [&'static str],
     budget: ExpansionBudget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    progression: Option<Progression<'a>>,
 }
 #[derive(Serialize)]
 pub struct ContextExpansionStep<'a> {
@@ -443,6 +550,9 @@ impl<'a> ContextExpansionStep<'a> {
     }
     pub fn expansion_id(&self) -> &str {
         &self.expansion_id
+    }
+    pub fn expansion_profile_id(&self) -> &'static str {
+        self.core.profile.profile_id
     }
     /// Remaining cumulative allowance for the consumer envelope, after the
     /// original artifacts, aggregate rows and canonical expansion are retained.
@@ -491,6 +601,9 @@ pub(crate) struct ContextExpansionArtifact<'a> {
     canonical_bytes: Box<[u8]>,
 }
 impl<'a> ContextExpansionArtifact<'a> {
+    pub(crate) fn expansion_profile_id(&self) -> &'static str {
+        self.core.profile.profile_id
+    }
     pub(crate) fn expansion_id(&self) -> &str {
         &self.expansion_id
     }
@@ -530,6 +643,11 @@ pub fn expand_context_frontier<'a>(
         return Err(support_mismatch());
     };
     let root = navigation.root;
+    let frontier_bound = if prepared.progression.is_some() {
+        MAX_FRONTIER * usize::from(progressive::MAX_ROUNDS)
+    } else {
+        MAX_FRONTIER
+    };
     let mut reasons = ReasonIndex::new();
     for node in &prepared.initial.nodes {
         reason(
@@ -541,6 +659,7 @@ pub fn expand_context_frontier<'a>(
             },
             &mut budget,
             stop,
+            frontier_bound,
         )?;
     }
     for edge in &prepared.initial.edges {
@@ -553,7 +672,34 @@ pub fn expand_context_frontier<'a>(
             },
             &mut budget,
             stop,
+            frontier_bound,
         )?;
+    }
+    if let Some(previous) = prepared
+        .progression
+        .as_ref()
+        .and_then(|progression| progression.previous.as_deref())
+    {
+        for item in &previous.core.items {
+            let (key, rows) = match item {
+                ExpansionItem::Entity { node, reasons, .. } => {
+                    ((0, node.node_id().as_str()), reasons)
+                }
+                ExpansionItem::Relation { edge, reasons, .. } => {
+                    ((1, edge.edge_id().as_str()), reasons)
+                }
+            };
+            for row in rows {
+                reason(
+                    &mut reasons,
+                    key,
+                    row.clone(),
+                    &mut budget,
+                    stop,
+                    frontier_bound,
+                )?;
+            }
+        }
     }
     for view in &navigation.neighborhoods {
         for node in std::iter::once(view.root()).chain(view.adjacent_nodes().iter().copied()) {
@@ -566,6 +712,7 @@ pub fn expand_context_frontier<'a>(
                 },
                 &mut budget,
                 stop,
+                frontier_bound,
             )?;
         }
         for edge in view.edges() {
@@ -578,10 +725,16 @@ pub fn expand_context_frontier<'a>(
                 },
                 &mut budget,
                 stop,
+                frontier_bound,
             )?;
         }
     }
-    let initial = open_project_map_view(prepared.initial, stop)?;
+    let seed = prepared
+        .progression
+        .as_ref()
+        .and_then(|progression| progression.previous.as_deref())
+        .map_or(prepared.initial, |previous| &previous.core.origins);
+    let initial = open_project_map_view(seed, stop)?;
     let mut items = Vec::new();
     let mut added_entity_count = 0;
     let mut added_relation_count = 0;
@@ -618,19 +771,49 @@ pub fn expand_context_frontier<'a>(
     }
     budget.retain(&navigation.frontier, stop)?;
     let frontier = navigation.frontier.clone();
-    let unselected_initial_frontier_count = initial
-        .nodes()
-        .len()
-        .checked_sub(1)
-        .and_then(|n| n.checked_sub(frontier.len()))
-        .ok_or_else(support_mismatch)?;
+    let unselected_initial_frontier_count = if let Some(progression) = &prepared.progression {
+        let mut count = 0usize;
+        for node in &prepared.initial.nodes {
+            budget.work(
+                progression
+                    .queried_root_count()?
+                    .checked_add(frontier.len() + 1)
+                    .ok_or_else(exhausted)?,
+                stop,
+            )?;
+            if node.node_id() != root.node_id()
+                && !progression.was_queried(node.node_id(), stop)?
+                && !frontier
+                    .iter()
+                    .any(|selected| selected.node_id() == node.node_id())
+            {
+                count += 1;
+            }
+        }
+        count
+    } else {
+        initial
+            .nodes()
+            .len()
+            .checked_sub(1)
+            .and_then(|n| n.checked_sub(frontier.len()))
+            .ok_or_else(support_mismatch)?
+    };
     let initial_l1_id = prepared.skeletons.l1_id().ok_or_else(support_mismatch)?;
     budget.retain(initial_l1_id, stop)?;
     let initial_l1_id = initial_l1_id.into();
     let state = origins.state();
     let core = ExpansionCore {
-        schema: "wow-context/primary-frontier-expansion/1",
-        profile: &PROFILE,
+        schema: if prepared.progression.is_some() {
+            "wow-context/primary-progressive-expansion/1"
+        } else {
+            "wow-context/primary-frontier-expansion/1"
+        },
+        profile: if prepared.progression.is_some() {
+            &PROGRESSIVE_PROFILE
+        } else {
+            &PROFILE
+        },
         universe_set_id,
         initial_map_id: prepared.initial.project_map_id(),
         initial_l1_id,
@@ -643,15 +826,31 @@ pub fn expand_context_frontier<'a>(
         unselected_initial_frontier_count,
         state,
         absence_authoritative: false,
-        stop_reason: "one_round_profile_bound",
+        stop_reason: match &prepared.progression {
+            Some(progression) if progression.round == progressive::MAX_ROUNDS => {
+                "progressive_round_profile_bound"
+            }
+            Some(_) => "explicit_batch_complete",
+            None => "one_round_profile_bound",
+        },
         continuation: "not_evaluated",
-        not_evaluated: &[
-            "unselected_frontier",
-            "further_rounds_and_continuation",
-            "reference_enrichment",
-            "source_excerpts_and_exact_tokens",
-            "complete_corpus_or_runtime_behavior",
-        ],
+        not_evaluated: if prepared.progression.is_some() {
+            &[
+                "unselected_frontier",
+                "automatic_selection_and_retained_continuation",
+                "reference_enrichment",
+                "source_excerpts_and_exact_tokens",
+                "complete_corpus_or_runtime_behavior",
+            ]
+        } else {
+            &[
+                "unselected_frontier",
+                "further_rounds_and_continuation",
+                "reference_enrichment",
+                "source_excerpts_and_exact_tokens",
+                "complete_corpus_or_runtime_behavior",
+            ]
+        },
         budget: ExpansionBudget {
             max_context_work: limits.max_context_work,
             max_metadata_bytes: limits.max_metadata_bytes,
@@ -660,6 +859,7 @@ pub fn expand_context_frontier<'a>(
             reservation_basis: "before_expansion_finalization",
             tokens: "unavailable",
         },
+        progression: prepared.progression,
     };
     let expansion_id = identity(
         core.schema,

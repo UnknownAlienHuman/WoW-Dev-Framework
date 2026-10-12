@@ -2,8 +2,9 @@
 //! The shared runner retains native custody through encoding and checked close.
 use super::operation::{
     Envelope, FrontierExpansion, current_record_digest, encode, failed_operation,
-    with_checked_context_read, with_native_frontier, with_native_origins,
+    with_checked_context_read, with_native_frontier, with_native_origins, with_native_progressive,
 };
+use super::request::ProgressiveExpansion;
 use super::{
     ContextInspectLevel, ContextL0Profile, ContextL1Profile, ContextMapCurrentGuard,
     ContextMapHostInput, ContextMapPublication, ContextMapReferenceGuard, ContextMapResult,
@@ -30,6 +31,12 @@ pub const PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID: &str =
     wow_context::PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE;
 pub const PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID: &str =
     wow_context::PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE;
+pub const PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID: &str =
+    wow_context::PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE;
+pub const PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID: &str =
+    wow_context::PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE;
+pub const PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID: &str =
+    wow_context::PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE;
 
 const JSON_RENDERER_PROFILE_IDS: &[&str] = &[PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID];
 const MARKDOWN_RENDERER_PROFILE_IDS: &[&str] = &[PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID];
@@ -44,6 +51,14 @@ const FRONTIER_MARKDOWN_RENDERER_PROFILE_IDS: &[&str] =
 const FRONTIER_BOTH_RENDERER_PROFILE_IDS: &[&str] = &[
     PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+];
+const PROGRESSIVE_JSON_RENDERER_PROFILE_IDS: &[&str] =
+    &[PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID];
+const PROGRESSIVE_MARKDOWN_RENDERER_PROFILE_IDS: &[&str] =
+    &[PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID];
+const PROGRESSIVE_BOTH_RENDERER_PROFILE_IDS: &[&str] = &[
+    PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID,
+    PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
 ];
 
 #[derive(Debug, Clone, Serialize)]
@@ -63,6 +78,8 @@ pub struct ContextBuildRequest {
     l1_profile_id: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     expansion: Option<FrontierExpansion>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    progressive: Option<ProgressiveExpansion>,
     #[serde(skip_serializing_if = "Option::is_none")]
     current: Option<ContextMapCurrentGuard>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -103,6 +120,7 @@ impl ContextBuildRequest {
             l1_profile_id: matches!(level, ContextInspectLevel::L1 | ContextInspectLevel::Both)
                 .then_some(PRIMARY_L1_PROFILE_ID),
             expansion: None,
+            progressive: None,
             current,
             reference,
         })
@@ -128,7 +146,8 @@ impl ContextBuildRequest {
             ContextL1Profile::StateDetailV1 | ContextL1Profile::ReferenceFactsV1
         ) && (self.level != ContextInspectLevel::L1
             || !matches!(&self.root, ContextMapRoot::GraphEntity(_))
-            || self.expansion.is_some()))
+            || self.expansion.is_some()
+            || self.progressive.is_some()))
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
@@ -143,6 +162,7 @@ impl ContextBuildRequest {
     pub fn with_frontier_expansion(mut self, frontier: Vec<ContextMapRoot>) -> ServiceResult<Self> {
         if self.l1_profile_id == Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)
             || self.l1_profile_id == Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID)
+            || self.progressive.is_some()
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
@@ -153,6 +173,27 @@ impl ContextBuildRequest {
             ContextRenderSelection::Json => FRONTIER_JSON_RENDERER_PROFILE_IDS,
             ContextRenderSelection::Markdown => FRONTIER_MARKDOWN_RENDERER_PROFILE_IDS,
             ContextRenderSelection::Both => FRONTIER_BOTH_RENDERER_PROFILE_IDS,
+        };
+        Ok(self)
+    }
+
+    pub fn with_progressive_expansion(
+        mut self,
+        rounds: Vec<Vec<ContextMapRoot>>,
+    ) -> ServiceResult<Self> {
+        if self.expansion.is_some()
+            || self.l1_profile_id == Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)
+            || self.l1_profile_id == Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID)
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        self.progressive = Some(ProgressiveExpansion::new(self.level, &self.root, rounds)?);
+        self.context_profile_id = PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID;
+        self.renderer_profile_ids = match &self.render {
+            ContextRenderSelection::None => &[],
+            ContextRenderSelection::Json => PROGRESSIVE_JSON_RENDERER_PROFILE_IDS,
+            ContextRenderSelection::Markdown => PROGRESSIVE_MARKDOWN_RENDERER_PROFILE_IDS,
+            ContextRenderSelection::Both => PROGRESSIVE_BOTH_RENDERER_PROFILE_IDS,
         };
         Ok(self)
     }
@@ -356,6 +397,7 @@ fn build(
             payload: Some(payload),
         };
         let remaining = if request.expansion.is_some()
+            || request.progressive.is_some()
             || matches!(
                 l1_profile,
                 ContextL1Profile::StateDetailV1 | ContextL1Profile::ReferenceFactsV1
@@ -368,7 +410,23 @@ fn build(
             usize::try_from(remaining).map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
         Ok((encode(&envelope, limit, stop)?, status))
     };
-    if let Some(expansion) = &request.expansion {
+    if let Some(progressive) = &request.progressive {
+        with_native_progressive(
+            &universe,
+            read,
+            host,
+            request.root.clone(),
+            &progressive.rounds,
+            stop,
+            |step| {
+                let pack = wow_context::build_context_semantic_pack_from_expansion(
+                    &universe, &scope, step, stop,
+                )
+                .map_err(context_error)?;
+                deliver(pack)
+            },
+        )
+    } else if let Some(expansion) = &request.expansion {
         with_native_frontier(
             &universe,
             read,

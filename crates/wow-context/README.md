@@ -1,7 +1,8 @@
 # `wow-context` contract router
 
 **Status:** partial executable E3-B selected Primary maps, L0/L1 inspection,
-semantic packs/rendering and one explicit native frontier round. Full E3-B and
+semantic packs/rendering, one explicit native frontier round and finite ordered
+progressive batches. Full E3-B and
 launch acceptance remain open in
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
 
@@ -14,6 +15,7 @@ configured Reference binding, original support and load/source custody:
 - [Sealed semantic packs and canonical JSON/metadata-safe Markdown](e3/NATIVE_PRIMARY_PACK.md).
 - [One explicit native frontier round](e3/NATIVE_PRIMARY_EXPANSION.md) and its
   [build/pack/JSON/Markdown consumer](e3/NATIVE_PRIMARY_FRONTIER_PACK.md).
+- [Explicit ordered native progressive batches and inspect/pack/render selection](e3/NATIVE_PRIMARY_PROGRESSIVE.md).
 - [Selected native state-detail L1 inspect/build](e3/NATIVE_PRIMARY_STATE_DETAIL.md),
   retaining literal state keys, plural TOC declarations, scope and ambiguity.
 - [Selected native Reference-facts L1 inspect/build](e3/NATIVE_PRIMARY_REFERENCE_FACTS.md),
@@ -83,9 +85,10 @@ No direct dependency on `wow-store`, `wow-emmy`, `wow-recognizers`, `wow-rules`,
 ```text
 Cargo.toml: active root workspace member
 functional/build-verified: selected maps, L0/L1, native syntax/signature metadata,
-  TOC state-root L0 inspect/build, packs/rendering and one native frontier round
+  TOC state-root L0 inspect/build, packs/rendering and explicit native frontier
+  and progressive batches
 bounded functional lifecycle/CLI: selected state-detail L1 inspect/build/render
-remaining: broader facets, deeper/progressive expansion, broader Reference/type enrichment,
+remaining: broader facets, automatic expansion/continuation, broader Reference/type enrichment,
   platform/combined views, excerpts/privacy/exact tokens/continuation,
   full fixtures, Tier A/X and the specified E6-B mapped-root handoff
 ```

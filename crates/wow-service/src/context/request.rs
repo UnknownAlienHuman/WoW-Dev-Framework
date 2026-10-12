@@ -43,6 +43,64 @@ impl ContextMapRoot {
     }
 }
 
+/// Inert bounded selection; native owner admission proves each round's membership.
+#[derive(Debug, Clone, Serialize)]
+pub(super) struct ProgressiveExpansion {
+    pub(super) profile_id: &'static str,
+    pub(super) rounds: Vec<Vec<GraphNodeId>>,
+}
+impl ProgressiveExpansion {
+    pub(super) fn new(
+        level: super::ContextInspectLevel,
+        root: &ContextMapRoot,
+        rounds: Vec<Vec<ContextMapRoot>>,
+    ) -> ServiceResult<Self> {
+        let ContextMapRoot::GraphEntity(root) = root else {
+            return Err(invalid());
+        };
+        if level != super::ContextInspectLevel::L1
+            || rounds.is_empty()
+            || rounds.len() > 4
+            || rounds
+                .iter()
+                .any(|round| round.is_empty() || round.len() > 32)
+        {
+            return Err(invalid());
+        }
+        identifier(root.as_str())?;
+        GraphNodeId::new(root.as_str()).map_err(|_| invalid())?;
+        let mut normalized: Vec<Vec<GraphNodeId>> = Vec::with_capacity(rounds.len());
+        for round in rounds {
+            let mut ids = round
+                .into_iter()
+                .map(|root| match root {
+                    ContextMapRoot::GraphEntity(id) => {
+                        identifier(id.as_str())?;
+                        GraphNodeId::new(id.as_str()).map_err(|_| invalid())
+                    }
+                    ContextMapRoot::Project(_) => Err(invalid()),
+                })
+                .collect::<ServiceResult<Vec<_>>>()?;
+            ids.sort();
+            if ids.windows(2).any(|pair| pair[0] == pair[1])
+                || ids.binary_search(root).is_ok()
+                || ids.iter().any(|id| {
+                    normalized
+                        .iter()
+                        .any(|prior| prior.binary_search(id).is_ok())
+                })
+            {
+                return Err(invalid());
+            }
+            normalized.push(ids);
+        }
+        Ok(Self {
+            profile_id: super::PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID,
+            rounds: normalized,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ContextMapCurrentGuard {
     #[serde(skip_serializing_if = "Option::is_none")]

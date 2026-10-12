@@ -1,4 +1,4 @@
-//! The selected frontier family consumes already-admitted native custody once.
+//! Selected expansion families consume already-admitted native custody once.
 use super::*;
 use crate::ContextExpansionStep;
 use crate::map::ExpansionItem;
@@ -44,7 +44,82 @@ pub(crate) const FRONTIER_MARKDOWN_PROFILE: RendererProfile = RendererProfile {
 };
 const FROZEN_PROFILES: &[u8] = include_bytes!("../../e3/native-frontier-pack/profiles.json");
 
-fn validate_frontier_profiles(limit: u64, stop: &AtomicBool) -> ContextResult<()> {
+pub const PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE: &str = "wow-context/primary-progressive-pack/1";
+pub const PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE: &str =
+    "wow-context/primary-progressive-pack-json/1";
+pub const PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE: &str =
+    "wow-context/primary-progressive-pack-markdown/1";
+const PROGRESSIVE_PACK_SCHEMA: &str = "wow-context/semantic-pack/primary-progressive/1";
+const PROGRESSIVE_PACK_PROFILE: PackProfile = PackProfile {
+    profile_id: PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE,
+    ordering: "original_progressive_expansion_item_order_with_retained_prior_rounds",
+    selection: "mandatory_exact_root_and_original_progressive_expansion_items",
+    ..FRONTIER_PACK_PROFILE
+};
+const PROGRESSIVE_JSON_PROFILE: RendererProfile = RendererProfile {
+    profile_id: PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE,
+    semantic_schema: PROGRESSIVE_PACK_SCHEMA,
+    ..FRONTIER_JSON_PROFILE
+};
+const PROGRESSIVE_MARKDOWN_PROFILE: RendererProfile = RendererProfile {
+    profile_id: PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE,
+    semantic_schema: PROGRESSIVE_PACK_SCHEMA,
+    layout: "fixed_typed_native_progressive_metadata_records",
+    ..FRONTIER_MARKDOWN_PROFILE
+};
+const PROGRESSIVE_FROZEN_PROFILES: &[u8] =
+    include_bytes!("../../e3/native-progressive-pack/profiles.json");
+
+// A closed descriptor choice from the sealed native artifact, not a request flag.
+struct ExpansionProfiles {
+    schema: &'static str,
+    pack: &'static PackProfile,
+    json: &'static RendererProfile,
+    markdown: &'static RendererProfile,
+    frozen: &'static [u8],
+}
+const FRONTIER_PROFILES: ExpansionProfiles = ExpansionProfiles {
+    schema: FRONTIER_PACK_SCHEMA,
+    pack: &FRONTIER_PACK_PROFILE,
+    json: &FRONTIER_JSON_PROFILE,
+    markdown: &FRONTIER_MARKDOWN_PROFILE,
+    frozen: FROZEN_PROFILES,
+};
+const PROGRESSIVE_PROFILES: ExpansionProfiles = ExpansionProfiles {
+    schema: PROGRESSIVE_PACK_SCHEMA,
+    pack: &PROGRESSIVE_PACK_PROFILE,
+    json: &PROGRESSIVE_JSON_PROFILE,
+    markdown: &PROGRESSIVE_MARKDOWN_PROFILE,
+    frozen: PROGRESSIVE_FROZEN_PROFILES,
+};
+
+fn expansion_profiles(profile_id: &str) -> ContextResult<&'static ExpansionProfiles> {
+    match profile_id {
+        crate::PRIMARY_FRONTIER_EXPANSION_PROFILE => Ok(&FRONTIER_PROFILES),
+        crate::PRIMARY_PROGRESSIVE_EXPANSION_PROFILE => Ok(&PROGRESSIVE_PROFILES),
+        _ => Err(encoding()),
+    }
+}
+
+pub(crate) fn expansion_renderer_profiles(
+    core: &PackCore<'_, '_>,
+) -> ContextResult<(&'static RendererProfile, &'static RendererProfile)> {
+    let expansion = core.expansion.as_ref().ok_or_else(encoding)?;
+    let profiles = expansion_profiles(expansion.expansion_profile_id())?;
+    if core.schema != profiles.schema
+        || core.profile.profile_id != profiles.pack.profile_id
+        || core.request.core.profile_id != profiles.pack.profile_id
+    {
+        return Err(encoding());
+    }
+    Ok((profiles.json, profiles.markdown))
+}
+
+fn validate_expansion_profiles(
+    profiles: &ExpansionProfiles,
+    limit: u64,
+    stop: &AtomicBool,
+) -> ContextResult<()> {
     #[derive(Serialize)]
     struct Profiles {
         json: &'static RendererProfile,
@@ -53,18 +128,19 @@ fn validate_frontier_profiles(limit: u64, stop: &AtomicBool) -> ContextResult<()
     }
     let bytes = canonical(
         &Profiles {
-            json: &FRONTIER_JSON_PROFILE,
-            markdown: &FRONTIER_MARKDOWN_PROFILE,
-            pack: &FRONTIER_PACK_PROFILE,
+            json: profiles.json,
+            markdown: profiles.markdown,
+            pack: profiles.pack,
         },
         limit,
         stop,
     )?;
     // The owned fixture's final LF is file framing, outside descriptor bytes.
     if bytes
-        != FROZEN_PROFILES
+        != profiles
+            .frozen
             .strip_suffix(b"\n")
-            .unwrap_or(FROZEN_PROFILES)
+            .unwrap_or(profiles.frozen)
     {
         return Err(encoding());
     }
@@ -79,15 +155,16 @@ pub fn build_context_semantic_pack_from_expansion<'m, 'a: 'm>(
     step: ContextExpansionStep<'a>,
     stop: &AtomicBool,
 ) -> ContextResult<ContextSemanticPack<'m, 'a>> {
+    let profiles = expansion_profiles(step.expansion_profile_id())?;
     let (expansion, skeletons, mut budget) = step.into_pack_parts(universe, root, stop)?;
-    validate_frontier_profiles(universe.limits.max_metadata_bytes, stop)?;
+    validate_expansion_profiles(profiles, universe.limits.max_metadata_bytes, stop)?;
     budget.retain(expansion.expansion_id(), stop)?;
     let request_core = PackRequestCore {
         schema: "wow-context/primary-pack-request/1",
         universe_set_id: universe.universe_set_id(),
         root,
         level: SkeletonLevel::L1,
-        profile_id: PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE,
+        profile_id: profiles.pack.profile_id,
         limits: universe.limits,
         l0_profile_id: None,
         l1_profile_id: None,
@@ -140,7 +217,14 @@ pub fn build_context_semantic_pack_from_expansion<'m, 'a: 'm>(
     }
     for (producer, id) in [
         ("project_map", Some(expansion.origins().project_map_id())),
-        ("native_frontier_expansion", Some(expansion.expansion_id())),
+        (
+            if profiles.pack.profile_id == PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE {
+                "native_progressive_expansion"
+            } else {
+                "native_frontier_expansion"
+            },
+            Some(expansion.expansion_id()),
+        ),
         ("l1_skeleton", skeletons.l1_id()),
     ] {
         budget.work(1, stop)?;
@@ -160,8 +244,8 @@ pub fn build_context_semantic_pack_from_expansion<'m, 'a: 'm>(
     }
     let state = expansion.state();
     let core = PackCore {
-        schema: FRONTIER_PACK_SCHEMA,
-        profile: &FRONTIER_PACK_PROFILE,
+        schema: profiles.schema,
+        profile: profiles.pack,
         universe_set_id: universe.universe_set_id(),
         binding: &universe.binding,
         request,
@@ -173,15 +257,27 @@ pub fn build_context_semantic_pack_from_expansion<'m, 'a: 'm>(
         omissions: PackOmissions {
             upstream,
             interpretation: "producer_local_omissions_retained_in_original_artifacts",
-            not_evaluated: &[
-                "reference_fact_enrichment",
-                "declaration_signature_qualification",
-                "control_effect_projection",
-                "source_excerpts_and_tokens",
-                "further_rounds_and_continuation",
-                "optional_platform_universe",
-                "complete_corpus_and_runtime",
-            ],
+            not_evaluated: if profiles.pack.profile_id == PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE {
+                &[
+                    "reference_fact_enrichment",
+                    "declaration_signature_qualification",
+                    "control_effect_projection",
+                    "source_excerpts_and_tokens",
+                    "unselected_further_rounds_and_continuation",
+                    "optional_platform_universe",
+                    "complete_corpus_and_runtime",
+                ]
+            } else {
+                &[
+                    "reference_fact_enrichment",
+                    "declaration_signature_qualification",
+                    "control_effect_projection",
+                    "source_excerpts_and_tokens",
+                    "further_rounds_and_continuation",
+                    "optional_platform_universe",
+                    "complete_corpus_and_runtime",
+                ]
+            },
             continuation: "not_evaluated",
         },
         budget: PackBudget {
@@ -210,8 +306,10 @@ pub(super) fn validate_expansion(
         }
         return Ok(());
     };
-    if pack.core.schema != FRONTIER_PACK_SCHEMA
-        || pack.core.profile.profile_id != PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE
+    let profiles = expansion_profiles(expansion.expansion_profile_id())?;
+    if pack.core.schema != profiles.schema
+        || pack.core.profile.profile_id != profiles.pack.profile_id
+        || pack.core.request.core.profile_id != profiles.pack.profile_id
         || pack.core.request.core.expansion_id.as_deref() != Some(expansion.expansion_id())
         || pack.core.items.len() != expansion.items().len()
         || !open_project_map_view(expansion.origins(), stop)?.bound_to(pack.universe)

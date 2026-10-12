@@ -94,3 +94,8 @@ pub(crate) const FRONTIER_PROFILE: ProfileDescription = ProfileDescription {
     edges: &DETAIL_RELATIONS,
     ..PROFILE
 };
+pub(crate) const PROGRESSIVE_FRONTIER_PROFILE: ProfileDescription = ProfileDescription {
+    profile: "wow-context/primary-progressive-origins/1",
+    nodes: "initial_detail_and_ordered_progressive_native_endpoints",
+    ..FRONTIER_PROFILE
+};

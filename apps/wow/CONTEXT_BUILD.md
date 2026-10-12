@@ -15,13 +15,15 @@ wow context build --native-host-config <host.json>
   --publication current|store-generation:<exact-native-generation-id>
   --root project@<unpadded-base64url-of-exact-ProjectId>|graph-entity@<unpadded-base64url-of-exact-node-id>
   --level l0|l1|both
-  --context-profile-id wow-context/primary-structural-pack/1|wow-context/primary-frontier-pack/1
+  --context-profile-id wow-context/primary-structural-pack/1|wow-context/primary-frontier-pack/1|wow-context/primary-progressive-pack/1
   [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1]
   [--l1-profile-id wow-context/primary-l1/1|wow-context/primary-state-detail-l1/1|wow-context/primary-reference-facts-l1/1]
   [--expansion-profile-id wow-context/primary-native-frontier/1
    --frontier graph-entity@<base64url-id> ...]
-  [--renderer-profile-id wow-context/primary-pack-json/1|wow-context/primary-frontier-pack-json/1]
-  [--renderer-profile-id wow-context/primary-pack-markdown/1|wow-context/primary-frontier-pack-markdown/1]
+  [--expansion-profile-id wow-context/primary-native-progressive/1
+   --frontier-round '<token>[,<token>...]' ...]
+  [--renderer-profile-id wow-context/primary-pack-json/1|wow-context/primary-frontier-pack-json/1|wow-context/primary-progressive-pack-json/1]
+  [--renderer-profile-id wow-context/primary-pack-markdown/1|wow-context/primary-frontier-pack-markdown/1|wow-context/primary-progressive-pack-markdown/1]
   [--platform omitted] [--output envelope-json]
   [--expect-current-record <id>] [--expect-current-digest <sha256:digest>]
   [--expect-profile <id> --expect-reference-generation <id> --expect-reference-view <sha256:digest>]
@@ -44,8 +46,8 @@ Root tokens are canonical unpadded base64url UTF-8 IDs, with no lookup or search
 L0 options select one closed profile; omission/default preserves primary-l0/1.
 The L1 option selects a closed profile; omission/default preserves primary-l1/1.
 Current guards require `--publication current`; Reference guards form one complete
-three-option group. Unknown options/profiles, duplicate options and incompatible
-level/profile assertions refuse before invocation.
+three-option group. Unknown options/profiles, repeated non-repeatable options and
+incompatible level/profile assertions refuse before invocation.
 
 Each renderer option may occur once. No renderer selects `none` and returns a
 validated semantic pack with an empty `rendered_artifacts` array. One selects JSON
@@ -190,6 +192,40 @@ fields retain their original bytes. The focused source-absent lifecycle and actu
 Windows CLI verify this selected consumer, including cumulative refusal; see the
 [owner contract](../../crates/wow-context/e3/NATIVE_PRIMARY_FRONTIER_PACK.md).
 
+## Selected progressive pack
+
+Select `--context-profile-id wow-context/primary-progressive-pack/1` with
+`--expansion-profile-id wow-context/primary-native-progressive/1`,
+`--level l1`, the default L1 profile and an explicit exact graph-entity root.
+Repeat `--frontier-round '<token>[,<token>...]'` for 1..4 ordered batches;
+each contains 1..32 distinct exact `graph-entity@<base64url-id>` endpoints.
+The first batch uses the initial detail map; later batches use retained prior
+round endpoints. Initial/repeated roots and mixed one-round/progressive selections
+refuse. The [progressive contract](../../crates/wow-context/e3/NATIVE_PRIMARY_PROGRESSIVE.md)
+defines exact native admission, immutable history and conservative stopping.
+
+Pack schema is `wow-context/semantic-pack/primary-progressive/1`. The pack retains
+the original skeletons and immutable round artifacts, native receipts, every
+inclusion reason, support and scoped coverage/omissions. Selected items remain
+original native nodes/edges; history does not manufacture transitive relations.
+
+Optional renderers are `wow-context/primary-progressive-pack-json/1` and
+`wow-context/primary-progressive-pack-markdown/1`. Zero/one/both uses the existing
+selection conventions and fixed JSON-then-Markdown order; mixed families refuse.
+JSON is the exact canonical selected pack. Markdown preserves its semantic fields
+and round history through the existing escaped metadata boundary and exact trace.
+Renderer choice does not change semantic pack bytes/identity.
+
+One acquisition and one build service call execute the explicit native rounds,
+then consume the genuine history and actual private Budget into the pack.
+Construction, validation, rendering and final delivery continue that same ledger;
+there is no inspect-envelope import, fresh per-round allowance or reconstruction
+from scalar counters. Mandatory overflow/cancellation suppresses delivery and
+checked close still precedes output. Partial/Truncated and nonauthoritative
+absence persist at the final explicit batch/profile bound. No automatic frontier,
+inferred NoNewEvidence or retained cross-request continuation is supplied.
+Unselected/default/frontier/state/Reference families keep their existing bytes.
+
 ## Host, bounds and custody
 
 The strict `wow-service/context-map-native-host/1` document is shared with
@@ -230,8 +266,10 @@ Default
 ContainersV1/EntityV1 retain None for these native pack fields, omitted from
 serialization to preserve old pack bytes. Default pack/renderer profile IDs stay
 the existing choices. Frontier selection binds its normalized profile/frontier and
-named pack/renderer family; absent frontier fields are omitted. No source,
-producer, storage or replay selection is introduced.
+named pack/renderer family. Progressive selection binds ordered batches and
+immutable native round history under its own pack/renderer family. Absent
+expansion fields are omitted. No source, producer, storage or replay selection
+is introduced.
 
 The envelope retains request identity/bytes, status, resource closure and optional
 failure/payload. Payload contains resolved request, publication/store generation,
@@ -262,9 +300,9 @@ unknown native closure is not treated as success.
 
 Every returned pack is Partial or Truncated with `absence_authoritative=false`.
 Original producer omissions remain scoped to their embedded maps/layers. Native
-additional recipe admission, broader Reference/type enrichment, excerpts/tokens, progressive
-rounds/continuation, platform composition and complete-corpus/runtime qualification
-remain open. The [default-profile synthetic fixture](../../crates/wow-service/e3/native-primary-pack/README.md)
+additional recipe admission, broader Reference/type enrichment, excerpts/tokens,
+automatic expansion/retained cross-request continuation, platform composition and
+complete-corpus/runtime qualification remain open. The [default-profile synthetic fixture](../../crates/wow-service/e3/native-primary-pack/README.md)
 freezes the actual pack/render bytes; broad E3/Tier A/X acceptance remains open.
 Executed gate evidence belongs to the canonical #122 milestone.
 

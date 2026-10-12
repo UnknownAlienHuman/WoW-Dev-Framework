@@ -18,11 +18,13 @@ use crate::{
 };
 
 mod frontier;
-pub(crate) use frontier::{FRONTIER_JSON_PROFILE, FRONTIER_MARKDOWN_PROFILE};
+pub(crate) use frontier::expansion_renderer_profiles;
 pub use frontier::{
     PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE,
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE,
-    build_context_semantic_pack_from_expansion,
+    PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE,
+    PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE,
+    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE, build_context_semantic_pack_from_expansion,
 };
 
 pub const PRIMARY_CONTEXT_PACK_PROFILE: &str = "wow-context/primary-structural-pack/1";

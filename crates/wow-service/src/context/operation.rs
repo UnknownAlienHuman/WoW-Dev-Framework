@@ -16,6 +16,9 @@ use crate::{
     live_project::{LiveProjectRead, LiveProjectStore, ReadFailureClosure},
 };
 
+mod progressive;
+pub(super) use progressive::with_native_progressive;
+
 #[derive(Debug, Clone, Serialize)]
 pub(super) struct FrontierExpansion {
     profile_id: &'static str,

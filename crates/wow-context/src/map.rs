@@ -29,8 +29,9 @@ mod project_navigation;
 pub(crate) use expansion::{ContextExpansionArtifact, ExpansionItem};
 pub use expansion::{
     ContextExpansionPlan, ContextExpansionPreparation, ContextExpansionStep,
-    PRIMARY_FRONTIER_EXPANSION_PROFILE, expand_context_frontier, plan_context_expansion,
-    prepare_context_expansion,
+    PRIMARY_FRONTIER_EXPANSION_PROFILE, PRIMARY_PROGRESSIVE_EXPANSION_PROFILE,
+    expand_context_frontier, plan_context_expansion, plan_context_progression,
+    plan_next_context_expansion, prepare_context_expansion,
 };
 pub use project_navigation::{
     ProjectNavigationRequest, prepare_primary_project_map, primary_project_navigation_queries,
@@ -73,6 +74,9 @@ impl MapNavigation<'_> {
             Self::Direct(_) => PROJECT_MAP_SCHEMA,
             Self::Detail(_) => "wow-context/project-map/primary-entity-detail-origins/1",
             Self::Project(_) => PRIMARY_PROJECT_MAP_SCHEMA,
+            Self::Expansion(view) if view.is_progressive() => {
+                "wow-context/project-map/primary-progressive-origins/1"
+            }
             Self::Expansion(_) => "wow-context/project-map/primary-frontier-origins/1",
         }
     }
@@ -81,6 +85,9 @@ impl MapNavigation<'_> {
             Self::Direct(_) => &PROFILE,
             Self::Detail(_) => &DETAIL_PROFILE,
             Self::Project(_) => &PROJECT_PROFILE,
+            Self::Expansion(view) if view.is_progressive() => {
+                &crate::profile::PROGRESSIVE_FRONTIER_PROFILE
+            }
             Self::Expansion(_) => &crate::profile::FRONTIER_PROFILE,
         }
     }

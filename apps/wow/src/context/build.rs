@@ -6,13 +6,16 @@ use wow_service::context::{
     PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_PACK_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
-    PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID,
+    PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID, PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID,
+    PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Family {
     Structural,
     Frontier,
+    Progressive,
 }
 
 #[derive(Default)]
@@ -33,6 +36,7 @@ impl Options {
                 let family = match value {
                     PRIMARY_CONTEXT_PACK_PROFILE_ID => Family::Structural,
                     PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID => Family::Frontier,
+                    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID => Family::Progressive,
                     _ => return Err("unsupported exact context pack profile"),
                 };
                 set(&mut self.context_profile, family, Command::Build)
@@ -52,6 +56,14 @@ impl Options {
                 PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID => set(
                     &mut self.markdown_renderer,
                     Family::Frontier,
+                    Command::Build,
+                ),
+                PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID => {
+                    set(&mut self.json_renderer, Family::Progressive, Command::Build)
+                }
+                PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID => set(
+                    &mut self.markdown_renderer,
+                    Family::Progressive,
                     Command::Build,
                 ),
                 _ => Err("unsupported exact context renderer profile"),
@@ -77,8 +89,15 @@ impl Options {
             l0_profile,
             l1_profile,
             frontier,
+            progressive,
         } = selection;
-        if (family == Family::Frontier) != frontier.is_some() {
+        let selected_family = match (frontier.is_some(), progressive.is_some()) {
+            (false, false) => Family::Structural,
+            (true, false) => Family::Frontier,
+            (false, true) => Family::Progressive,
+            (true, true) => return Err("context expansion families cannot be mixed"),
+        };
+        if family != selected_family {
             return Err("context build pack profile conflicts with expansion selection");
         }
         if self
@@ -127,6 +146,11 @@ impl Options {
             // Entity remains an optional assertion of the existing primary constructor.
             Some(ContextL1Profile::EntityV1) | None => request,
         };
+        if let Some(rounds) = progressive {
+            return request
+                .with_progressive_expansion(rounds)
+                .map_err(|_| "invalid context build progressive expansion syntax");
+        }
         match frontier {
             Some(frontier) => request
                 .with_frontier_expansion(frontier)

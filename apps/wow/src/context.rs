@@ -46,6 +46,11 @@ const HELP: &str = concat!(
     "--frontier graph-entity@<base64url-id> ...]\n",
     "  Expansion requires l1, an exact graph-entity@ root and 1..32 distinct frontiers; ",
     "service validates initial-map membership.\n",
+    "  Progressive inspect/build: repeat --frontier-round ",
+    "'graph-entity@<base64url-id>,<...>' for 1..4 ordered batches, ",
+    "1..32 globally distinct exact graph IDs per batch, excluding the initial root.\n",
+    "  Select the exact progressive expansion profile listed below; requires l1 and ",
+    "default/explicit entity L1. Legacy --frontier and progressive rounds cannot be mixed.\n",
     "  Same omitted-platform, complete reference/current guards and envelope-json transport. ",
     "Default L0 accepts project@ or an exact container graph-entity@. Select ",
     "wow-context/primary-state-root-l0/1 for an exact SavedVariables state-root graph-entity@; ",
@@ -71,6 +76,22 @@ const HELP: &str = concat!(
     "guard group and envelope-json output. Build supports the same explicit state-root L0 profile; ",
     "service owns profile/root/level compatibility.\n",
 );
+
+fn progressive_help() -> String {
+    use wow_service::context::{
+        PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+        PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID, PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID,
+    };
+
+    format!(
+        "Progressive inspect/build: --expansion-profile-id {PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID}\n\
+         Progressive build: --context-profile-id {PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID}\n\
+           [--renderer-profile-id {PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID}]\n\
+           [--renderer-profile-id {PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID}]\n\
+         Progressive pack/renderers require the matching progressive rounds family.\n"
+    )
+}
 
 // Preserve the existing app argv/individual-path transport maxima.
 const MAX_ARGUMENTS: usize = 4096;
@@ -106,7 +127,12 @@ pub fn run(values: Vec<OsString>) -> u8 {
             .last()
             .is_some_and(|value| value == "--help" || value == "-h")
     {
-        return if std::io::stdout().lock().write_all(HELP.as_bytes()).is_ok() {
+        let mut output = std::io::stdout().lock();
+        return if output
+            .write_all(HELP.as_bytes())
+            .and_then(|()| output.write_all(progressive_help().as_bytes()))
+            .is_ok()
+        {
             0
         } else {
             4
@@ -340,7 +366,8 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             | "--l0-profile-id"
             | "--l1-profile-id"
             | "--expansion-profile-id"
-            | "--frontier" => {
+            | "--frontier"
+            | "--frontier-round" => {
                 inspect_options.option(option, &value, command)?;
             }
             "--context-profile-id" | "--renderer-profile-id" => {
@@ -1204,6 +1231,280 @@ mod tests {
             "a".repeat(CONTEXT_MAP_ID_MAX_BYTES)
         );
         assert!(decode_root_id(&repeated_a(CONTEXT_MAP_ID_MAX_BYTES + 1)).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn context_progressive_grammar_preserves_rounds_and_refuses_mixed_families()
+    -> Result<(), &'static str> {
+        use wow_service::context::{
+            ContextInspectLevel, ContextRenderSelection, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+            PRIMARY_CONTEXT_PACK_PROFILE_ID, PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+            PRIMARY_L1_PROFILE_ID, PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID,
+            PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+            PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID, PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID,
+            PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID, PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+        };
+
+        fn base(command: &str) -> Result<Vec<OsString>, &'static str> {
+            let mut values = arguments();
+            *values.get_mut(1).ok_or("missing fixture command")? = command.into();
+            for flag in ["--map-target", "--map-profile-id"] {
+                let index = values
+                    .iter()
+                    .position(|value| value == flag)
+                    .ok_or("missing fixture map option")?;
+                values.drain(index..index + 2);
+            }
+            push(&mut values, "--root", GRAPH_ROOT);
+            push(&mut values, "--level", "l1");
+            Ok(values)
+        }
+
+        fn token(index: usize) -> String {
+            let mut token = String::from("graph-entity@Z3JhcGgtbm9kZTpzaGEyNTY6");
+            for bit in 0..8 {
+                token.push_str(if index & (1 << bit) == 0 {
+                    "YmJi"
+                } else {
+                    "Y2Nj"
+                });
+            }
+            token.push_str(&"YmJi".repeat(13));
+            token.push_str("Yg");
+            token
+        }
+
+        let first = format!("{},{}", token(1), token(0));
+        let second = token(2);
+        let mut inspect = base("inspect")?;
+        // Profile follows the rounds; root/profile order cannot weaken validation.
+        push(&mut inspect, "--frontier-round", &first);
+        push(&mut inspect, "--frontier-round", &second);
+        push(
+            &mut inspect,
+            "--expansion-profile-id",
+            PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID,
+        );
+        let rounds = vec![
+            vec![parse_root(&token(1))?, parse_root(&token(0))?],
+            vec![parse_root(&second)?],
+        ];
+        let expected = ContextInspectRequest::primary(
+            "context-cli-store",
+            ContextMapPublication::Current,
+            ContextInspectLevel::L1,
+            parse_root(GRAPH_ROOT)?,
+            None,
+            None,
+        )
+        .map_err(|_| "inspect constructor failed")?
+        .with_progressive_expansion(rounds.clone())
+        .map_err(|_| "progressive inspect constructor failed")?;
+        let exact = request_json(inspect.clone())?;
+        assert_eq!(
+            exact,
+            serde_json::to_value(expected).map_err(|_| "serialization failed")?
+        );
+        assert!(exact.get("expansion").is_none());
+        let mut asserted = inspect.clone();
+        push(&mut asserted, "--l1-profile-id", PRIMARY_L1_PROFILE_ID);
+        assert_eq!(request_json(asserted)?, exact);
+        let mut reversed = base("inspect")?;
+        push(
+            &mut reversed,
+            "--expansion-profile-id",
+            PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID,
+        );
+        push(&mut reversed, "--frontier-round", &second);
+        push(&mut reversed, "--frontier-round", &first);
+        assert_ne!(request_json(reversed)?, exact);
+
+        let mut build = inspect.clone();
+        *build.get_mut(1).ok_or("missing fixture command")? = "build".into();
+        push(
+            &mut build,
+            "--context-profile-id",
+            PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID,
+        );
+        assert!(parse(build.clone()).is_ok());
+        let unrendered_build = build.clone();
+        push(
+            &mut build,
+            "--renderer-profile-id",
+            PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+        );
+        push(
+            &mut build,
+            "--renderer-profile-id",
+            PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        );
+        let expected = ContextBuildRequest::primary(
+            "context-cli-store",
+            ContextMapPublication::Current,
+            ContextInspectLevel::L1,
+            parse_root(GRAPH_ROOT)?,
+            ContextRenderSelection::Both,
+            None,
+            None,
+        )
+        .map_err(|_| "build constructor failed")?
+        .with_progressive_expansion(rounds)
+        .map_err(|_| "progressive build constructor failed")?;
+        assert_eq!(
+            request_json(build.clone())?,
+            serde_json::to_value(expected).map_err(|_| "serialization failed")?
+        );
+
+        for command in ["inspect", "build"] {
+            let mut selected = base(command)?;
+            if command == "build" {
+                push(
+                    &mut selected,
+                    "--context-profile-id",
+                    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID,
+                );
+            }
+            push(
+                &mut selected,
+                "--expansion-profile-id",
+                PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID,
+            );
+            assert!(parse(selected.clone()).is_err()); // no rounds
+            for invalid in [
+                "".to_owned(),
+                ",".to_owned(),
+                format!("{second},"),
+                format!(",{second}"),
+                format!("{second},{second}"),
+                GRAPH_ROOT.to_owned(),
+                PROJECT_ROOT.to_owned(),
+                format!("{second}="),
+                format!("{second}, {second}"),
+            ] {
+                let mut values = selected.clone();
+                push(&mut values, "--frontier-round", &invalid);
+                assert!(parse(values).is_err());
+            }
+            push(&mut selected, "--frontier-round", &second);
+            assert!(parse(selected.clone()).is_ok());
+            let mut across = selected.clone();
+            push(&mut across, "--frontier-round", &second);
+            assert!(parse(across).is_err());
+            for level in ["l0", "both"] {
+                let mut values = selected.clone();
+                replace(&mut values, "--level", level)?;
+                assert!(parse(values).is_err());
+            }
+            for profile in [
+                PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+                PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
+            ] {
+                let mut values = selected.clone();
+                push(&mut values, "--l1-profile-id", profile);
+                assert!(parse(values).is_err());
+            }
+            let mut late_root = selected.clone();
+            let index = late_root
+                .iter()
+                .position(|value| value == "--root")
+                .ok_or("missing fixture root")?;
+            late_root.drain(index..index + 2);
+            push(&mut late_root, "--root", &second);
+            assert!(parse(late_root).is_err());
+            let mut project = selected.clone();
+            replace(&mut project, "--root", PROJECT_ROOT)?;
+            assert!(parse(project).is_err());
+            let mut legacy_profile = selected.clone();
+            replace(
+                &mut legacy_profile,
+                "--expansion-profile-id",
+                PRIMARY_FRONTIER_EXPANSION_PROFILE_ID,
+            )?;
+            assert!(parse(legacy_profile).is_err());
+            let mut duplicate_profile = selected.clone();
+            push(
+                &mut duplicate_profile,
+                "--expansion-profile-id",
+                PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID,
+            );
+            assert!(parse(duplicate_profile).is_err());
+            let mut unknown_profile = selected.clone();
+            replace(&mut unknown_profile, "--expansion-profile-id", "unknown")?;
+            assert!(parse(unknown_profile).is_err());
+            let mut unknown_flag = selected.clone();
+            push(&mut unknown_flag, "--frontier-rounds", &second);
+            assert!(parse(unknown_flag).is_err());
+            selected.pop(); // remove first round and its flag
+            selected.pop();
+            for legacy_first in [false, true] {
+                let mut values = selected.clone();
+                let flags = if legacy_first {
+                    ["--frontier", "--frontier-round"]
+                } else {
+                    ["--frontier-round", "--frontier"]
+                };
+                for flag in flags {
+                    push(&mut values, flag, &second);
+                }
+                assert!(parse(values).is_err());
+            }
+            let mut no_profile = base(command)?;
+            push(&mut no_profile, "--frontier-round", &second);
+            assert!(parse(no_profile).is_err());
+            let mut no_value = selected.clone();
+            no_value.push("--frontier-round".into());
+            assert!(parse(no_value).is_err());
+
+            // Four ordered batches of 32 distinct exact IDs, then each finite overflow.
+            let mut bounded = selected;
+            for batch in 0..4 {
+                let ids = (batch * 32..(batch + 1) * 32)
+                    .map(token)
+                    .collect::<Vec<_>>()
+                    .join(",");
+                push(&mut bounded, "--frontier-round", &ids);
+            }
+            assert!(parse(bounded.clone()).is_ok());
+            let mut fifth = bounded.clone();
+            push(&mut fifth, "--frontier-round", &token(128));
+            assert!(parse(fifth).is_err());
+            let too_many = (0..33).map(token).collect::<Vec<_>>().join(",");
+            replace(&mut bounded, "--frontier-round", &too_many)?;
+            assert!(parse(bounded).is_err());
+        }
+        for (flag, wrong) in [
+            ("--context-profile-id", PRIMARY_CONTEXT_PACK_PROFILE_ID),
+            (
+                "--renderer-profile-id",
+                PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+            ),
+        ] {
+            let mut values = unrendered_build.clone();
+            if flag == "--renderer-profile-id" {
+                push(&mut values, flag, wrong);
+            } else {
+                replace(&mut values, flag, wrong)?;
+            }
+            assert!(parse(values).is_err());
+        }
+        let mut duplicate_renderer = build;
+        push(
+            &mut duplicate_renderer,
+            "--renderer-profile-id",
+            PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID,
+        );
+        assert!(parse(duplicate_renderer).is_err());
+        let mut legacy = base("build")?;
+        push(
+            &mut legacy,
+            "--context-profile-id",
+            PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID,
+        );
+        assert!(parse(legacy).is_err());
+        let mut map = arguments();
+        push(&mut map, "--frontier-round", &second);
+        assert!(parse(map).is_err());
         Ok(())
     }
 

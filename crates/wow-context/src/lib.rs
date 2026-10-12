@@ -16,21 +16,25 @@ pub use budget::PrimaryMapLimits;
 pub use error::{ContextError, ContextErrorCode, ContextResult};
 pub use map::{
     ContextExpansionPlan, ContextExpansionPreparation, ContextExpansionStep,
-    PRIMARY_FRONTIER_EXPANSION_PROFILE, PRIMARY_PROJECT_MAP_SCHEMA, PROJECT_MAP_SCHEMA, ProjectMap,
-    ProjectMapSelection, ProjectMapState, ProjectMapView, ProjectNavigationRequest,
-    build_project_map, expand_context_frontier, open_project_map_view, plan_context_expansion,
-    prepare_context_expansion, prepare_detail_map, prepare_primary_project_map,
-    prepare_project_map, primary_detail_query, primary_navigation_query,
-    primary_project_navigation_queries,
+    PRIMARY_FRONTIER_EXPANSION_PROFILE, PRIMARY_PROGRESSIVE_EXPANSION_PROFILE,
+    PRIMARY_PROJECT_MAP_SCHEMA, PROJECT_MAP_SCHEMA, ProjectMap, ProjectMapSelection,
+    ProjectMapState, ProjectMapView, ProjectNavigationRequest, build_project_map,
+    expand_context_frontier, open_project_map_view, plan_context_expansion,
+    plan_context_progression, plan_next_context_expansion, prepare_context_expansion,
+    prepare_detail_map, prepare_primary_project_map, prepare_project_map, primary_detail_query,
+    primary_navigation_query, primary_project_navigation_queries,
 };
 pub use pack::{
     ContextOperationBudgetUsage, ContextSemanticPack, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE,
     PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_CONTEXT_PACK_PROFILE,
     PRIMARY_CONTEXT_PROFILES_BYTES, PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE,
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE,
-    build_context_semantic_pack, build_context_semantic_pack_from_expansion,
-    build_context_semantic_pack_with_l1_profile, build_context_semantic_pack_with_profile,
-    build_context_semantic_pack_with_reference_facts, validate_context_semantic_pack,
+    PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE,
+    PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE,
+    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE, build_context_semantic_pack,
+    build_context_semantic_pack_from_expansion, build_context_semantic_pack_with_l1_profile,
+    build_context_semantic_pack_with_profile, build_context_semantic_pack_with_reference_facts,
+    validate_context_semantic_pack,
 };
 pub use profile::{
     PRIMARY_MAP_PROFILE, PRIMARY_MAP_PROFILE_BYTES, PRIMARY_PROJECT_MAP_PROFILE,

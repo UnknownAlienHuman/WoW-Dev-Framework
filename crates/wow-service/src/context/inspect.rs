@@ -2,8 +2,9 @@
 //! this operation selects typed context artifacts, never a second semantic map call.
 use super::operation::{
     Envelope, FrontierExpansion, current_record_digest, encode, failed_operation,
-    with_checked_context_read, with_native_frontier, with_native_origins,
+    with_checked_context_read, with_native_frontier, with_native_origins, with_native_progressive,
 };
+use super::request::ProgressiveExpansion;
 use super::{
     ContextInspectLevel, ContextL0Profile, ContextL1Profile, ContextMapCurrentGuard,
     ContextMapHostInput, ContextMapPublication, ContextMapReferenceGuard, ContextMapResult,
@@ -34,6 +35,8 @@ pub struct ContextInspectRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     expansion: Option<FrontierExpansion>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    progressive: Option<ProgressiveExpansion>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     current: Option<ContextMapCurrentGuard>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reference: Option<ContextMapReferenceGuard>,
@@ -63,6 +66,7 @@ impl ContextInspectRequest {
             l1_profile_id: matches!(level, ContextInspectLevel::L1 | ContextInspectLevel::Both)
                 .then_some(PRIMARY_L1_PROFILE_ID),
             expansion: None,
+            progressive: None,
             current,
             reference,
         })
@@ -88,7 +92,8 @@ impl ContextInspectRequest {
             ContextL1Profile::StateDetailV1 | ContextL1Profile::ReferenceFactsV1
         ) && (self.level != ContextInspectLevel::L1
             || !matches!(&self.root, ContextMapRoot::GraphEntity(_))
-            || self.expansion.is_some()))
+            || self.expansion.is_some()
+            || self.progressive.is_some()))
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
@@ -103,10 +108,25 @@ impl ContextInspectRequest {
     pub fn with_frontier_expansion(mut self, frontier: Vec<ContextMapRoot>) -> ServiceResult<Self> {
         if self.l1_profile_id == Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)
             || self.l1_profile_id == Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID)
+            || self.progressive.is_some()
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
         self.expansion = Some(FrontierExpansion::new(self.level, &self.root, frontier)?);
+        Ok(self)
+    }
+
+    pub fn with_progressive_expansion(
+        mut self,
+        rounds: Vec<Vec<ContextMapRoot>>,
+    ) -> ServiceResult<Self> {
+        if self.expansion.is_some()
+            || self.l1_profile_id == Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)
+            || self.l1_profile_id == Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID)
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        self.progressive = Some(ProgressiveExpansion::new(self.level, &self.root, rounds)?);
         Ok(self)
     }
 }
@@ -295,7 +315,17 @@ fn build(
             usize::try_from(remaining).map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
         Ok((encode(&envelope, limit, stop)?, status))
     };
-    if let Some(expansion) = &request.expansion {
+    if let Some(progressive) = &request.progressive {
+        with_native_progressive(
+            &universe,
+            read,
+            host,
+            request.root.clone(),
+            &progressive.rounds,
+            stop,
+            |step| deliver(step.skeletons(), Some(&step)),
+        )
+    } else if let Some(expansion) = &request.expansion {
         with_native_frontier(
             &universe,
             read,
