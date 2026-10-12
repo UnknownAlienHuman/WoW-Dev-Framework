@@ -348,6 +348,115 @@ fn explicit_state_root_l0_decode_is_narrow_and_preserves_omission() -> TestResul
 }
 
 #[test]
+fn platform_root_facets_compose_with_valid_primary_recipes_in_inspect_and_build() -> TestResult {
+    let recipes = [
+        (
+            "l0",
+            "l0_profile_id",
+            PRIMARY_STATE_ROOT_L0_PROFILE_ID,
+            Some(CombinedL0Recipe::StateRoot),
+            None,
+        ),
+        (
+            "l1",
+            "l1_profile_id",
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+            None,
+            Some(CombinedL1Recipe::StateDetail),
+        ),
+        (
+            "both",
+            "l1_profile_id",
+            PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+            None,
+            Some(CombinedL1Recipe::StateDetail),
+        ),
+        (
+            "l1",
+            "l1_profile_id",
+            PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
+            None,
+            Some(CombinedL1Recipe::ReferenceFacts),
+        ),
+    ];
+    for facet in ["callable_metadata", "xml_handler_metadata"] {
+        for operation in ["inspect", "build"] {
+            for (level, field, profile, expected_l0, expected_l1) in recipes {
+                let mut value = if operation == "inspect" {
+                    inspect(level, None)?
+                } else {
+                    build(level, None)?
+                };
+                let key = if operation == "inspect" {
+                    "inspection"
+                } else {
+                    "build"
+                };
+                value[key]["platform_root_facet"] = json!(facet);
+                value[key][field] = json!(profile);
+                let request = ContextCombinedRequest::from_json_slice(
+                    &serde_json::to_vec(&value)?,
+                    &AtomicBool::new(false),
+                )?;
+                assert_eq!(
+                    request.platform_root_facet,
+                    Some(match facet {
+                        "callable_metadata" => wow_context::PlatformRootFacet::CallableMetadata,
+                        _ => wow_context::PlatformRootFacet::XmlHandlerMetadata,
+                    })
+                );
+                assert!(request.l0_recipe == expected_l0);
+                assert!(request.l1_recipe == expected_l1);
+                let expected = wow_core::canonical_json_bytes(&value)?;
+                assert_eq!(wow_core::canonical_json_bytes(&request)?, expected);
+                let roundtrip =
+                    ContextCombinedRequest::from_json_slice(&expected, &AtomicBool::new(false))?;
+                assert_eq!(wow_core::canonical_json_bytes(&roundtrip)?, expected);
+            }
+        }
+    }
+
+    for facet in ["callable_metadata", "xml_handler_metadata"] {
+        for operation in ["inspect", "build"] {
+            let mut mixed = if operation == "inspect" {
+                inspect("l0", None)?
+            } else {
+                build("l0", None)?
+            };
+            let key = if operation == "inspect" {
+                "inspection"
+            } else {
+                "build"
+            };
+            mixed[key]["platform_root_facet"] = json!(facet);
+            mixed[key]["l0_profile_id"] = json!(PRIMARY_STATE_ROOT_L0_PROFILE_ID);
+            mixed[key]["l1_profile_id"] = json!(PRIMARY_STATE_DETAIL_L1_PROFILE_ID);
+            refused(&mixed, ServiceErrorCode::InvalidRequest)?;
+
+            for (level, field, profile) in [
+                ("l1", "l0_profile_id", PRIMARY_STATE_ROOT_L0_PROFILE_ID),
+                (
+                    "both",
+                    "l1_profile_id",
+                    PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
+                ),
+                ("l0", "l1_profile_id", PRIMARY_STATE_DETAIL_L1_PROFILE_ID),
+            ] {
+                let mut invalid = if operation == "inspect" {
+                    inspect(level, None)?
+                } else {
+                    build(level, None)?
+                };
+                invalid[key]["platform_root_facet"] = json!(facet);
+                invalid[key][field] = json!(profile);
+                refused(&invalid, ServiceErrorCode::InvalidRequest)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn platform_callable_selection_preserves_ordinary_admission_and_request_bytes() -> TestResult {
     for level in ["l0", "l1", "both"] {
         for omitted in [inspect(level, None)?, build(level, None)?] {
@@ -452,18 +561,7 @@ fn platform_callable_selection_refuses_invalid_and_mixed_intent_before_acquisiti
                 refused(&value, ServiceErrorCode::InvalidRequest)?;
             }
             value[key]["platform_root_facet"] = json!("callable_metadata");
-            for (field, profile) in [
-                ("l0_profile_id", PRIMARY_STATE_ROOT_L0_PROFILE_ID),
-                ("l1_profile_id", PRIMARY_STATE_DETAIL_L1_PROFILE_ID),
-                ("l1_profile_id", PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID),
-            ] {
-                value[key][field] = json!(profile);
-                refused(&value, ServiceErrorCode::InvalidRequest)?;
-                value[key]
-                    .as_object_mut()
-                    .ok_or("selection object")?
-                    .remove(field);
-            }
+
             value[key]["level"] = json!("l2");
             refused(&value, ServiceErrorCode::InvalidRequest)?;
         }
@@ -489,7 +587,7 @@ fn platform_callable_selection_refuses_invalid_and_mixed_intent_before_acquisiti
 }
 
 #[test]
-fn platform_xml_handler_selection_is_closed_additive_and_recipe_incompatible() -> TestResult {
+fn platform_xml_handler_selection_is_closed_and_additive() -> TestResult {
     for level in ["l0", "l1", "both"] {
         for omitted in [inspect(level, None)?, build(level, None)?] {
             let request = ContextCombinedRequest::from_json_slice(
@@ -544,18 +642,6 @@ fn platform_xml_handler_selection_is_closed_additive_and_recipe_incompatible() -
                 refused(&value, ServiceErrorCode::InvalidRequest)?;
             }
             value[key]["platform_root_facet"] = json!("xml_handler_metadata");
-            for (field, profile) in [
-                ("l0_profile_id", PRIMARY_STATE_ROOT_L0_PROFILE_ID),
-                ("l1_profile_id", PRIMARY_STATE_DETAIL_L1_PROFILE_ID),
-                ("l1_profile_id", PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID),
-            ] {
-                value[key][field] = json!(profile);
-                refused(&value, ServiceErrorCode::InvalidRequest)?;
-                value[key]
-                    .as_object_mut()
-                    .ok_or("selection object")?
-                    .remove(field);
-            }
         }
     }
     Ok(())

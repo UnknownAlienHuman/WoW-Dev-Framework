@@ -259,8 +259,8 @@ and the original platform Map request with exact candidate and native binding.
 The required non-null `build` object has `level` (`l0|l1|both`),
 `context_profile_id="wow-context/combined-native-structural-pack/1"`,
 `renderer_profile_ids` and optional `l0_profile_id`, `l1_profile_id` or
-`platform_root_facet`. Recipe fields
-cannot coexist. Explicit `l0_profile_id="wow-context/primary-state-root-l0/1"`
+`platform_root_facet`. L0/L1 recipe fields cannot coexist with each other;
+either valid recipe may select a platform facet. Explicit `l0_profile_id="wow-context/primary-state-root-l0/1"`
 requires L0/GraphEntity and the original native StateRootV1 kind/provenance/TOC
 custody. It emits only L0 through the same navigation map and continuing Budget;
 state_path refuses with checked closure. Other explicit L0 profile/level/root
@@ -274,7 +274,7 @@ detail map and continuing Budget. State_path Both refuses after native kind
 validation and checked closure. ReferenceFacts Both, either L1 profile with level L0, project roots,
 null, non-string, default ID and unknown IDs refuse before owner acquisition. Mixed
 operation fields also refuse. Optional `platform_root_facet="callable_metadata"`
-requires the default Primary recipe, with no explicit L0/L1 fields. It adds the
+is independent of any valid default or explicit Primary recipe. It adds the
 exact platform query root's original native callable metadata to Inspect origins
 under the same continuing Budget. Acquired wrong-kind or missing native custody
 refuses with checked closure. Original states/support remain qualified to that

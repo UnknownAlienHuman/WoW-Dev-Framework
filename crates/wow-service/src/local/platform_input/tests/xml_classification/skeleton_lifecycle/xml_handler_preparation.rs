@@ -887,3 +887,5 @@ fn selected_xml_handler_consumer_lifecycle() -> TestResult {
     );
     Ok(())
 }
+
+mod combined_recipe_composition;

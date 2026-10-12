@@ -105,7 +105,7 @@ acceptance result is asserted by this contract.
 The specified inspect selection uses `operation="inspect"` and requires
 an `inspection` object with exactly `level` (`l0`, `l1` or `both`) and optional
 `l0_profile_id`, `l1_profile_id` or `platform_root_facet`. Explicit recipe fields
-cannot coexist; the platform facet requires the default Primary recipe.
+cannot coexist with each other; either valid recipe may select a platform facet.
 `l0_profile_id` accepts only non-null `wow-context/primary-state-root-l0/1` with
 `level="l0"` and an exact GraphEntity root. The original StateRootV1 owner checks
 state_root kind, provenance and TOC declaration support on the navigation map;
@@ -160,8 +160,9 @@ Selected behavioral verification is tracked in #122; full E3 acceptance remains 
 
 `inspection.platform_root_facet="callable_metadata"` explicitly requests the
 selected platform root's original native callable metadata. The closed optional
-field accepts `callable_metadata` or `xml_handler_metadata`; null, other values and coexistence with explicit
-L0/L1 recipes refuse before acquisition. The ordinary Primary level/root rules
+field accepts `callable_metadata` or `xml_handler_metadata`; null and other values
+refuse before acquisition. A facet can accompany any valid default or explicit
+Primary recipe. The ordinary Primary level/root rules
 remain: project roots use default L0, and L1/Both require an eligible GraphEntity.
 The platform root is independently supplied by the existing native query.
 Omitting this field preserves previous request/artifact bytes.
@@ -187,7 +188,7 @@ runtime execution, loaded state, combat or taint safety.
 ### Selected platform-root XML handler facet
 
 `inspection.platform_root_facet="xml_handler_metadata"` selects one exact native
-`xml_source_handler` root under the same default-Primary admission and continuing
+`xml_source_handler` root under the same Primary-recipe admission and continuing
 Budget. The supplemental `platform_root_xml_handler` retains original
 `ProjectGraphInlineHandler` and matching `ProjectGraphScriptSource` records,
 source context, assertion, accepted root, handle, evidence and root support.
@@ -226,14 +227,14 @@ The existing combined request family selects `operation="build"` and a required
 non-null `build` object with exactly `level`, `context_profile_id`, `renderer_profile_ids`
 and optional `l0_profile_id`, `l1_profile_id` or `platform_root_facet`; no other
 fields are accepted.
-Recipe fields cannot coexist. Explicit `l0_profile_id` selects only
+L0/L1 recipe fields cannot coexist with each other. Explicit `l0_profile_id` selects only
 `wow-context/primary-state-root-l0/1` with L0/GraphEntity, through the original
 StateRootV1 owner on the navigation map and continuing Budget. Its kind/custody
 checks and original L0 schema/identity also govern pack/render; no L1 is emitted.
 Other explicit L0 profile/level/root combinations refuse before acquisition.
-`build.platform_root_facet="callable_metadata"` or `"xml_handler_metadata"` uses the same default-Primary
-admission and original platform-root facet described above. Explicit L0/L1 recipes
-cannot accompany it. The consuming pack retains it in original Inspect origins;
+`build.platform_root_facet="callable_metadata"` or `"xml_handler_metadata"` selects
+the original platform-root facet independently of any valid Primary recipe.
+The consuming pack retains both original owners in Inspect origins;
 None/JSON/Markdown share one semantic pack identity and never rebuild that facet.
 Level is `l0`, `l1` or `both`, with original root/layer admission;
 project roots select default L0 only. Omission of all recipe/facet fields

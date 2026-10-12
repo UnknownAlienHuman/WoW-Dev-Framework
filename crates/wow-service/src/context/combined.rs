@@ -141,16 +141,6 @@ fn non_null_platform_root_facet<'de, D: serde::Deserializer<'de>>(
     .map(Some)
 }
 
-fn select_platform_root_facet(
-    selection: Option<wow_context::PlatformRootFacet>,
-    explicit_primary_recipe: bool,
-) -> ServiceResult<Option<wow_context::PlatformRootFacet>> {
-    if selection.is_some() && explicit_primary_recipe {
-        return Err(failure(ServiceErrorCode::InvalidRequest));
-    }
-    Ok(selection)
-}
-
 fn select_l0_recipe(
     profile_id: Option<&str>,
     l1_profile_id_is_explicit: bool,
@@ -365,10 +355,7 @@ impl ContextCombinedRequest {
             ),
             ("inspect", Some(selection), None) => {
                 let level = selection.level()?;
-                let platform_root_facet = select_platform_root_facet(
-                    selection.platform_root_facet,
-                    selection.l0_profile_id.is_some() || selection.l1_profile_id.is_some(),
-                )?;
+                let platform_root_facet = selection.platform_root_facet;
                 let l1_recipe = select_l1_recipe(
                     selection.l1_profile_id.as_deref(),
                     level,
@@ -391,10 +378,7 @@ impl ContextCombinedRequest {
             }
             ("build", None, Some(selection)) => {
                 let (level, render) = selection.normalize(stop)?;
-                let platform_root_facet = select_platform_root_facet(
-                    selection.platform_root_facet,
-                    selection.l0_profile_id.is_some() || selection.l1_profile_id.is_some(),
-                )?;
+                let platform_root_facet = selection.platform_root_facet;
                 let l1_recipe = select_l1_recipe(
                     selection.l1_profile_id.as_deref(),
                     level,
@@ -593,44 +577,46 @@ pub fn execute_context_combined(
                                                 wow_context::L0Scope::Entity(id.clone())
                                             }
                                         };
-                                        let inspect = match (request.l0_recipe, request.l1_recipe) {
+                                        let primary_selection = match (
+                                            request.l0_recipe, request.l1_recipe,
+                                        ) {
                                             (Some(CombinedL0Recipe::StateRoot), None) => {
-                                                wow_context::build_combined_state_root_l0_inspect(
-                                                    &mut map, &universe, graph, &scope, stop,
-                                                )
+                                                wow_context::CombinedPrimaryInspection::StateRootL0 {
+                                                    root: &scope,
+                                                }
                                             }
                                             (None, Some(CombinedL1Recipe::StateDetail)) => {
-                                                wow_context::build_combined_state_detail_inspect_with_level(
-                                                    &mut map,
-                                                    &universe,
-                                                    graph,
-                                                    &scope,
+                                                wow_context::CombinedPrimaryInspection::StateDetail {
+                                                    root: &scope,
                                                     level,
-                                                    stop,
-                                                )
+                                                }
                                             }
                                             (None, Some(CombinedL1Recipe::ReferenceFacts)) => {
-                                                wow_context::build_combined_reference_facts_inspect(
-                                                    &mut map,
-                                                    &universe,
-                                                    graph,
-                                                    &scope,
-                                                    origins.as_deref().ok_or_else(|| {
+                                                wow_context::CombinedPrimaryInspection::ReferenceFacts {
+                                                    root: &scope,
+                                                    origins: origins.as_deref().ok_or_else(|| {
                                                         failure(ServiceErrorCode::InternalContractViolation)
                                                     })?,
-                                                    stop,
-                                                )
+                                                }
                                             }
-                                            (None, None) => wow_context::build_combined_context_inspect_with_platform_root_facet(
-                                                &mut map, &universe, graph, (&scope, level),
-                                                request.platform_root_facet, stop,
-                                            ),
+                                            (None, None) => wow_context::CombinedPrimaryInspection::Default {
+                                                root: &scope,
+                                                level,
+                                            },
                                             (Some(_), Some(_)) => {
                                                 return Err(failure(
                                                     ServiceErrorCode::InternalContractViolation,
                                                 ));
                                             }
-                                        }
+                                        };
+                                        let inspect = wow_context::build_combined_context_inspect_with_selection_and_platform_root_facet(
+                                            &mut map,
+                                            &universe,
+                                            graph,
+                                            primary_selection,
+                                            request.platform_root_facet,
+                                            stop,
+                                        )
                                         .map_err(context_error)?;
                                         if request.build.is_some() {
                                             let result = encode_build_result(

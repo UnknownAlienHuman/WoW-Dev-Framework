@@ -400,15 +400,12 @@ pub fn build_combined_context_inspect_with_platform_root_facet<'m, 'p, 'f>(
     stop: &AtomicBool,
 ) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
     let (root, level) = selection;
-    build_combined_inspect(
+    build_combined_context_inspect_with_selection_and_platform_root_facet(
         map,
         universe,
         graph,
-        CombinedInspection::Default {
-            root,
-            level,
-            platform_root_facet,
-        },
+        CombinedPrimaryInspection::Default { root, level },
+        platform_root_facet,
         stop,
     )
 }
@@ -422,11 +419,12 @@ pub fn build_combined_state_root_l0_inspect<'m, 'p, 'f>(
     root: &L0Scope,
     stop: &AtomicBool,
 ) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
-    build_combined_inspect(
+    build_combined_context_inspect_with_selection_and_platform_root_facet(
         map,
         universe,
         graph,
-        CombinedInspection::StateRootL0 { root },
+        CombinedPrimaryInspection::StateRootL0 { root },
+        None,
         stop,
     )
 }
@@ -459,11 +457,12 @@ pub fn build_combined_state_detail_inspect_with_level<'m, 'p, 'f>(
     level: SkeletonLevel,
     stop: &AtomicBool,
 ) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
-    build_combined_inspect(
+    build_combined_context_inspect_with_selection_and_platform_root_facet(
         map,
         universe,
         graph,
-        CombinedInspection::StateDetail { root, level },
+        CombinedPrimaryInspection::StateDetail { root, level },
+        None,
         stop,
     )
 }
@@ -478,39 +477,47 @@ pub fn build_combined_reference_facts_inspect<'m, 'p, 'f>(
     origins: &[crate::reference::ReferenceOriginInput<'p>],
     stop: &AtomicBool,
 ) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
-    build_combined_inspect(
+    build_combined_context_inspect_with_selection_and_platform_root_facet(
         map,
         universe,
         graph,
-        CombinedInspection::ReferenceFacts { root, origins },
+        CombinedPrimaryInspection::ReferenceFacts { root, origins },
+        None,
         stop,
     )
 }
 
-enum CombinedInspection<'r, 'p> {
+/// The original Primary recipe selected for a combined inspection. The platform
+/// root facet is selected independently by the consuming combined operation.
+#[derive(Clone, Copy)]
+pub enum CombinedPrimaryInspection<'r, 'p> {
+    /// Existing default Primary skeleton recipe at the requested level.
     Default {
         root: &'r L0Scope,
         level: SkeletonLevel,
-        platform_root_facet: Option<PlatformRootFacet>,
     },
+    /// Existing StateDetail L1 or Both recipe.
     StateDetail {
         root: &'r L0Scope,
         level: SkeletonLevel,
     },
-    StateRootL0 {
-        root: &'r L0Scope,
-    },
+    /// Existing StateRoot L0 recipe.
+    StateRootL0 { root: &'r L0Scope },
+    /// Existing ReferenceFacts L1 recipe and its original native origins.
     ReferenceFacts {
         root: &'r L0Scope,
-        origins: &'r [crate::reference::ReferenceOriginInput<'p>],
+        origins: &'r [crate::ReferenceOriginInput<'p>],
     },
 }
 
-fn build_combined_inspect<'m, 'p, 'f>(
+/// Compose one original Primary recipe with an independent selected platform-root
+/// facet on the held combined map and its continuing construction Budget.
+pub fn build_combined_context_inspect_with_selection_and_platform_root_facet<'m, 'p, 'f>(
     map: &'m mut CombinedContextMap<'p, 'f>,
     universe: &'m ContextUniverseSet<'p>,
     graph: &GraphPartitionRead<'p>,
-    selection: CombinedInspection<'_, 'p>,
+    selection: CombinedPrimaryInspection<'_, 'p>,
+    platform_root_facet: Option<PlatformRootFacet>,
     stop: &AtomicBool,
 ) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
     checkpoint(stop)?;
@@ -525,15 +532,8 @@ fn build_combined_inspect<'m, 'p, 'f>(
     if map.core.limits != universe.limits {
         return Err(ContextError::new(ContextErrorCode::UniverseMismatch));
     }
-    let platform_root_facet = match &selection {
-        CombinedInspection::Default {
-            platform_root_facet,
-            ..
-        } => *platform_root_facet,
-        _ => None,
-    };
     let primary_skeletons = match selection {
-        CombinedInspection::Default { root, level, .. } => build_primary_skeletons_on_budget(
+        CombinedPrimaryInspection::Default { root, level } => build_primary_skeletons_on_budget(
             universe,
             &map.core.primary,
             graph,
@@ -542,15 +542,17 @@ fn build_combined_inspect<'m, 'p, 'f>(
             budget,
             stop,
         )?,
-        CombinedInspection::StateDetail { root, level } => build_primary_state_detail_on_budget(
-            universe,
-            &map.core.primary,
-            graph,
-            (root, level),
-            budget,
-            stop,
-        )?,
-        CombinedInspection::StateRootL0 { root } => build_primary_skeletons_on_budget(
+        CombinedPrimaryInspection::StateDetail { root, level } => {
+            build_primary_state_detail_on_budget(
+                universe,
+                &map.core.primary,
+                graph,
+                (root, level),
+                budget,
+                stop,
+            )?
+        }
+        CombinedPrimaryInspection::StateRootL0 { root } => build_primary_skeletons_on_budget(
             universe,
             &map.core.primary,
             graph,
@@ -559,7 +561,7 @@ fn build_combined_inspect<'m, 'p, 'f>(
             budget,
             stop,
         )?,
-        CombinedInspection::ReferenceFacts { root, origins } => {
+        CombinedPrimaryInspection::ReferenceFacts { root, origins } => {
             build_primary_reference_facts_on_budget(
                 universe,
                 &map.core.primary,

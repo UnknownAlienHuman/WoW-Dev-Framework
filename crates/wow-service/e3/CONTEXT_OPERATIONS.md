@@ -132,8 +132,8 @@ Renderer failure cannot mutate or relabel the semantic pack. Policy decides whet
 ### Selected combined native inspect/build
 
 The optional non-null `platform_root_facet="callable_metadata"` selects only the
-exact platform root's original native callable metadata with the default Primary
-recipe. Explicit L0/L1 recipes cannot accompany it. Ordinary Primary level/root
+exact platform root's original native callable metadata independently of the
+valid default or explicit Primary recipe. Ordinary Primary level/root
 admission stays in force. Native acquisition verifies `lua_source_function`,
 original producer assertion and accepted final-node membership before retaining
 the original metadata/handle/evidence and existing root support. It uses the held
