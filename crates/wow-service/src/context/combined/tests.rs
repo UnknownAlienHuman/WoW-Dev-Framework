@@ -346,3 +346,144 @@ fn explicit_state_root_l0_decode_is_narrow_and_preserves_omission() -> TestResul
     refused(&map, ServiceErrorCode::InvalidRequest)?;
     Ok(())
 }
+
+#[test]
+fn platform_callable_selection_preserves_ordinary_admission_and_request_bytes() -> TestResult {
+    for level in ["l0", "l1", "both"] {
+        for omitted in [inspect(level, None)?, build(level, None)?] {
+            let request = ContextCombinedRequest::from_json_slice(
+                &serde_json::to_vec(&omitted)?,
+                &AtomicBool::new(false),
+            )?;
+            assert!(request.platform_root_facet.is_none());
+            assert_eq!(
+                wow_core::canonical_json_bytes(&request)?,
+                wow_core::canonical_json_bytes(&omitted)?,
+            );
+        }
+        let mut values = vec![inspect(level, None)?];
+        for renderers in [
+            json!([]),
+            json!([COMBINED_CONTEXT_JSON_RENDERER_PROFILE_ID]),
+            json!([COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID]),
+            json!([
+                COMBINED_CONTEXT_JSON_RENDERER_PROFILE_ID,
+                COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID
+            ]),
+        ] {
+            let mut value = build(level, None)?;
+            value["build"]["renderer_profile_ids"] = renderers;
+            values.push(value);
+        }
+        for mut value in values {
+            let key = if value["operation"] == "inspect" {
+                "inspection"
+            } else {
+                "build"
+            };
+            value[key]["platform_root_facet"] = json!("callable_metadata");
+            let request = ContextCombinedRequest::from_json_slice(
+                &serde_json::to_vec(&value)?,
+                &AtomicBool::new(false),
+            )?;
+            assert_eq!(
+                request.platform_root_facet,
+                Some(wow_context::PlatformRootFacet::CallableMetadata),
+            );
+            assert!(request.l0_recipe.is_none() && request.l1_recipe.is_none());
+            // The independent input catches leaks of any derived field,
+            // including selected_level/render/recipe and selected facet.
+            let expected = wow_core::canonical_json_bytes(&value)?;
+            let encoded = wow_core::canonical_json_bytes(&request)?;
+            assert_eq!(encoded, expected);
+            let roundtrip =
+                ContextCombinedRequest::from_json_slice(&encoded, &AtomicBool::new(false))?;
+            assert_eq!(wow_core::canonical_json_bytes(&roundtrip)?, expected);
+        }
+    }
+    for mut value in [inspect("l0", None)?, build("l0", None)?] {
+        value["primary"]["root"] = json!({"kind":"project","id":"fixture-primary"});
+        value["primary"]["map_profile_id"] = json!(PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID);
+        let key = if value["operation"] == "inspect" {
+            "inspection"
+        } else {
+            "build"
+        };
+        for selected in [false, true] {
+            if selected {
+                value[key]["platform_root_facet"] = json!("callable_metadata");
+            }
+            let request = ContextCombinedRequest::from_json_slice(
+                &serde_json::to_vec(&value)?,
+                &AtomicBool::new(false),
+            )?;
+            assert_eq!(
+                wow_core::canonical_json_bytes(&request)?,
+                wow_core::canonical_json_bytes(&value)?,
+            );
+        }
+        for level in ["l1", "both"] {
+            value[key]["level"] = json!(level);
+            refused(&value, ServiceErrorCode::InvalidRequest)?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn platform_callable_selection_refuses_invalid_and_mixed_intent_before_acquisition() -> TestResult {
+    for level in ["l0", "l1", "both"] {
+        for mut value in [inspect(level, None)?, build(level, None)?] {
+            let key = if value["operation"] == "inspect" {
+                "inspection"
+            } else {
+                "build"
+            };
+            for invalid in [
+                Value::Null,
+                json!(false),
+                json!(1),
+                json!([]),
+                json!({"callable_metadata": null}),
+                json!("default"),
+                json!("unknown"),
+            ] {
+                value[key]["platform_root_facet"] = invalid;
+                refused(&value, ServiceErrorCode::InvalidRequest)?;
+            }
+            value[key]["platform_root_facet"] = json!("callable_metadata");
+            for (field, profile) in [
+                ("l0_profile_id", PRIMARY_STATE_ROOT_L0_PROFILE_ID),
+                ("l1_profile_id", PRIMARY_STATE_DETAIL_L1_PROFILE_ID),
+                ("l1_profile_id", PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID),
+            ] {
+                value[key][field] = json!(profile);
+                refused(&value, ServiceErrorCode::InvalidRequest)?;
+                value[key]
+                    .as_object_mut()
+                    .ok_or("selection object")?
+                    .remove(field);
+            }
+            value[key]["level"] = json!("l2");
+            refused(&value, ServiceErrorCode::InvalidRequest)?;
+        }
+    }
+    let mut map = fixture()?;
+    map["operation"] = json!("map");
+    map.as_object_mut().ok_or("request object")?.remove("build");
+    // Map has no inspection/build selection or top-level facet selector.
+    for field in ["inspection", "build", "platform_root_facet"] {
+        let mut value = map.clone();
+        value[field] = match field {
+            "inspection" => json!({"level":"l0","platform_root_facet":"callable_metadata"}),
+            "build" => {
+                let mut selection = fixture()?["build"].clone();
+                selection["platform_root_facet"] = json!("callable_metadata");
+                selection
+            }
+            _ => json!("callable_metadata"),
+        };
+        refused(&value, ServiceErrorCode::InvalidRequest)?;
+    }
+    Ok(())
+}

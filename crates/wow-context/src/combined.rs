@@ -10,8 +10,9 @@ use wow_reference::ReferenceView;
 
 use crate::budget::{Budget, canonical, checkpoint, exhausted, identity};
 use crate::platform::{
-    PlatformContextInspectView, PlatformMapArtifact, bind_platform_context_universe_with_budget,
-    build_platform_context_inspect_on_budget, encode_retained,
+    PlatformContextInspectView, PlatformMapArtifact, PlatformRootCallableFacet, PlatformRootFacet,
+    bind_platform_context_universe_with_budget, build_platform_context_inspect_on_budget,
+    build_platform_root_callable_facet_on_budget, encode_retained,
 };
 use crate::skeleton::{
     build_primary_reference_facts_on_budget, build_primary_skeletons_on_budget,
@@ -233,6 +234,8 @@ struct CombinedInspectCore<'m, 'p, 'f> {
     map: &'m CombinedMapArtifact<'p, 'f>,
     primary_skeletons: PrimarySkeletons<'m, 'p>,
     platform_inspect: PlatformContextInspectView<'m, 'f>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    platform_root_callable: Option<PlatformRootCallableFacet<'m, 'f>>,
     state: ProjectMapState,
     absence_authoritative: bool,
     cross_universe_relations: &'static str,
@@ -373,11 +376,36 @@ pub fn build_combined_context_inspect<'m, 'p, 'f>(
     level: SkeletonLevel,
     stop: &AtomicBool,
 ) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
+    build_combined_context_inspect_with_platform_root_facet(
+        map,
+        universe,
+        graph,
+        (root, level),
+        None,
+        stop,
+    )
+}
+
+/// Default Primary inspection with an optional native selected platform-root
+/// facet. Both use the held map and continuing construction ledger.
+pub fn build_combined_context_inspect_with_platform_root_facet<'m, 'p, 'f>(
+    map: &'m mut CombinedContextMap<'p, 'f>,
+    universe: &'m ContextUniverseSet<'p>,
+    graph: &GraphPartitionRead<'p>,
+    selection: (&L0Scope, SkeletonLevel),
+    platform_root_facet: Option<PlatformRootFacet>,
+    stop: &AtomicBool,
+) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
+    let (root, level) = selection;
     build_combined_inspect(
         map,
         universe,
         graph,
-        CombinedInspection::Default { root, level },
+        CombinedInspection::Default {
+            root,
+            level,
+            platform_root_facet,
+        },
         stop,
     )
 }
@@ -460,6 +488,7 @@ enum CombinedInspection<'r, 'p> {
     Default {
         root: &'r L0Scope,
         level: SkeletonLevel,
+        platform_root_facet: Option<PlatformRootFacet>,
     },
     StateDetail {
         root: &'r L0Scope,
@@ -493,8 +522,15 @@ fn build_combined_inspect<'m, 'p, 'f>(
     if map.core.limits != universe.limits {
         return Err(ContextError::new(ContextErrorCode::UniverseMismatch));
     }
+    let platform_root_facet = match &selection {
+        CombinedInspection::Default {
+            platform_root_facet,
+            ..
+        } => *platform_root_facet,
+        _ => None,
+    };
     let primary_skeletons = match selection {
-        CombinedInspection::Default { root, level } => build_primary_skeletons_on_budget(
+        CombinedInspection::Default { root, level, .. } => build_primary_skeletons_on_budget(
             universe,
             &map.core.primary,
             graph,
@@ -538,6 +574,12 @@ fn build_combined_inspect<'m, 'p, 'f>(
         budget,
         stop,
     )?;
+    let platform_root_callable = match platform_root_facet {
+        Some(PlatformRootFacet::CallableMetadata) => Some(
+            build_platform_root_callable_facet_on_budget(&map.core.platform, budget, stop)?,
+        ),
+        None => None,
+    };
     let state = if map.core.state == ProjectMapState::Truncated
         || primary_skeletons.state() == ProjectMapState::Truncated
         || platform_inspect.state() == GraphQueryState::Truncated
@@ -551,6 +593,7 @@ fn build_combined_inspect<'m, 'p, 'f>(
         map,
         primary_skeletons,
         platform_inspect,
+        platform_root_callable,
         state,
         absence_authoritative: false,
         cross_universe_relations: "not_evaluated",

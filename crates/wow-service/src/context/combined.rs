@@ -129,6 +129,28 @@ fn non_null_profile_id<'de, D: serde::Deserializer<'de>>(
     Box::<str>::deserialize(deserializer).map(Some)
 }
 
+fn non_null_platform_root_facet<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<wow_context::PlatformRootFacet>, D::Error> {
+    // Unit enums also accept externally tagged objects in serde; this wire
+    // selection deliberately accepts only a non-null string.
+    let value = Box::<str>::deserialize(deserializer)?;
+    wow_context::PlatformRootFacet::deserialize(serde::de::value::StrDeserializer::<D::Error>::new(
+        &value,
+    ))
+    .map(Some)
+}
+
+fn select_platform_root_facet(
+    selection: Option<wow_context::PlatformRootFacet>,
+    explicit_primary_recipe: bool,
+) -> ServiceResult<Option<wow_context::PlatformRootFacet>> {
+    if selection.is_some() && explicit_primary_recipe {
+        return Err(failure(ServiceErrorCode::InvalidRequest));
+    }
+    Ok(selection)
+}
+
 fn select_l0_recipe(
     profile_id: Option<&str>,
     l1_profile_id_is_explicit: bool,
@@ -200,6 +222,12 @@ struct Inspection {
         skip_serializing_if = "Option::is_none"
     )]
     l1_profile_id: Option<Box<str>>,
+    #[serde(
+        default,
+        deserialize_with = "non_null_platform_root_facet",
+        skip_serializing_if = "Option::is_none"
+    )]
+    platform_root_facet: Option<wow_context::PlatformRootFacet>,
 }
 impl Inspection {
     fn level(&self) -> ServiceResult<wow_context::SkeletonLevel> {
@@ -234,6 +262,12 @@ struct BuildSelection {
         skip_serializing_if = "Option::is_none"
     )]
     l1_profile_id: Option<Box<str>>,
+    #[serde(
+        default,
+        deserialize_with = "non_null_platform_root_facet",
+        skip_serializing_if = "Option::is_none"
+    )]
+    platform_root_facet: Option<wow_context::PlatformRootFacet>,
 }
 impl BuildSelection {
     fn normalize(
@@ -294,6 +328,8 @@ pub struct ContextCombinedRequest {
     #[serde(skip)]
     l0_recipe: Option<CombinedL0Recipe>,
     #[serde(skip)]
+    platform_root_facet: Option<wow_context::PlatformRootFacet>,
+    #[serde(skip)]
     render: ContextRenderSelection,
     #[serde(skip)]
     primary_request: ContextMapRequest,
@@ -314,7 +350,7 @@ impl ContextCombinedRequest {
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
-        let (operation, selected_level, render, l1_recipe, l0_recipe) = match (
+        let (operation, selected_level, render, l1_recipe, l0_recipe, platform_root_facet) = match (
             document.operation.as_ref(),
             document.inspection.as_ref(),
             document.build.as_mut(),
@@ -325,9 +361,14 @@ impl ContextCombinedRequest {
                 ContextRenderSelection::None,
                 None,
                 None,
+                None,
             ),
             ("inspect", Some(selection), None) => {
                 let level = selection.level()?;
+                let platform_root_facet = select_platform_root_facet(
+                    selection.platform_root_facet,
+                    selection.l0_profile_id.is_some() || selection.l1_profile_id.is_some(),
+                )?;
                 let l1_recipe = select_l1_recipe(
                     selection.l1_profile_id.as_deref(),
                     level,
@@ -345,10 +386,15 @@ impl ContextCombinedRequest {
                     ContextRenderSelection::None,
                     l1_recipe,
                     l0_recipe,
+                    platform_root_facet,
                 )
             }
             ("build", None, Some(selection)) => {
                 let (level, render) = selection.normalize(stop)?;
+                let platform_root_facet = select_platform_root_facet(
+                    selection.platform_root_facet,
+                    selection.l0_profile_id.is_some() || selection.l1_profile_id.is_some(),
+                )?;
                 let l1_recipe = select_l1_recipe(
                     selection.l1_profile_id.as_deref(),
                     level,
@@ -366,6 +412,7 @@ impl ContextCombinedRequest {
                     render,
                     l1_recipe,
                     l0_recipe,
+                    platform_root_facet,
                 )
             }
             _ => return Err(failure(ServiceErrorCode::InvalidRequest)),
@@ -409,6 +456,7 @@ impl ContextCombinedRequest {
             selected_level,
             l1_recipe,
             l0_recipe,
+            platform_root_facet,
             render,
             primary_request,
         })
@@ -573,8 +621,9 @@ pub fn execute_context_combined(
                                                     stop,
                                                 )
                                             }
-                                            (None, None) => wow_context::build_combined_context_inspect(
-                                                &mut map, &universe, graph, &scope, level, stop,
+                                            (None, None) => wow_context::build_combined_context_inspect_with_platform_root_facet(
+                                                &mut map, &universe, graph, (&scope, level),
+                                                request.platform_root_facet, stop,
                                             ),
                                             (Some(_), Some(_)) => {
                                                 return Err(failure(

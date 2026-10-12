@@ -104,14 +104,15 @@ acceptance result is asserted by this contract.
 
 The specified inspect selection uses `operation="inspect"` and requires
 an `inspection` object with exactly `level` (`l0`, `l1` or `both`) and optional
-`l0_profile_id` / `l1_profile_id`. Explicit recipe fields cannot coexist.
+`l0_profile_id`, `l1_profile_id` or `platform_root_facet`. Explicit recipe fields
+cannot coexist; the platform facet requires the default Primary recipe.
 `l0_profile_id` accepts only non-null `wow-context/primary-state-root-l0/1` with
 `level="l0"` and an exact GraphEntity root. The original StateRootV1 owner checks
 state_root kind, provenance and TOC declaration support on the navigation map;
 state_path refuses with checked closure. Explicit L0 selection with L1/Both,
 project roots, null, default/unknown IDs or an explicit L1 recipe refuses before
 acquisition. A project root selects default L0 only; L1/Both use a genuine detail
-map and an eligible exact entity root. Omitting both recipe fields preserves the existing
+map and an eligible exact entity root. Omitting all recipe/facet fields preserves the existing
 default Primary skeleton selection with unchanged request/artifact bytes. The only
 accepted non-null `l1_profile_id` values are `wow-context/primary-state-detail-l1/1` and
 `wow-context/primary-reference-facts-l1/1`; either accepts `level="l1"` with an
@@ -155,6 +156,34 @@ is `context_combined_inspect`; payload retains `combined_inspect_byte_length` an
 original `combined_inspect`, alongside the existing native read bindings/selection.
 Selected behavioral verification is tracked in #122; full E3 acceptance remains open.
 
+### Selected platform-root callable facet
+
+`inspection.platform_root_facet="callable_metadata"` explicitly requests the
+selected platform root's original native callable metadata. The closed optional
+field accepts this string only; null, other values and coexistence with explicit
+L0/L1 recipes refuse before acquisition. The ordinary Primary level/root rules
+remain: project roots use default L0, and L1/Both require an eligible GraphEntity.
+The platform root is independently supplied by the existing native query.
+Omitting this field preserves previous request/artifact bytes.
+
+The platform root must be an exact native `lua_source_function`. The projection
+uses the already admitted `SkeletonInputView`, original producer assertion and
+accepted final graph node, original source handle/evidence, and the native
+`ProjectCallableMetadata` owner. It retains the existing root support without
+another neighborhood read. Missing or incompatible custody and wrong-kind roots
+refuse with checked resource closure. Original declaration/signature states,
+recipes, spans, source digest, function/parent IDs and scope remain unchanged;
+unselected signatures remain `NotSelected`.
+
+The supplemental `platform_root_callable` belongs to the combined Inspect core
+and its identity. The original native page and its scoped
+`TypedDeclarationsSignaturesAndTypes` omission remain unchanged; the facet covers
+only the selected root. It supplies neither neighbor metadata nor a Reference or
+cross-universe bridge. Native joins and accepted-node lookup are precharged before
+execution to the same construction Budget; retention, identity, pack, rendering
+and final delivery continue that ledger. Static callable metadata cannot prove
+runtime execution, loaded state, combat or taint safety.
+
 ## Selected combined semantic pack and rendering
 
 Build consumes the genuine combined Inspect with
@@ -177,14 +206,19 @@ their original owners, including unevaluated platform neighbor support closure.
 
 The existing combined request family selects `operation="build"` and a required
 non-null `build` object with exactly `level`, `context_profile_id`, `renderer_profile_ids`
-and optional `l0_profile_id` / `l1_profile_id`; no other fields are accepted.
+and optional `l0_profile_id`, `l1_profile_id` or `platform_root_facet`; no other
+fields are accepted.
 Recipe fields cannot coexist. Explicit `l0_profile_id` selects only
 `wow-context/primary-state-root-l0/1` with L0/GraphEntity, through the original
 StateRootV1 owner on the navigation map and continuing Budget. Its kind/custody
 checks and original L0 schema/identity also govern pack/render; no L1 is emitted.
 Other explicit L0 profile/level/root combinations refuse before acquisition.
+`build.platform_root_facet="callable_metadata"` uses the same default-Primary
+admission and original platform-root facet described above. Explicit L0/L1 recipes
+cannot accompany it. The consuming pack retains it in original Inspect origins;
+None/JSON/Markdown share one semantic pack identity and never rebuild that facet.
 Level is `l0`, `l1` or `both`, with original root/layer admission;
-project roots select default L0 only. Omission of both recipe fields
+project roots select default L0 only. Omission of all recipe/facet fields
 preserves the existing default Primary selection with unchanged request/artifact
 bytes. The only accepted non-null `l1_profile_id` values are
 `wow-context/primary-state-detail-l1/1` and

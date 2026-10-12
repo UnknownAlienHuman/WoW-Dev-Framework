@@ -2,13 +2,18 @@
 //! Primary-only universe admission and its serialized artifacts stay unchanged.
 use std::sync::atomic::AtomicBool;
 
-use serde::Serialize;
-use wow_core::{ProfileIdentity, ReferenceGenerationId};
-use wow_graph::{GraphNeighborView, GraphNode, GraphQueryState, GraphResolvedExplanation};
+use serde::{Deserialize, Serialize};
+use wow_core::{
+    EvidenceRecord, GenerationContext, ProfileIdentity, ReferenceGenerationId, SourceHandle,
+};
+use wow_graph::{
+    GraphAssertionKind, GraphAssertionRef, GraphAssertionSupport, GraphLocalAssertion,
+    GraphNeighborView, GraphNode, GraphQueryState, GraphResolvedExplanation,
+};
 use wow_project::skeleton_input::{
     OpenSkeletonInputRequest, SkeletonInputNotEvaluated, SkeletonInputPage, SkeletonInputView,
 };
-use wow_project::{ProjectError, ProjectErrorCode, ProjectKind};
+use wow_project::{ProjectError, ProjectErrorCode, ProjectKind, graph::ProjectCallableMetadata};
 use wow_reference::{ReferenceConflict, ReferenceView, ReferenceViewError};
 
 use crate::budget::{Budget, canonical, checkpoint, encoded_len, exhausted, identity};
@@ -18,6 +23,13 @@ use crate::{ContextError, ContextErrorCode, ContextResult, PrimaryMapLimits};
 /// One selected family; artifact roles distinguish universe, map and inspect.
 pub const PLATFORM_NATIVE_ONE_HOP_PROFILE: &str = "wow-context/platform-native-one-hop/1";
 pub const PLATFORM_NATIVE_ONE_HOP_PROFILE_BYTES: &[u8] = br#"{"native":"genuine_admitted_platform_skeleton_input","neighborhood":"one_exact_native_query","profile":"wow-context/platform-native-one-hop/1","reference":"configured_profile_generation_and_validated_full_content_binding","runtime":"not_evaluated","source":"metadata_and_handles_only","support":"original_root_support_neighbor_evidence_not_evaluated","tokens":"not_evaluated"}"#;
+
+/// Closed inert intent; decoding this selector supplies no native authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlatformRootFacet {
+    CallableMetadata,
+}
 
 #[derive(Serialize)]
 struct PlatformProfile {
@@ -220,6 +232,8 @@ pub(crate) struct PlatformMapArtifact<'a> {
     artifact_kind: &'static str,
     map_id: Box<str>,
     core: PlatformMapCore<'a>,
+    #[serde(skip)]
+    native_view: &'a SkeletonInputView<'a>,
 }
 
 impl<'a> PlatformMapArtifact<'a> {
@@ -327,6 +341,7 @@ pub fn build_platform_context_map<'a>(
         artifact_kind: "map",
         map_id,
         core,
+        native_view: view,
     };
     let canonical_bytes = encode_retained(&artifact, &mut budget, limits, stop)?;
     Ok(PlatformContextMap {
@@ -518,6 +533,256 @@ pub(crate) fn build_platform_context_inspect_on_budget<'m, 'a>(
         canonical_bytes,
         map_canonical_bytes,
     })
+}
+
+/// Original selected-root metadata and custody; no public constructor or decoder.
+#[derive(Serialize)]
+pub(crate) struct PlatformRootCallableFacet<'m, 'a> {
+    selection: PlatformRootFacet,
+    interpretation: &'static str,
+    source_context: &'a GenerationContext,
+    assertion: &'a GraphAssertionRef,
+    root: &'a GraphNode,
+    metadata: ProjectCallableMetadata<'a>,
+    source_handle: &'a SourceHandle,
+    evidence: &'a EvidenceRecord,
+    root_support: &'m GraphResolvedExplanation<'m>,
+}
+
+pub(crate) fn build_platform_root_callable_facet_on_budget<'m, 'a>(
+    map: &'m PlatformMapArtifact<'a>,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<PlatformRootCallableFacet<'m, 'a>> {
+    checkpoint(stop)?;
+    let native_view: &'a SkeletonInputView<'a> = map.native_view;
+    let (native, accepted, _) = native_view.context_parts();
+    let source = native.source();
+    let root = map.page().neighborhood().root();
+    let root_support = map.page().root_support();
+    if root.kind() != "lua_source_function" {
+        return Err(ContextError::new(ContextErrorCode::RootInvalid));
+    }
+    if source.context().context_id() != accepted.source_context_id()
+        || source.context().context_id() != native.scope().source_context_id
+    {
+        return Err(mismatch());
+    }
+    let explanation = root_support.explanation();
+    if !explanation.support_complete() || !explanation.derivation_complete() {
+        return Err(facet_missing());
+    }
+    if !explanation.conflicts().is_empty() {
+        return Err(facet_mismatch());
+    }
+
+    // Search exact native proposal IDs in the already resolved root support.
+    // Reserve the full search before visiting either collection; no name join.
+    let supports = explanation.supports();
+    let functions = source.functions();
+    budget.work(
+        functions
+            .len()
+            .checked_add(1)
+            .and_then(|n| n.checked_mul(supports.len()))
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    let depth = |count: usize| count.max(1).ilog2() as usize + 1;
+    // The original producer charges every serialized address row. Its charged
+    // byte count therefore bounds address count without scanning any graph.
+    let address_depth = depth(native.charged_metadata_bytes());
+    let mut selected = None;
+    for support in supports {
+        checkpoint(stop)?;
+        let GraphAssertionSupport::ProducerEntity {
+            producer,
+            proposal,
+            accepted: receipt,
+            ..
+        } = support
+        else {
+            continue;
+        };
+        // Restrict the search to the exact selected entity identity, never a
+        // callable dependency which happens to occur in this root explanation.
+        if receipt.node().kind() != root.kind() || receipt.node().owner_key() != root.owner_key() {
+            continue;
+        }
+        for function in functions {
+            checkpoint(stop)?;
+            if function.proposal_id.as_str() != proposal.proposal_id() {
+                continue;
+            }
+            budget.work(
+                function
+                    .proposal_id
+                    .len()
+                    .checked_add(address_depth)
+                    .ok_or_else(exhausted)?,
+                stop,
+            )?;
+            budget.retain(&function.proposal_id, stop)?;
+            let local = GraphLocalAssertion {
+                kind: GraphAssertionKind::Entity,
+                proposal_id: function.proposal_id.clone().into(),
+            };
+            let assertion = native.assertion(&local).ok_or_else(facet_missing)?;
+            let GraphAssertionRef::Producer {
+                partition_id,
+                batch_id,
+                assertion: retained_local,
+            } = assertion
+            else {
+                return Err(facet_mismatch());
+            };
+            if partition_id.as_ref() != producer.partition_id
+                || batch_id.as_ref() != producer.batch_id
+            {
+                continue;
+            }
+            // These are original GraphExplainQuery proposal/receipt witnesses
+            // from the already admitted Skeleton view, not decoded authority.
+            if retained_local != &local
+                || receipt.proposal_id() != proposal.proposal_id()
+                || proposal.entity_kind_id() != "lua_source_function"
+                || receipt.node().universe() != &native.scope().universe
+                || receipt.node().generation() != &native.scope().generation
+            {
+                return Err(facet_mismatch());
+            }
+            if selected
+                .replace((function, assertion, *proposal, *receipt))
+                .is_some()
+            {
+                return Err(facet_mismatch());
+            }
+        }
+    }
+    let (function, assertion, proposal, receipt) = selected.ok_or_else(facet_missing)?;
+
+    // The input-generation accepted node and the final selected node are distinct.
+    // Rebind only this original witness and resolve its exact final node.
+    let snapshot = accepted.snapshot();
+    let evidence_count = receipt.node().evidence_ids().len();
+    let node_work = depth(snapshot.nodes().len())
+        .checked_add(8)
+        .and_then(|n| {
+            evidence_count
+                .checked_mul(depth(evidence_count) + 1)
+                .and_then(|e| n.checked_add(e))
+        })
+        .ok_or_else(exhausted)?;
+    budget.work(node_work, stop)?;
+    // Reserve the selected original node (including its identity/evidence) and
+    // exact target identities before constructing the one transient rebound.
+    let original = receipt.node();
+    let node_material = (original, snapshot.universe(), snapshot.generation());
+    budget.retain(&node_material, stop)?;
+    let node_bytes = encoded_len(&node_material, budget.remaining_context_work(), stop)?;
+    budget.work(usize::try_from(node_bytes).map_err(|_| exhausted())?, stop)?;
+    let rebound = GraphNode::new(
+        snapshot.universe().clone(),
+        snapshot.generation().clone(),
+        original.kind(),
+        original.owner_key(),
+        original.evidence_ids().to_vec(),
+        snapshot.limits(),
+    )
+    .map_err(crate::error::graph_error)?;
+    let final_node = snapshot.node(rebound.node_id()).ok_or_else(facet_missing)?;
+    if !std::ptr::eq(final_node, root) {
+        return Err(facet_mismatch());
+    }
+
+    budget.work(
+        depth(source.source_handles().len())
+            .checked_add(depth(source.evidence().len()))
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    let source_handle = source
+        .source_handles()
+        .get(&function.source_handle_id)
+        .ok_or_else(facet_missing)?;
+    let evidence = source
+        .evidence()
+        .get(&function.evidence_id)
+        .ok_or_else(facet_missing)?;
+    let report_rows = source
+        .function_call_report()
+        .map_or(0, |r| r.functions().len());
+    let metadata_work = [
+        depth(functions.len()),
+        depth(report_rows),
+        depth(report_rows),
+        depth(source.files().len()),
+        depth(source.source_handles().len()),
+        depth(source.evidence().len()),
+        evidence.source_handle_ids().len(),
+        root_support.evidence_resolution().source_handles().len(),
+        root_support.evidence_resolution().evidence_records().len(),
+        proposal.source_handle_ids().len(),
+        proposal.evidence_ids().len(),
+        8,
+    ]
+    .into_iter()
+    .try_fold(0usize, |sum, n| sum.checked_add(n).ok_or_else(exhausted))?;
+    budget.work(metadata_work, stop)?;
+    // Also reserve structural comparisons of original support records before
+    // they run. Catalog records may be retained copies; never decode substitutes.
+    let comparison_bytes = encoded_len(
+        &(source_handle, evidence, root_support.evidence_resolution()),
+        budget
+            .remaining_metadata_bytes()?
+            .min(budget.remaining_context_work()),
+        stop,
+    )?;
+    budget.work(
+        usize::try_from(comparison_bytes).map_err(|_| exhausted())?,
+        stop,
+    )?;
+    let metadata = source
+        .callable_metadata(&function.function_id)
+        .map_err(project_error)?
+        .ok_or_else(facet_missing)?;
+    checkpoint(stop)?;
+    if !std::ptr::eq(metadata.function(), function)
+        || !proposal
+            .source_handle_ids()
+            .contains(&source_handle.handle_id())
+        || !proposal.evidence_ids().contains(&evidence.evidence_id())
+        || !root_support
+            .evidence_resolution()
+            .source_handles()
+            .contains(&source_handle)
+        || !root_support
+            .evidence_resolution()
+            .evidence_records()
+            .contains(&evidence)
+    {
+        return Err(facet_mismatch());
+    }
+    let facet = PlatformRootCallableFacet {
+        selection: PlatformRootFacet::CallableMetadata,
+        interpretation: "original_accepted_root_callable_metadata_no_runtime_or_reference_resolution",
+        source_context: source.context(),
+        assertion,
+        root: final_node,
+        metadata,
+        source_handle,
+        evidence,
+        root_support,
+    };
+    budget.retain(&facet, stop)?;
+    Ok(facet)
+}
+
+fn facet_missing() -> ContextError {
+    ContextError::new(ContextErrorCode::MissingRequiredCustody)
+}
+fn facet_mismatch() -> ContextError {
+    ContextError::new(ContextErrorCode::SupportMismatch)
 }
 
 fn remaining(budget: &Budget, limits: PrimaryMapLimits) -> ContextResult<u64> {

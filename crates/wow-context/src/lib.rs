@@ -17,7 +17,8 @@ mod universe;
 pub use budget::PrimaryMapLimits;
 pub use combined::{
     COMBINED_NATIVE_ONE_HOP_PROFILE, COMBINED_NATIVE_ONE_HOP_PROFILE_BYTES, CombinedContextInspect,
-    CombinedContextMap, build_combined_context_inspect, build_combined_context_map,
+    CombinedContextMap, build_combined_context_inspect,
+    build_combined_context_inspect_with_platform_root_facet, build_combined_context_map,
     build_combined_reference_facts_inspect, build_combined_state_detail_inspect,
     build_combined_state_detail_inspect_with_level, build_combined_state_root_l0_inspect,
 };
@@ -50,7 +51,7 @@ pub use pack::{
 };
 pub use platform::{
     PLATFORM_NATIVE_ONE_HOP_PROFILE, PLATFORM_NATIVE_ONE_HOP_PROFILE_BYTES, PlatformContextInspect,
-    PlatformContextInspectView, PlatformContextMap, PlatformContextUniverse,
+    PlatformContextInspectView, PlatformContextMap, PlatformContextUniverse, PlatformRootFacet,
     bind_platform_context_universe, build_platform_context_inspect, build_platform_context_map,
 };
 pub use profile::{

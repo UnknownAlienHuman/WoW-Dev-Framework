@@ -3132,3 +3132,560 @@ fn combined_context_export_root(fixture: &FixtureRoot) -> TestResult<Option<Path
 }
 mod combined_reference_facts;
 mod combined_state_detail;
+
+// This witness reopens retained native owners only. It never recreates source,
+// runs an analyzer, publishes a fixture, or invokes a CLI/control campaign.
+#[test]
+#[ignore = "requires explicit retained default-L1 baseline and fresh export directory; not run by default"]
+fn retained_source_absent_combined_platform_root_callable() -> TestResult {
+    use std::io::{Read, Write};
+
+    fn bounded_read(path: &std::path::Path, limit: usize) -> TestResult<Vec<u8>> {
+        let mut bytes = Vec::new();
+        std::fs::File::open(path)?
+            .take(u64::try_from(limit)? + 1)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > limit {
+            return Err("retained callable witness input exceeds byte bound".into());
+        }
+        Ok(bytes)
+    }
+
+    fn observe(
+        phase: &str,
+        host: &ContextCombinedHostInput,
+        wire: &Value,
+        stop: &AtomicBool,
+    ) -> TestResult<(Vec<u8>, Value, Option<ServiceErrorCode>)> {
+        let request =
+            ContextCombinedRequest::from_json_slice(&wow_core::canonical_json_bytes(wire)?, stop)?;
+        let started = std::time::Instant::now();
+        let result = execute_context_combined(host, &request, stop);
+        eprintln!(
+            "platform callable {phase}: {}ms",
+            started.elapsed().as_millis()
+        );
+        let result = result?;
+        let bytes = result.canonical_bytes().to_vec();
+        assert!(bytes.len() <= CONTEXT_MAP_RESULT_MAX_BYTES);
+        let envelope = serde_json::from_slice(&bytes)?;
+        Ok((bytes, envelope, result.failure_code()))
+    }
+
+    let stop = AtomicBool::new(false);
+    let fixture = PathBuf::from(
+        std::env::var_os("WOW_CONTEXT_PLATFORM_CALLABLE_RETAINED_FIXTURE")
+            .ok_or("explicit retained callable baseline directory required")?,
+    );
+    let export = PathBuf::from(
+        std::env::var_os("WOW_CONTEXT_PLATFORM_CALLABLE_EXPORT")
+            .ok_or("explicit fresh callable witness export directory required")?,
+    );
+    if !fixture.is_absolute() || !export.is_absolute() || export.try_exists()? {
+        return Err("absolute fixture and fresh export directory required".into());
+    }
+    let proof: Value = serde_json::from_slice(&bounded_read(&fixture.join("proof.json"), 16_384)?)?;
+    assert_eq!(proof["base"], "3b28b18ef12ff3a79f517f826c78f8467c391c91");
+    assert_eq!(proof["source_absent"], true);
+    let case_path = PathBuf::from(
+        proof["source_case"]
+            .as_str()
+            .ok_or("original source case")?,
+    );
+    assert!(case_path.is_absolute());
+    let mut case: Value = serde_json::from_slice(&bounded_read(&case_path, 65_536)?)?;
+    let absent = case["source_absent_paths"]
+        .as_array()
+        .ok_or("source-absence paths")?;
+    assert!(!absent.is_empty());
+    for path in absent {
+        let path = PathBuf::from(path.as_str().ok_or("source-absence path")?);
+        assert!(path.is_absolute());
+        assert!(!path.try_exists()?, "source must remain absent: {path:?}");
+    }
+
+    let host_bytes = bounded_read(
+        &fixture.join("host.json"),
+        CONTEXT_COMBINED_HOST_INPUT_MAX_BYTES,
+    )?;
+    let host_wire: Value = serde_json::from_slice(&host_bytes)?;
+    let host = ContextCombinedHostInput::from_json_slice(&host_bytes, &stop)?;
+    let baseline_wire: Value = serde_json::from_slice(&bounded_read(
+        &fixture.join("inspect-request.json"),
+        CONTEXT_COMBINED_REQUEST_MAX_BYTES,
+    )?)?;
+    assert_eq!(baseline_wire["operation"], "inspect");
+    assert_eq!(baseline_wire["inspection"], json!({"level": "l1"}));
+    assert!(baseline_wire.get("build").is_none());
+    assert_eq!(
+        baseline_wire["platform"]["input"]["neighborhood"]["query"]["max_edges"],
+        1
+    );
+    assert_eq!(
+        baseline_wire["platform"]["input"]["neighborhood"]["query"]["direction"],
+        "both"
+    );
+    assert_eq!(
+        baseline_wire["platform"]["input"]["neighborhood"]["query"]["relations"],
+        json!(["owns"])
+    );
+    assert_eq!(
+        proof["platform_root"],
+        baseline_wire["platform"]["input"]["neighborhood"]["query"]["node_id"]
+    );
+    let stdout = bounded_read(
+        &fixture.join("expected-inspect-stdout.json"),
+        CONTEXT_MAP_RESULT_MAX_BYTES + 1,
+    )?;
+    assert_eq!(proof["stdout_bytes"], stdout.len());
+    let expected_service = stdout
+        .strip_suffix(b"\n")
+        .ok_or("exact CLI final LF required")?;
+    assert_eq!(
+        expected_service.last(),
+        Some(&b'}'),
+        "strip exactly one LF, never trim"
+    );
+    let old: Value = serde_json::from_slice(expected_service)?;
+    assert_eq!(old["request"], baseline_wire);
+    // The source-absence case also contains a later StateDetail Primary
+    // generation. Pin this request to its frozen pre-change CLI observation,
+    // not that unrelated selection; service must reopen these exact owners.
+    for owner in ["primary", "platform"] {
+        for field in ["store_generation_id", "publication_set_id"] {
+            assert_eq!(old["payload"][owner][field], baseline_wire[owner][field]);
+        }
+        assert_eq!(
+            old["payload"][owner]["configured_registration_id"],
+            baseline_wire[owner]["project_store_id"]
+        );
+    }
+    for field in ["store_generation_id", "publication_set_id", "candidate_id"] {
+        assert_eq!(case["platform"][field], baseline_wire["platform"][field]);
+    }
+    assert_eq!(old["status"], "truncated");
+    assert_eq!(old["resource_closure"], "closed");
+    assert!(
+        old["payload"]["combined_inspect"]["core"]
+            .get("platform_root_callable")
+            .is_none()
+    );
+
+    // Independent actual namespace acquisition. JSON below records comparisons;
+    // only the reopened native source/accepted graph can mint metadata/support.
+    let (original, original_page, wrong_kind_id) = {
+        let selection = PlatformProjectSelection::from_json_slice(
+            &wow_core::canonical_json_bytes(&host_wire["platform"]["selection"])?,
+            &stop,
+        )?;
+        let store_root = PathBuf::from(
+            host_wire["platform"]["project_store_root"]
+                .as_str()
+                .ok_or("platform store root")?,
+        );
+        assert!(store_root.is_absolute());
+        let exact = StoreGenerationId::parse(
+            baseline_wire["platform"]["store_generation_id"]
+                .as_str()
+                .ok_or("exact platform generation")?,
+        )?;
+        let store = LiveProjectStore::open_in_namespace(&store_root, selection.owner())?;
+        let read =
+            store.read_in_namespace(selection.owner(), &ReadSelector::Exact(exact), &stop)?;
+        let observation = (|| -> TestResult<(Value, Value, Value)> {
+            assert_eq!(
+                read.publication_set_id(),
+                baseline_wire["platform"]["publication_set_id"]
+                    .as_str()
+                    .ok_or("platform publication")?
+            );
+            let candidate = read
+                .candidate()
+                .ok_or("genuine retained candidate required")?;
+            assert_eq!(
+                candidate.manifest().candidate_id(),
+                baseline_wire["platform"]["candidate_id"]
+                    .as_str()
+                    .ok_or("candidate ID")?
+            );
+            assert_eq!(
+                candidate.manifest().candidate_digest(),
+                baseline_wire["platform"]["candidate_digest"]
+                    .as_str()
+                    .ok_or("candidate digest")?
+            );
+            let native = candidate.native();
+            let source = native.source();
+            let graph = candidate.graph();
+            // This is a tiny retained witness, not a corpus-wide source scan.
+            let functions = candidate
+                .function_fingerprints()
+                .ok_or("original candidate function manifest")?;
+            assert!(functions.records().len() <= 4096);
+            assert!(graph.snapshot().nodes().len() <= 4096);
+            let input = OpenSkeletonInputRequest::from_json_slice(
+                &wow_core::canonical_json_bytes(&baseline_wire["platform"]["input"])?,
+                &stop,
+            )?;
+            let view =
+                wow_project::skeleton_input::open_skeleton_input_view(native, graph, input, &stop)?;
+            let page = view.read(&stop)?;
+            let root = page.neighborhood().root();
+            assert_eq!(root.kind(), "lua_source_function");
+            assert_eq!(
+                serde_json::to_value(root.node_id())?,
+                proof["platform_root"]
+            );
+            let lookup = graph.producer_lookup(&stop)?;
+            let mut original = None;
+            // Independent candidate-manifest/graph-owner oracle. Product code
+            // instead consumes the existing root-support receipts; this test
+            // does not reproduce that projection/helper implementation.
+            for function in functions.records() {
+                let assertion = function.support().entity_assertion();
+                let resolved = lookup.entity(native.scope(), assertion, &stop)?;
+                let accepted = resolved.accepted().node();
+                let rebound = wow_graph::GraphNode::new(
+                    graph.snapshot().universe().clone(),
+                    graph.snapshot().generation().clone(),
+                    accepted.kind(),
+                    accepted.owner_key(),
+                    accepted.evidence_ids().to_vec(),
+                    graph.snapshot().limits(),
+                )?;
+                if rebound.node_id() != root.node_id() {
+                    continue;
+                }
+                assert!(
+                    original.is_none(),
+                    "selected native callable custody must be unique"
+                );
+                let final_node = graph
+                    .snapshot()
+                    .node(rebound.node_id())
+                    .ok_or("accepted final native node")?;
+                assert!(std::ptr::eq(final_node, root));
+                let metadata = source
+                    .callable_metadata(function.function_id())?
+                    .ok_or("original owner callable metadata")?;
+                let origin = metadata.function();
+                let local = wow_graph::GraphLocalAssertion {
+                    kind: wow_graph::GraphAssertionKind::Entity,
+                    proposal_id: origin.proposal_id.clone().into(),
+                };
+                assert_eq!(
+                    serde_json::to_value(
+                        native
+                            .assertion(&local)
+                            .ok_or("original accepted callable address")?
+                    )?,
+                    serde_json::to_value(assertion)?
+                );
+                assert_eq!(
+                    serde_json::to_value(resolved.reference())?,
+                    serde_json::to_value(assertion)?
+                );
+                assert_eq!(
+                    resolved.proposal().source_handle_ids(),
+                    std::slice::from_ref(&origin.source_handle_id)
+                );
+                assert_eq!(
+                    resolved.proposal().evidence_ids(),
+                    std::slice::from_ref(&origin.evidence_id)
+                );
+                assert_eq!(
+                    serde_json::to_value(metadata.declaration_state())?,
+                    "unavailable"
+                );
+                assert_eq!(
+                    origin.kind,
+                    wow_emmy::function_calls::SourceFunctionKind::Chunk
+                );
+                assert_eq!(
+                    serde_json::to_value(&metadata)?["declaration"]["observation"],
+                    json!({"state": "unavailable", "reason": "chunk_has_no_declaration"})
+                );
+                assert_eq!(
+                    serde_json::to_value(metadata.signature_state())?,
+                    "not_selected"
+                );
+                original = Some(json!({
+                    "source_context": source.context(),
+                    "root": final_node,
+                    "assertion": assertion,
+                    "metadata": metadata,
+                    "source_handle": source.source_handles().get(&origin.source_handle_id).ok_or("original source handle")?,
+                    "evidence": source.evidence().get(&origin.evidence_id).ok_or("original evidence")?,
+                    "root_support": page.root_support(),
+                }));
+            }
+            let [neighbor] = page.neighborhood().adjacent_nodes() else {
+                return Err("one exact retained wrong-kind neighbor required".into());
+            };
+            assert_eq!(neighbor.kind(), "source_file");
+            let wrong_kind_id = serde_json::to_value(neighbor.node_id())?;
+            assert_eq!(
+                wrong_kind_id,
+                "graph-node:sha256:265435c54bfd1c36e1fab663a170b02df05715830ac8cbfab776391297646c97"
+            );
+            Ok((
+                original.ok_or("selected callable original custody missing")?,
+                serde_json::to_value(&page)?,
+                wrong_kind_id,
+            ))
+        })();
+        // Check both native closes even when observation fails; service reads
+        // run only after this independent acquisition has fully closed.
+        let read_close = read.close();
+        let store_close = store.close();
+        read_close?;
+        store_close?;
+        observation?
+    };
+    assert_eq!(
+        original_page,
+        old["payload"]["combined_inspect"]["core"]["platform_inspect"]["map"]["core"]["native"]
+    );
+
+    // Six finite service invocations: omission, Inspect, None, both renderers,
+    // exact retained wrong-kind neighbor, and one hard work refusal.
+    let (default_bytes, default, default_failure) =
+        observe("default", &host, &baseline_wire, &stop)?;
+    assert_eq!(default_failure, None);
+    assert_eq!(
+        default_bytes.as_slice(),
+        expected_service,
+        "old omitted-selector exact bytes"
+    );
+    let mut selected = baseline_wire.clone();
+    selected["inspection"]["platform_root_facet"] = json!("callable_metadata");
+    let (inspect_bytes, inspect_envelope, inspect_failure) =
+        observe("inspect", &host, &selected, &stop)?;
+    assert_eq!(inspect_failure, None);
+    assert_eq!(inspect_envelope["status"], old["status"]);
+    assert_eq!(inspect_envelope["resource_closure"], "closed");
+    let inspect = &inspect_envelope["payload"]["combined_inspect"];
+    let facet = inspect["core"]["platform_root_callable"]
+        .as_object()
+        .ok_or("selected root callable facet")?;
+    assert_eq!(
+        facet.get("selection").ok_or("explicit facet selection")?,
+        "callable_metadata"
+    );
+    assert_eq!(
+        facet
+            .get("interpretation")
+            .ok_or("selected facet interpretation")?,
+        "original_accepted_root_callable_metadata_no_runtime_or_reference_resolution"
+    );
+    for field in [
+        "source_context",
+        "root",
+        "assertion",
+        "metadata",
+        "source_handle",
+        "evidence",
+        "root_support",
+    ] {
+        assert_eq!(
+            facet
+                .get(field)
+                .ok_or("mandatory original callable field")?,
+            &original[field]
+        );
+    }
+    assert_eq!(
+        inspect["core"]["map"],
+        default["payload"]["combined_inspect"]["core"]["map"]
+    );
+    assert_eq!(
+        inspect["core"]["platform_inspect"]["map"]["core"]["native"],
+        original_page
+    );
+    assert_eq!(inspect["core"]["cross_universe_relations"], "not_evaluated");
+    assert_eq!(inspect["core"]["absence_authoritative"], false);
+
+    let mut build = selected.clone();
+    build
+        .as_object_mut()
+        .ok_or("combined request object")?
+        .remove("inspection");
+    build["operation"] = json!("build");
+    build["build"] = json!({
+        "level": "l1", "platform_root_facet": "callable_metadata",
+        "context_profile_id": wow_context::COMBINED_CONTEXT_PACK_PROFILE,
+        "renderer_profile_ids": [],
+    });
+    let (_, none, none_failure) = observe("none", &host, &build, &stop)?;
+    assert_eq!(none_failure, None);
+    assert_eq!(none["status"], old["status"]);
+    assert_eq!(none["resource_closure"], "closed");
+    assert_eq!(none["payload"]["rendered_artifacts"], json!([]));
+    assert_eq!(
+        none["payload"]["semantic_pack"]["core"]["origins"],
+        *inspect
+    );
+    build["build"]["renderer_profile_ids"] = json!([
+        wow_context::COMBINED_CONTEXT_JSON_RENDERER_PROFILE,
+        wow_context::COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE,
+    ]);
+    let build_request_bytes = wow_core::canonical_json_bytes(&build)?;
+    let (build_bytes, rendered, rendered_failure) = observe("render", &host, &build, &stop)?;
+    assert_eq!(rendered_failure, None);
+    assert_eq!(rendered["status"], old["status"]);
+    assert_eq!(rendered["resource_closure"], "closed");
+    let pack = &rendered["payload"]["semantic_pack"];
+    assert_eq!(
+        *pack, none["payload"]["semantic_pack"],
+        "one renderer-independent semantic identity"
+    );
+    assert_eq!(pack["core"]["origins"], *inspect);
+    let canonical_pack = wow_core::canonical_json_bytes(pack)?;
+    let profiles: Value = serde_json::from_slice(wow_context::COMBINED_CONTEXT_PROFILES_BYTES)?;
+    let renderers = rendered["payload"]["rendered_artifacts"]
+        .as_array()
+        .ok_or("both renderers")?;
+    assert_eq!(renderers.len(), 2);
+    for (index, renderer) in renderers.iter().enumerate() {
+        let row = &renderer["core"];
+        assert_eq!(row["semantic_pack_id"], pack["semantic_pack_id"]);
+        assert_eq!(
+            row["profile"],
+            profiles[if index == 0 { "json" } else { "markdown" }]
+        );
+        let content = row["content"].as_str().ok_or("renderer UTF8 content")?;
+        assert_eq!(row["byte_length"], content.len());
+        assert_eq!(
+            row["content_digest"],
+            serde_json::to_value(digest(content.as_bytes()))?
+        );
+        if index == 0 {
+            assert_eq!(content.as_bytes(), canonical_pack.as_slice());
+        } else {
+            let origins = content
+                .lines()
+                .find_map(|line| line.strip_prefix("ORIGINS "))
+                .ok_or("Markdown original origins")?;
+            let quoted: String = serde_json::from_str(origins)?;
+            assert_eq!(serde_json::from_str::<Value>(&quoted)?, *inspect);
+            let trace = row["trace"]
+                .as_array()
+                .ok_or("Markdown trace")?
+                .iter()
+                .find(|trace| trace["template_id"] == "combined_native_origins")
+                .ok_or("original origins trace")?;
+            assert_eq!(trace["record_id"], inspect["inspect_id"]);
+            assert_eq!(trace["semantic_fields"], json!(["core.origins"]));
+        }
+    }
+    let usage = &rendered["payload"]["operation_budget_usage"];
+    for (field, limit) in [
+        ("work_reserved", "max_context_work"),
+        ("bytes_reserved", "max_metadata_bytes"),
+    ] {
+        let total = usage[field].as_u64().ok_or("continuing operation usage")?;
+        assert!(
+            total
+                > none["payload"]["operation_budget_usage"][field]
+                    .as_u64()
+                    .ok_or("None usage")?
+        );
+        assert!(
+            total
+                >= pack["core"]["budget"][field]
+                    .as_u64()
+                    .ok_or("pack reservation")?
+        );
+        assert!(
+            total
+                <= host_wire["primary"]["limits"][limit]
+                    .as_u64()
+                    .ok_or("original hard cap")?
+        );
+    }
+    assert!(
+        usage["bytes_reserved"].as_u64().ok_or("bytes")? + u64::try_from(build_bytes.len())?
+            <= host_wire["primary"]["limits"]["max_metadata_bytes"]
+                .as_u64()
+                .ok_or("metadata cap")?
+    );
+
+    let mut wrong_kind = selected.clone();
+    wrong_kind["platform"]["input"]["neighborhood"]["query"]["node_id"] = wrong_kind_id;
+    let (_, wrong, wrong_failure) = observe("wrong-kind", &host, &wrong_kind, &stop)?;
+    assert_eq!(wrong_failure, Some(ServiceErrorCode::InvalidRequest));
+    assert_eq!(wrong["resource_closure"], "closed");
+    assert!(wrong.get("payload").is_none());
+    let mut bounded_host = host_wire.clone();
+    for owner in ["primary", "platform"] {
+        bounded_host[owner]["limits"]["max_context_work"] = json!(1);
+    }
+    let bounded_host = ContextCombinedHostInput::from_json_slice(
+        &wow_core::canonical_json_bytes(&bounded_host)?,
+        &stop,
+    )?;
+    let (_, refused, work_failure) = observe("work-refusal", &bounded_host, &selected, &stop)?;
+    assert_eq!(work_failure, Some(ServiceErrorCode::BudgetExceeded));
+    assert_eq!(refused["resource_closure"], "closed");
+    assert!(refused.get("payload").is_none());
+
+    std::fs::create_dir(&export)?;
+    case["argv"] = json!([
+        "context",
+        "build",
+        "--platform",
+        "combined",
+        "--native-host-config",
+        export.join("host.json"),
+        "--combined-request-input",
+        export.join("build-request.json"),
+        "--output",
+        "envelope-json",
+    ]);
+    case["expected_envelope"] = json!("expected-build-envelope.json");
+    case["stdout"] = json!("expected service bytes followed by one LF");
+    for owner in ["primary", "platform"] {
+        for field in ["store_generation_id", "publication_set_id"] {
+            case[owner][field] = build[owner][field].clone();
+        }
+    }
+    case["primary"]["root_id"] = build["primary"]["root"]["id"].clone();
+    case["platform"]["root_id"] = proof["platform_root"].clone();
+    let witness_proof = json!({
+        "base": proof["base"], "source_case": case_path, "source_absent": true,
+        "service_invocations": 6, "default_bytes_equal_excluding_one_cli_lf": true,
+        "independent_native_read_closed": true, "platform_root": proof["platform_root"],
+        "inspect_id": inspect["inspect_id"], "semantic_pack_id": pack["semantic_pack_id"],
+        "original_metadata_and_root_support_equal": true, "renderers": ["none", "json", "markdown"],
+        "operation_budget_usage": usage, "wrong_kind_refusal": wrong, "work_refusal": refused,
+        "native_page_counts": original_page["body"]["counts"],
+        "graph_rebuilds": "unmeasured", "total_physical_edge_visits": "unmeasured",
+        "cli": "not run; export for one root-owned byte comparison", "runtime": "not_evaluated",
+    });
+    for (name, bytes) in [
+        ("host.json", host_bytes),
+        ("build-request.json", build_request_bytes),
+        ("expected-build-envelope.json", build_bytes),
+        (
+            "build-cli-case.json",
+            wow_core::canonical_json_bytes(&case)?,
+        ),
+        ("expected-inspect-envelope.json", inspect_bytes),
+        (
+            "original-platform-root-callable.json",
+            wow_core::canonical_json_bytes(&original)?,
+        ),
+        (
+            "proof.json",
+            wow_core::canonical_json_bytes(&witness_proof)?,
+        ),
+    ] {
+        assert!(bytes.len() <= CONTEXT_MAP_RESULT_MAX_BYTES);
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(export.join(name))?
+            .write_all(&bytes)?;
+    }
+    Ok(())
+}

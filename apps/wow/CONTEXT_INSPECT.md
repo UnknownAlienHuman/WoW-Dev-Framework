@@ -354,7 +354,7 @@ L0/L1 recipe fields cannot coexist. The optional `inspection.l1_profile_id` acce
 exact GraphEntity root. StateDetail also supports `level="both"` for a genuine
 state_root: original StateRoot L0 precedes StateDetail L1 on the same detail map
 and continuing Budget. State_path Both refuses after native kind validation and
-checked closure; ReferenceFacts Both refuses before acquisition. Omission of both recipe fields
+checked closure; ReferenceFacts Both refuses before acquisition. Omission of all recipe/facet fields
 preserves default recipe request/artifact bytes. Null, non-string, the default ID,
 unknown IDs and incompatible level/root or mixed operation fields refuse before
 owner acquisition. The platform
@@ -379,3 +379,12 @@ for budget scope and conservative omissions. Selected verification is tracked
 under #122; full acceptance remains open. Combined build/pack is described in its
 [build contract](CONTEXT_BUILD.md#selected-combined-native-build). Combined links
 and full acceptance remain open.
+
+Optional `inspection.platform_root_facet="callable_metadata"` requests the exact
+platform query root's original native callable metadata with the ordinary default
+Primary recipe. It cannot accompany explicit L0/L1 recipe fields. Null/unknown
+values refuse before acquisition; acquired wrong-kind or missing native custody
+refuses with checked closure. Original declaration/signature states and support
+remain qualified to that root; unselected signatures remain `NotSelected`.
+Omission preserves existing bytes. The same explicit JSON-file transport and
+envelope output apply; the CLI does not resolve or reconstruct the facet.
