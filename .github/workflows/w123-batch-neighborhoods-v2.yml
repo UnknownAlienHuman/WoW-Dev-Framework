@@ -1,0 +1,92 @@
+name: W123 batch neighborhoods reconcile
+
+on:
+  push:
+    branches: [work/w123-batch-neighborhoods-v2]
+    paths:
+      - .github/workflows/w123-batch-neighborhoods-v2.yml
+      - .ci/w123/**
+
+permissions:
+  contents: write
+
+concurrency:
+  group: w123-batch-neighborhoods-v2
+  cancel-in-progress: false
+
+jobs:
+  checkpoint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      BASE_SHA: 164bfc09b1d086aa28ca311e67dca5d450a7c97d
+      PATCH_SHA256: b77f0c15b72baeadbf5033d334175517d67c9c36e49934606c382a6897d1ec4b
+      PATCH_XZ_SHA256: 4d9e26e335065f629623fac132046d3ca53a9d35b0983f288e9b8461fad3d04e
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Admit exact reconciled transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          git diff --name-only "$BASE_SHA" HEAD | sort > "$RUNNER_TEMP/transport-files"
+          cat > "$RUNNER_TEMP/expected-transport-files" <<'FILES'
+          .ci/w123/batch-neighborhoods.patch.xz.b64
+          .github/workflows/w123-batch-neighborhoods-v2.yml
+          FILES
+          diff -u "$RUNNER_TEMP/expected-transport-files" "$RUNNER_TEMP/transport-files"
+          base64 -d .ci/w123/batch-neighborhoods.patch.xz.b64 > "$RUNNER_TEMP/patch.xz"
+          printf '%s  %s\n' "$PATCH_XZ_SHA256" "$RUNNER_TEMP/patch.xz" | sha256sum -c -
+          xz -dc "$RUNNER_TEMP/patch.xz" > "$RUNNER_TEMP/patch"
+          printf '%s  %s\n' "$PATCH_SHA256" "$RUNNER_TEMP/patch" | sha256sum -c -
+          git apply --check "$RUNNER_TEMP/patch"
+          git apply "$RUNNER_TEMP/patch"
+          git rm .ci/w123/batch-neighborhoods.patch.xz.b64 .github/workflows/w123-batch-neighborhoods-v2.yml
+
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+
+      - name: Format
+        run: cargo +stable fmt --all
+
+      - name: Repository policy
+        run: cargo +stable xtask check
+
+      - name: Affected owner-chain check
+        run: >-
+          cargo +stable check --locked
+          -p wow-graph -p wow-context -p wow-service
+          --all-targets --all-features
+
+      - name: Strict affected owner-chain Clippy
+        run: >-
+          cargo +stable clippy --locked
+          -p wow-graph -p wow-context -p wow-service
+          --all-targets --all-features -- -D warnings
+
+      - name: Verify exact product boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff --name-only "$BASE_SHA" | sort > "$RUNNER_TEMP/product-files"
+          cat > "$RUNNER_TEMP/expected-product-files" <<'FILES'
+          crates/wow-graph/src/direct/neighbors.rs
+          crates/wow-graph/src/partition.rs
+          crates/wow-service/src/context/operation.rs
+          FILES
+          diff -u "$RUNNER_TEMP/expected-product-files" "$RUNNER_TEMP/product-files"
+
+      - name: Publish exact reconciled branch product
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/work/w123-batch-neighborhoods-v2 | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git commit -m 'perf(graph): batch project-root neighborhoods'
+          git push origin HEAD:work/w123-batch-neighborhoods-v2
