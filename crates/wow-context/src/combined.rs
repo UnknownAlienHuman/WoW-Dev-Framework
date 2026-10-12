@@ -13,7 +13,10 @@ use crate::platform::{
     PlatformContextInspectView, PlatformMapArtifact, bind_platform_context_universe_with_budget,
     build_platform_context_inspect_on_budget, encode_retained,
 };
-use crate::skeleton::{build_primary_skeletons_on_budget, build_primary_state_detail_on_budget};
+use crate::skeleton::{
+    build_primary_reference_facts_on_budget, build_primary_skeletons_on_budget,
+    build_primary_state_detail_on_budget,
+};
 use crate::{
     ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, L0Scope,
     PrimaryMapForComposition, PrimaryMapLimits, PrimarySkeletons, ProjectMap, ProjectMapState,
@@ -86,6 +89,22 @@ impl<'p, 'f> CombinedContextMap<'p, 'f> {
     #[must_use]
     pub fn primary_map(&self) -> &ProjectMap<'p> {
         &self.artifact.core.primary
+    }
+    /// Borrow the original map and its scoped origin-preparation ledger together.
+    pub fn reference_origin_preparation(
+        &mut self,
+        stop: &AtomicBool,
+    ) -> ContextResult<(&ProjectMap<'p>, crate::ReferenceOriginPreparation<'_>)> {
+        let map_node_count = open_project_map_view(&self.artifact.core.primary, stop)?
+            .nodes()
+            .len();
+        Ok((
+            &self.artifact.core.primary,
+            crate::ReferenceOriginPreparation {
+                budget: &mut self.budget,
+                map_node_count,
+            },
+        ))
     }
     #[must_use]
     pub fn platform_map_id(&self) -> &str {
@@ -381,7 +400,26 @@ pub fn build_combined_state_detail_inspect<'m, 'p, 'f>(
     )
 }
 
-enum CombinedInspection<'r> {
+/// Explicit Primary ReferenceFacts L1 with the original platform inspection.
+/// The reference recipe consumes the same held combined construction ledger.
+pub fn build_combined_reference_facts_inspect<'m, 'p, 'f>(
+    map: &'m mut CombinedContextMap<'p, 'f>,
+    universe: &'m ContextUniverseSet<'p>,
+    graph: &GraphPartitionRead<'p>,
+    root: &L0Scope,
+    origins: &[crate::reference::ReferenceOriginInput<'p>],
+    stop: &AtomicBool,
+) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
+    build_combined_inspect(
+        map,
+        universe,
+        graph,
+        CombinedInspection::ReferenceFacts { root, origins },
+        stop,
+    )
+}
+
+enum CombinedInspection<'r, 'p> {
     Default {
         root: &'r L0Scope,
         level: SkeletonLevel,
@@ -389,13 +427,17 @@ enum CombinedInspection<'r> {
     StateDetail {
         root: &'r L0Scope,
     },
+    ReferenceFacts {
+        root: &'r L0Scope,
+        origins: &'r [crate::reference::ReferenceOriginInput<'p>],
+    },
 }
 
 fn build_combined_inspect<'m, 'p, 'f>(
     map: &'m mut CombinedContextMap<'p, 'f>,
     universe: &'m ContextUniverseSet<'p>,
     graph: &GraphPartitionRead<'p>,
-    selection: CombinedInspection<'_>,
+    selection: CombinedInspection<'_, 'p>,
     stop: &AtomicBool,
 ) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
     checkpoint(stop)?;
@@ -427,6 +469,17 @@ fn build_combined_inspect<'m, 'p, 'f>(
             budget,
             stop,
         )?,
+        CombinedInspection::ReferenceFacts { root, origins } => {
+            build_primary_reference_facts_on_budget(
+                universe,
+                &map.core.primary,
+                graph,
+                root,
+                origins,
+                budget,
+                stop,
+            )?
+        }
     };
     let platform_inspect = build_platform_context_inspect_on_budget(
         &map.core.platform,

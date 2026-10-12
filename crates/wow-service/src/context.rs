@@ -100,7 +100,7 @@ fn graph_error(error: wow_graph::GraphError) -> ServiceError {
         _ => ServiceErrorCode::InternalContractViolation,
     })
 }
-fn context_error(error: wow_context::ContextError) -> ServiceError {
+pub(crate) fn context_error(error: wow_context::ContextError) -> ServiceError {
     use wow_context::ContextErrorCode;
     failure(match error.code() {
         ContextErrorCode::Cancelled => ServiceErrorCode::Cancelled,

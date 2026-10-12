@@ -344,10 +344,12 @@ request family with `operation="inspect"`,
 `profile_id="wow-context/combined-native-one-hop/1"` and required
 `inspection`, for example `{"level":"both"}`; level is exactly `l0`, `l1` or
 `both`. The optional nested `inspection.l1_profile_id` accepts only
-`wow-context/primary-state-detail-l1/1`, paired with `level="l1"` and an exact
-GraphEntity root. Omission preserves the default Primary selection. Null, a
-non-string, default/Reference-facts recipe IDs, unknown IDs and incompatible
-level/root or mixed operation fields refuse before owner acquisition. The platform
+`wow-context/primary-state-detail-l1/1` or
+`wow-context/primary-reference-facts-l1/1`, each paired with `level="l1"` and an
+exact GraphEntity root. Omission preserves the default recipe request/artifact
+bytes. Explicit `both` cannot mix L0 and L1; null, non-string, the default ID,
+unknown IDs and incompatible level/root or mixed operation fields refuse before
+owner acquisition. The platform
 subrequest remains `operation="map"`. Generations/publications, Primary root,
 platform candidate and native binding are explicit in the request. Primary argv
 selectors, standalone platform input, mixed modes, text/artifact output and
@@ -356,8 +358,9 @@ option.
 
 One consuming service operation retains the selected original Primary skeleton
 and borrowed original platform inspect under the actual continuing construction
-Budget, without a second platform read. Original maps/IDs/universes/support and
-exact shared Reference association remain distinct. Checked reverse closure and
+Budget, without a second platform read. The held native API supplies original
+`reference_origins` to the existing L1 Reference engine; origin identity and
+support stay with their owners. Checked reverse closure and
 final remaining allowance govern payload exposure. Envelope JSON is exact service
 bytes plus one LF; Partial/Truncated exit 2 and output failure never retries.
 The service result uses the same combined /1 schema, operation

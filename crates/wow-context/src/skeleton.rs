@@ -1374,6 +1374,41 @@ pub(crate) fn build_primary_state_detail_on_budget<'m, 'a>(
     )
 }
 
+/// Continue the explicit ReferenceFacts L1 recipe on the held construction ledger.
+/// The borrowed original origins are validated by the existing L1 Reference engine.
+pub(crate) fn build_primary_reference_facts_on_budget<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &L0Scope,
+    origins: &[crate::reference::ReferenceOriginInput<'a>],
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<PrimarySkeletons<'m, 'a>> {
+    budget.work(1, stop)?;
+    let L0Scope::Entity(id) = root else {
+        return Err(invalid());
+    };
+    let view = validate_input(universe, map, graph, stop)?;
+    let artifact = l1(
+        universe,
+        map,
+        graph,
+        (id, PrimaryL1Profile::ReferenceFactsV1, Some(origins)),
+        &view,
+        budget,
+        stop,
+    )?;
+    finish_primary_skeletons_on_budget(
+        universe,
+        SkeletonLevel::L1,
+        None,
+        Some(artifact),
+        budget,
+        stop,
+    )
+}
+
 /// Continue an existing construction ledger; the origin map was already charged.
 /// Only the default container/entity recipes are selected by combined inspect.
 pub(crate) fn build_primary_skeletons_on_budget<'m, 'a>(

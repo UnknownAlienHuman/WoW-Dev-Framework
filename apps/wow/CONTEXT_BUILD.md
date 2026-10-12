@@ -259,12 +259,15 @@ and the original platform Map request with exact candidate and native binding.
 The required non-null `build` object has `level` (`l0|l1|both`),
 `context_profile_id="wow-context/combined-native-structural-pack/1"`,
 `renderer_profile_ids` and optional `l1_profile_id`. Omission preserves the
-existing default Primary recipe. The only explicit value is
-`wow-context/primary-state-detail-l1/1`, requiring `level="l1"` and an exact
-GraphEntity root. Null, a non-string, default/Reference-facts recipe IDs, unknown
-IDs and, when this profile is explicitly selected, L0/Both/Project roots refuse during request decoding. Mixed operation fields refuse
-before owner acquisition. StateDetail preserves its original nested
-`wow-context/l1-skeleton/primary-state-detail/1` schema and artifact ID. The
+existing default Primary recipe with unchanged request/artifact bytes. The only
+accepted non-null explicit values are `wow-context/primary-state-detail-l1/1` and
+`wow-context/primary-reference-facts-l1/1`; either requires `level="l1"` and an
+exact GraphEntity root. Explicit L0, Both (an L0/L1 mix), project roots, null,
+non-string, default ID and unknown IDs refuse before owner acquisition. Mixed
+operation fields also refuse. StateDetail retains its original nested
+`wow-context/l1-skeleton/primary-state-detail/1` schema and artifact ID;
+ReferenceFacts retains `wow-context/l1-skeleton/primary-reference-facts/1`,
+including original origins and identity through pack and renderers. The
 combined request/result, combined pack and renderer families remain /1; no
 additional argv flag or request/read/map operation is introduced.
 The renderer array is required: `[]` selects None; one selects
@@ -282,8 +285,10 @@ Original maps/skeletons/platform inspection stay in pack `core.origins`; items
 retain qualified owner/universe/generation/scope/origin-map identities and original
 node/edge records with scoped support/omissions. One continuing construction Budget covers Map→Inspect→
 Pack→validation→JSON/Markdown validation; earlier acquisition/universe/catalog work
-keeps its existing owner bounds. None still validates the pack. Renderer choice
-does not change semantic pack bytes/ID. JSON is the exact canonical pack; Markdown
+keeps its existing owner bounds. ReferenceFacts origin preparation and L1 origins
+continue on the construction ledger through pack and rendering. None still
+validates the pack. Renderer choice does not change semantic pack bytes/ID. JSON
+is the exact canonical pack; Markdown
 uses escaped typed metadata and exact traces, with no source bodies.
 
 Final envelope delivery uses the actual post-render remainder and checked reverse

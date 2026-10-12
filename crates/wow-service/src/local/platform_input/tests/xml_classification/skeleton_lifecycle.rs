@@ -56,10 +56,32 @@ struct SelectedSkeletonFixture {
 
 // Identical original candidate setup, shared by standalone and combined witnesses.
 fn selected_skeleton_fixture(stop: &AtomicBool) -> TestResult<SelectedSkeletonFixture> {
+    selected_skeleton_fixture_from_seed(stop, false)
+}
+
+fn selected_reference_skeleton_fixture(stop: &AtomicBool) -> TestResult<SelectedSkeletonFixture> {
+    selected_skeleton_fixture_from_seed(stop, true)
+}
+
+fn selected_skeleton_fixture_from_seed(
+    stop: &AtomicBool,
+    native_reference: bool,
+) -> TestResult<SelectedSkeletonFixture> {
     // Reuse the existing reviewed classification fixture and its positive closed
     // TextureType shape; no second fixture manifest/schema authority is invented.
     let xsd = skeleton_xsd();
-    let (root, mut config) = classification_fixture(&xsd)?;
+    let (root, mut config) = if native_reference {
+        classification_fixture_from_seed(
+            &[("UI/classification.xsd", &xsd)],
+            CLASSIFICATION_XML,
+            None,
+            None,
+            &[],
+            true,
+        )?
+    } else {
+        classification_fixture(&xsd)?
+    };
     config["physical_function_declarations"] =
         serde_json::to_value(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1)?;
     write_json(&root, "project.json", &config)?;
@@ -2941,6 +2963,101 @@ fn combined_primary_fixture(
     Ok((path, query))
 }
 
+// Native Main and API Library share the same manifest/profile before publication.
+fn combined_reference_primary_fixture(
+    fixture: &FixtureRoot,
+    platform_config: &Value,
+    profile: &wow_core::ProfileIdentity,
+    reference: &wow_reference::ReferenceView,
+    stop: &AtomicBool,
+) -> TestResult<(PathBuf, GraphBuildRequest)> {
+    const MAIN: &str = "local function ContextFixture(flag) return C_Transport.Read(flag) end\n";
+    std::fs::create_dir(fixture.0.join("primary-source"))?;
+    std::fs::write(fixture.0.join("primary-source/main.lua"), MAIN)?;
+    let config = json!({
+        "schema": crate::local::LOCAL_NATIVE_SCHEMA,
+        "project_id": "fixture-context-primary-map",
+        "workspace_id": "workspace:fixture:context-primary-map",
+        "source_origin_id": "project-origin:fixture-context-primary-map",
+        "logical_root": "fixtures/context-primary/main",
+        "profile": platform_config["native_reference"]["profile"],
+        "analyzer": platform_config["analyzer"],
+        "main": {"root": "primary-source", "files": [
+            ProjectDiskFile::new("main.lua").with_identity(digest(MAIN.as_bytes()), MAIN.len() as u64)
+        ]},
+        "native_source": platform_config["native_reference"]["native_source"],
+        "native_api_uses": "reference_v1"
+    });
+    write_json(fixture, "combined-reference-primary.json", &config)?;
+    let path = fixture.0.join("combined-reference-primary.json");
+    let input = LocalProjectInput::from_config_path(&path, stop)?;
+    assert_eq!(
+        input.project_bundle().configuration().selected_profile(),
+        profile
+    );
+    assert_eq!(input.reference_view(), reference);
+    assert_eq!(
+        input
+            .native_callable_bindings()
+            .ok_or("native callable binding")?
+            .bindings()
+            .len(),
+        1
+    );
+    let query = GraphBuildRequest::new("fixture-context-primary-map".into(), "current".into())?
+        .with_input_profile(&input);
+    Ok((path, query))
+}
+
+fn combined_reference_primary_observation(
+    store_root: &std::path::Path,
+    exact: &StoreGenerationId,
+    stop: &AtomicBool,
+) -> TestResult<(wow_graph::GraphNodeId, String, Value)> {
+    let store = LiveProjectStore::open(store_root)?;
+    let read = store.read(&ReadSelector::Exact(exact.clone()), stop)?;
+    let graph = read.pair().graph_read(stop)?;
+    let producer = graph
+        .owner()
+        .partition("wow-service.native-api-callables")
+        .ok_or("original accepted API partition")?;
+    let [accepted] = producer.report().accepted_entities() else {
+        return Err("fixture requires one original accepted native callable".into());
+    };
+    let proposal = producer
+        .batch()
+        .entity_proposal(accepted.proposal_id())
+        .ok_or("accepted API proposal")?;
+    assert_eq!(proposal.entity_kind_id(), "native_api_callable");
+    let Some(wow_graph::GraphProposalValue::String(key)) =
+        proposal.semantic_key().get("record_key")
+    else {
+        return Err("original API Reference key".into());
+    };
+    let node = graph.published_entity(producer.partition_id(), accepted.proposal_id(), stop)?;
+    // Same original replay requalification used by the standalone Reference witness.
+    // It reads retained owner input; no source file or decoded signature is authority.
+    let rebuilt = crate::local::native_library_input::rebuild_for_project(read.project(), stop)?;
+    let record = match rebuilt
+        .reference()
+        .view
+        .lookup(wow_reference::native_view::NATIVE_API_PARTITION, key)
+    {
+        wow_reference::LookupResult::Found(record) => record,
+        _ => return Err("original native Reference record".into()),
+    };
+    let signature =
+        assert_transport_signature(rebuilt.reference().callable_signature(record, stop)?)?;
+    let result = (
+        node.node_id().clone(),
+        read.publication_set_id().to_owned(),
+        signature,
+    );
+    read.close()?;
+    store.close()?;
+    Ok(result)
+}
+
 // Reuse context/tests.rs source_file_root: original accepted native definition,
 // then exact final-generation membership. No label/path/owner-key lookup.
 fn combined_primary_observation(
@@ -3013,4 +3130,5 @@ fn combined_context_export_root(fixture: &FixtureRoot) -> TestResult<Option<Path
     std::fs::create_dir(&path)?;
     Ok(Some(path))
 }
+mod combined_reference_facts;
 mod combined_state_detail;

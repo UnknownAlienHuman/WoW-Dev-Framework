@@ -95,6 +95,9 @@ impl Budget {
             .checked_sub(self.retained_bytes)
             .ok_or_else(exhausted)
     }
+    pub(crate) fn remaining_context_work(&self) -> u64 {
+        self.limits.max_context_work - self.work
+    }
     pub(crate) fn work(&mut self, amount: usize, stop: &AtomicBool) -> ContextResult<()> {
         checkpoint(stop)?;
         self.work = self

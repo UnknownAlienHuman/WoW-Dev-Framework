@@ -13,7 +13,7 @@ use wow_graph::{
 use wow_reference::native_view::NativeCallableSignature;
 use wow_reference::{CoverageStatus, LookupResult, ReferenceRecord, ReferenceRecordKind};
 
-use crate::budget::{Budget, checkpoint, exhausted};
+use crate::budget::{Budget, checkpoint, encoded_len, exhausted};
 use crate::{ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, ProjectMapView};
 
 /// An inert request for one original producer association. These references
@@ -45,6 +45,122 @@ impl<'a> ReferenceOriginInput<'a> {
     pub const fn with_signature(mut self, signature: NativeCallableSignature<'a>) -> Self {
         self.signature = Some(signature);
         self
+    }
+}
+
+/// Scoped preparation reservations on the original combined construction ledger.
+/// This resource port supplies no source, signature, or accepted graph authority.
+pub struct ReferenceOriginPreparation<'b> {
+    pub(crate) budget: &'b mut Budget,
+    pub(crate) map_node_count: usize,
+}
+
+impl ReferenceOriginPreparation<'_> {
+    fn bytes(&mut self, amount: usize, stop: &AtomicBool) -> ContextResult<()> {
+        checkpoint(stop)?;
+        let amount = u64::try_from(amount).map_err(|_| exhausted())?;
+        if amount > self.budget.remaining_metadata_bytes()? {
+            return Err(exhausted());
+        }
+        self.budget.retained_bytes += amount;
+        Ok(())
+    }
+
+    /// Reserve the actual borrowed-origin vector before its allocation.
+    pub fn reserve_vector(&mut self, capacity: usize, stop: &AtomicBool) -> ContextResult<()> {
+        self.budget
+            .work(capacity.checked_add(1).ok_or_else(exhausted)?, stop)?;
+        self.bytes(
+            capacity
+                .checked_mul(std::mem::size_of::<ReferenceOriginInput<'_>>())
+                .ok_or_else(exhausted)?,
+            stop,
+        )
+    }
+
+    /// Charge the existing exact accepted-node lookup and reconstruction before use.
+    pub fn reserve_graph_origin(
+        &mut self,
+        graph: &GraphPartitionRead<'_>,
+        assertion: &GraphAssertionRef,
+        stop: &AtomicBool,
+    ) -> ContextResult<()> {
+        let GraphAssertionRef::Producer {
+            partition_id,
+            assertion,
+            ..
+        } = assertion
+        else {
+            return Err(mismatch());
+        };
+        self.budget.work(graph.owner().partitions().len(), stop)?;
+        let partition = graph.owner().partition(partition_id).ok_or_else(missing)?;
+        let entries = partition.report().accepted_entities();
+        let depth = |count: usize| count.max(1).ilog2() as usize + 1;
+        let evidence = graph.owner().snapshot().limits().max_evidence_per_record as usize;
+        let work = depth(partition.batch().entity_proposals().len())
+            + depth(entries.len())
+            + depth(graph.owner().snapshot().nodes().len())
+            + depth(self.map_node_count)
+            + evidence * (depth(evidence) + 1)
+            + 8;
+        // The reservation itself and the owner's subsequent reads both consume work.
+        self.budget
+            .work(work.checked_mul(2).ok_or_else(exhausted)?, stop)?;
+        let index = entries
+            .binary_search_by(|row| row.proposal_id().cmp(&assertion.proposal_id))
+            .map_err(|_| missing())?;
+        let node = entries[index].node();
+        let left = self
+            .budget
+            .remaining_metadata_bytes()?
+            .min(self.budget.remaining_context_work());
+        let bytes = usize::try_from(encoded_len(node, left, stop)?).map_err(|_| exhausted())?;
+        // Original-node fields bound cloned strings/evidence and canonical identity scratch.
+        let scratch = bytes.checked_mul(3).ok_or_else(exhausted)?;
+        self.budget.work(scratch, stop)?;
+        self.bytes(scratch, stop)
+    }
+
+    /// Charge every possible linear Reference lookup and the catalog lookup.
+    pub fn reserve_reference_lookup(
+        &mut self,
+        reference: &wow_reference::ReferenceView,
+        stop: &AtomicBool,
+    ) -> ContextResult<()> {
+        self.budget.work(reference.partitions().len(), stop)?;
+        let records = reference
+            .partitions()
+            .iter()
+            .find(|row| row.id() == wow_reference::native_view::NATIVE_API_PARTITION)
+            .map_or(0, |row| row.records().len());
+        let work = reference
+            .conflicts()
+            .len()
+            .checked_add(reference.partitions().len())
+            .and_then(|work| work.checked_add(records))
+            .and_then(|work| work.checked_add(records.max(1).ilog2() as usize + 2))
+            .ok_or_else(exhausted)?;
+        self.budget.work(work, stop)
+    }
+
+    /// Reserve bounded serialization/validation scratch before the native signature read.
+    pub fn reserve_signature_read(
+        &mut self,
+        record: &ReferenceRecord,
+        stop: &AtomicBool,
+    ) -> ContextResult<()> {
+        let left = self
+            .budget
+            .remaining_metadata_bytes()?
+            .min(self.budget.remaining_context_work());
+        let bytes = usize::try_from(encoded_len(record, left, stop)?).map_err(|_| exhausted())?;
+        let amount = bytes.checked_add(64).ok_or_else(exhausted)?;
+        // Four linear passes: length preflight, native record validation,
+        // digest serialization, and hashing; encoded bytes bound each input pass.
+        self.budget
+            .work(amount.checked_mul(4).ok_or_else(exhausted)?, stop)?;
+        self.bytes(amount, stop)
     }
 }
 

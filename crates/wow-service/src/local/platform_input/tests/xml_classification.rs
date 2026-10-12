@@ -197,16 +197,32 @@ fn classification_fixture_schema_and_main_members(
     toc: Option<&str>,
     extra_main: &[(&str, &str)],
 ) -> TestResult<(FixtureRoot, Value)> {
+    classification_fixture_from_seed(schema_members, xml_text, lua, toc, extra_main, false)
+}
+
+fn classification_fixture_from_seed(
+    schema_members: &[(&str, &str)],
+    xml_text: &str,
+    lua: Option<&str>,
+    toc: Option<&str>,
+    extra_main: &[(&str, &str)],
+    native_reference: bool,
+) -> TestResult<(FixtureRoot, Value)> {
     use wow_project::load::schema::XmlSchemaComponentKind as Kind;
     use wow_project::load::schema::{
         XmlSchemaMemberSelection, XmlSchemaSelection, admit_xml_schema, classification::*,
     };
 
-    let (root, mut config) = fixture()?;
+    let (root, mut config) = if native_reference {
+        native_fixture()?
+    } else {
+        fixture()?
+    };
     std::fs::write(root.0.join("UI/frames.xml"), xml_text)?;
     let mut manifest: Value =
         serde_json::from_slice(&std::fs::read(root.0.join("manifest.json"))?)?;
     let files = manifest["files"].as_array_mut().ok_or("manifest files")?;
+    let initial_files = files.len();
     // All changed members precede native source/catalog/profile admission.
     // Never relabel a sealed catalog after changing its source manifest.
     for (path, text) in [
@@ -251,9 +267,16 @@ fn classification_fixture_schema_and_main_members(
                 .checked_add(file["bytes"].as_u64().ok_or("member bytes")?)
                 .ok_or("fixture byte sum")?)
         })?;
-    assert_eq!(files.len(), 4 + schema_members.len() + extra_main.len());
+    assert_eq!(
+        files.len(),
+        initial_files + schema_members.len() + extra_main.len()
+    );
     manifest["coverage"] = json!({"tracked_files":files.len(),"included_files":files.len(),"excluded_files":0,
         "included_bytes":total,"kind_version":1,"kind_lua":1 + extra_main.len(),"kind_toc":1,"kind_xml":1,"kind_schema":schema_members.len()});
+    if native_reference {
+        manifest["coverage"]["kind_toc"] = json!(2);
+        manifest["coverage"]["kind_generated_api"] = json!(2);
+    }
     manifest
         .as_object_mut()
         .ok_or("manifest object")?
@@ -262,13 +285,30 @@ fn classification_fixture_schema_and_main_members(
         "{:x}",
         Sha256::digest(wow_core::canonical_json_bytes(&manifest)?)
     ));
-    config["source"]["manifest"] =
-        serde_json::to_value(write_json(&root, "manifest.json", &manifest)?)?;
+    let manifest_file = serde_json::to_value(write_json(&root, "manifest.json", &manifest)?)?;
+    config["source"]["manifest"] = manifest_file.clone();
+    if native_reference {
+        config["native_reference"]["native_source"]["manifest"] = manifest_file;
+        let mut reference_input = config["native_reference"].clone();
+        reference_input["schema"] = json!(crate::local::SOURCE_REFERENCE_INPUT_SCHEMA);
+        write_json(&root, "source-reference.json", &reference_input)?;
+        let expected = crate::local::read_local_source_reference(
+            &root.0.join("source-reference.json"),
+            &AtomicBool::new(false),
+        )?;
+        config["source_profile"]["target"]["reference_profile"] =
+            serde_json::to_value(expected.profile())?;
+        config["source_profile"]["target"]["reference_generation"] =
+            serde_json::to_value(expected.reference_generation())?;
+        write_json(&root, "reference.json", &expected.reference().view)?;
+    }
     // Required fixture wire OIDs are assertions; this synthetic source never attests Git membership.
-    config["source"]["origin"]["revision"] =
-        serde_json::to_value(PlatformSourceRevision::Fixture {
-            digest: digest(&serde_json::to_vec(&manifest)?),
-        })?;
+    if !native_reference {
+        config["source"]["origin"]["revision"] =
+            serde_json::to_value(PlatformSourceRevision::Fixture {
+                digest: digest(&serde_json::to_vec(&manifest)?),
+            })?;
+    }
     write_json(&root, "project.json", &config)?;
 
     let stop = AtomicBool::new(false);

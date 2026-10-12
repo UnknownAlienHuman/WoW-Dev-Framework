@@ -168,6 +168,28 @@ impl NativeApiProvenance {
         graph: &wow_graph::GraphPartitionRead<'a>,
         stop: &AtomicBool,
     ) -> ServiceResult<Vec<wow_context::ReferenceOriginInput<'a>>> {
+        self.reference_origins_prepared(map, graph, None, stop)
+    }
+
+    pub(crate) fn combined_reference_origins<'a>(
+        &'a self,
+        map: &mut wow_context::CombinedContextMap<'a, '_>,
+        graph: &wow_graph::GraphPartitionRead<'a>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Vec<wow_context::ReferenceOriginInput<'a>>> {
+        let (primary, mut preparation) = map
+            .reference_origin_preparation(stop)
+            .map_err(crate::context::context_error)?;
+        self.reference_origins_prepared(primary, graph, Some(&mut preparation), stop)
+    }
+
+    fn reference_origins_prepared<'a>(
+        &'a self,
+        map: &wow_context::ProjectMap<'a>,
+        graph: &wow_graph::GraphPartitionRead<'a>,
+        mut preparation: Option<&mut wow_context::ReferenceOriginPreparation<'_>>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Vec<wow_context::ReferenceOriginInput<'a>>> {
         checkpoint(stop)?;
         if graph.owner().source_context_id() != self.context.context_id() {
             return Err(incompatible());
@@ -187,9 +209,23 @@ impl NativeApiProvenance {
                 "native Reference origins exceed their inherited bound",
             ));
         }
-        let mut origins = Vec::with_capacity(view.nodes().len());
+        let capacity = if let Some(preparation) = preparation.as_mut() {
+            let capacity = view.nodes().len().min(self.endpoints.len());
+            preparation
+                .reserve_vector(capacity, stop)
+                .map_err(crate::context::context_error)?;
+            capacity
+        } else {
+            view.nodes().len()
+        };
+        let mut origins = Vec::with_capacity(capacity);
         for endpoint in self.endpoints.values() {
             checkpoint(stop)?;
+            if let Some(preparation) = preparation.as_mut() {
+                preparation
+                    .reserve_graph_origin(graph, &endpoint.assertion, stop)
+                    .map_err(crate::context::context_error)?;
+            }
             let GraphAssertionRef::Producer {
                 partition_id,
                 batch_id,
@@ -222,6 +258,11 @@ impl NativeApiProvenance {
                     return Err(incompatible());
                 };
                 let projection = self.library.reference();
+                if let Some(preparation) = preparation.as_mut() {
+                    preparation
+                        .reserve_reference_lookup(&projection.view, stop)
+                        .map_err(crate::context::context_error)?;
+                }
                 let lookup = projection
                     .view
                     .lookup(wow_reference::native_view::NATIVE_API_PARTITION, record_key);
@@ -232,6 +273,11 @@ impl NativeApiProvenance {
                     }
                     _ => return Err(incompatible()),
                 };
+                if let Some(preparation) = preparation.as_mut() {
+                    preparation
+                        .reserve_signature_read(record, stop)
+                        .map_err(crate::context::context_error)?;
+                }
                 let signature = projection
                     .callable_signature(record, stop)
                     .map_err(|error| match error.code {

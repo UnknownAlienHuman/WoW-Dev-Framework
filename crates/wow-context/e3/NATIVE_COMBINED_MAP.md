@@ -48,9 +48,15 @@ Both hosts must select equal owner limits and evidence limits. Aggregate input
 preflight precedes acquisition. Construction input accounting includes both
 original tuples, conservatively counting the shared Reference twice. Checked
 arithmetic, native scan/support reservations and cancellation remain in force.
-Final service encoding must fit `remaining_metadata_bytes()` after all map work;
-this is a continuing allowance, not a reset cap. Reservations do not measure CPU,
-OS memory or tokens; mandatory overflow refuses without a prefix-success fallback.
+For explicit ReferenceFacts, the continuing ledger also precharges selected origin
+preparation: origin-vector construction, graph reconstruction, exact Reference
+lookup and callable-signature digest work before the L1 operation begins. L1 and
+subsequent inspect/build/pack/render work continue that same ledger. Earlier
+acquisition, universe validation and evidence-catalog preparation keep their
+existing owner bounds. Final service encoding must fit `remaining_metadata_bytes()`
+after all work; this is a continuing allowance, not a reset cap. Reservations do
+not measure CPU, OS memory or tokens; mandatory overflow refuses without a
+prefix-success fallback.
 
 ## Exact service transport
 
@@ -100,11 +106,12 @@ The specified inspect selection uses `operation="inspect"` and requires
 an `inspection` object with exactly `level` (`l0`, `l1` or `both`) and optional
 `l1_profile_id`. A project root selects L0 only; L1/Both use a genuine detail map
 and an eligible exact entity root. Omitting `l1_profile_id` preserves the existing
-default Primary skeleton selection. Its only accepted explicit value is
-`wow-context/primary-state-detail-l1/1`, and that explicit selection requires `level="l1"`
-with an exact `GraphEntity` root. `null`, a non-string value, the explicit default or
-Reference-facts recipe IDs, any unknown ID, and incompatible level/root
-combinations refuse during request decoding, before either owner read is acquired.
+default Primary skeleton selection with unchanged request/artifact bytes. The only
+accepted non-null explicit values are `wow-context/primary-state-detail-l1/1` and
+`wow-context/primary-reference-facts-l1/1`; either requires `level="l1"` and an
+exact `GraphEntity` root. Explicit `both` (an L0/L1 mix), L0, project roots, null,
+non-string, the default ID and unknown IDs refuse before either owner read is acquired.
+The combined map operation does not accept this selection.
 Missing inspection for inspect, explicit null, unknown fields/levels and inspection
 on map refuse. The nested platform request still uses `operation="map"`; it
 supplies the original native map read, not a second inspection acquisition. The
@@ -116,7 +123,10 @@ Budget. By default, Primary skeletons use the original L0/L1 engines and Both
 keeps their fixed original order. The explicit StateDetail selection uses the
 existing native Primary StateDetail L1 engine and retains its nested
 `wow-context/l1-skeleton/primary-state-detail/1` schema and original skeleton ID
-semantics. Platform inspect borrows the original admitted map/page/support without
+semantics. ReferenceFacts uses the original native `reference_origins` with the
+existing L1 Reference engine and retains `wow-context/l1-skeleton/primary-reference-facts/1`,
+including its original origins and identity. Platform inspect borrows the admitted
+map/page/support without
 another platform read. Maps, universes and their IDs remain distinct; inspection
 cannot upgrade native omissions or infer cross-universe links. Omitting inspection
 preserves the existing map request/artifact bytes.
@@ -156,19 +166,21 @@ The existing combined request family selects `operation="build"` and a required
 non-null `build` object with exactly `level`, `context_profile_id`, `renderer_profile_ids`
 and optional `l1_profile_id`; no other fields are accepted. Level is `l0`, `l1` or `both`, with the original
 root/layer admission; project roots select L0 only. Omission of `l1_profile_id`
-preserves the existing default Primary selection. Its only accepted explicit value
-is `wow-context/primary-state-detail-l1/1`, requiring `level="l1"` and an exact
-`GraphEntity` root. `null`, a non-string, the default or Reference-facts recipe
-IDs, unknown IDs and incompatible level/root combinations refuse during request
-decoding, before either owner read is acquired. The context profile is the pack
+preserves the existing default Primary selection with unchanged request/artifact
+bytes. The only accepted non-null explicit values are
+`wow-context/primary-state-detail-l1/1` and
+`wow-context/primary-reference-facts-l1/1`; either requires `level="l1"` and an
+exact `GraphEntity` root. Explicit `both` (an L0/L1 mix), `l0`, project roots, null,
+non-string, the default ID and unknown IDs refuse before owner acquisition. The
+context profile is the pack
 ID above. The required renderer array is empty for None, contains one reviewed
 renderer, or both distinct reviewed IDs. Both renders JSON then Markdown. Unknown/
 mixed profiles, duplicates, excess renderers, `inspection` on build and `build`
 on map/inspect refuse. The outer profile remains
 `wow-context/combined-native-one-hop/1`; the nested platform request remains Map
-with its exact candidate/publication/binding. StateDetail retains its original
-nested L1 schema and artifact identity; no combined, pack, or renderer /2 family
-is introduced.
+with its exact candidate/publication/binding. Each explicit recipe retains its
+original L1 schema and identity; ReferenceFacts origins survive semantic-pack
+construction and rendering. No combined, pack or renderer /2 family is introduced.
 
 Map, Inspect, pack construction/validation and every requested render/validation
 continue the same actual private Budget. The pack moves Inspect custody and its
@@ -184,8 +196,9 @@ JSON content is the exact canonical pack without transport LF. Markdown uses
 fixed escaped metadata records and exact UTF-8 trace ranges, including one ORIGINS
 record for the complete original combined Inspect closure. Rendering preserves
 data and grants no new authority. The pack remains Partial/Truncated with
-`absence_authoritative=false`; Reference enrichment, cross-universe links, control/
-effects, excerpts/tokens, deeper continuation and runtime remain NotEvaluated.
+`absence_authoritative=false`; selected ReferenceFacts origins and identity remain
+in the original L1 scope. Broader Reference enrichment, cross-universe links,
+control/effects, excerpts/tokens, deeper continuation and runtime remain NotEvaluated.
 Source bodies are excluded and source inclusion is not permitted. The
 [explicit combined Build CLI](../../../apps/wow/CONTEXT_BUILD.md#selected-combined-native-build)
 returns envelope JSON only. Selected gates are tracked in #122; this contract

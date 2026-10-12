@@ -9,7 +9,8 @@ use super::{
     ContextMapHostInput, ContextMapPublication, ContextMapRequest, ContextMapResult,
     ContextMapRoot, ContextMapStatus, ContextPlatformHostInput, ContextPlatformOperation,
     ContextPlatformRequest, ContextRenderSelection, PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
-    PRIMARY_STATE_DETAIL_L1_PROFILE_ID, checkpoint, context_error, failure,
+    PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID, PRIMARY_STATE_DETAIL_L1_PROFILE_ID, checkpoint,
+    context_error, failure,
     operation::{
         Envelope, encode, failed_operation, preflight, with_checked_context_read,
         with_primary_composition,
@@ -128,21 +129,33 @@ fn non_null_l1_profile_id<'de, D: serde::Deserializer<'de>>(
     Box::<str>::deserialize(deserializer).map(Some)
 }
 
-fn select_state_detail(
+fn select_l1_recipe(
     profile_id: Option<&str>,
     level: wow_context::SkeletonLevel,
     root: &ContextMapRoot,
-) -> ServiceResult<bool> {
+) -> ServiceResult<Option<CombinedL1Recipe>> {
     match profile_id {
-        None => Ok(false),
+        None => Ok(None),
         Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)
             if level == wow_context::SkeletonLevel::L1
                 && matches!(root, ContextMapRoot::GraphEntity(_)) =>
         {
-            Ok(true)
+            Ok(Some(CombinedL1Recipe::StateDetail))
+        }
+        Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID)
+            if level == wow_context::SkeletonLevel::L1
+                && matches!(root, ContextMapRoot::GraphEntity(_)) =>
+        {
+            Ok(Some(CombinedL1Recipe::ReferenceFacts))
         }
         Some(_) => Err(failure(ServiceErrorCode::InvalidRequest)),
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CombinedL1Recipe {
+    StateDetail,
+    ReferenceFacts,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -239,7 +252,7 @@ pub struct ContextCombinedRequest {
     #[serde(skip)]
     selected_level: Option<wow_context::SkeletonLevel>,
     #[serde(skip)]
-    state_detail: bool,
+    l1_recipe: Option<CombinedL1Recipe>,
     #[serde(skip)]
     render: ContextRenderSelection,
     #[serde(skip)]
@@ -261,7 +274,7 @@ impl ContextCombinedRequest {
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
-        let (operation, selected_level, render, state_detail) = match (
+        let (operation, selected_level, render, l1_recipe) = match (
             document.operation.as_ref(),
             document.inspection.as_ref(),
             document.build.as_mut(),
@@ -270,11 +283,11 @@ impl ContextCombinedRequest {
                 ContextCombinedOperation::Map,
                 None,
                 ContextRenderSelection::None,
-                false,
+                None,
             ),
             ("inspect", Some(selection), None) => {
                 let level = selection.level()?;
-                let state_detail = select_state_detail(
+                let l1_recipe = select_l1_recipe(
                     selection.l1_profile_id.as_deref(),
                     level,
                     &document.primary.root,
@@ -283,12 +296,12 @@ impl ContextCombinedRequest {
                     ContextCombinedOperation::Inspect,
                     Some(level),
                     ContextRenderSelection::None,
-                    state_detail,
+                    l1_recipe,
                 )
             }
             ("build", None, Some(selection)) => {
                 let (level, render) = selection.normalize(stop)?;
-                let state_detail = select_state_detail(
+                let l1_recipe = select_l1_recipe(
                     selection.l1_profile_id.as_deref(),
                     level,
                     &document.primary.root,
@@ -297,7 +310,7 @@ impl ContextCombinedRequest {
                     ContextCombinedOperation::Build,
                     Some(level),
                     render,
-                    state_detail,
+                    l1_recipe,
                 )
             }
             _ => return Err(failure(ServiceErrorCode::InvalidRequest)),
@@ -339,7 +352,7 @@ impl ContextCombinedRequest {
             inspection: document.inspection,
             build: document.build,
             selected_level,
-            state_detail,
+            l1_recipe,
             render,
             primary_request,
         })
@@ -432,6 +445,16 @@ pub fn execute_context_combined(
                     .is_some_and(|level| level != wow_context::SkeletonLevel::L0),
                 stop,
                 |primary, graph| {
+                    let native_api = if request.l1_recipe == Some(CombinedL1Recipe::ReferenceFacts)
+                    {
+                        Some(
+                            primary_read
+                                .native_api()
+                                .ok_or_else(|| failure(ServiceErrorCode::ComponentUnavailable))?,
+                        )
+                    } else {
+                        None
+                    };
                     let (outcome, closure) = with_checked_platform_read(
                         &host.platform,
                         &request.platform,
@@ -451,6 +474,13 @@ pub fn execute_context_combined(
                                     )
                                     .map_err(context_error)?;
                                     if let Some(level) = request.selected_level {
+                                        let origins = native_api
+                                            .map(|api| {
+                                                api.combined_reference_origins(
+                                                    &mut map, graph, stop,
+                                                )
+                                            })
+                                            .transpose()?;
                                         let scope = match &root {
                                             ContextMapRoot::Project(id) => {
                                                 wow_context::L0Scope::Project(id.clone())
@@ -459,18 +489,31 @@ pub fn execute_context_combined(
                                                 wow_context::L0Scope::Entity(id.clone())
                                             }
                                         };
-                                        let inspect = if request.state_detail {
-                                            wow_context::build_combined_state_detail_inspect(
-                                                &mut map, &universe, graph, &scope, stop,
-                                            )
-                                        } else {
-                                            wow_context::build_combined_context_inspect(
+                                        let inspect = match request.l1_recipe {
+                                            Some(CombinedL1Recipe::StateDetail) => {
+                                                wow_context::build_combined_state_detail_inspect(
+                                                    &mut map, &universe, graph, &scope, stop,
+                                                )
+                                            }
+                                            Some(CombinedL1Recipe::ReferenceFacts) => {
+                                                wow_context::build_combined_reference_facts_inspect(
+                                                    &mut map,
+                                                    &universe,
+                                                    graph,
+                                                    &scope,
+                                                    origins.as_deref().ok_or_else(|| {
+                                                        failure(ServiceErrorCode::InternalContractViolation)
+                                                    })?,
+                                                    stop,
+                                                )
+                                            }
+                                            None => wow_context::build_combined_context_inspect(
                                                 &mut map, &universe, graph, &scope, level, stop,
-                                            )
+                                            ),
                                         }
                                         .map_err(context_error)?;
                                         if request.build.is_some() {
-                                            encode_build_result(
+                                            let result = encode_build_result(
                                                 host,
                                                 request,
                                                 &request_id,
@@ -478,7 +521,9 @@ pub fn execute_context_combined(
                                                 platform_read,
                                                 inspect,
                                                 stop,
-                                            )
+                                            );
+                                            drop(origins);
+                                            result
                                         } else {
                                             let delivery = Delivery {
                                                 artifact: InspectPayload {
@@ -491,7 +536,7 @@ pub fn execute_context_combined(
                                                 remaining_metadata_bytes: inspect
                                                     .remaining_metadata_bytes(),
                                             };
-                                            encode_result(
+                                            let result = encode_result(
                                                 host,
                                                 request,
                                                 &request_id,
@@ -499,7 +544,9 @@ pub fn execute_context_combined(
                                                 platform_read,
                                                 delivery,
                                                 stop,
-                                            )
+                                            );
+                                            drop(origins);
+                                            result
                                         }
                                     } else {
                                         let delivery = Delivery {

@@ -129,6 +129,21 @@ Behavior:
 
 Renderer failure cannot mutate or relabel the semantic pack. Policy decides whether a validated semantic pack with a failed optional renderer yields `partial` or service failure; the exact decision is frozen per renderer request class.
 
+### Selected combined native inspect/build
+
+The combined transport accepts the explicit L1 IDs
+`wow-context/primary-state-detail-l1/1` and `wow-context/primary-reference-facts-l1/1`,
+each with `level="l1"` and an exact GraphEntity root. Omission preserves default
+recipe request/artifact bytes. An explicit profile with L0, Both or a project root
+refuses; null, the default ID and unknown IDs also refuse. The held native API
+supplies original `reference_origins` to the existing L1 Reference engine.
+Origin-vector construction, graph reconstruction, exact Reference lookup and
+signature digest work are precharged to the continuing construction Budget before
+L1; earlier acquisition retains its existing bounds. The original ReferenceFacts
+L1 schema, origins and identity survive combined semantic-pack construction and
+rendering. Request/result, pack and renderer schemas remain /1. See the
+[combined contract](../../wow-context/e3/NATIVE_COMBINED_MAP.md).
+
 ## `context_continue`
 
 Purpose: continue one previously returned exact E3-B frontier/page chain.
