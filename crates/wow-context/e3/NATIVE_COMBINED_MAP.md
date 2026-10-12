@@ -63,7 +63,7 @@ Decoding supplies inert intent; original acquired owners supply authority.
 | Document | Exact schema and fields |
 |---|---|
 | Host | `wow-service/context-combined-native-host/1`: `schema`, `primary`, `platform` |
-| Request | `wow-service/context-combined-request/1`: `schema`, `operation="map"` or `"inspect"`, `profile_id="wow-context/combined-native-one-hop/1"`, `primary`, `platform`; inspect additionally requires `inspection` |
+| Request | `wow-service/context-combined-request/1`: `schema`, `operation="map"`, `"inspect"` or `"build"`, `profile_id="wow-context/combined-native-one-hop/1"`, `primary`, `platform`; inspect requires `inspection`, build requires `build` |
 | Result | `wow-service/context-combined-result/1` |
 
 Host `primary` is the complete existing
@@ -91,8 +91,8 @@ Either truncated component makes the outer state Truncated; otherwise it is
 Partial. Original coverage/conflicts/support/NotEvaluated stay nested and
 `absence_authoritative=false`. The [explicit map CLI](../../../apps/wow/CONTEXT_MAP.md#selected-combined-native-map)
 uses envelope JSON only. Existing Primary/platform contracts remain separate;
-combined packs/rendering, cross-universe links and runtime qualification remain
-open. No behavioral or acceptance result is asserted by this contract.
+cross-universe links and runtime qualification remain open. No behavioral or
+acceptance result is asserted by this contract.
 
 ## Selected combined inspection
 
@@ -125,3 +125,54 @@ uses explicit host/request files and envelope JSON only. The service result oper
 is `context_combined_inspect`; payload retains `combined_inspect_byte_length` and
 original `combined_inspect`, alongside the existing native read bindings/selection.
 Selected behavioral verification is tracked in #122; full E3 acceptance remains open.
+
+## Selected combined semantic pack and rendering
+
+Build consumes the genuine combined Inspect with
+`build_combined_context_semantic_pack(inspect, stop)`. Its original maps, Primary
+L0/L1 and platform inspection remain in `core.origins`; no inspect-envelope import,
+second platform read or decoded record supplies native authority. Items retain
+original node/edge payloads, qualified by Primary/platform owner, native universe
+and generation, exact scope and origin map ID. Ordering is Primary then platform,
+each with native node IDs before edge IDs; selection traces retain required reasons.
+Original support, confidence, coverage, conflicts and omissions remain scoped to
+their original owners, including unevaluated platform neighbor support closure.
+
+| Selection | Exact reviewed ID/schema |
+|---|---|
+| Pack profile | `wow-context/combined-native-structural-pack/1` |
+| Semantic pack | `wow-context/semantic-pack/combined/1` |
+| JSON renderer | `wow-context/combined-pack-json/1` |
+| Markdown renderer | `wow-context/combined-pack-markdown/1` |
+| Rendered artifact | `wow-context/rendered-context-artifact/combined/1` |
+
+The existing combined request family selects `operation="build"` and a required
+non-null `build` object with exactly `level`, `context_profile_id` and
+`renderer_profile_ids`. Level is `l0`, `l1` or `both`, with the original root/layer
+admission; project roots select L0 only. The context profile is the pack ID above.
+The required renderer array is empty for None, contains one reviewed renderer,
+or both distinct reviewed IDs. Both renders JSON then Markdown. Null, unknown/
+mixed profiles, duplicates, excess renderers, `inspection` on build and `build`
+on map/inspect refuse. The outer profile remains `wow-context/combined-native-one-hop/1`;
+the nested platform request remains Map with its exact candidate/publication/binding.
+
+Map, Inspect, pack construction/validation and every requested render/validation
+continue the same actual private Budget. The pack moves Inspect custody and its
+borrowed ledger; serialized budget snapshots are not fresh allowances. Earlier
+acquisition/universe/catalog preparation retains its existing owner bounds. Final
+service delivery uses the pack remainder after all rendering/validation and waits
+for checked platform-then-Primary close. Mandatory overflow, required renderer
+refusal, cancellation or close failure suppresses payload; no pack-only or
+supported-prefix fallback is delivered. None returns a validated pack without
+rendered artifacts. Renderer choice is excluded from semantic pack bytes/identity.
+
+JSON content is the exact canonical pack without transport LF. Markdown uses
+fixed escaped metadata records and exact UTF-8 trace ranges, including one ORIGINS
+record for the complete original combined Inspect closure. Rendering preserves
+data and grants no new authority. The pack remains Partial/Truncated with
+`absence_authoritative=false`; Reference enrichment, cross-universe links, control/
+effects, excerpts/tokens, deeper continuation and runtime remain NotEvaluated.
+Source bodies are excluded and source inclusion is not permitted. The
+[explicit combined Build CLI](../../../apps/wow/CONTEXT_BUILD.md#selected-combined-native-build)
+returns envelope JSON only. Selected gates are tracked in #122; this contract
+makes no full E3 or current-source/runtime acceptance claim.

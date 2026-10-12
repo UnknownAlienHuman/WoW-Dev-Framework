@@ -1,4 +1,4 @@
-//! Lossless renderings of a sealed primary pack; labels remain quoted data.
+//! Lossless renderings of sealed native packs; labels remain quoted data.
 use std::fmt;
 use std::sync::atomic::AtomicBool;
 
@@ -9,7 +9,8 @@ use wow_core::{CanonicalResult, ContentDigest};
 
 use crate::budget::{Budget, canonical, checkpoint, exhausted};
 use crate::pack::{
-    ContextSemanticPack, JSON_PROFILE, MARKDOWN_PROFILE, PackCore, RendererProfile,
+    COMBINED_RENDER_SCHEMA, CombinedContextSemanticPack, CombinedPackCore, ContextSemanticPack,
+    JSON_PROFILE, MARKDOWN_PROFILE, PackCore, RendererProfile, combined_renderer_profiles,
     expansion_renderer_profiles,
 };
 use crate::{ContextError, ContextErrorCode, ContextResult};
@@ -105,12 +106,25 @@ enum Format {
     Json,
     Markdown,
 }
+#[derive(Clone, Copy)]
+enum NativePackCore<'r, 'm, 'p, 'f> {
+    Primary(&'r PackCore<'m, 'p>),
+    Combined(&'r CombinedPackCore<'m, 'p, 'f>),
+}
 impl Format {
-    fn profile(self, core: &PackCore<'_, '_>) -> ContextResult<&'static RendererProfile> {
-        let (json, markdown) = if core.expansion.is_some() {
-            expansion_renderer_profiles(core)?
-        } else {
-            (&JSON_PROFILE, &MARKDOWN_PROFILE)
+    fn profile(
+        self,
+        core: NativePackCore<'_, '_, '_, '_>,
+    ) -> ContextResult<&'static RendererProfile> {
+        let (json, markdown) = match core {
+            NativePackCore::Primary(core) => {
+                if core.expansion.is_some() {
+                    expansion_renderer_profiles(core)?
+                } else {
+                    (&JSON_PROFILE, &MARKDOWN_PROFILE)
+                }
+            }
+            NativePackCore::Combined(core) => combined_renderer_profiles(core)?,
         };
         Ok(match self {
             Self::Json => json,
@@ -118,11 +132,18 @@ impl Format {
         })
     }
 }
-
-struct Input<'p, 'm, 'a> {
-    id: &'p str,
-    core: &'p PackCore<'m, 'a>,
-    canonical_bytes: &'p [u8],
+struct Input<'r, 'm, 'p, 'f> {
+    id: &'r str,
+    core: NativePackCore<'r, 'm, 'p, 'f>,
+    canonical_bytes: &'r [u8],
+}
+impl Input<'_, '_, '_, '_> {
+    fn rendered_schema(&self) -> &'static str {
+        match self.core {
+            NativePackCore::Primary(_) => SCHEMA,
+            NativePackCore::Combined(_) => COMBINED_RENDER_SCHEMA,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -288,7 +309,7 @@ struct Header<'p> {
 }
 
 fn prepare<'p>(
-    input: &Input<'p, '_, '_>,
+    input: &Input<'p, '_, '_, '_>,
     format: Format,
     budget: &mut Budget,
     limit: u64,
@@ -319,109 +340,198 @@ fn prepare<'p>(
             Payload::CanonicalPack(text),
         )?;
     } else {
-        let core = input.core;
-        planner.add(
-            input.id,
-            "pack_header",
-            "PACK",
-            &["semantic_pack_id", "core.schema"],
-            None,
-            &Header {
-                schema: core.schema,
-                semantic_pack_id: input.id,
-                item_count: core.items.len(),
-            },
-        )?;
-        planner.add(
-            input.id,
-            "pack_profile",
-            "PROFILE",
-            &["core.profile"],
-            None,
-            core.profile,
-        )?;
-        planner.add(
-            input.id,
-            "universe_binding",
-            "UNIVERSE",
-            &["core.universe_set_id", "core.binding"],
-            None,
-            &(core.universe_set_id, core.binding),
-        )?;
-        planner.add(
-            input.id,
-            "pack_request",
-            "REQUEST",
-            &["core.request"],
-            None,
-            &core.request,
-        )?;
-        planner.add(
-            input.id,
-            "boundary_notice",
-            "BOUNDARY",
-            &["core.boundary_notice"],
-            None,
-            core.boundary_notice,
-        )?;
-        planner.add(
-            input.id,
-            "native_skeletons",
-            "SKELETONS",
-            &["core.skeletons"],
-            None,
-            &core.skeletons,
-        )?;
-        if let Some(expansion) = &core.expansion {
-            planner.add(
-                expansion.expansion_id(),
-                "native_frontier_expansion",
-                "EXPANSION",
-                &["core.expansion"],
-                None,
-                expansion,
-            )?;
+        match input.core {
+            NativePackCore::Primary(core) => {
+                planner.add(
+                    input.id,
+                    "pack_header",
+                    "PACK",
+                    &["semantic_pack_id", "core.schema"],
+                    None,
+                    &Header {
+                        schema: core.schema,
+                        semantic_pack_id: input.id,
+                        item_count: core.items.len(),
+                    },
+                )?;
+                planner.add(
+                    input.id,
+                    "pack_profile",
+                    "PROFILE",
+                    &["core.profile"],
+                    None,
+                    core.profile,
+                )?;
+                planner.add(
+                    input.id,
+                    "universe_binding",
+                    "UNIVERSE",
+                    &["core.universe_set_id", "core.binding"],
+                    None,
+                    &(core.universe_set_id, core.binding),
+                )?;
+                planner.add(
+                    input.id,
+                    "pack_request",
+                    "REQUEST",
+                    &["core.request"],
+                    None,
+                    &core.request,
+                )?;
+                planner.add(
+                    input.id,
+                    "boundary_notice",
+                    "BOUNDARY",
+                    &["core.boundary_notice"],
+                    None,
+                    core.boundary_notice,
+                )?;
+                planner.add(
+                    input.id,
+                    "native_skeletons",
+                    "SKELETONS",
+                    &["core.skeletons"],
+                    None,
+                    &core.skeletons,
+                )?;
+                if let Some(expansion) = &core.expansion {
+                    planner.add(
+                        expansion.expansion_id(),
+                        "native_frontier_expansion",
+                        "EXPANSION",
+                        &["core.expansion"],
+                        None,
+                        expansion,
+                    )?;
+                }
+                for (index, item) in core.items.iter().enumerate() {
+                    checkpoint(stop)?;
+                    let (template, label) = match item.core.payload.template() {
+                        "native_entity_item" => ("native_entity_item", "ENTITY"),
+                        "native_relation_item" => ("native_relation_item", "RELATION"),
+                        _ => return Err(encoding()),
+                    };
+                    planner.add(
+                        item.context_item_id(),
+                        template,
+                        label,
+                        &["core.items"],
+                        Some(index),
+                        item,
+                    )?;
+                }
+                planner.add(
+                    input.id,
+                    "selection_trace",
+                    "SELECTION_TRACE",
+                    &["core.selection_trace"],
+                    None,
+                    &core.selection_trace,
+                )?;
+                planner.add(
+                    input.id,
+                    "coverage_and_omissions",
+                    "COVERAGE",
+                    &["core.omissions", "core.state", "core.absence_authoritative"],
+                    None,
+                    &(&core.omissions, core.state, core.absence_authoritative),
+                )?;
+                planner.add(
+                    input.id,
+                    "pack_budget",
+                    "BUDGET",
+                    &["core.budget"],
+                    None,
+                    &core.budget,
+                )?;
+            }
+            NativePackCore::Combined(core) => {
+                planner.add(
+                    input.id,
+                    "pack_header",
+                    "PACK",
+                    &["semantic_pack_id", "core.schema"],
+                    None,
+                    &Header {
+                        schema: core.schema,
+                        semantic_pack_id: input.id,
+                        item_count: core.items.len(),
+                    },
+                )?;
+                planner.add(
+                    input.id,
+                    "pack_profile",
+                    "PROFILE",
+                    &["core.profile"],
+                    None,
+                    core.profile,
+                )?;
+                planner.add(
+                    core.origins.inspect_id(),
+                    "combined_native_origins",
+                    "ORIGINS",
+                    &["core.origins"],
+                    None,
+                    &core.origins,
+                )?;
+                planner.add(
+                    input.id,
+                    "pack_request",
+                    "REQUEST",
+                    &["core.request"],
+                    None,
+                    &core.request,
+                )?;
+                planner.add(
+                    input.id,
+                    "boundary_notice",
+                    "BOUNDARY",
+                    &["core.boundary_notice"],
+                    None,
+                    core.boundary_notice,
+                )?;
+                for (index, item) in core.items.iter().enumerate() {
+                    checkpoint(stop)?;
+                    let (template, label) = match item.core.payload.template() {
+                        "native_entity_item" => ("qualified_native_entity_item", "ENTITY"),
+                        "native_relation_item" => ("qualified_native_relation_item", "RELATION"),
+                        _ => return Err(encoding()),
+                    };
+                    planner.add(
+                        item.context_item_id(),
+                        template,
+                        label,
+                        &["core.items"],
+                        Some(index),
+                        item,
+                    )?;
+                }
+                planner.add(
+                    input.id,
+                    "selection_trace",
+                    "SELECTION_TRACE",
+                    &["core.selection_trace"],
+                    None,
+                    &core.selection_trace,
+                )?;
+                planner.add(
+                    input.id,
+                    "coverage_and_omissions",
+                    "COVERAGE",
+                    &["core.omissions", "core.state", "core.absence_authoritative"],
+                    None,
+                    &(&core.omissions, core.state, core.absence_authoritative),
+                )?;
+                planner.add(
+                    input.id,
+                    "pack_budget",
+                    "BUDGET",
+                    &["core.budget"],
+                    None,
+                    &core.budget,
+                )?;
+            }
         }
-        for (index, item) in core.items.iter().enumerate() {
-            checkpoint(stop)?;
-            let (template, label) = match item.core.payload.template() {
-                "native_entity_item" => ("native_entity_item", "ENTITY"),
-                "native_relation_item" => ("native_relation_item", "RELATION"),
-                _ => return Err(encoding()),
-            };
-            planner.add(
-                item.context_item_id(),
-                template,
-                label,
-                &["core.items"],
-                Some(index),
-                item,
-            )?;
-        }
-        planner.add(
-            input.id,
-            "selection_trace",
-            "SELECTION_TRACE",
-            &["core.selection_trace"],
-            None,
-            &core.selection_trace,
-        )?;
-        planner.add(
-            input.id,
-            "coverage_and_omissions",
-            "COVERAGE",
-            &["core.omissions", "core.state", "core.absence_authoritative"],
-            None,
-            &(&core.omissions, core.state, core.absence_authoritative),
-        )?;
-        planner.add(
-            input.id,
-            "pack_budget",
-            "BUDGET",
-            &["core.budget"],
-            None,
-            &core.budget,
-        )?;
     }
     Ok(planner.finish())
 }
@@ -513,13 +623,14 @@ struct CoreRef<'p, 'r, 's> {
     trace: Trace<'r, 's>,
 }
 fn core_ref<'p, 'r, 's>(
+    schema: &'static str,
     id: &'p str,
     plan: &'r Plan<'r>,
     profile: &'static RendererProfile,
     stop: &'s AtomicBool,
 ) -> CoreRef<'p, 'r, 's> {
     CoreRef {
-        schema: SCHEMA,
+        schema,
         semantic_pack_id: id,
         profile,
         content: Content {
@@ -573,9 +684,13 @@ fn pass(plan: &Plan<'_>, budget: &mut Budget, stop: &AtomicBool) -> ContextResul
     budget.work(amount, stop)
 }
 
-fn artifact_id(value: &impl Serialize, stop: &AtomicBool) -> ContextResult<Box<str>> {
+fn artifact_id(
+    schema: &'static str,
+    value: &impl Serialize,
+    stop: &AtomicBool,
+) -> ContextResult<Box<str>> {
     checkpoint(stop)?;
-    let hash = wow_core::domain_separated_digest(SCHEMA, value);
+    let hash = wow_core::domain_separated_digest(schema, value);
     checkpoint(stop)?;
     let digest = ContentDigest::<CanonicalResult>::from_bytes(hash.map_err(|_| encoding())?);
     Ok(format!("rendered-context:{digest}").into_boxed_str())
@@ -606,22 +721,38 @@ fn render(
     stop: &AtomicBool,
 ) -> ContextResult<RenderedContextArtifact> {
     let limit = pack.render_limit();
-    // Root-owned crate-private split; it lends the SAME held ledger.
     let (id, core, canonical_bytes, budget) = pack.render_parts();
-    let input = Input {
-        id,
-        core,
-        canonical_bytes,
-    };
-    let profile = format.profile(core)?;
+    render_input(
+        Input {
+            id,
+            core: NativePackCore::Primary(core),
+            canonical_bytes,
+        },
+        format,
+        budget,
+        limit,
+        stop,
+    )
+}
+
+fn render_input(
+    input: Input<'_, '_, '_, '_>,
+    format: Format,
+    budget: &mut Budget,
+    limit: u64,
+    stop: &AtomicBool,
+) -> ContextResult<RenderedContextArtifact> {
+    let id = input.id;
+    let schema = input.rendered_schema();
+    let profile = format.profile(input.core)?;
     let plan = prepare(&input, format, budget, limit, stop)?;
-    let core = core_ref(id, &plan, profile, stop);
+    let core = core_ref(schema, id, &plan, profile, stop);
     pass(&plan, budget, stop)?;
     budget.retain(&core, stop)?;
     pass(&plan, budget, stop)?;
     budget.retain(
         &IdMaterial {
-            domain: SCHEMA,
+            domain: schema,
             value: &core,
         },
         stop,
@@ -650,7 +781,7 @@ fn render(
         return Err(encoding());
     }
     let complete_core = CompleteCoreRef {
-        schema: SCHEMA,
+        schema,
         semantic_pack_id: id,
         profile,
         content: &output.text,
@@ -670,7 +801,7 @@ fn render(
             .ok_or_else(exhausted)?,
         stop,
     )?;
-    let rendered_context_artifact_id = artifact_id(&complete_core, stop)?;
+    let rendered_context_artifact_id = artifact_id(schema, &complete_core, stop)?;
     budget.work(plan.records.len(), stop)?;
     budget.retain(
         &ArtifactRef {
@@ -696,7 +827,7 @@ fn render(
     Ok(RenderedContextArtifact {
         rendered_context_artifact_id,
         core: RenderCore {
-            schema: SCHEMA,
+            schema,
             semantic_pack_id: id.into(),
             profile,
             content: output.text.into_boxed_str(),
@@ -720,6 +851,43 @@ pub fn render_context_pack_markdown(
     stop: &AtomicBool,
 ) -> ContextResult<RenderedContextArtifact> {
     render(pack, Format::Markdown, stop)
+}
+
+pub fn render_combined_context_pack_json(
+    pack: &mut CombinedContextSemanticPack<'_, '_, '_>,
+    stop: &AtomicBool,
+) -> ContextResult<RenderedContextArtifact> {
+    let limit = pack.render_limit();
+    let (id, core, canonical_bytes, budget) = pack.render_parts();
+    render_input(
+        Input {
+            id,
+            core: NativePackCore::Combined(core),
+            canonical_bytes,
+        },
+        Format::Json,
+        budget,
+        limit,
+        stop,
+    )
+}
+pub fn render_combined_context_pack_markdown(
+    pack: &mut CombinedContextSemanticPack<'_, '_, '_>,
+    stop: &AtomicBool,
+) -> ContextResult<RenderedContextArtifact> {
+    let limit = pack.render_limit();
+    let (id, core, canonical_bytes, budget) = pack.render_parts();
+    render_input(
+        Input {
+            id,
+            core: NativePackCore::Combined(core),
+            canonical_bytes,
+        },
+        Format::Markdown,
+        budget,
+        limit,
+        stop,
+    )
 }
 
 struct Compare<'p, 's> {
@@ -763,13 +931,50 @@ pub fn validate_rendered_context_artifact(
 ) -> ContextResult<()> {
     let limit = pack.render_limit();
     let (id, core, canonical_bytes, budget) = pack.render_parts();
-    let input = Input {
-        id,
-        core,
-        canonical_bytes,
-    };
+    validate_rendered_input(
+        Input {
+            id,
+            core: NativePackCore::Primary(core),
+            canonical_bytes,
+        },
+        artifact,
+        budget,
+        limit,
+        stop,
+    )
+}
+
+pub fn validate_rendered_combined_context_artifact(
+    pack: &mut CombinedContextSemanticPack<'_, '_, '_>,
+    artifact: &RenderedContextArtifact,
+    stop: &AtomicBool,
+) -> ContextResult<()> {
+    let limit = pack.render_limit();
+    let (id, core, canonical_bytes, budget) = pack.render_parts();
+    validate_rendered_input(
+        Input {
+            id,
+            core: NativePackCore::Combined(core),
+            canonical_bytes,
+        },
+        artifact,
+        budget,
+        limit,
+        stop,
+    )
+}
+
+fn validate_rendered_input(
+    input: Input<'_, '_, '_, '_>,
+    artifact: &RenderedContextArtifact,
+    budget: &mut Budget,
+    limit: u64,
+    stop: &AtomicBool,
+) -> ContextResult<()> {
+    let id = input.id;
+    let schema = input.rendered_schema();
     budget.work(artifact.core.trace.len(), stop)?;
-    if artifact.core.schema != SCHEMA
+    if artifact.core.schema != schema
         || artifact.core.semantic_pack_id.as_ref() != id
         || artifact.core.byte_length > limit
         || artifact.core.byte_length
@@ -779,16 +984,18 @@ pub fn validate_rendered_context_artifact(
         return Err(encoding());
     }
     let format = match artifact.core.profile.profile_id {
-        crate::pack::PRIMARY_CONTEXT_JSON_RENDERER_PROFILE
+        crate::pack::COMBINED_CONTEXT_JSON_RENDERER_PROFILE
+        | crate::pack::PRIMARY_CONTEXT_JSON_RENDERER_PROFILE
         | crate::pack::PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE
         | crate::pack::PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE => Format::Json,
-        crate::pack::PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE
+        crate::pack::COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE
+        | crate::pack::PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE
         | crate::pack::PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE
         | crate::pack::PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE => Format::Markdown,
         _ => return Err(encoding()),
     };
     // Profiles are exact compiled descriptors, not caller-selectable templates.
-    let profile = format.profile(core)?;
+    let profile = format.profile(input.core)?;
     budget.work(profile.templates.len(), stop)?;
     budget.retain(&(artifact.core.profile, profile), stop)?;
     if canonical(artifact.core.profile, limit, stop)? != canonical(profile, limit, stop)? {
@@ -825,7 +1032,7 @@ pub fn validate_rendered_context_artifact(
     }
     if matches!(format, Format::Json) {
         budget.work(artifact.core.content.len(), stop)?;
-        if artifact.core.content.as_bytes() != canonical_bytes {
+        if artifact.core.content.as_bytes() != input.canonical_bytes {
             return Err(encoding());
         }
     } else {
@@ -851,7 +1058,7 @@ pub fn validate_rendered_context_artifact(
         return Err(encoding());
     }
     let material = IdMaterial {
-        domain: SCHEMA,
+        domain: schema,
         value: &artifact.core,
     };
     budget.work(
@@ -873,7 +1080,7 @@ pub fn validate_rendered_context_artifact(
             .ok_or_else(exhausted)?,
         stop,
     )?;
-    if artifact_id(&artifact.core, stop)? != artifact.rendered_context_artifact_id {
+    if artifact_id(schema, &artifact.core, stop)? != artifact.rendered_context_artifact_id {
         return Err(encoding());
     }
     checkpoint(stop)

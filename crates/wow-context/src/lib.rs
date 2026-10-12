@@ -32,15 +32,18 @@ pub use map::{
     primary_navigation_query, primary_project_navigation_queries,
 };
 pub use pack::{
+    COMBINED_CONTEXT_JSON_RENDERER_PROFILE, COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE,
+    COMBINED_CONTEXT_PACK_PROFILE, COMBINED_CONTEXT_PROFILES_BYTES, CombinedContextSemanticPack,
     ContextOperationBudgetUsage, ContextSemanticPack, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE,
     PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_CONTEXT_PACK_PROFILE,
     PRIMARY_CONTEXT_PROFILES_BYTES, PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE,
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE,
     PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE,
     PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE,
-    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE, build_context_semantic_pack,
-    build_context_semantic_pack_from_expansion, build_context_semantic_pack_with_l1_profile,
-    build_context_semantic_pack_with_profile, build_context_semantic_pack_with_reference_facts,
+    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE, build_combined_context_semantic_pack,
+    build_context_semantic_pack, build_context_semantic_pack_from_expansion,
+    build_context_semantic_pack_with_l1_profile, build_context_semantic_pack_with_profile,
+    build_context_semantic_pack_with_reference_facts, validate_combined_context_semantic_pack,
     validate_context_semantic_pack,
 };
 pub use platform::{
@@ -54,8 +57,10 @@ pub use profile::{
 };
 pub use reference::ReferenceOriginInput;
 pub use render::{
-    ContextRenderTrace, RenderSelection, RenderedContextArtifact, render_context_pack_json,
-    render_context_pack_markdown, validate_rendered_context_artifact,
+    ContextRenderTrace, RenderSelection, RenderedContextArtifact,
+    render_combined_context_pack_json, render_combined_context_pack_markdown,
+    render_context_pack_json, render_context_pack_markdown,
+    validate_rendered_combined_context_artifact, validate_rendered_context_artifact,
 };
 pub use skeleton::{
     L0Scope, L0Skeleton, L1Skeleton, PRIMARY_L0_PROFILE, PRIMARY_L1_PROFILE,

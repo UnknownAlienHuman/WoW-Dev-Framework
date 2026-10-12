@@ -1,4 +1,4 @@
-//! Closed combined map/inspect explicit-file transport; semantics remain service-owned.
+//! Closed combined map/inspect/build transport; semantics remain service-owned.
 use super::{Arguments, Command, MAX_VALUE_BYTES, set};
 use std::{
     ffi::{OsStr, OsString},
@@ -10,7 +10,7 @@ use wow_service::{
     ServiceErrorCode,
     context::{
         CONTEXT_COMBINED_HOST_INPUT_MAX_BYTES, CONTEXT_COMBINED_REQUEST_MAX_BYTES,
-        ContextCombinedHostInput, ContextCombinedRequest, ContextPlatformOperation,
+        ContextCombinedHostInput, ContextCombinedOperation, ContextCombinedRequest,
         execute_context_combined,
     },
 };
@@ -21,11 +21,12 @@ pub(super) struct Request {
 }
 
 impl Request {
-    pub(super) fn operation_matches(&self, operation: ContextPlatformOperation) -> bool {
+    pub(super) fn operation_matches(&self, operation: ContextCombinedOperation) -> bool {
         matches!(
             (self.command, operation),
-            (Command::Map, ContextPlatformOperation::Map)
-                | (Command::Inspect, ContextPlatformOperation::Inspect)
+            (Command::Map, ContextCombinedOperation::Map)
+                | (Command::Inspect, ContextCombinedOperation::Inspect)
+                | (Command::Build, ContextCombinedOperation::Build)
         )
     }
 }
@@ -45,12 +46,13 @@ pub(super) fn parse(values: &[OsString]) -> Result<Option<Arguments>, &'static s
         return Ok(None);
     }
     if values.first().map(OsString::as_os_str) != Some(OsStr::new("context")) {
-        return Err("expected context map or inspect");
+        return Err("expected context map, inspect or build");
     }
     let command = match values.get(1).and_then(|value| value.to_str()) {
         Some("map") => Command::Map,
         Some("inspect") => Command::Inspect,
-        _ => return Err("combined platform supports context map or inspect only"),
+        Some("build") => Command::Build,
+        _ => return Err("combined platform supports context map, inspect or build only"),
     };
     let mut host_config = None;
     let mut request_input = None;
@@ -92,7 +94,7 @@ pub(super) fn parse(values: &[OsString]) -> Result<Option<Arguments>, &'static s
             }
             "--output" => {
                 if value != "envelope-json" {
-                    return Err("combined context map/inspect output must be envelope-json");
+                    return Err("combined context map/inspect/build output must be envelope-json");
                 }
                 set(&mut output, (), command)?;
             }

@@ -8,8 +8,8 @@ use wow_store::project::{ReadSelector, StoreGenerationId};
 use super::{
     ContextMapHostInput, ContextMapPublication, ContextMapRequest, ContextMapResult,
     ContextMapRoot, ContextMapStatus, ContextPlatformHostInput, ContextPlatformOperation,
-    ContextPlatformRequest, PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID, checkpoint, context_error,
-    failure,
+    ContextPlatformRequest, ContextRenderSelection, PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
+    checkpoint, context_error, failure,
     operation::{
         Envelope, encode, failed_operation, preflight, with_checked_context_read,
         with_primary_composition,
@@ -25,6 +25,18 @@ pub const CONTEXT_COMBINED_RESULT_SCHEMA: &str = "wow-service/context-combined-r
 pub const CONTEXT_COMBINED_HOST_INPUT_MAX_BYTES: usize = super::CONTEXT_MAP_HOST_INPUT_MAX_BYTES;
 pub const CONTEXT_COMBINED_REQUEST_MAX_BYTES: usize = super::CONTEXT_PLATFORM_REQUEST_MAX_BYTES;
 pub const COMBINED_NATIVE_MAP_PROFILE_ID: &str = wow_context::COMBINED_NATIVE_ONE_HOP_PROFILE;
+pub const COMBINED_CONTEXT_PACK_PROFILE_ID: &str = wow_context::COMBINED_CONTEXT_PACK_PROFILE;
+pub const COMBINED_CONTEXT_JSON_RENDERER_PROFILE_ID: &str =
+    wow_context::COMBINED_CONTEXT_JSON_RENDERER_PROFILE;
+pub const COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID: &str =
+    wow_context::COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContextCombinedOperation {
+    Map,
+    Inspect,
+    Build,
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -94,12 +106,20 @@ struct RequestDocument {
     platform: platform::RequestDocument,
     #[serde(default, deserialize_with = "non_null_inspection")]
     inspection: Option<Inspection>,
+    #[serde(default, deserialize_with = "non_null_build")]
+    build: Option<BuildSelection>,
 }
 
 fn non_null_inspection<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<Inspection>, D::Error> {
     Inspection::deserialize(deserializer).map(Some)
+}
+
+fn non_null_build<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<BuildSelection>, D::Error> {
+    BuildSelection::deserialize(deserializer).map(Some)
 }
 
 #[derive(Deserialize, Serialize)]
@@ -109,12 +129,63 @@ struct Inspection {
 }
 impl Inspection {
     fn level(&self) -> ServiceResult<wow_context::SkeletonLevel> {
-        match self.level.as_ref() {
-            "l0" => Ok(wow_context::SkeletonLevel::L0),
-            "l1" => Ok(wow_context::SkeletonLevel::L1),
-            "both" => Ok(wow_context::SkeletonLevel::Both),
-            _ => Err(failure(ServiceErrorCode::InvalidRequest)),
+        skeleton_level(&self.level)
+    }
+}
+
+fn skeleton_level(value: &str) -> ServiceResult<wow_context::SkeletonLevel> {
+    match value {
+        "l0" => Ok(wow_context::SkeletonLevel::L0),
+        "l1" => Ok(wow_context::SkeletonLevel::L1),
+        "both" => Ok(wow_context::SkeletonLevel::Both),
+        _ => Err(failure(ServiceErrorCode::InvalidRequest)),
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct BuildSelection {
+    level: Box<str>,
+    context_profile_id: Box<str>,
+    renderer_profile_ids: Vec<Box<str>>,
+}
+impl BuildSelection {
+    fn normalize(
+        &mut self,
+        stop: &AtomicBool,
+    ) -> ServiceResult<(wow_context::SkeletonLevel, ContextRenderSelection)> {
+        let level = skeleton_level(&self.level)?;
+        if self.context_profile_id.as_ref() != COMBINED_CONTEXT_PACK_PROFILE_ID
+            || self.renderer_profile_ids.len() > 2
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
         }
+        let mut json = false;
+        let mut markdown = false;
+        for profile in &self.renderer_profile_ids {
+            checkpoint(stop)?;
+            match profile.as_ref() {
+                COMBINED_CONTEXT_JSON_RENDERER_PROFILE_ID if !json => json = true,
+                COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID if !markdown => markdown = true,
+                _ => return Err(failure(ServiceErrorCode::InvalidRequest)),
+            }
+        }
+        // Both uses one fixed order in intent and delivery, regardless of input order.
+        if json
+            && markdown
+            && self.renderer_profile_ids[0].as_ref()
+                == COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID
+        {
+            self.renderer_profile_ids.swap(0, 1);
+        }
+        let render = match (json, markdown) {
+            (false, false) => ContextRenderSelection::None,
+            (true, false) => ContextRenderSelection::Json,
+            (false, true) => ContextRenderSelection::Markdown,
+            (true, true) => ContextRenderSelection::Both,
+        };
+        checkpoint(stop)?;
+        Ok((level, render))
     }
 }
 
@@ -128,12 +199,18 @@ pub struct ContextCombinedRequest {
     platform: ContextPlatformRequest,
     #[serde(skip_serializing_if = "Option::is_none")]
     inspection: Option<Inspection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    build: Option<BuildSelection>,
+    #[serde(skip)]
+    selected_level: Option<wow_context::SkeletonLevel>,
+    #[serde(skip)]
+    render: ContextRenderSelection,
     #[serde(skip)]
     primary_request: ContextMapRequest,
 }
 impl ContextCombinedRequest {
     pub fn from_json_slice(bytes: &[u8], stop: &AtomicBool) -> ServiceResult<Self> {
-        let document: RequestDocument = crate::graph::input::decode(
+        let mut document: RequestDocument = crate::graph::input::decode(
             bytes,
             CONTEXT_COMBINED_REQUEST_MAX_BYTES,
             65_536,
@@ -142,22 +219,36 @@ impl ContextCombinedRequest {
         )
         .map_err(|error| failure(error.code))?;
         if document.schema.as_ref() != CONTEXT_COMBINED_REQUEST_SCHEMA
-            || !matches!(document.operation.as_ref(), "map" | "inspect")
+            || !matches!(document.operation.as_ref(), "map" | "inspect" | "build")
             || document.profile_id.as_ref() != COMBINED_NATIVE_MAP_PROFILE_ID
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
-        match (document.operation.as_ref(), document.inspection.as_ref()) {
-            ("map", None) => {}
-            ("inspect", Some(selection)) => {
-                let level = selection.level()?;
-                if matches!(&document.primary.root, ContextMapRoot::Project(_))
-                    && level != wow_context::SkeletonLevel::L0
-                {
-                    return Err(failure(ServiceErrorCode::InvalidRequest));
-                }
+        let (operation, selected_level, render) = match (
+            document.operation.as_ref(),
+            document.inspection.as_ref(),
+            document.build.as_mut(),
+        ) {
+            ("map", None, None) => (
+                ContextCombinedOperation::Map,
+                None,
+                ContextRenderSelection::None,
+            ),
+            ("inspect", Some(selection), None) => (
+                ContextCombinedOperation::Inspect,
+                Some(selection.level()?),
+                ContextRenderSelection::None,
+            ),
+            ("build", None, Some(selection)) => {
+                let (level, render) = selection.normalize(stop)?;
+                (ContextCombinedOperation::Build, Some(level), render)
             }
             _ => return Err(failure(ServiceErrorCode::InvalidRequest)),
+        };
+        if matches!(&document.primary.root, ContextMapRoot::Project(_))
+            && selected_level.is_some_and(|level| level != wow_context::SkeletonLevel::L0)
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
         }
         request::identifier(&document.primary.publication_set_id)?;
         // Reuse the original root/request admission, rather than accepting DTO authority.
@@ -180,32 +271,37 @@ impl ContextCombinedRequest {
         checkpoint(stop)?;
         Ok(Self {
             schema: CONTEXT_COMBINED_REQUEST_SCHEMA,
-            operation: if document.inspection.is_some() {
-                "inspect"
-            } else {
-                "map"
+            operation: match operation {
+                ContextCombinedOperation::Map => "map",
+                ContextCombinedOperation::Inspect => "inspect",
+                ContextCombinedOperation::Build => "build",
             },
             profile_id: COMBINED_NATIVE_MAP_PROFILE_ID,
             primary: document.primary,
             platform,
             inspection: document.inspection,
+            build: document.build,
+            selected_level,
+            render,
             primary_request,
         })
     }
 
-    pub fn operation(&self) -> ContextPlatformOperation {
-        if self.inspection.is_some() {
-            ContextPlatformOperation::Inspect
+    pub fn operation(&self) -> ContextCombinedOperation {
+        if self.build.is_some() {
+            ContextCombinedOperation::Build
+        } else if self.inspection.is_some() {
+            ContextCombinedOperation::Inspect
         } else {
-            ContextPlatformOperation::Map
+            ContextCombinedOperation::Map
         }
     }
 
     fn result_operation(&self) -> &'static str {
-        if self.inspection.is_some() {
-            "context_combined_inspect"
-        } else {
-            "context_combined_map"
+        match self.operation() {
+            ContextCombinedOperation::Map => "context_combined_map",
+            ContextCombinedOperation::Inspect => "context_combined_inspect",
+            ContextCombinedOperation::Build => "context_combined_build",
         }
     }
 }
@@ -274,9 +370,8 @@ pub fn execute_context_combined(
                 &host.primary,
                 root.clone(),
                 request
-                    .inspection
-                    .as_ref()
-                    .is_some_and(|selection| selection.level.as_ref() != "l0"),
+                    .selected_level
+                    .is_some_and(|level| level != wow_context::SkeletonLevel::L0),
                 stop,
                 |primary, graph| {
                     let (outcome, closure) = with_checked_platform_read(
@@ -297,7 +392,7 @@ pub fn execute_context_combined(
                                         stop,
                                     )
                                     .map_err(context_error)?;
-                                    if let Some(selection) = &request.inspection {
+                                    if let Some(level) = request.selected_level {
                                         let scope = match &root {
                                             ContextMapRoot::Project(id) => {
                                                 wow_context::L0Scope::Project(id.clone())
@@ -307,34 +402,41 @@ pub fn execute_context_combined(
                                             }
                                         };
                                         let inspect = wow_context::build_combined_context_inspect(
-                                            &mut map,
-                                            &universe,
-                                            graph,
-                                            &scope,
-                                            selection.level()?,
-                                            stop,
+                                            &mut map, &universe, graph, &scope, level, stop,
                                         )
                                         .map_err(context_error)?;
-                                        let delivery = Delivery {
-                                            artifact: InspectPayload {
-                                                combined_inspect_byte_length: inspect
-                                                    .canonical_bytes()
-                                                    .len(),
-                                                combined_inspect: &inspect,
-                                            },
-                                            state: inspect.state(),
-                                            remaining_metadata_bytes: inspect
-                                                .remaining_metadata_bytes(),
-                                        };
-                                        encode_result(
-                                            host,
-                                            request,
-                                            &request_id,
-                                            primary_read,
-                                            platform_read,
-                                            delivery,
-                                            stop,
-                                        )
+                                        if request.build.is_some() {
+                                            encode_build_result(
+                                                host,
+                                                request,
+                                                &request_id,
+                                                primary_read,
+                                                platform_read,
+                                                inspect,
+                                                stop,
+                                            )
+                                        } else {
+                                            let delivery = Delivery {
+                                                artifact: InspectPayload {
+                                                    combined_inspect_byte_length: inspect
+                                                        .canonical_bytes()
+                                                        .len(),
+                                                    combined_inspect: &inspect,
+                                                },
+                                                state: inspect.state(),
+                                                remaining_metadata_bytes: inspect
+                                                    .remaining_metadata_bytes(),
+                                            };
+                                            encode_result(
+                                                host,
+                                                request,
+                                                &request_id,
+                                                primary_read,
+                                                platform_read,
+                                                delivery,
+                                                stop,
+                                            )
+                                        }
                                     } else {
                                         let delivery = Delivery {
                                             artifact: MapPayload {
@@ -466,6 +568,70 @@ struct InspectPayload<'a, T: Serialize> {
     combined_inspect_byte_length: usize,
     combined_inspect: &'a T,
 }
+#[derive(Serialize)]
+struct BuildPayload<'a, 'm, 'p, 'f> {
+    semantic_pack_byte_length: usize,
+    semantic_pack: &'a wow_context::CombinedContextSemanticPack<'m, 'p, 'f>,
+    rendered_artifacts: &'a [wow_context::RenderedContextArtifact],
+    operation_budget_usage: wow_context::ContextOperationBudgetUsage,
+    validation: &'static str,
+}
+fn encode_build_result(
+    host: &ContextCombinedHostInput,
+    request: &ContextCombinedRequest,
+    request_id: &str,
+    primary_read: &LiveProjectRead,
+    platform_read: &LiveProjectRead,
+    inspect: wow_context::CombinedContextInspect<'_, '_, '_>,
+    stop: &AtomicBool,
+) -> ServiceResult<(Vec<u8>, ContextMapStatus)> {
+    let mut pack =
+        wow_context::build_combined_context_semantic_pack(inspect, stop).map_err(context_error)?;
+    wow_context::validate_combined_context_semantic_pack(&mut pack, stop).map_err(context_error)?;
+    let mut rendered_artifacts = Vec::new();
+    if matches!(
+        &request.render,
+        ContextRenderSelection::Json | ContextRenderSelection::Both
+    ) {
+        let artifact = wow_context::render_combined_context_pack_json(&mut pack, stop)
+            .map_err(context_error)?;
+        wow_context::validate_rendered_combined_context_artifact(&mut pack, &artifact, stop)
+            .map_err(context_error)?;
+        rendered_artifacts.push(artifact);
+    }
+    if matches!(
+        &request.render,
+        ContextRenderSelection::Markdown | ContextRenderSelection::Both
+    ) {
+        let artifact = wow_context::render_combined_context_pack_markdown(&mut pack, stop)
+            .map_err(context_error)?;
+        wow_context::validate_rendered_combined_context_artifact(&mut pack, &artifact, stop)
+            .map_err(context_error)?;
+        rendered_artifacts.push(artifact);
+    }
+    // The inspect was consumed; snapshot only after every render and validation.
+    let delivery = Delivery {
+        artifact: BuildPayload {
+            semantic_pack_byte_length: pack.canonical_bytes().len(),
+            semantic_pack: &pack,
+            rendered_artifacts: &rendered_artifacts,
+            operation_budget_usage: pack.operation_budget_usage(),
+            validation: "exact_native_binding_and_canonical_bytes",
+        },
+        state: pack.state(),
+        remaining_metadata_bytes: pack.remaining_metadata_bytes(),
+    };
+    encode_result(
+        host,
+        request,
+        request_id,
+        primary_read,
+        platform_read,
+        delivery,
+        stop,
+    )
+}
+
 struct Delivery<T> {
     artifact: T,
     state: wow_context::ProjectMapState,

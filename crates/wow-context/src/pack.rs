@@ -17,6 +17,14 @@ use crate::{
     ReferenceOriginInput, SkeletonLevel, open_project_map_view,
 };
 
+mod combined;
+pub use combined::{
+    COMBINED_CONTEXT_JSON_RENDERER_PROFILE, COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE,
+    COMBINED_CONTEXT_PACK_PROFILE, COMBINED_CONTEXT_PROFILES_BYTES, CombinedContextSemanticPack,
+    build_combined_context_semantic_pack, validate_combined_context_semantic_pack,
+};
+pub(crate) use combined::{COMBINED_RENDER_SCHEMA, CombinedPackCore, combined_renderer_profiles};
+
 mod frontier;
 pub(crate) use frontier::expansion_renderer_profiles;
 pub use frontier::{

@@ -1,9 +1,16 @@
 # `apps/wow` E3-C context CLI contract
 
-**Status:** partial executable `context map` in canonical envelope JSON mode.
-[`../CONTEXT_MAP.md`](../CONTEXT_MAP.md) defines the implemented grammar and
-remaining root/profile limits. Other commands, output modes and E3-C acceptance
-remain specified and unimplemented under Issue #122.
+**Status:** partial executable selected Primary `context map`, `inspect` and
+`build`, plus candidate-qualified native platform and combined Map/Inspect.
+[Map](../CONTEXT_MAP.md), [inspect](../CONTEXT_INSPECT.md) and
+[build](../CONTEXT_BUILD.md) define the actual selected grammar, including the
+explicit combined Build request/host route and optional pack JSON/Markdown records.
+Each command invokes one service operation; selected Build/combined output is
+envelope JSON, while native platform Map/Inspect also has its bounded text summary.
+Status/continue/validate/standalone render, general artifact output and broader
+facets/links/excerpts/tokens/continuation remain specified; full E3-C acceptance
+remains open in [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
+The command list below is the complete target surface.
 
 **Contract ID:** `apps/wow/e3-c/context-cli`
 

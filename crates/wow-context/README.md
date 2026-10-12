@@ -24,9 +24,9 @@ configured Reference binding, original support and load/source custody:
   source type resolution and annotation display lowering remain unevaluated.
 - [Native platform universe/map/inspect through service and CLI](e3/NATIVE_PLATFORM_MAP.md),
   using one retained Skeleton input; broader platform and combined acceptance remain open.
-- [Selected combined native map and L0/L1 inspection](e3/NATIVE_COMBINED_MAP.md), retaining
-  separate original maps, native support and exact shared Reference association under
-  one continuing construction Budget.
+- [Selected combined native map, L0/L1 inspection and semantic pack/JSON/Markdown](e3/NATIVE_COMBINED_MAP.md),
+  retaining separate original owners/origins and exact shared Reference association
+  under one continuing construction Budget through validation and final delivery.
 
 Selected projections remain Partial or Truncated with absence_authoritative=false;
 a bound Reference view does not imply Reference enrichment.

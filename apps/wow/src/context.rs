@@ -82,11 +82,11 @@ const HELP: &str = concat!(
     "  Native map/inspect use a bounded explicit service host and request document. ",
     "The request operation must match the command. Primary options cannot be mixed; ",
     "native build and artifact output are unavailable.\n",
-    "wow context map --platform combined --native-host-config <combined-host.json> ",
+    "wow context map|inspect|build --platform combined --native-host-config <combined-host.json> ",
     "--combined-request-input <request.json> [--output envelope-json]\n",
     "  Combined uses explicit bounded service host/request documents. Native platform ",
-    "request flags and Primary selectors cannot be mixed. Inspect, build, text and artifact ",
-    "are unavailable for this route.\n",
+    "request flags and Primary selectors cannot be mixed. Operation, inspection/build level ",
+    "and Build pack/renderer profiles stay in the request. Text and artifact output are unavailable.\n",
 );
 
 fn progressive_help() -> String {
@@ -1176,7 +1176,7 @@ mod tests {
             assert!(parse(values).is_err(), "{flag}");
         }
 
-        // Combined retains explicit file transport; inspection level stays in its request.
+        // Combined retains explicit transport; level and Build profiles stay in its request.
         let combined_values = |command: &str| {
             [
                 "context",
@@ -1192,18 +1192,21 @@ mod tests {
             .map(OsString::from)
             .collect::<Vec<_>>()
         };
-        for (command, operation, other, duplicate) in [
+        for (command, operation, duplicate) in [
             (
                 "map",
-                wow_service::context::ContextPlatformOperation::Map,
-                wow_service::context::ContextPlatformOperation::Inspect,
+                wow_service::context::ContextCombinedOperation::Map,
                 "duplicate context map option",
             ),
             (
                 "inspect",
-                wow_service::context::ContextPlatformOperation::Inspect,
-                wow_service::context::ContextPlatformOperation::Map,
+                wow_service::context::ContextCombinedOperation::Inspect,
                 "duplicate context inspect option",
+            ),
+            (
+                "build",
+                wow_service::context::ContextCombinedOperation::Build,
+                "duplicate context build option",
             ),
         ] {
             let values = combined_values(command);
@@ -1212,8 +1215,13 @@ mod tests {
             let Request::Combined(request) = parsed.request else {
                 return Err("expected combined explicit file transport");
             };
-            assert!(request.operation_matches(operation));
-            assert!(!request.operation_matches(other));
+            for supplied in [
+                wow_service::context::ContextCombinedOperation::Map,
+                wow_service::context::ContextCombinedOperation::Inspect,
+                wow_service::context::ContextCombinedOperation::Build,
+            ] {
+                assert_eq!(request.operation_matches(supplied), supplied == operation);
+            }
             let mut explicit_output = values.clone();
             push(&mut explicit_output, "--output", "envelope-json");
             assert!(parse(explicit_output).is_ok());
@@ -1232,6 +1240,11 @@ mod tests {
             }
             for (flag, value) in [
                 ("--level", "l1"),
+                (
+                    "--context-profile-id",
+                    "wow-context/combined-native-structural-pack/1",
+                ),
+                ("--renderer-profile-id", "wow-context/combined-pack-json/1"),
                 ("--root", GRAPH_ROOT),
                 ("--platform-request-input", "native-request.json"),
                 ("--unknown", "value"),
@@ -1265,8 +1278,8 @@ mod tests {
             ));
         }
         assert!(matches!(
-            parse(combined_values("build")),
-            Err("combined platform supports context map or inspect only")
+            parse(combined_values("render")),
+            Err("combined platform supports context map, inspect or build only")
         ));
 
         let mut partial_reference = arguments();

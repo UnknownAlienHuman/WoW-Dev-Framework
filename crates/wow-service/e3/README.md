@@ -1,9 +1,16 @@
 # `wow-service` E3-C context acquisition and use-case orchestration
 
-**Status:** partial executable `context_map` over a retained native primary pair.
-The [native route](../../../apps/wow/CONTEXT_MAP.md) freezes explicit host admission,
-selectors, guards, canonical results and checked close behavior. Other E3-C
-operations and complete acquisition/qualification gates remain pending in #122.
+**Status:** partial executable selected native Primary Map/Inspect/Build and
+candidate-qualified platform/combined Map/Inspect. The actual application routes
+are [map](../../../apps/wow/CONTEXT_MAP.md), [inspect](../../../apps/wow/CONTEXT_INSPECT.md)
+and [build with optional JSON/Markdown](../../../apps/wow/CONTEXT_BUILD.md). The
+[combined pack/render contract](../../wow-context/e3/NATIVE_COMBINED_MAP.md#selected-combined-semantic-pack-and-rendering)
+continues original owner custody and one construction Budget into selected Build.
+Explicit host admission, exact selectors, native support and checked closure remain
+mandatory. Status/continue/validate/standalone render and broader facets, links,
+excerpts/tokens/continuation and full E3 qualification remain pending in
+[#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
+The operation list below is the complete target surface, not an implementation claim.
 
 **Contract ID:** `wow-service/e3-c/context-acquisition-and-use-cases`
 

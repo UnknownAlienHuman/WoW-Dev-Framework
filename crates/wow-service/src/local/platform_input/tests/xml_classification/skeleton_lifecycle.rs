@@ -638,7 +638,8 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
         "explain": native_input["limits"]["root_explanation"],
         "evidence": native_input["limits"]["root_evidence"],
         "max_direct_edges": native_input["neighborhood"]["query"]["max_edges"],
-        "max_input_bytes": 8_000_000, "max_metadata_bytes": 8_000_000, "max_context_work": 8_000_000
+        "max_input_bytes": 8_000_000, "max_metadata_bytes": 16 * 1024 * 1024,
+        "max_context_work": 16_000_000
     });
     let primary_host = json!({
         "schema": CONTEXT_MAP_HOST_SCHEMA, "project_store_id": "project-store:fixture-combined-primary",
@@ -1117,6 +1118,181 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
         assert_eq!(refused["resource_closure"], "closed");
         assert!(refused.get("payload").is_none());
     }
+    // One new Build witness reuses the SAME published/source-absent owners.
+    // Renderer selection is inert service intent, not semantic pack identity.
+    let mut build_none_wire = request_wire.clone();
+    build_none_wire["operation"] = json!("build");
+    build_none_wire["build"] = json!({
+        "level": "both", "context_profile_id": wow_context::COMBINED_CONTEXT_PACK_PROFILE,
+        "renderer_profile_ids": []
+    });
+    let build_none = ContextCombinedRequest::from_json_slice(
+        &wow_core::canonical_json_bytes(&build_none_wire)?,
+        &stop,
+    )?;
+    assert_eq!(serde_json::to_value(&build_none)?, build_none_wire);
+    let mut build_wire = build_none_wire.clone();
+    build_wire["build"]["renderer_profile_ids"] = json!([
+        wow_context::COMBINED_CONTEXT_JSON_RENDERER_PROFILE,
+        wow_context::COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE
+    ]);
+    let build_request_bytes = wow_core::canonical_json_bytes(&build_wire)?;
+    let build_request = ContextCombinedRequest::from_json_slice(&build_request_bytes, &stop)?;
+    assert_eq!(serde_json::to_value(&build_request)?, build_wire);
+    let mut reversed_renderers = build_wire.clone();
+    reversed_renderers["build"]["renderer_profile_ids"] = json!([
+        wow_context::COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE,
+        wow_context::COMBINED_CONTEXT_JSON_RENDERER_PROFILE
+    ]);
+    assert_eq!(
+        serde_json::to_value(ContextCombinedRequest::from_json_slice(
+            &wow_core::canonical_json_bytes(&reversed_renderers)?,
+            &stop,
+        )?)?,
+        build_wire,
+        "Both intent normalizes before request identity"
+    );
+    let mut missing_build = build_wire.clone();
+    missing_build
+        .as_object_mut()
+        .ok_or("Build request object")?
+        .remove("build");
+    let mut null_build = build_wire.clone();
+    null_build["build"] = Value::Null;
+    let mut null_render = build_wire.clone();
+    null_render["build"]["renderer_profile_ids"] = Value::Null;
+    let mut primary_recipe = build_wire.clone();
+    primary_recipe["build"]["context_profile_id"] = json!("wow-context/primary-structural-pack/1");
+    let mut mixed_renderer = build_wire.clone();
+    mixed_renderer["build"]["renderer_profile_ids"] = json!(["wow-context/primary-pack-json/1"]);
+    let mut duplicate_renderer = build_wire.clone();
+    duplicate_renderer["build"]["renderer_profile_ids"] = json!([
+        wow_context::COMBINED_CONTEXT_JSON_RENDERER_PROFILE,
+        wow_context::COMBINED_CONTEXT_JSON_RENDERER_PROFILE
+    ]);
+    let mut conflicting_inspection = build_wire.clone();
+    conflicting_inspection["inspection"] = Value::Null;
+    for invalid in [
+        missing_build,
+        null_build,
+        null_render,
+        primary_recipe,
+        mixed_renderer,
+        duplicate_renderer,
+        conflicting_inspection,
+    ] {
+        assert_eq!(
+            ContextCombinedRequest::from_json_slice(&serde_json::to_vec(&invalid)?, &stop)
+                .err()
+                .ok_or("invalid combined Build recipe accepted")?
+                .code(),
+            ServiceErrorCode::InvalidRequest
+        );
+    }
+    assert_eq!(
+        ContextCombinedRequest::from_json_slice(&build_request_bytes, &AtomicBool::new(true))
+            .err()
+            .ok_or("cancelled combined Build selection accepted")?
+            .code(),
+        ServiceErrorCode::Cancelled
+    );
+    let none_observed = execute_context_combined(&host, &build_none, &stop)?;
+    assert_eq!(none_observed.status(), ContextMapStatus::Partial);
+    assert_eq!(none_observed.failure_code(), None);
+    let none_envelope: Value = serde_json::from_slice(none_observed.canonical_bytes())?;
+    assert_eq!(none_envelope["operation"], "context_combined_build");
+    assert_eq!(none_envelope["resource_closure"], "closed");
+    let none_payload = &none_envelope["payload"];
+    assert_eq!(none_payload["rendered_artifacts"], json!([]));
+    let build_observed = execute_context_combined(&host, &build_request, &stop)?;
+    assert_eq!(build_observed.status(), ContextMapStatus::Partial);
+    assert_eq!(build_observed.failure_code(), None);
+    let build_envelope: Value = serde_json::from_slice(build_observed.canonical_bytes())?;
+    assert_eq!(build_envelope["schema"], CONTEXT_COMBINED_RESULT_SCHEMA);
+    assert_eq!(build_envelope["operation"], "context_combined_build");
+    assert_eq!(build_envelope["resource_closure"], "closed");
+    assert_eq!(build_envelope["request"], build_wire);
+    assert_ne!(build_envelope["request_id"], none_envelope["request_id"]);
+    let build_payload = &build_envelope["payload"];
+    for key in ["primary", "platform", "platform_selection"] {
+        assert_eq!(build_payload[key], inspect_payload[key]);
+        assert_eq!(none_payload[key], inspect_payload[key]);
+    }
+    assert_eq!(
+        build_payload["validation"],
+        "exact_native_binding_and_canonical_bytes"
+    );
+    assert_eq!(none_payload["validation"], build_payload["validation"]);
+    assert_combined_pack_and_renderers(
+        build_payload,
+        none_payload,
+        inspect,
+        &original_native["page"],
+    )?;
+
+    // Derive NEW-stage ceilings from the actual None Build usage. Prove the
+    // predecessor still succeeds under each ceiling; preserve every old refusal.
+    let none_usage = &none_payload["operation_budget_usage"];
+    let both_usage = &build_payload["operation_budget_usage"];
+    assert_eq!(none_usage["reservation_basis"], "before_service_delivery");
+    assert_eq!(both_usage["reservation_basis"], "before_service_delivery");
+    let none_work = none_usage["work_reserved"]
+        .as_u64()
+        .ok_or("None Build actual work")?;
+    let none_bytes = none_usage["bytes_reserved"]
+        .as_u64()
+        .ok_or("None Build actual bytes")?;
+    assert!(none_work > 0 && none_work < 8_000_000);
+    assert!(none_bytes > 0 && none_bytes < 8_000_000);
+    assert!(
+        both_usage["work_reserved"]
+            .as_u64()
+            .ok_or("Both Build actual work")?
+            > none_work
+    );
+    assert!(
+        both_usage["bytes_reserved"]
+            .as_u64()
+            .ok_or("Both Build actual bytes")?
+            > none_bytes
+    );
+    for (field, ceiling, predecessor, selected) in [
+        ("max_context_work", none_work, &build_none, &build_request),
+        (
+            "max_metadata_bytes",
+            none_bytes,
+            &inspect_request,
+            &build_none,
+        ),
+    ] {
+        let mut stage_host = host_wire.clone();
+        stage_host["primary"]["limits"][field] = json!(ceiling);
+        stage_host["platform"]["limits"][field] = json!(ceiling);
+        let stage_host = ContextCombinedHostInput::from_json_slice(
+            &wow_core::canonical_json_bytes(&stage_host)?,
+            &stop,
+        )?;
+        let before = execute_context_combined(&stage_host, predecessor, &stop)?;
+        assert_eq!(
+            before.status(),
+            ContextMapStatus::Partial,
+            "predecessor must fit {field}"
+        );
+        assert_eq!(before.failure_code(), None);
+        let before: Value = serde_json::from_slice(before.canonical_bytes())?;
+        assert_eq!(before["resource_closure"], "closed");
+        assert!(before.get("payload").is_some());
+        let refused = execute_context_combined(&stage_host, selected, &stop)?;
+        assert_eq!(refused.status(), ContextMapStatus::Failed);
+        assert_eq!(
+            refused.failure_code(),
+            Some(ServiceErrorCode::BudgetExceeded)
+        );
+        let refused: Value = serde_json::from_slice(refused.canonical_bytes())?;
+        assert_eq!(refused["operation"], "context_combined_build");
+        assert_eq!(refused["resource_closure"], "closed");
+        assert!(refused.get("payload").is_none());
+    }
     assert!(source_absent_paths.iter().all(|path| !path.exists()));
 
     if let Some(destination) = &export {
@@ -1147,6 +1323,20 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
             "envelope-json"
         ]);
         inspect_cli_case["expected_envelope"] = json!("expected-inspect-envelope.json");
+        let mut build_cli_case = cli_case.clone();
+        build_cli_case["argv"] = json!([
+            "context",
+            "build",
+            "--platform",
+            "combined",
+            "--native-host-config",
+            destination.join("host.json"),
+            "--combined-request-input",
+            destination.join("build-request.json"),
+            "--output",
+            "envelope-json"
+        ]);
+        build_cli_case["expected_envelope"] = json!("expected-build-envelope.json");
         for (name, bytes, limit) in [
             (
                 "host.json",
@@ -1183,6 +1373,21 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
                 inspect_observed.canonical_bytes().to_vec(),
                 CONTEXT_MAP_RESULT_MAX_BYTES,
             ),
+            (
+                "build-request.json",
+                wow_core::canonical_json_bytes(&build_request)?,
+                CONTEXT_COMBINED_REQUEST_MAX_BYTES,
+            ),
+            (
+                "build-cli-case.json",
+                wow_core::canonical_json_bytes(&build_cli_case)?,
+                64 * 1024,
+            ),
+            (
+                "expected-build-envelope.json",
+                build_observed.canonical_bytes().to_vec(),
+                CONTEXT_MAP_RESULT_MAX_BYTES,
+            ),
         ] {
             if bytes.len() > limit {
                 return Err("combined fixture export exceeded finite byte bound".into());
@@ -1193,6 +1398,547 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
                 .open(destination.join(name))?;
             file.write_all(&bytes)?;
         }
+    }
+    Ok(())
+}
+
+fn assert_combined_pack_and_renderers(
+    build_payload: &Value,
+    none_payload: &Value,
+    inspect: &Value,
+    original_platform_page: &Value,
+) -> TestResult {
+    let inspect_core = &inspect["core"];
+    let inspect_map = &inspect_core["map"];
+    let inspect_primary_map = &inspect_map["core"]["primary"];
+    let skeletons = &inspect_core["primary_skeletons"];
+    let original_platform_map = &inspect_map["core"]["platform"];
+    let original_platform_inspect = &inspect_core["platform_inspect"];
+    let pack = &build_payload["semantic_pack"];
+    let pack_core = &pack["core"];
+    let semantic_bytes = wow_core::canonical_json_bytes(pack)?;
+    assert_eq!(
+        build_payload["semantic_pack_byte_length"],
+        semantic_bytes.len()
+    );
+    assert_eq!(
+        *pack, none_payload["semantic_pack"],
+        "renderer-independent native pack"
+    );
+    assert_eq!(
+        semantic_bytes,
+        wow_core::canonical_json_bytes(&none_payload["semantic_pack"])?
+    );
+    assert_eq!(pack_core["schema"], "wow-context/semantic-pack/combined/1");
+    let profiles: Value = serde_json::from_slice(wow_context::COMBINED_CONTEXT_PROFILES_BYTES)?;
+    assert_eq!(pack_core["profile"], profiles["pack"]);
+    assert_eq!(
+        pack_core["origins"], *inspect,
+        "exact original map/skeleton/support closure"
+    );
+    assert_eq!(pack_core["state"], "partial");
+    assert_eq!(pack_core["absence_authoritative"], false);
+    let normalized = &pack_core["request"]["core"];
+    assert_eq!(
+        normalized["profile_id"],
+        wow_context::COMBINED_CONTEXT_PACK_PROFILE
+    );
+    assert_eq!(normalized["origin_inspect_id"], inspect["inspect_id"]);
+    assert_eq!(
+        normalized["combined_map_id"],
+        inspect_map["combined_map_id"]
+    );
+    assert_eq!(
+        normalized["primary_map_id"],
+        inspect_primary_map["project_map_id"]
+    );
+    assert_eq!(
+        normalized["primary_l0_id"],
+        skeletons["l0"]["l0_skeleton_id"]
+    );
+    assert_eq!(
+        normalized["primary_l1_id"],
+        skeletons["l1"]["l1_skeleton_id"]
+    );
+    assert_eq!(
+        normalized["platform_map_id"],
+        original_platform_map["map_id"]
+    );
+    assert_eq!(
+        normalized["platform_inspect_id"],
+        original_platform_inspect["inspect_id"]
+    );
+    assert!(normalized.get("renderer_profile_ids").is_none());
+
+    // Compare every qualified item to the ORIGINAL native populations. These
+    // decoded test observations are assertions, never reconstructed authority.
+    let items = pack_core["items"]
+        .as_array()
+        .ok_or("qualified native pack items")?;
+    let selection = pack_core["selection_trace"]
+        .as_array()
+        .ok_or("qualified native selection trace")?;
+    assert_eq!(items.len(), selection.len());
+    let mut item_cursor = 0usize;
+    let mut item_ids = std::collections::BTreeSet::new();
+    let mut qualified_keys = std::collections::BTreeSet::new();
+    let mut relation_count = 0usize;
+    for (owner, original_map, neighborhood) in [
+        (
+            "primary",
+            inspect_primary_map,
+            &inspect_primary_map["core"]["navigation"],
+        ),
+        (
+            "platform",
+            original_platform_map,
+            &original_platform_page["body"]["neighborhood"],
+        ),
+    ] {
+        let root_node = &neighborhood["root"];
+        let root_id = root_node["node_id"]
+            .as_str()
+            .ok_or("native owner root ID")?;
+        let map_id = original_map[if owner == "primary" {
+            "project_map_id"
+        } else {
+            "map_id"
+        }]
+        .as_str()
+        .ok_or("original native owner map ID")?;
+        let mut nodes = std::collections::BTreeMap::new();
+        for node in std::iter::once(root_node).chain(
+            neighborhood["adjacent_nodes"]
+                .as_array()
+                .ok_or("native adjacent nodes")?
+                .iter(),
+        ) {
+            let id = node["node_id"].as_str().ok_or("native member node ID")?;
+            if let Some(previous) = nodes.insert(id, node) {
+                assert_eq!(previous, node, "same-owner repeated root must be exact");
+            }
+        }
+        assert!(!nodes.is_empty());
+        let edges = neighborhood["edges"]
+            .as_array()
+            .ok_or("native selected edges")?;
+        for pair in edges.windows(2) {
+            assert!(
+                pair[0]["edge_id"]
+                    .as_str()
+                    .ok_or("ordered native edge ID")?
+                    < pair[1]["edge_id"]
+                        .as_str()
+                        .ok_or("ordered native edge ID")?
+            );
+        }
+        for (kind, record, native_id) in nodes
+            .values()
+            .map(|node| ("entity", *node, "node_id"))
+            .chain(edges.iter().map(|edge| ("relation", edge, "edge_id")))
+        {
+            let item = items.get(item_cursor).ok_or("native item omitted")?;
+            let row = &item["core"];
+            let id = item["context_item_id"]
+                .as_str()
+                .ok_or("qualified item ID")?;
+            let native_id = record[native_id].as_str().ok_or("native record ID")?;
+            assert!(item_ids.insert(id), "duplicate qualified item ID");
+            assert_eq!(row["schema"], "wow-context/context-item/combined/1");
+            assert_eq!(row["owner"], owner);
+            assert_eq!(row["origin_map_id"], map_id);
+            assert_eq!(row["universe"], root_node["universe"]);
+            assert_eq!(row["generation"], root_node["generation"]);
+            assert_eq!(row["scope"], json!({"kind": "entity", "root_id": root_id}));
+            assert_eq!(row["payload"]["kind"], kind);
+            assert_eq!(row["privacy"], "local_metadata_only");
+            assert_eq!(row["license"], "source_inclusion_not_permitted");
+            assert_eq!(row["source_boundary"], "untrusted_native_metadata");
+            assert!(qualified_keys.insert((
+                owner,
+                row["universe"].as_str().ok_or("native universe")?,
+                row["generation"].as_str().ok_or("native generation")?,
+                root_id,
+                map_id,
+                kind,
+                native_id,
+            )));
+            if kind == "entity" {
+                let reason = if native_id == root_id {
+                    "exact_native_root"
+                } else if owner == "primary" {
+                    "selected_original_primary_native_record"
+                } else {
+                    "selected_original_platform_native_neighbor"
+                };
+                assert_eq!(row["inclusion_reason"], reason);
+                assert_eq!(row["payload"]["node"], *record);
+            } else {
+                assert_eq!(
+                    row["inclusion_reason"],
+                    "original_selected_direct_native_assertion"
+                );
+                assert_eq!(row["payload"]["edge"], *record);
+                for endpoint in ["from", "to"] {
+                    let endpoint = record[endpoint].as_str().ok_or("native edge endpoint")?;
+                    let node = nodes.get(endpoint).ok_or("native endpoint omitted")?;
+                    assert_eq!(node["universe"], row["universe"]);
+                    assert_eq!(node["generation"], row["generation"]);
+                }
+                relation_count += 1;
+            }
+            let trace = &selection[item_cursor];
+            assert_eq!(trace["item_id"], id);
+            assert_eq!(trace["owner"], owner);
+            assert_eq!(trace["origin_map_id"], map_id);
+            assert_eq!(trace["reason"], row["inclusion_reason"]);
+            assert_eq!(trace["required"], true);
+            item_cursor += 1;
+        }
+    }
+    assert_eq!(
+        item_cursor,
+        items.len(),
+        "extra cross-owner or unqualified native item"
+    );
+    assert!(
+        relation_count > 0,
+        "genuine fixture must exercise relation membership"
+    );
+
+    let renderers = build_payload["rendered_artifacts"]
+        .as_array()
+        .ok_or("validated combined rendered artifacts")?;
+    assert_eq!(renderers.len(), 2);
+    let markdown_templates: Vec<_> = [
+        "pack_header",
+        "pack_profile",
+        "combined_native_origins",
+        "pack_request",
+        "boundary_notice",
+    ]
+    .into_iter()
+    .chain(items.iter().map(|item| {
+        if item["core"]["payload"]["kind"] == "entity" {
+            "qualified_native_entity_item"
+        } else {
+            "qualified_native_relation_item"
+        }
+    }))
+    .chain(["selection_trace", "coverage_and_omissions", "pack_budget"])
+    .collect();
+    for (index, renderer) in renderers.iter().enumerate() {
+        let row = &renderer["core"];
+        let profile = if index == 0 { "json" } else { "markdown" };
+        assert_eq!(
+            row["schema"],
+            "wow-context/rendered-context-artifact/combined/1"
+        );
+        assert_eq!(row["profile"], profiles[profile]);
+        assert_eq!(row["semantic_pack_id"], pack["semantic_pack_id"]);
+        let content = row["content"].as_str().ok_or("exact renderer content")?;
+        assert_eq!(row["byte_length"], content.len());
+        assert_eq!(
+            row["content_digest"],
+            serde_json::to_value(digest(content.as_bytes()))?
+        );
+        assert_eq!(
+            row["content_digest_basis"],
+            "sha256_exact_rendered_utf8_bytes"
+        );
+        let traces = row["trace"].as_array().ok_or("exact renderer byte trace")?;
+        if index == 0 {
+            assert_eq!(content.as_bytes(), semantic_bytes.as_slice());
+            assert!(!content.ends_with('\n'));
+            assert_eq!(traces.len(), 1);
+            assert_eq!(traces[0]["record_id"], pack["semantic_pack_id"]);
+            assert_eq!(traces[0]["template_id"], "canonical_pack_json");
+            assert_eq!(
+                traces[0]["semantic_fields"],
+                json!(["semantic_pack_id", "core"])
+            );
+            assert!(traces[0].get("item_index").is_none());
+            assert_eq!(traces[0]["byte_start"], 0);
+            assert_eq!(traces[0]["byte_end"], content.len());
+            continue;
+        }
+        assert_eq!(traces.len(), markdown_templates.len());
+        let mut offset = 0usize;
+        let mut rendered_item_cursor = 0usize;
+        for (trace, template) in traces.iter().zip(&markdown_templates) {
+            assert_eq!(trace["template_id"], *template);
+            let start = usize::try_from(trace["byte_start"].as_u64().ok_or("trace start")?)?;
+            let end = usize::try_from(trace["byte_end"].as_u64().ok_or("trace end")?)?;
+            assert_eq!(start, offset);
+            assert!(start < end && end <= content.len());
+            let record = content.get(start..end).ok_or("UTF8 trace boundary")?;
+            assert_eq!(record.bytes().filter(|byte| *byte == b'\n').count(), 1);
+            let (label, quoted) = record
+                .strip_suffix('\n')
+                .ok_or("Markdown record LF")?
+                .split_once(' ')
+                .ok_or("Markdown typed record framing")?;
+            let decoded: String = serde_json::from_str(quoted)?;
+            let observed_record: Value = serde_json::from_str(&decoded)?;
+            let (expected_label, expected_record, fields) = match *template {
+                "pack_header" => (
+                    "PACK",
+                    json!({"schema": pack_core["schema"],
+                    "semantic_pack_id": pack["semantic_pack_id"], "item_count": items.len()}),
+                    json!(["semantic_pack_id", "core.schema"]),
+                ),
+                "pack_profile" => (
+                    "PROFILE",
+                    pack_core["profile"].clone(),
+                    json!(["core.profile"]),
+                ),
+                "combined_native_origins" => (
+                    "ORIGINS",
+                    pack_core["origins"].clone(),
+                    json!(["core.origins"]),
+                ),
+                "pack_request" => (
+                    "REQUEST",
+                    pack_core["request"].clone(),
+                    json!(["core.request"]),
+                ),
+                "boundary_notice" => (
+                    "BOUNDARY",
+                    pack_core["boundary_notice"].clone(),
+                    json!(["core.boundary_notice"]),
+                ),
+                "qualified_native_entity_item" | "qualified_native_relation_item" => {
+                    let item_index =
+                        usize::try_from(trace["item_index"].as_u64().ok_or("trace item index")?)?;
+                    assert_eq!(item_index, rendered_item_cursor);
+                    rendered_item_cursor += 1;
+                    let item = items
+                        .get(item_index)
+                        .ok_or("rendered item outside sealed pack")?;
+                    assert_eq!(trace["record_id"], item["context_item_id"]);
+                    (
+                        if *template == "qualified_native_entity_item" {
+                            "ENTITY"
+                        } else {
+                            "RELATION"
+                        },
+                        item.clone(),
+                        json!(["core.items"]),
+                    )
+                }
+                "selection_trace" => (
+                    "SELECTION_TRACE",
+                    pack_core["selection_trace"].clone(),
+                    json!(["core.selection_trace"]),
+                ),
+                "coverage_and_omissions" => (
+                    "COVERAGE",
+                    json!([
+                        pack_core["omissions"],
+                        pack_core["state"],
+                        pack_core["absence_authoritative"]
+                    ]),
+                    json!(["core.omissions", "core.state", "core.absence_authoritative"]),
+                ),
+                "pack_budget" => (
+                    "BUDGET",
+                    pack_core["budget"].clone(),
+                    json!(["core.budget"]),
+                ),
+                _ => return Err("unknown combined Markdown record".into()),
+            };
+            assert_eq!(label, expected_label);
+            assert_eq!(
+                observed_record, expected_record,
+                "exact lossless Markdown record"
+            );
+            assert_eq!(trace["semantic_fields"], fields);
+            if !matches!(
+                *template,
+                "qualified_native_entity_item" | "qualified_native_relation_item"
+            ) {
+                assert!(trace.get("item_index").is_none());
+                assert_eq!(
+                    &trace["record_id"],
+                    if *template == "combined_native_origins" {
+                        &inspect["inspect_id"]
+                    } else {
+                        &pack["semantic_pack_id"]
+                    }
+                );
+            }
+            offset = end;
+        }
+        assert_eq!(rendered_item_cursor, items.len());
+        assert_eq!(offset, content.len(), "complete Markdown trace closure");
+    }
+
+    Ok(())
+}
+
+// Reuse the exact source-absent stores from a successful cold lifecycle. This
+// selected witness skips publication/control campaigns, not native acquisition.
+#[test]
+#[ignore = "requires explicit retained source-absent fixture and fresh export directory"]
+fn retained_source_absent_combined_pack_and_renderers() -> TestResult {
+    use std::io::{Read, Write};
+    let stop = AtomicBool::new(false);
+    let fixture = PathBuf::from(
+        std::env::var_os("WOW_CONTEXT_COMBINED_RETAINED_FIXTURE")
+            .ok_or("explicit retained combined fixture required")?,
+    );
+    let export = PathBuf::from(
+        std::env::var_os("WOW_CONTEXT_COMBINED_BUILD_EXPORT")
+            .ok_or("explicit fresh combined Build export required")?,
+    );
+    if !fixture.is_absolute() || !export.is_absolute() {
+        return Err("absolute fixture/export paths required".into());
+    }
+    let read = |name: &str, limit: usize| -> TestResult<Vec<u8>> {
+        let mut bytes = Vec::new();
+        std::fs::File::open(fixture.join(name))?
+            .take(u64::try_from(limit)? + 1)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > limit {
+            return Err("retained fixture exceeds byte bound".into());
+        }
+        Ok(bytes)
+    };
+    let old: Value = serde_json::from_slice(&read(
+        "expected-inspect-envelope.json",
+        CONTEXT_MAP_RESULT_MAX_BYTES,
+    )?)?;
+    assert_eq!(old["resource_closure"], "closed");
+    assert_eq!(old["status"], "partial");
+    let mut case: Value = serde_json::from_slice(&read("inspect-cli-case.json", 65536)?)?;
+    let absent = case["source_absent_paths"]
+        .as_array()
+        .ok_or("source-absent witness paths")?;
+    assert!(!absent.is_empty());
+    for path in absent {
+        assert!(!PathBuf::from(path.as_str().ok_or("source-absent path")?).exists());
+    }
+    let mut host_wire: Value =
+        serde_json::from_slice(&read("host.json", CONTEXT_COMBINED_HOST_INPUT_MAX_BYTES)?)?;
+    // Measured Both: 11.87m work, 10.15m retained + 1.85m delivery. The original
+    // 8m refusal remains retained; select finite headroom within the existing cap.
+    for owner in ["primary", "platform"] {
+        host_wire[owner]["limits"]["max_context_work"] = json!(16_000_000);
+        host_wire[owner]["limits"]["max_metadata_bytes"] = json!(16 * 1024 * 1024);
+    }
+    let host_bytes = wow_core::canonical_json_bytes(&host_wire)?;
+    let host = ContextCombinedHostInput::from_json_slice(&host_bytes, &stop)?;
+    let mut wire: Value =
+        serde_json::from_slice(&read("request.json", CONTEXT_COMBINED_REQUEST_MAX_BYTES)?)?;
+    wire["operation"] = json!("build");
+    wire["build"] = json!({"level":"both", "context_profile_id": wow_context::COMBINED_CONTEXT_PACK_PROFILE, "renderer_profile_ids":[]});
+    let none =
+        ContextCombinedRequest::from_json_slice(&wow_core::canonical_json_bytes(&wire)?, &stop)?;
+    let none_result = execute_context_combined(&host, &none, &stop)?;
+    assert_eq!(
+        none_result.status(),
+        ContextMapStatus::Partial,
+        "None failure: {:?}",
+        none_result.failure_code()
+    );
+    assert_eq!(none_result.failure_code(), None);
+    let none_envelope: Value = serde_json::from_slice(none_result.canonical_bytes())?;
+    assert_eq!(none_envelope["resource_closure"], "closed");
+    assert_eq!(none_envelope["payload"]["rendered_artifacts"], json!([]));
+    wire["build"]["renderer_profile_ids"] = json!([
+        wow_context::COMBINED_CONTEXT_JSON_RENDERER_PROFILE,
+        wow_context::COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE
+    ]);
+    let request_bytes = wow_core::canonical_json_bytes(&wire)?;
+    let request = ContextCombinedRequest::from_json_slice(&request_bytes, &stop)?;
+    let start = std::time::Instant::now();
+    let result = execute_context_combined(&host, &request, &stop)?;
+    let operation_seconds = start.elapsed().as_secs_f64();
+    assert_eq!(
+        result.status(),
+        ContextMapStatus::Partial,
+        "Both failure: {:?}",
+        result.failure_code()
+    );
+    assert_eq!(result.failure_code(), None);
+    let envelope: Value = serde_json::from_slice(result.canonical_bytes())?;
+    assert_eq!(envelope["schema"], CONTEXT_COMBINED_RESULT_SCHEMA);
+    assert_eq!(envelope["operation"], "context_combined_build");
+    assert_eq!(envelope["request"], wire);
+    assert_eq!(envelope["resource_closure"], "closed");
+    assert_ne!(envelope["request_id"], none_envelope["request_id"]);
+    let payload = &envelope["payload"];
+    let inspect = &none_envelope["payload"]["semantic_pack"]["core"]["origins"];
+    let original = &old["payload"]["combined_inspect"]["core"]["map"]["core"];
+    let current = &inspect["core"]["map"]["core"];
+    // Changed caller limits affect envelope identities; original populations and
+    // native support must still equal the independent cold/reopen observation.
+    for field in ["binding", "navigation", "supports"] {
+        assert_eq!(
+            current["primary"]["core"][field],
+            original["primary"]["core"][field]
+        );
+    }
+    assert_eq!(
+        current["platform"]["core"]["native"],
+        original["platform"]["core"]["native"]
+    );
+    assert_combined_pack_and_renderers(
+        payload,
+        &none_envelope["payload"],
+        inspect,
+        &original["platform"]["core"]["native"],
+    )?;
+    for key in ["primary", "platform", "platform_selection"] {
+        assert_eq!(payload[key], old["payload"][key]);
+    }
+    assert_eq!(
+        payload["validation"],
+        "exact_native_binding_and_canonical_bytes"
+    );
+    let usage = &payload["operation_budget_usage"];
+    assert!(usage["work_reserved"].as_u64().ok_or("work")? > 8_000_000);
+    assert!(usage["work_reserved"].as_u64().ok_or("work")? < 16_000_000);
+    assert!(
+        usage["bytes_reserved"].as_u64().ok_or("bytes")?
+            + u64::try_from(result.canonical_bytes().len())?
+            < 16 * 1024 * 1024
+    );
+    eprintln!(
+        "combined retained Both: seconds={operation_seconds} usage={usage} envelope_bytes={}",
+        result.canonical_bytes().len()
+    );
+    std::fs::create_dir(&export)?;
+    case["argv"] = json!([
+        "context",
+        "build",
+        "--platform",
+        "combined",
+        "--native-host-config",
+        export.join("host.json"),
+        "--combined-request-input",
+        export.join("build-request.json"),
+        "--output",
+        "envelope-json"
+    ]);
+    case["expected_envelope"] = json!("expected-build-envelope.json");
+    for (name, bytes) in [
+        ("host.json", host_bytes),
+        ("build-request.json", request_bytes),
+        (
+            "expected-build-envelope.json",
+            result.canonical_bytes().to_vec(),
+        ),
+        (
+            "build-cli-case.json",
+            wow_core::canonical_json_bytes(&case)?,
+        ),
+    ] {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(export.join(name))?
+            .write_all(&bytes)?;
     }
     Ok(())
 }

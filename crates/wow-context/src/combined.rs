@@ -219,11 +219,71 @@ struct CombinedInspectCore<'m, 'p, 'f> {
     cross_universe_relations: &'static str,
 }
 #[derive(Serialize)]
-struct CombinedInspectArtifact<'m, 'p, 'f> {
+pub(crate) struct CombinedInspectArtifact<'m, 'p, 'f> {
     family: &'static str,
     artifact_kind: &'static str,
     inspect_id: Box<str>,
     core: CombinedInspectCore<'m, 'p, 'f>,
+}
+
+impl<'m, 'p, 'f> CombinedInspectArtifact<'m, 'p, 'f> {
+    pub(crate) fn inspect_id(&self) -> &str {
+        &self.inspect_id
+    }
+    pub(crate) fn combined_map_id(&self) -> &'m str {
+        &self.core.map.combined_map_id
+    }
+    pub(crate) fn primary_map(&self) -> &'m ProjectMap<'p> {
+        &self.core.map.core.primary
+    }
+    pub(crate) fn platform_map_id(&self) -> &'m str {
+        self.core.map.core.platform.map_id()
+    }
+    pub(crate) fn platform_page(&self) -> &'m SkeletonInputPage<'f> {
+        self.core.map.core.platform.page()
+    }
+    pub(crate) fn platform_inspect_id(&self) -> &str {
+        self.core.platform_inspect.inspect_id()
+    }
+    pub(crate) fn primary_skeletons(&self) -> &PrimarySkeletons<'m, 'p> {
+        &self.core.primary_skeletons
+    }
+    pub(crate) fn limits(&self) -> PrimaryMapLimits {
+        self.core.map.core.limits
+    }
+    pub(crate) fn state(&self) -> ProjectMapState {
+        self.core.state
+    }
+    pub(crate) fn validate_for_pack(
+        &self,
+        bytes: &[u8],
+        budget: &mut Budget,
+        stop: &AtomicBool,
+    ) -> ContextResult<()> {
+        budget.work(1, stop)?;
+        if self.family != COMBINED_NATIVE_ONE_HOP_PROFILE
+            || self.artifact_kind != "inspect"
+            || self.core.absence_authoritative
+            || self.core.cross_universe_relations != "not_evaluated"
+            || self.core.platform_inspect.map_id() != self.platform_map_id()
+        {
+            return Err(ContextError::new(ContextErrorCode::SupportMismatch));
+        }
+        let id = identity(
+            COMBINED_NATIVE_ONE_HOP_PROFILE,
+            "combined-context-inspect:sha256:",
+            &("inspect", &self.core),
+            self.limits().max_metadata_bytes,
+            stop,
+        )?;
+        budget.retain(self, stop)?;
+        if id != self.inspect_id
+            || canonical(self, self.limits().max_metadata_bytes, stop)?.as_slice() != bytes
+        {
+            return Err(ContextError::new(ContextErrorCode::EncodingInvalid));
+        }
+        Ok(())
+    }
 }
 
 /// Original component inspections borrowing disjoint map fields and its ledger.
@@ -238,6 +298,16 @@ pub struct CombinedContextInspect<'m, 'p, 'f> {
     budget: &'m mut Budget,
 }
 impl<'m, 'p, 'f> CombinedContextInspect<'m, 'p, 'f> {
+    pub(crate) fn into_pack_parts(
+        self,
+    ) -> (
+        CombinedInspectArtifact<'m, 'p, 'f>,
+        Box<[u8]>,
+        &'m mut Budget,
+    ) {
+        (self.artifact, self.canonical_bytes, self.budget)
+    }
+
     #[must_use]
     pub fn inspect_id(&self) -> &str {
         &self.artifact.inspect_id

@@ -1,8 +1,10 @@
-# Native primary context build
+# Native context build
 
-`wow context build` acquires one registered immutable Primary project, builds a
-sealed L0/L1 semantic pack and optionally renders that same pack. Platform is
-explicitly omitted. The [owner contract](../../crates/wow-context/e3/NATIVE_PRIMARY_PACK.md)
+The Primary `wow context build` selection acquires one registered immutable
+project, builds a sealed L0/L1 semantic pack and optionally renders that same pack.
+It omits platform; the [explicit combined selection](#selected-combined-native-build)
+retains separate original Primary/platform owners. The
+[owner contract](../../crates/wow-context/e3/NATIVE_PRIMARY_PACK.md)
 and [frozen descriptors](../../crates/wow-context/e3/NATIVE_PRIMARY_PACK_PROFILES.md)
 define this selected route; [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122)
 tracks its remaining qualification.
@@ -242,6 +244,47 @@ absence persist at the final explicit batch/profile bound. No automatic frontier
 inferred NoNewEvidence or retained cross-request continuation is supplied.
 Unselected/default/frontier/state/Reference family IDs remain in use.
 
+## Selected combined native build
+
+```text
+wow context build --platform combined --native-host-config <host.json>
+  --combined-request-input <build-request.json> [--output envelope-json]
+```
+
+Use the strict combined host/request families described by the
+[combined owner contract](../../crates/wow-context/e3/NATIVE_COMBINED_MAP.md#selected-combined-semantic-pack-and-rendering).
+The request selects `operation="build"`, outer profile
+`wow-context/combined-native-one-hop/1`, exact Primary generation/publication/root
+and the original platform Map request with exact candidate and native binding.
+The required non-null `build` object has exactly `level` (`l0|l1|both`),
+`context_profile_id="wow-context/combined-native-structural-pack/1"` and
+`renderer_profile_ids`. The array is required: `[]` selects None; one selects
+`wow-context/combined-pack-json/1` or `wow-context/combined-pack-markdown/1`; both
+unique IDs render JSON then Markdown. Project roots select L0 only; original
+entity/root/layer admission remains mandatory.
+
+Primary root/level/profile/renderer overrides, mixed platform options, duplicate
+options, unknown selections and text/artifact stdout refuse. Inspection on Build,
+Build on Map/Inspect, explicit null and duplicate/unknown/mixed renderer IDs refuse.
+The CLI checks the operation against Build and invokes one service operation.
+It does not import decoded maps/packs or make another inspect/platform query.
+
+Original maps/skeletons/platform inspection stay in pack `core.origins`; items
+retain qualified owner/universe/generation/scope/origin-map identities and original
+node/edge records with scoped support/omissions. One continuing construction Budget covers Map→Inspect→
+Pack→validation→JSON/Markdown validation; earlier acquisition/universe/catalog work
+keeps its existing owner bounds. None still validates the pack. Renderer choice
+does not change semantic pack bytes/ID. JSON is the exact canonical pack; Markdown
+uses escaped typed metadata and exact traces, with no source bodies.
+
+Final envelope delivery uses the actual post-render remainder and checked reverse
+close. Refusal/cancellation/failed closure returns no successful prefix or
+pack-only fallback. Stdout is exact finalized service JSON plus one LF; Partial/
+Truncated exits 2, semantic refusal 3, internal/close/output failure 4, transport
+failure 64 and cancellation 130. Partial/Truncated and nonauthoritative absence
+remain; shared Reference association does not prove enrichment, cross-universe
+links or runtime behavior. Gate evidence belongs to #122; no acceptance is claimed.
+
 ## Host, bounds and custody
 
 The strict `wow-service/context-map-native-host/1` document is shared with
@@ -317,8 +360,8 @@ unknown native closure is not treated as success.
 Every returned pack is Partial or Truncated with `absence_authoritative=false`.
 Original producer omissions remain scoped to their embedded maps/layers. Native
 additional recipe admission, broader Reference/type enrichment, excerpts/tokens,
-automatic expansion/retained cross-request continuation, platform composition and
-complete-corpus/runtime qualification remain open. The [default-profile synthetic fixture](../../crates/wow-service/e3/native-primary-pack/README.md)
+automatic expansion/retained cross-request continuation, broader platform/combined
+facets and complete-corpus/runtime qualification remain open. The [default-profile synthetic fixture](../../crates/wow-service/e3/native-primary-pack/README.md)
 freezes the actual pack/render bytes; broad E3/Tier A/X acceptance remains open.
 Executed gate evidence belongs to the canonical #122 milestone.
 
