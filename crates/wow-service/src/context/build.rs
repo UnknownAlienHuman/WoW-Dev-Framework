@@ -8,7 +8,8 @@ use super::{
     ContextInspectLevel, ContextL0Profile, ContextL1Profile, ContextMapCurrentGuard,
     ContextMapHostInput, ContextMapPublication, ContextMapReferenceGuard, ContextMapResult,
     ContextMapRoot, ContextMapStatus, ContextRenderSelection, PRIMARY_L0_PROFILE_ID,
-    PRIMARY_L1_PROFILE_ID, PRIMARY_STATE_DETAIL_L1_PROFILE_ID, checkpoint, context_error, failure,
+    PRIMARY_L1_PROFILE_ID, PRIMARY_REFERENCE_RECORD_L1_PROFILE_ID,
+    PRIMARY_STATE_DETAIL_L1_PROFILE_ID, checkpoint, context_error, failure,
 };
 use crate::{ServiceErrorCode, ServiceResult, live_project::LiveProjectRead};
 use serde::Serialize;
@@ -122,22 +123,27 @@ impl ContextBuildRequest {
         if !matches!(
             self.level,
             ContextInspectLevel::L1 | ContextInspectLevel::Both
-        ) || (matches!(profile, ContextL1Profile::StateDetailV1)
-            && (self.level != ContextInspectLevel::L1
-                || !matches!(&self.root, ContextMapRoot::GraphEntity(_))
-                || self.expansion.is_some()))
+        ) || (matches!(
+            profile,
+            ContextL1Profile::StateDetailV1 | ContextL1Profile::ReferenceRecordsV1
+        ) && (self.level != ContextInspectLevel::L1
+            || !matches!(&self.root, ContextMapRoot::GraphEntity(_))
+            || self.expansion.is_some()))
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
         self.l1_profile_id = Some(match profile {
             ContextL1Profile::EntityV1 => PRIMARY_L1_PROFILE_ID,
             ContextL1Profile::StateDetailV1 => PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+            ContextL1Profile::ReferenceRecordsV1 => PRIMARY_REFERENCE_RECORD_L1_PROFILE_ID,
         });
         Ok(self)
     }
 
     pub fn with_frontier_expansion(mut self, frontier: Vec<ContextMapRoot>) -> ServiceResult<Self> {
-        if self.l1_profile_id == Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID) {
+        if self.l1_profile_id == Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)
+            || self.l1_profile_id == Some(PRIMARY_REFERENCE_RECORD_L1_PROFILE_ID)
+        {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
         self.expansion = Some(FrontierExpansion::new(self.level, &self.root, frontier)?);
@@ -268,6 +274,14 @@ fn build(
         stop,
     )
     .map_err(context_error)?;
+    let reference_api = if matches!(l1_profile, ContextL1Profile::ReferenceRecordsV1) {
+        Some(
+            read.native_api()
+                .ok_or_else(|| failure(ServiceErrorCode::ComponentUnavailable))?,
+        )
+    } else {
+        None
+    };
     let resolved = wow_core::domain_separated_digest(
         "wow-service/context-build-resolved-request/1",
         &(
@@ -342,8 +356,10 @@ fn build(
             payload: Some(payload),
         };
         let remaining = if request.expansion.is_some()
-            || matches!(l1_profile, ContextL1Profile::StateDetailV1)
-        {
+            || matches!(
+                l1_profile,
+                ContextL1Profile::StateDetailV1 | ContextL1Profile::ReferenceRecordsV1
+            ) {
             pack.remaining_metadata_bytes()
         } else {
             host.limits.max_metadata_bytes
@@ -377,6 +393,15 @@ fn build(
             request.level != ContextInspectLevel::L0,
             stop,
             |map, graph| {
+                if let Some(api) = reference_api {
+                    let origins = api.reference_origins(map, graph, stop)?;
+                    let pack = wow_context::build_context_semantic_pack_with_reference_records(
+                        &universe, map, graph, &scope, &origins, stop,
+                    )
+                    .map_err(context_error)?;
+                    // Keep origin input through pack validation/rendering/encoding.
+                    return deliver(pack);
+                }
                 // Renderer selection is intentionally absent from this owner request.
                 let pack = if matches!(l1_profile, ContextL1Profile::StateDetailV1) {
                     wow_context::build_context_semantic_pack_with_l1_profile(

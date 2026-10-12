@@ -7,6 +7,7 @@ mod error;
 mod map;
 mod pack;
 mod profile;
+mod reference;
 mod render;
 mod skeleton;
 mod universe;
@@ -29,21 +30,23 @@ pub use pack::{
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE,
     build_context_semantic_pack, build_context_semantic_pack_from_expansion,
     build_context_semantic_pack_with_l1_profile, build_context_semantic_pack_with_profile,
-    validate_context_semantic_pack,
+    build_context_semantic_pack_with_reference_records, validate_context_semantic_pack,
 };
 pub use profile::{
     PRIMARY_MAP_PROFILE, PRIMARY_MAP_PROFILE_BYTES, PRIMARY_PROJECT_MAP_PROFILE,
     PRIMARY_PROJECT_MAP_PROFILE_BYTES,
 };
+pub use reference::ReferenceOriginInput;
 pub use render::{
     ContextRenderTrace, RenderSelection, RenderedContextArtifact, render_context_pack_json,
     render_context_pack_markdown, validate_rendered_context_artifact,
 };
 pub use skeleton::{
     L0Scope, L0Skeleton, L1Skeleton, PRIMARY_L0_PROFILE, PRIMARY_L1_PROFILE,
-    PRIMARY_STATE_DETAIL_L1_PROFILE, PRIMARY_STATE_ROOT_L0_PROFILE, PrimaryL0Profile,
-    PrimaryL1Profile, PrimarySkeletons, SkeletonLevel, build_l0_skeleton,
-    build_l0_skeleton_with_profile, build_l1_skeleton, build_primary_l1_skeletons_with_profile,
+    PRIMARY_REFERENCE_RECORD_L1_PROFILE, PRIMARY_STATE_DETAIL_L1_PROFILE,
+    PRIMARY_STATE_ROOT_L0_PROFILE, PrimaryL0Profile, PrimaryL1Profile, PrimarySkeletons,
+    SkeletonLevel, build_l0_skeleton, build_l0_skeleton_with_profile, build_l1_skeleton,
+    build_primary_l1_skeletons_with_profile, build_primary_reference_skeletons,
     build_primary_skeletons, build_primary_skeletons_with_profile,
 };
 pub use universe::{ContextUniverseSet, bind_context_universe_set};

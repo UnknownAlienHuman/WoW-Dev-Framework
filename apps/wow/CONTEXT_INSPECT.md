@@ -17,7 +17,7 @@ wow context inspect --native-host-config <host.json>
   --root project@<base64url-id>|graph-entity@<base64url-id>
   --level l0|l1|both
   [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1]
-  [--l1-profile-id wow-context/primary-l1/1|wow-context/primary-state-detail-l1/1]
+  [--l1-profile-id wow-context/primary-l1/1|wow-context/primary-state-detail-l1/1|wow-context/primary-reference-record-l1/1]
   [--expansion-profile-id wow-context/primary-native-frontier/1
    --frontier graph-entity@<base64url-id> ...]
   [--platform omitted] [--output envelope-json]
@@ -35,6 +35,7 @@ required; there is no omitted-root shortcut for inspect.
 | `l0` state | Exact original ordinary TOC state_root GraphEntity | `wow-context/primary-state-root-l0/1` |
 | `l1` default | Exact native graph entity | `wow-context/primary-l1/1` |
 | `l1` state detail | Exact original ordinary TOC state_root/state_path GraphEntity; no frontier | `wow-context/primary-state-detail-l1/1` |
+| `l1` Reference records | Exact native graph entity on a genuine native_api_uses=reference_v1 publication; no frontier | `wow-context/primary-reference-record-l1/1` |
 | `both` default | One explicit source_file/source_package graph container | Default L0 + old L1, distinct artifact IDs |
 | `both` state | One exact original ordinary TOC state_root GraphEntity | Selected state L0 + old L1, distinct artifact IDs |
 
@@ -45,7 +46,7 @@ owner supplies the root, every exact supporting typed declaration and selected
 literal state_path members; there is no name lookup or exhaustive-field claim.
 Bounded execution evidence is recorded in #122.
 
-An omitted/default L1 flag preserves primary-l1/1; state detail requires explicit
+An omitted/default L1 flag preserves primary-l1/1; state detail and Reference records require explicit
 selection. An L1 flag conflicts with level l0,
 and an L0 flag conflicts with level l1. Unknown/duplicate options and other
 profiles/platform/output modes refuse; map-target/profile flags are not inspect
@@ -80,6 +81,33 @@ checks. The selected build consumer has its own bounded lifecycle and CLI checks
 This metadata projection does not attest runtime
 values, loaded state, combat safety, API parity or current-source qualification.
 See [Native Primary state detail](../../crates/wow-context/e3/NATIVE_PRIMARY_STATE_DETAIL.md).
+
+## Selected native Reference-record L1
+
+Pass `--level l1 --l1-profile-id wow-context/primary-reference-record-l1/1`
+with an exact `--root graph-entity@<base64url-id>` on an ordinary publication
+that genuinely selected `native_api_uses=reference_v1`. Project/L0/Both and
+frontier selections refuse. The host's complete Reference profile/view must
+match the held requalified native owner; optional Reference guards are additional
+assertions and cannot replace that mandatory fence.
+
+The selected L1 schema is `wow-context/l1-skeleton/primary-reference-record/1`.
+For each admitted local `native_api_callable` node, it retains the original
+ReferenceRecord, record key/digest, source IDs and restriction facets, exact
+accepted producer assertion/final node, original source handle/evidence and
+Reference partition coverage. All five native endpoint identity fields and the
+record/source association are checked against the same bound owners. An endpoint
+label, decoded sidecar or inert origin input cannot supply that proof.
+
+The original canonical payload is opaque data: context does not parse it into
+normalized types, signatures or additional restriction/runtime assertions.
+The embedded map still reports `ReferenceContractNotEvaluated` source custody;
+the selected L1 facet supplies the narrower exact record/source association,
+without relabeling that map omission or including source excerpts. Default/state
+profiles retain their existing bytes and omissions. The same selection has a
+structural [build/JSON/Markdown route](CONTEXT_BUILD.md#selected-native-reference-record-l1-pack).
+See [the selected owner contract](../../crates/wow-context/e3/NATIVE_PRIMARY_REFERENCE_RECORD.md)
+for custody, continuing limits and nonclaims; execution evidence remains in #122.
 
 ## Selected native frontier expansion
 
@@ -135,8 +163,8 @@ edge and its original caller, call-site and API source evidence, including exact
 source handles, digests and spans. `UsesApi` remains distinct from `Calls`.
 
 The same evidence reaches structural [build/pack/JSON/Markdown](CONTEXT_BUILD.md)
-through the native owner path. Structured Reference record/type enrichment and
-Reference source excerpts remain `NotEvaluated`; existing captured native
+through the native owner path. With default L1, Reference record/type enrichment
+and Reference source excerpts remain `NotEvaluated`; existing captured native
 signature observations retain their original availability. Static accepted
 relations and source observations do not prove runtime execution, API legality,
 loaded state, protected/Secret behavior, combat safety or authoritative absence.
@@ -166,7 +194,7 @@ Default nested schemas remain `wow-context/l0-skeleton/primary/1` and
 `wow-context/l1-skeleton/primary/1`. Selected state L0 uses
 `wow-context/l0-skeleton/primary-state-root/1`; Both retains the existing combined
 schema and old L1. Selected state-detail L1 uses its named nested schema; the
-outer inspect/result and combined skeleton schemas remain unchanged. Each layer
+outer inspect/result and combined skeleton schemas remain unchanged. Selected Reference-record L1 uses its own named nested schema. Each layer
 carries its descriptor, original typed records,
 exact origin-map support/custody and explicit omissions. Root declarations are
 plural, retaining repeated supporting TOC rows, account/character and ambiguity.
@@ -203,7 +231,7 @@ semantic retry after output begins.
 
 This route documents selected functionality, not full E3 or Tier A/X acceptance.
 Broader scopes/facets, control/effect enrichment, progressive expansion /
-continuation, Reference enrichment, excerpts/privacy/tokens and platform/combined
+continuation, broader Reference/type enrichment, excerpts/privacy/tokens and platform/combined
 context remain open. [Build/pack/render](CONTEXT_BUILD.md) consumes the native
 step, not a decoded inspect envelope. Existing map commands/profile and unselected
 inspect bytes remain unchanged.

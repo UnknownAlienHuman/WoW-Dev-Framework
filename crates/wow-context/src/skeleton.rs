@@ -23,12 +23,14 @@ pub const PRIMARY_L0_PROFILE: &str = "wow-context/primary-l0/1";
 pub const PRIMARY_L1_PROFILE: &str = "wow-context/primary-l1/1";
 pub const PRIMARY_STATE_ROOT_L0_PROFILE: &str = "wow-context/primary-state-root-l0/1";
 pub const PRIMARY_STATE_DETAIL_L1_PROFILE: &str = "wow-context/primary-state-detail-l1/1";
+pub const PRIMARY_REFERENCE_RECORD_L1_PROFILE: &str = "wow-context/primary-reference-record-l1/1";
 
 /// Explicit entity detail recipes over the same retained native neighborhood.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrimaryL1Profile {
     EntityV1,
     StateDetailV1,
+    ReferenceRecordsV1,
 }
 impl PrimaryL1Profile {
     pub const fn profile_id(self) -> &'static str {
@@ -38,12 +40,14 @@ impl PrimaryL1Profile {
         match self {
             Self::EntityV1 => &L1_PROFILE,
             Self::StateDetailV1 => &STATE_DETAIL_L1_PROFILE,
+            Self::ReferenceRecordsV1 => &REFERENCE_RECORD_L1_PROFILE,
         }
     }
     const fn schema(self) -> &'static str {
         match self {
             Self::EntityV1 => "wow-context/l1-skeleton/primary/1",
             Self::StateDetailV1 => "wow-context/l1-skeleton/primary-state-detail/1",
+            Self::ReferenceRecordsV1 => "wow-context/l1-skeleton/primary-reference-record/1",
         }
     }
 }
@@ -117,6 +121,14 @@ const STATE_DETAIL_L1_PROFILE: SkeletonProfile = SkeletonProfile {
     ..L1_PROFILE
 };
 const STATE_DETAIL_PROFILE_BYTES: &[u8] = include_bytes!("../e3/native-state-detail/profile.json");
+const REFERENCE_RECORD_L1_PROFILE: SkeletonProfile = SkeletonProfile {
+    profile_id: PRIMARY_REFERENCE_RECORD_L1_PROFILE,
+    declarations: "selected_native_callable_lua_xml_and_original_reference_record_metadata",
+    types: "original_native_signature_and_reference_payload_no_type_or_restriction_inference",
+    ..L1_PROFILE
+};
+const REFERENCE_RECORD_PROFILE_BYTES: &[u8] =
+    include_bytes!("../e3/native-reference-record/profile.json");
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "id", rename_all = "snake_case")]
@@ -176,9 +188,16 @@ impl PrimarySkeletons<'_, '_> {
                     && skeleton.core.schema == profile.schema()
                     && skeleton.core.profile == profile.profile_id()
                     && skeleton.core.profile_descriptor == profile.descriptor()
-                    && (profile == PrimaryL1Profile::EntityV1
-                        || (level == SkeletonLevel::L1
-                            && matches!(skeleton.core.root.kind(), "state_root" | "state_path")))
+                    && match profile {
+                        PrimaryL1Profile::EntityV1 => true,
+                        PrimaryL1Profile::StateDetailV1 => {
+                            level == SkeletonLevel::L1
+                                && matches!(skeleton.core.root.kind(), "state_root" | "state_path")
+                        }
+                        PrimaryL1Profile::ReferenceRecordsV1 => {
+                            level == SkeletonLevel::L1 && skeleton.core.reference_records.is_some()
+                        }
+                    }
             }
             _ => false,
         }
@@ -293,6 +312,8 @@ struct L1Core<'m, 'a> {
     local_entities: &'m [&'a GraphNode],
     direct_relations: &'m [&'a GraphEdge],
     declarations: Vec<Declaration<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reference_records: Option<Vec<crate::reference::ReferenceRecordFacet<'a>>>,
     relation_interpretation: &'static str,
     not_evaluated: &'static [&'static str],
 }
@@ -318,6 +339,15 @@ impl L1Skeleton<'_, '_> {
 const NOT_EVALUATED: &[&str] = &[
     "unselected_native_declaration_or_type_recipes",
     "reference_fact_enrichment",
+    "control_effect_projection",
+    "source_excerpts_and_exact_tokens",
+    "deeper_paths_and_retained_continuation",
+    "complete_corpus_or_runtime_behavior",
+];
+
+const REFERENCE_RECORD_NOT_EVALUATED: &[&str] = &[
+    "unselected_native_declaration_or_type_recipes",
+    "reference_record_normalization_and_type_lowering",
     "control_effect_projection",
     "source_excerpts_and_exact_tokens",
     "deeper_paths_and_retained_continuation",
@@ -931,7 +961,7 @@ pub fn build_l1_skeleton<'m, 'a>(
         universe,
         map,
         graph,
-        (root, PrimaryL1Profile::EntityV1),
+        (root, PrimaryL1Profile::EntityV1, None),
         &view,
         &mut budget,
         stop,
@@ -941,21 +971,31 @@ fn l1<'m, 'a>(
     universe: &'m ContextUniverseSet<'a>,
     map: &'m ProjectMap<'a>,
     graph: &GraphPartitionRead<'a>,
-    selection: (&GraphNodeId, PrimaryL1Profile),
+    selection: (
+        &GraphNodeId,
+        PrimaryL1Profile,
+        Option<&[crate::reference::ReferenceOriginInput<'a>]>,
+    ),
     view: &ProjectMapView<'m, 'a>,
     budget: &mut Budget,
     stop: &AtomicBool,
 ) -> ContextResult<L1Skeleton<'m, 'a>> {
-    let (root, profile) = selection;
+    let (root, profile, reference_origins) = selection;
+    if profile == PrimaryL1Profile::ReferenceRecordsV1 && reference_origins.is_none() {
+        return Err(missing());
+    }
     if !view.has_detail_vocabulary() {
         return Err(ContextError::new(ContextErrorCode::SupportMismatch));
     }
     let descriptor = profile.descriptor();
-    if profile == PrimaryL1Profile::StateDetailV1
+    let frozen = match profile {
+        PrimaryL1Profile::EntityV1 => None,
+        PrimaryL1Profile::StateDetailV1 => Some(STATE_DETAIL_PROFILE_BYTES),
+        PrimaryL1Profile::ReferenceRecordsV1 => Some(REFERENCE_RECORD_PROFILE_BYTES),
+    };
+    if let Some(bytes) = frozen
         && canonical(descriptor, universe.limits.max_metadata_bytes, stop)?
-            != STATE_DETAIL_PROFILE_BYTES
-                .strip_suffix(b"\n")
-                .unwrap_or(STATE_DETAIL_PROFILE_BYTES)
+            != bytes.strip_suffix(b"\n").unwrap_or(bytes)
     {
         return Err(ContextError::new(ContextErrorCode::EncodingInvalid));
     }
@@ -1000,6 +1040,18 @@ fn l1<'m, 'a>(
     {
         return Err(missing());
     }
+    let reference_records = if profile == PrimaryL1Profile::ReferenceRecordsV1 {
+        Some(crate::reference::reference_facets(
+            universe,
+            view,
+            graph,
+            reference_origins.ok_or_else(missing)?,
+            budget,
+            stop,
+        )?)
+    } else {
+        None
+    };
     let core = L1Core {
         schema: profile.schema(),
         profile: descriptor.profile_id,
@@ -1009,8 +1061,13 @@ fn l1<'m, 'a>(
         local_entities: map.native_nodes(),
         direct_relations: map.native_edges(),
         declarations: rows,
+        reference_records,
         relation_interpretation: "original_direct_native_assertions_no_transitive_edges",
-        not_evaluated: NOT_EVALUATED,
+        not_evaluated: if profile == PrimaryL1Profile::ReferenceRecordsV1 {
+            REFERENCE_RECORD_NOT_EVALUATED
+        } else {
+            NOT_EVALUATED
+        },
     };
     let id = identity(
         core.schema,
@@ -1052,6 +1109,55 @@ pub(crate) fn build_primary_l1_skeletons_with_budget<'m, 'a>(
     profile: PrimaryL1Profile,
     stop: &AtomicBool,
 ) -> ContextResult<(PrimarySkeletons<'m, 'a>, Budget)> {
+    primary_l1_skeletons(universe, map, graph, root, (profile, None), stop)
+}
+
+/// Explicit original Reference records over one native entity neighborhood.
+/// Origins are inert requests; the shared engine validates their native custody.
+/// This recipe produces only L1, with no L0 or frontier reconstruction.
+pub fn build_primary_reference_skeletons<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &L0Scope,
+    origins: &[crate::reference::ReferenceOriginInput<'a>],
+    stop: &AtomicBool,
+) -> ContextResult<PrimarySkeletons<'m, 'a>> {
+    build_primary_reference_skeletons_with_budget(universe, map, graph, root, origins, stop)
+        .map(|(result, _)| result)
+}
+
+/// Continue the actual input/declaration/Reference/artifact reservation ledger.
+pub(crate) fn build_primary_reference_skeletons_with_budget<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &L0Scope,
+    origins: &[crate::reference::ReferenceOriginInput<'a>],
+    stop: &AtomicBool,
+) -> ContextResult<(PrimarySkeletons<'m, 'a>, Budget)> {
+    primary_l1_skeletons(
+        universe,
+        map,
+        graph,
+        root,
+        (PrimaryL1Profile::ReferenceRecordsV1, Some(origins)),
+        stop,
+    )
+}
+
+fn primary_l1_skeletons<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &L0Scope,
+    selection: (
+        PrimaryL1Profile,
+        Option<&[crate::reference::ReferenceOriginInput<'a>]>,
+    ),
+    stop: &AtomicBool,
+) -> ContextResult<(PrimarySkeletons<'m, 'a>, Budget)> {
+    let (profile, reference_origins) = selection;
     let L0Scope::Entity(id) = root else {
         return Err(invalid());
     };
@@ -1060,7 +1166,7 @@ pub(crate) fn build_primary_l1_skeletons_with_budget<'m, 'a>(
         universe,
         map,
         graph,
-        (id, profile),
+        (id, profile, reference_origins),
         &view,
         &mut budget,
         stop,
@@ -1147,7 +1253,7 @@ pub(crate) fn build_primary_skeletons_with_budget<'m, 'a>(
             universe,
             map,
             graph,
-            (id, PrimaryL1Profile::EntityV1),
+            (id, PrimaryL1Profile::EntityV1, None),
             &view,
             &mut budget,
             stop,

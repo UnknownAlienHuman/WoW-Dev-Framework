@@ -4,7 +4,8 @@ use wow_service::context::{
     ContextInspectLevel, ContextInspectRequest, ContextL0Profile, ContextL1Profile,
     ContextMapCurrentGuard, ContextMapPublication, ContextMapReferenceGuard, ContextMapRoot,
     PRIMARY_FRONTIER_EXPANSION_PROFILE_ID, PRIMARY_L0_PROFILE_ID, PRIMARY_L1_PROFILE_ID,
-    PRIMARY_STATE_DETAIL_L1_PROFILE_ID, PRIMARY_STATE_ROOT_L0_PROFILE_ID,
+    PRIMARY_REFERENCE_RECORD_L1_PROFILE_ID, PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+    PRIMARY_STATE_ROOT_L0_PROFILE_ID,
 };
 
 pub(super) struct Selection {
@@ -69,6 +70,11 @@ impl Options {
                         if matches!(command, Command::Inspect | Command::Build) =>
                     {
                         ContextL1Profile::StateDetailV1
+                    }
+                    PRIMARY_REFERENCE_RECORD_L1_PROFILE_ID
+                        if matches!(command, Command::Inspect | Command::Build) =>
+                    {
+                        ContextL1Profile::ReferenceRecordsV1
                     }
                     _ => return Err("unsupported exact context L1 profile"),
                 };
@@ -158,6 +164,25 @@ impl Options {
                 });
             }
         }
+        if matches!(&self.l1_profile, Some(ContextL1Profile::ReferenceRecordsV1)) {
+            if level != ContextInspectLevel::L1 || !matches!(&root, ContextMapRoot::GraphEntity(_))
+            {
+                return Err(match command {
+                    Command::Build => {
+                        "reference-record L1 requires context build l1 and graph-entity root"
+                    }
+                    _ => "reference-record L1 requires context inspect l1 and graph-entity root",
+                });
+            }
+            if self.expansion_profile.is_some() || !self.frontier.is_empty() {
+                return Err(match command {
+                    Command::Build => {
+                        "reference-record L1 conflicts with context build frontier expansion"
+                    }
+                    _ => "reference-record L1 conflicts with context frontier expansion",
+                });
+            }
+        }
         if self.expansion_profile.is_some() == self.frontier.is_empty() {
             return Err(match command {
                 Command::Build => "context build expansion requires profile and frontier together",
@@ -220,6 +245,9 @@ impl Options {
         let request = match l1_profile {
             Some(ContextL1Profile::StateDetailV1) => request
                 .with_l1_profile(ContextL1Profile::StateDetailV1)
+                .map_err(|_| "invalid context inspect request syntax")?,
+            Some(ContextL1Profile::ReferenceRecordsV1) => request
+                .with_l1_profile(ContextL1Profile::ReferenceRecordsV1)
                 .map_err(|_| "invalid context inspect request syntax")?,
             // Entity is an optional assertion of the existing primary constructor.
             Some(ContextL1Profile::EntityV1) | None => request,

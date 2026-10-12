@@ -7,13 +7,14 @@ use wow_graph::{GraphEdge, GraphNode, GraphPartitionRead};
 use crate::budget::{Budget, canonical, checkpoint, exhausted, identity};
 use crate::map::ContextExpansionArtifact;
 use crate::skeleton::{
-    build_primary_l1_skeletons_with_budget, build_primary_skeletons_with_budget,
+    build_primary_l1_skeletons_with_budget, build_primary_reference_skeletons_with_budget,
+    build_primary_skeletons_with_budget,
 };
 use crate::universe::UniverseBinding;
 use crate::{
     ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, L0Scope, PrimaryL0Profile,
     PrimaryL1Profile, PrimaryMapLimits, PrimarySkeletons, ProjectMap, ProjectMapState,
-    SkeletonLevel, open_project_map_view,
+    ReferenceOriginInput, SkeletonLevel, open_project_map_view,
 };
 
 mod frontier;
@@ -408,6 +409,7 @@ pub fn build_context_semantic_pack_with_profile<'m, 'a>(
         graph,
         root,
         (level, profile, PrimaryL1Profile::EntityV1),
+        None,
         stop,
     )
 }
@@ -427,6 +429,31 @@ pub fn build_context_semantic_pack_with_l1_profile<'m, 'a>(
         graph,
         root,
         (SkeletonLevel::L1, PrimaryL0Profile::ContainersV1, profile),
+        None,
+        stop,
+    )
+}
+
+/// Build explicit Reference-record L1 using original native origins and ledger.
+pub fn build_context_semantic_pack_with_reference_records<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &'m L0Scope,
+    origins: &[ReferenceOriginInput<'a>],
+    stop: &AtomicBool,
+) -> ContextResult<ContextSemanticPack<'m, 'a>> {
+    build_context_semantic_pack_with_selection(
+        universe,
+        map,
+        graph,
+        root,
+        (
+            SkeletonLevel::L1,
+            PrimaryL0Profile::ContainersV1,
+            PrimaryL1Profile::ReferenceRecordsV1,
+        ),
+        Some(origins),
         stop,
     )
 }
@@ -437,6 +464,7 @@ fn build_context_semantic_pack_with_selection<'m, 'a>(
     graph: &GraphPartitionRead<'a>,
     root: &'m L0Scope,
     selection: (SkeletonLevel, PrimaryL0Profile, PrimaryL1Profile),
+    origins: Option<&[ReferenceOriginInput<'a>]>,
     stop: &AtomicBool,
 ) -> ContextResult<ContextSemanticPack<'m, 'a>> {
     let (level, profile, l1_profile) = selection;
@@ -448,6 +476,19 @@ fn build_context_semantic_pack_with_selection<'m, 'a>(
         }
         PrimaryL1Profile::StateDetailV1 => {
             build_primary_l1_skeletons_with_budget(universe, map, graph, root, l1_profile, stop)?
+        }
+        PrimaryL1Profile::ReferenceRecordsV1 => {
+            if level != SkeletonLevel::L1
+                || profile != PrimaryL0Profile::ContainersV1
+                || !matches!(root, L0Scope::Entity(_))
+            {
+                return Err(ContextError::new(ContextErrorCode::RootInvalid));
+            }
+            let origins = origins
+                .ok_or_else(|| ContextError::new(ContextErrorCode::MissingRequiredCustody))?;
+            build_primary_reference_skeletons_with_budget(
+                universe, map, graph, root, origins, stop,
+            )?
         }
     };
     let request_core = PackRequestCore {
@@ -557,15 +598,27 @@ fn build_context_semantic_pack_with_selection<'m, 'a>(
         omissions: PackOmissions {
             upstream,
             interpretation: "producer_local_omissions_retained_in_original_artifacts",
-            not_evaluated: &[
-                "reference_fact_enrichment",
-                "declaration_signature_qualification",
-                "control_effect_projection",
-                "source_excerpts_and_tokens",
-                "deeper_expansion_and_continuation",
-                "optional_platform_universe",
-                "complete_corpus_and_runtime",
-            ],
+            not_evaluated: if l1_profile == PrimaryL1Profile::ReferenceRecordsV1 {
+                &[
+                    "reference_record_normalization_and_type_lowering",
+                    "declaration_signature_qualification",
+                    "control_effect_projection",
+                    "source_excerpts_and_tokens",
+                    "deeper_expansion_and_continuation",
+                    "optional_platform_universe",
+                    "complete_corpus_and_runtime",
+                ]
+            } else {
+                &[
+                    "reference_fact_enrichment",
+                    "declaration_signature_qualification",
+                    "control_effect_projection",
+                    "source_excerpts_and_tokens",
+                    "deeper_expansion_and_continuation",
+                    "optional_platform_universe",
+                    "complete_corpus_and_runtime",
+                ]
+            },
             continuation: "not_evaluated",
         },
         budget: PackBudget {
@@ -685,6 +738,14 @@ pub fn validate_context_semantic_pack(
                 && pack.core.expansion.is_none() =>
         {
             PrimaryL1Profile::StateDetailV1
+        }
+        Some(id)
+            if id == PrimaryL1Profile::ReferenceRecordsV1.profile_id()
+                && pack.core.request.core.level == SkeletonLevel::L1
+                && pack.core.expansion.is_none()
+                && matches!(pack.core.request.core.root, L0Scope::Entity(_)) =>
+        {
+            PrimaryL1Profile::ReferenceRecordsV1
         }
         _ => return Err(encoding()),
     };

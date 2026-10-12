@@ -159,6 +159,58 @@ impl NativeApiProvenance {
         self.library.profile() == profile && &self.library.reference().view == reference
     }
 
+    /// Only exact selected final API nodes receive their original inert origin
+    /// input. The context owner independently qualifies the Reference facet.
+    pub(crate) fn reference_origins<'a>(
+        &'a self,
+        map: &wow_context::ProjectMap<'a>,
+        graph: &wow_graph::GraphPartitionRead<'a>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Vec<wow_context::ReferenceOriginInput<'a>>> {
+        checkpoint(stop)?;
+        if graph.owner().source_context_id() != self.context.context_id() {
+            return Err(incompatible());
+        }
+        let view = wow_context::open_project_map_view(map, stop).map_err(|_| incompatible())?;
+        if self.endpoints.len() > NATIVE_JOIN_MAX_WORK || view.nodes().len() > NATIVE_JOIN_MAX_WORK
+        {
+            return Err(ServiceError::new(
+                ServiceErrorCode::BudgetExceeded,
+                "native Reference origins exceed their inherited bound",
+            ));
+        }
+        let mut origins = Vec::with_capacity(view.nodes().len());
+        for endpoint in self.endpoints.values() {
+            checkpoint(stop)?;
+            let GraphAssertionRef::Producer {
+                partition_id,
+                assertion,
+                ..
+            } = &endpoint.assertion
+            else {
+                return Err(incompatible());
+            };
+            let node = graph
+                .published_entity(partition_id, &assertion.proposal_id, stop)
+                .map_err(graph_error)?;
+            if view
+                .node(node.node_id())
+                .is_some_and(|selected| std::ptr::eq(selected, node))
+            {
+                origins.push(wow_context::ReferenceOriginInput::new(
+                    &endpoint.assertion,
+                    self.source_handles
+                        .get(&endpoint.source_handle_id)
+                        .ok_or_else(incompatible)?,
+                    self.evidence
+                        .get(&endpoint.evidence_id)
+                        .ok_or_else(incompatible)?,
+                ));
+            }
+        }
+        Ok(origins)
+    }
+
     /// The held native proof supplies the producer declaration; graph admission
     /// independently binds the exact original support to accepted final entities.
     pub(crate) fn source_observations<'a>(

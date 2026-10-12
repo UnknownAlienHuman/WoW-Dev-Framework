@@ -26,6 +26,8 @@ pub const PRIMARY_L0_PROFILE_ID: &str = wow_context::PRIMARY_L0_PROFILE;
 pub const PRIMARY_L1_PROFILE_ID: &str = wow_context::PRIMARY_L1_PROFILE;
 pub const PRIMARY_STATE_ROOT_L0_PROFILE_ID: &str = wow_context::PRIMARY_STATE_ROOT_L0_PROFILE;
 pub const PRIMARY_STATE_DETAIL_L1_PROFILE_ID: &str = wow_context::PRIMARY_STATE_DETAIL_L1_PROFILE;
+pub const PRIMARY_REFERENCE_RECORD_L1_PROFILE_ID: &str =
+    ContextL1Profile::ReferenceRecordsV1.profile_id();
 pub const PRIMARY_FRONTIER_EXPANSION_PROFILE_ID: &str =
     wow_context::PRIMARY_FRONTIER_EXPANSION_PROFILE;
 pub use request::{
@@ -65,6 +67,7 @@ fn l1_profile_from_id(profile_id: Option<&str>) -> ServiceResult<ContextL1Profil
     match profile_id {
         None | Some(PRIMARY_L1_PROFILE_ID) => Ok(ContextL1Profile::EntityV1),
         Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID) => Ok(ContextL1Profile::StateDetailV1),
+        Some(PRIMARY_REFERENCE_RECORD_L1_PROFILE_ID) => Ok(ContextL1Profile::ReferenceRecordsV1),
         Some(_) => Err(failure(ServiceErrorCode::InvalidRequest)),
     }
 }
