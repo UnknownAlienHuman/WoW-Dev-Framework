@@ -8,7 +8,7 @@ use super::{
     ContextInspectLevel, ContextL0Profile, ContextL1Profile, ContextMapCurrentGuard,
     ContextMapHostInput, ContextMapPublication, ContextMapReferenceGuard, ContextMapResult,
     ContextMapRoot, ContextMapStatus, PRIMARY_L0_PROFILE_ID, PRIMARY_L1_PROFILE_ID,
-    PRIMARY_REFERENCE_RECORD_L1_PROFILE_ID, PRIMARY_STATE_DETAIL_L1_PROFILE_ID, checkpoint,
+    PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID, PRIMARY_STATE_DETAIL_L1_PROFILE_ID, checkpoint,
     context_error, failure,
 };
 use crate::{ServiceErrorCode, ServiceResult, live_project::LiveProjectRead};
@@ -85,7 +85,7 @@ impl ContextInspectRequest {
             ContextInspectLevel::L1 | ContextInspectLevel::Both
         ) || (matches!(
             profile,
-            ContextL1Profile::StateDetailV1 | ContextL1Profile::ReferenceRecordsV1
+            ContextL1Profile::StateDetailV1 | ContextL1Profile::ReferenceFactsV1
         ) && (self.level != ContextInspectLevel::L1
             || !matches!(&self.root, ContextMapRoot::GraphEntity(_))
             || self.expansion.is_some()))
@@ -95,14 +95,14 @@ impl ContextInspectRequest {
         self.l1_profile_id = Some(match profile {
             ContextL1Profile::EntityV1 => PRIMARY_L1_PROFILE_ID,
             ContextL1Profile::StateDetailV1 => PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
-            ContextL1Profile::ReferenceRecordsV1 => PRIMARY_REFERENCE_RECORD_L1_PROFILE_ID,
+            ContextL1Profile::ReferenceFactsV1 => PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
         });
         Ok(self)
     }
 
     pub fn with_frontier_expansion(mut self, frontier: Vec<ContextMapRoot>) -> ServiceResult<Self> {
         if self.l1_profile_id == Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)
-            || self.l1_profile_id == Some(PRIMARY_REFERENCE_RECORD_L1_PROFILE_ID)
+            || self.l1_profile_id == Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID)
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
@@ -224,7 +224,7 @@ fn build(
         stop,
     )
     .map_err(context_error)?;
-    let reference_api = if matches!(l1_profile, ContextL1Profile::ReferenceRecordsV1) {
+    let reference_api = if matches!(l1_profile, ContextL1Profile::ReferenceFactsV1) {
         Some(
             read.native_api()
                 .ok_or_else(|| failure(ServiceErrorCode::ComponentUnavailable))?,
@@ -284,7 +284,7 @@ fn build(
             Some(step) => step.remaining_metadata_bytes(),
             None if matches!(
                 l1_profile,
-                ContextL1Profile::StateDetailV1 | ContextL1Profile::ReferenceRecordsV1
+                ContextL1Profile::StateDetailV1 | ContextL1Profile::ReferenceFactsV1
             ) =>
             {
                 skeletons.remaining_metadata_bytes()

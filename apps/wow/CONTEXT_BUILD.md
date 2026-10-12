@@ -17,7 +17,7 @@ wow context build --native-host-config <host.json>
   --level l0|l1|both
   --context-profile-id wow-context/primary-structural-pack/1|wow-context/primary-frontier-pack/1
   [--l0-profile-id wow-context/primary-l0/1|wow-context/primary-state-root-l0/1]
-  [--l1-profile-id wow-context/primary-l1/1|wow-context/primary-state-detail-l1/1|wow-context/primary-reference-record-l1/1]
+  [--l1-profile-id wow-context/primary-l1/1|wow-context/primary-state-detail-l1/1|wow-context/primary-reference-facts-l1/1]
   [--expansion-profile-id wow-context/primary-native-frontier/1
    --frontier graph-entity@<base64url-id> ...]
   [--renderer-profile-id wow-context/primary-pack-json/1|wow-context/primary-frontier-pack-json/1]
@@ -120,9 +120,9 @@ pack/render profile or version is introduced. Metadata does not attest state
 values, loaded state, combat safety or runtime behavior. The bounded source-absent
 build lifecycle, cumulative refusal and actual Windows CLI pass in #122.
 
-## Selected native Reference-record L1 pack
+## Selected native Reference-facts L1 pack
 
-Select `--level l1 --l1-profile-id wow-context/primary-reference-record-l1/1`
+Select `--level l1 --l1-profile-id wow-context/primary-reference-facts-l1/1`
 with `--context-profile-id wow-context/primary-structural-pack/1` and an explicit
 exact graph-entity root on a genuine `native_api_uses=reference_v1` publication.
 Project/L0/Both and frontier selections refuse. The complete host Reference/profile
@@ -130,11 +130,15 @@ must equal the held requalified native owner even when no optional Reference
 guard is supplied.
 
 The pack embeds the selected L1 schema
-`wow-context/l1-skeleton/primary-reference-record/1` and its original accepted
+`wow-context/l1-skeleton/primary-reference-facts/1` and its original accepted
 API-to-Reference record/source associations. It retains original canonical payload
 data, source IDs, restriction facets, partition coverage and exact graph/source/
-evidence support. Context does not parse the payload or infer normalized types,
-additional restrictions, runtime behavior or absence. The original map's
+evidence support. The held Reference catalog adds genuine normalized ordered
+source parameters/returns, unresolved type names/inner types, tri-state nilability
+and original raw default/stride values and spans. Context does not parse payloads;
+unknown fields stay in the original ReferenceRecord. Source type resolution,
+corrected overlays, annotation display lowering, broader restriction interpretation,
+runtime behavior and authoritative absence remain unevaluated. The original map's
 `ReferenceContractNotEvaluated` custody remains scoped to that map; the selected
 L1 association does not rewrite its bytes or authorize Reference source excerpts.
 
@@ -144,9 +148,11 @@ construction, validation, each renderer and final delivery. Mandatory custody,
 work/byte overflow or cancellation suppresses delivery; there is no pack-only
 fallback when a required renderer refuses. Optional selected l1_profile_id binds
 this recipe into pack identity; omitted/default selection preserves old bytes,
-profiles and omissions, including existing state-detail behavior.
+profiles and omissions, including existing state-detail behavior. Persisted
+Project/Reference records and their recipes stay unchanged; the retained typed
+catalog is runtime owner custody, not a new replay/store representation.
 
-The [selected owner contract](../../crates/wow-context/e3/NATIVE_PRIMARY_REFERENCE_RECORD.md)
+The [selected owner contract](../../crates/wow-context/e3/NATIVE_PRIMARY_REFERENCE_FACTS.md)
 defines this narrow handoff. Bounded gate outcomes belong to #122; this page
 makes no full E3/Tier A/X acceptance claim.
 
@@ -219,7 +225,8 @@ The request retains store/publication, `platform="omitted"`, level/root, render
 selection, exact context profile and normalized renderer-profile array. Selected
 L0/L1 profiles are recorded; absent guard/profile fields are omitted. The native
 pack request's selected l0_profile_id binds state-root L0; its optional selected
-l1_profile_id binds state-detail or Reference-record L1 into request/pack identity. Default
+l1_profile_id binds state-detail or Reference-facts L1 into request/pack identity.
+Default
 ContainersV1/EntityV1 retain None for these native pack fields, omitted from
 serialization to preserve old pack bytes. Default pack/renderer profile IDs stay
 the existing choices. Frontier selection binds its normalized profile/frontier and

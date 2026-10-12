@@ -23,14 +23,14 @@ pub const PRIMARY_L0_PROFILE: &str = "wow-context/primary-l0/1";
 pub const PRIMARY_L1_PROFILE: &str = "wow-context/primary-l1/1";
 pub const PRIMARY_STATE_ROOT_L0_PROFILE: &str = "wow-context/primary-state-root-l0/1";
 pub const PRIMARY_STATE_DETAIL_L1_PROFILE: &str = "wow-context/primary-state-detail-l1/1";
-pub const PRIMARY_REFERENCE_RECORD_L1_PROFILE: &str = "wow-context/primary-reference-record-l1/1";
+pub const PRIMARY_REFERENCE_FACTS_L1_PROFILE: &str = "wow-context/primary-reference-facts-l1/1";
 
 /// Explicit entity detail recipes over the same retained native neighborhood.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrimaryL1Profile {
     EntityV1,
     StateDetailV1,
-    ReferenceRecordsV1,
+    ReferenceFactsV1,
 }
 impl PrimaryL1Profile {
     pub const fn profile_id(self) -> &'static str {
@@ -40,14 +40,14 @@ impl PrimaryL1Profile {
         match self {
             Self::EntityV1 => &L1_PROFILE,
             Self::StateDetailV1 => &STATE_DETAIL_L1_PROFILE,
-            Self::ReferenceRecordsV1 => &REFERENCE_RECORD_L1_PROFILE,
+            Self::ReferenceFactsV1 => &REFERENCE_FACTS_L1_PROFILE,
         }
     }
     const fn schema(self) -> &'static str {
         match self {
             Self::EntityV1 => "wow-context/l1-skeleton/primary/1",
             Self::StateDetailV1 => "wow-context/l1-skeleton/primary-state-detail/1",
-            Self::ReferenceRecordsV1 => "wow-context/l1-skeleton/primary-reference-record/1",
+            Self::ReferenceFactsV1 => "wow-context/l1-skeleton/primary-reference-facts/1",
         }
     }
 }
@@ -121,14 +121,14 @@ const STATE_DETAIL_L1_PROFILE: SkeletonProfile = SkeletonProfile {
     ..L1_PROFILE
 };
 const STATE_DETAIL_PROFILE_BYTES: &[u8] = include_bytes!("../e3/native-state-detail/profile.json");
-const REFERENCE_RECORD_L1_PROFILE: SkeletonProfile = SkeletonProfile {
-    profile_id: PRIMARY_REFERENCE_RECORD_L1_PROFILE,
-    declarations: "selected_native_callable_lua_xml_and_original_reference_record_metadata",
-    types: "original_native_signature_and_reference_payload_no_type_or_restriction_inference",
+const REFERENCE_FACTS_L1_PROFILE: SkeletonProfile = SkeletonProfile {
+    profile_id: PRIMARY_REFERENCE_FACTS_L1_PROFILE,
+    declarations: "source_normalized_native_callable_and_original_reference_records",
+    types: "original_source_type_identities_unresolved",
     ..L1_PROFILE
 };
-const REFERENCE_RECORD_PROFILE_BYTES: &[u8] =
-    include_bytes!("../e3/native-reference-record/profile.json");
+const REFERENCE_FACTS_PROFILE_BYTES: &[u8] =
+    include_bytes!("../e3/native-reference-facts/profile.json");
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "id", rename_all = "snake_case")]
@@ -194,7 +194,7 @@ impl PrimarySkeletons<'_, '_> {
                             level == SkeletonLevel::L1
                                 && matches!(skeleton.core.root.kind(), "state_root" | "state_path")
                         }
-                        PrimaryL1Profile::ReferenceRecordsV1 => {
+                        PrimaryL1Profile::ReferenceFactsV1 => {
                             level == SkeletonLevel::L1 && skeleton.core.reference_records.is_some()
                         }
                     }
@@ -345,9 +345,9 @@ const NOT_EVALUATED: &[&str] = &[
     "complete_corpus_or_runtime_behavior",
 ];
 
-const REFERENCE_RECORD_NOT_EVALUATED: &[&str] = &[
+const REFERENCE_FACTS_NOT_EVALUATED: &[&str] = &[
     "unselected_native_declaration_or_type_recipes",
-    "reference_record_normalization_and_type_lowering",
+    "reference_type_resolution_and_annotation_lowering",
     "control_effect_projection",
     "source_excerpts_and_exact_tokens",
     "deeper_paths_and_retained_continuation",
@@ -981,7 +981,7 @@ fn l1<'m, 'a>(
     stop: &AtomicBool,
 ) -> ContextResult<L1Skeleton<'m, 'a>> {
     let (root, profile, reference_origins) = selection;
-    if profile == PrimaryL1Profile::ReferenceRecordsV1 && reference_origins.is_none() {
+    if profile == PrimaryL1Profile::ReferenceFactsV1 && reference_origins.is_none() {
         return Err(missing());
     }
     if !view.has_detail_vocabulary() {
@@ -991,7 +991,7 @@ fn l1<'m, 'a>(
     let frozen = match profile {
         PrimaryL1Profile::EntityV1 => None,
         PrimaryL1Profile::StateDetailV1 => Some(STATE_DETAIL_PROFILE_BYTES),
-        PrimaryL1Profile::ReferenceRecordsV1 => Some(REFERENCE_RECORD_PROFILE_BYTES),
+        PrimaryL1Profile::ReferenceFactsV1 => Some(REFERENCE_FACTS_PROFILE_BYTES),
     };
     if let Some(bytes) = frozen
         && canonical(descriptor, universe.limits.max_metadata_bytes, stop)?
@@ -1040,7 +1040,7 @@ fn l1<'m, 'a>(
     {
         return Err(missing());
     }
-    let reference_records = if profile == PrimaryL1Profile::ReferenceRecordsV1 {
+    let reference_records = if profile == PrimaryL1Profile::ReferenceFactsV1 {
         Some(crate::reference::reference_facets(
             universe,
             view,
@@ -1063,8 +1063,8 @@ fn l1<'m, 'a>(
         declarations: rows,
         reference_records,
         relation_interpretation: "original_direct_native_assertions_no_transitive_edges",
-        not_evaluated: if profile == PrimaryL1Profile::ReferenceRecordsV1 {
-            REFERENCE_RECORD_NOT_EVALUATED
+        not_evaluated: if profile == PrimaryL1Profile::ReferenceFactsV1 {
+            REFERENCE_FACTS_NOT_EVALUATED
         } else {
             NOT_EVALUATED
         },
@@ -1112,7 +1112,7 @@ pub(crate) fn build_primary_l1_skeletons_with_budget<'m, 'a>(
     primary_l1_skeletons(universe, map, graph, root, (profile, None), stop)
 }
 
-/// Explicit original Reference records over one native entity neighborhood.
+/// Explicit normalized Reference facts over one native entity neighborhood.
 /// Origins are inert requests; the shared engine validates their native custody.
 /// This recipe produces only L1, with no L0 or frontier reconstruction.
 pub fn build_primary_reference_skeletons<'m, 'a>(
@@ -1141,7 +1141,7 @@ pub(crate) fn build_primary_reference_skeletons_with_budget<'m, 'a>(
         map,
         graph,
         root,
-        (PrimaryL1Profile::ReferenceRecordsV1, Some(origins)),
+        (PrimaryL1Profile::ReferenceFactsV1, Some(origins)),
         stop,
     )
 }

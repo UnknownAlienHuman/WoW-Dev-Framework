@@ -10,6 +10,7 @@ use wow_graph::{
     GraphAssertionKind, GraphAssertionRef, GraphConfidence, GraphEntityProposal, GraphNode,
     GraphPartitionRead, GraphProposalValue,
 };
+use wow_reference::native_view::NativeCallableSignature;
 use wow_reference::{CoverageStatus, LookupResult, ReferenceRecord, ReferenceRecordKind};
 
 use crate::budget::{Budget, checkpoint, exhausted};
@@ -22,6 +23,8 @@ pub struct ReferenceOriginInput<'a> {
     assertion: &'a GraphAssertionRef,
     source: &'a SourceHandle,
     evidence: &'a EvidenceRecord,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signature: Option<NativeCallableSignature<'a>>,
 }
 
 impl<'a> ReferenceOriginInput<'a> {
@@ -34,7 +37,14 @@ impl<'a> ReferenceOriginInput<'a> {
             assertion,
             source,
             evidence,
+            signature: None,
         }
+    }
+
+    /// Attach a genuine native owner view; admission remains in reference_facets.
+    pub const fn with_signature(mut self, signature: NativeCallableSignature<'a>) -> Self {
+        self.signature = Some(signature);
+        self
     }
 }
 
@@ -47,6 +57,7 @@ pub(crate) struct ReferenceRecordFacet<'a> {
     partition_coverage: CoverageStatus,
     record: &'a ReferenceRecord,
     record_digest: &'a str,
+    signature: NativeCallableSignature<'a>,
     source: &'a SourceHandle,
     evidence: &'a EvidenceRecord,
     source_association: &'static str,
@@ -86,6 +97,7 @@ pub(crate) fn reference_facets<'a>(
     let mut result = Vec::with_capacity(selected);
     for origin in origins {
         budget.work(1, stop)?;
+        let signature = origin.signature.ok_or_else(missing)?;
         let GraphAssertionRef::Producer {
             partition_id,
             batch_id,
@@ -207,6 +219,33 @@ pub(crate) fn reference_facets<'a>(
         {
             return Err(mismatch());
         }
+        let comparisons = [
+            (
+                signature.reference_generation(),
+                universe.reference.generation_id(),
+            ),
+            (
+                signature.reference_view_digest(),
+                universe.reference.self_digest(),
+            ),
+            (signature.record_key(), record.key()),
+            (signature.record_digest(), actual_digest.as_str()),
+            (signature.source_id(), origin.source.origin_id()),
+        ];
+        let comparison_work = comparisons
+            .iter()
+            .try_fold(comparisons.len(), |work, (actual, expected)| {
+                work.checked_add(actual.len())
+                    .and_then(|work| work.checked_add(expected.len()))
+            })
+            .ok_or_else(exhausted)?;
+        budget.work(comparison_work, stop)?;
+        for (actual, expected) in comparisons {
+            checkpoint(stop)?;
+            if actual != expected {
+                return Err(mismatch());
+            }
+        }
         let row = ReferenceRecordFacet {
             node,
             assertion: origin.assertion,
@@ -214,6 +253,7 @@ pub(crate) fn reference_facets<'a>(
             partition_coverage: partition.ok_or_else(missing)?.coverage(),
             record,
             record_digest,
+            signature,
             source: origin.source,
             evidence: origin.evidence,
             source_association: "exact_record_source_id_and_accepted_original_support",

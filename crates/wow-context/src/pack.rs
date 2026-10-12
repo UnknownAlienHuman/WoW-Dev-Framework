@@ -434,8 +434,8 @@ pub fn build_context_semantic_pack_with_l1_profile<'m, 'a>(
     )
 }
 
-/// Build explicit Reference-record L1 using original native origins and ledger.
-pub fn build_context_semantic_pack_with_reference_records<'m, 'a>(
+/// Build explicit Reference-facts L1 using original native origins and ledger.
+pub fn build_context_semantic_pack_with_reference_facts<'m, 'a>(
     universe: &'m ContextUniverseSet<'a>,
     map: &'m ProjectMap<'a>,
     graph: &GraphPartitionRead<'a>,
@@ -451,7 +451,7 @@ pub fn build_context_semantic_pack_with_reference_records<'m, 'a>(
         (
             SkeletonLevel::L1,
             PrimaryL0Profile::ContainersV1,
-            PrimaryL1Profile::ReferenceRecordsV1,
+            PrimaryL1Profile::ReferenceFactsV1,
         ),
         Some(origins),
         stop,
@@ -477,7 +477,7 @@ fn build_context_semantic_pack_with_selection<'m, 'a>(
         PrimaryL1Profile::StateDetailV1 => {
             build_primary_l1_skeletons_with_budget(universe, map, graph, root, l1_profile, stop)?
         }
-        PrimaryL1Profile::ReferenceRecordsV1 => {
+        PrimaryL1Profile::ReferenceFactsV1 => {
             if level != SkeletonLevel::L1
                 || profile != PrimaryL0Profile::ContainersV1
                 || !matches!(root, L0Scope::Entity(_))
@@ -598,9 +598,9 @@ fn build_context_semantic_pack_with_selection<'m, 'a>(
         omissions: PackOmissions {
             upstream,
             interpretation: "producer_local_omissions_retained_in_original_artifacts",
-            not_evaluated: if l1_profile == PrimaryL1Profile::ReferenceRecordsV1 {
+            not_evaluated: if l1_profile == PrimaryL1Profile::ReferenceFactsV1 {
                 &[
-                    "reference_record_normalization_and_type_lowering",
+                    "reference_type_resolution_and_annotation_lowering",
                     "declaration_signature_qualification",
                     "control_effect_projection",
                     "source_excerpts_and_tokens",
@@ -740,12 +740,12 @@ pub fn validate_context_semantic_pack(
             PrimaryL1Profile::StateDetailV1
         }
         Some(id)
-            if id == PrimaryL1Profile::ReferenceRecordsV1.profile_id()
+            if id == PrimaryL1Profile::ReferenceFactsV1.profile_id()
                 && pack.core.request.core.level == SkeletonLevel::L1
                 && pack.core.expansion.is_none()
                 && matches!(pack.core.request.core.root, L0Scope::Entity(_)) =>
         {
-            PrimaryL1Profile::ReferenceRecordsV1
+            PrimaryL1Profile::ReferenceFactsV1
         }
         _ => return Err(encoding()),
     };

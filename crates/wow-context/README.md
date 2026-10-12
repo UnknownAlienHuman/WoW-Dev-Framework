@@ -16,6 +16,9 @@ configured Reference binding, original support and load/source custody:
   [build/pack/JSON/Markdown consumer](e3/NATIVE_PRIMARY_FRONTIER_PACK.md).
 - [Selected native state-detail L1 inspect/build](e3/NATIVE_PRIMARY_STATE_DETAIL.md),
   retaining literal state keys, plural TOC declarations, scope and ambiguity.
+- [Selected native Reference-facts L1 inspect/build](e3/NATIVE_PRIMARY_REFERENCE_FACTS.md),
+  retaining original records, normalized ordered source signatures and exact support;
+  source type resolution and annotation display lowering remain unevaluated.
 
 Selected projections remain Partial or Truncated with absence_authoritative=false;
 a bound Reference view does not imply Reference enrichment.
@@ -82,7 +85,7 @@ Cargo.toml: active root workspace member
 functional/build-verified: selected maps, L0/L1, native syntax/signature metadata,
   TOC state-root L0 inspect/build, packs/rendering and one native frontier round
 bounded functional lifecycle/CLI: selected state-detail L1 inspect/build/render
-remaining: broader facets, deeper/progressive expansion, Reference enrichment,
+remaining: broader facets, deeper/progressive expansion, broader Reference/type enrichment,
   platform/combined views, excerpts/privacy/exact tokens/continuation,
   full fixtures, Tier A/X and the specified E6-B mapped-root handoff
 ```

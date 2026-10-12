@@ -83,3 +83,17 @@ Only inputs using expanded forms select `ketho-apidoc-declarative/3`; other
 admitted inputs retain v2 receipts. This does not execute Lua or add a byte-string
 wire type. See [Lua 5.1 lexical rules](https://www.lua.org/manual/5.1/manual.html#2.1)
 and the focused source-owner cases in `tests/native_string_forms.rs`.
+
+## Native callable signature view
+
+`NativeViewProjection::callable_signature(record, stop)` borrows the original
+source-normalized callable captured during `project_callables`. The sealed view
+binds its original Reference generation/view digest, record key/digest and source
+ID. It retains ordered parameters/returns, unresolved source type identities,
+tri-state nilability and raw default/stride values with original member spans.
+No payload parser, correction overlay or annotation lowering runs in this reader;
+unknown fields remain in the original record. Conflicting candidates cannot mint
+this view. The private catalog is skipped by serialization, preserving existing
+Reference and projection bytes. Consumers must validate the complete binding
+against their held universe; replacing a public report does not relabel it.
+See the selected [context consumer](../wow-context/e3/NATIVE_PRIMARY_REFERENCE_FACTS.md).

@@ -1,4 +1,4 @@
-# Native Primary Reference-record L1
+# Native Primary Reference-facts L1
 
 This closed selected contract extends bounded native inspection and structural
 pack/render consumption under [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
@@ -7,9 +7,9 @@ normative. This page records the selected scope, not full E3-B/Tier A/X acceptan
 
 ## Explicit selection
 
-`PrimaryL1Profile::ReferenceRecordsV1` selects
-`wow-context/primary-reference-record-l1/1` and emits
-`wow-context/l1-skeleton/primary-reference-record/1`. Only explicit non-frontier
+`PrimaryL1Profile::ReferenceFactsV1` selects
+`wow-context/primary-reference-facts-l1/1` and emits
+`wow-context/l1-skeleton/primary-reference-facts/1`. Only explicit non-frontier
 L1 with an exact Primary GraphEntity is supported. Project roots, L0/Both and
 frontier composition refuse; no API node or record is selected by name.
 
@@ -19,14 +19,14 @@ original native Library/API/call owners; decoded endpoint data cannot replace
 that proof. The complete host Reference profile/view must equal the held native
 Reference, independently of optional caller guards.
 
-[Inspect](../../../apps/wow/CONTEXT_INSPECT.md#selected-native-reference-record-l1)
-uses `--level l1 --l1-profile-id wow-context/primary-reference-record-l1/1` and
+[Inspect](../../../apps/wow/CONTEXT_INSPECT.md#selected-native-reference-facts-l1)
+uses `--level l1 --l1-profile-id wow-context/primary-reference-facts-l1/1` and
 `--root graph-entity@<base64url-id>`.
-[Build](../../../apps/wow/CONTEXT_BUILD.md#selected-native-reference-record-l1-pack)
+[Build](../../../apps/wow/CONTEXT_BUILD.md#selected-native-reference-facts-l1-pack)
 uses the same selection with `wow-context/primary-structural-pack/1` and its
 existing optional structural JSON/Markdown renderers.
 
-## Original record and accepted support
+## Original record, source normalization and accepted support
 
 The held native API proof supplies original assertion/source/evidence inputs
 only for API nodes selected by the exact local map.
@@ -47,20 +47,42 @@ substitution is permitted.
 
 Each facet retains the original ReferenceRecord, key/digest, source IDs and
 restriction facets; exact accepted assertion/final node; original handle,
-evidence and Reference partition coverage. The canonical record payload remains
-opaque data. Context does not parse it into normalized types/signatures,
-interpret restriction prose, add restrictions, infer API legality or execute it.
-JSON and Markdown retain that data under their existing canonical/escaping and
-trace rules; rendering cannot upgrade its authority.
+evidence and Reference partition coverage. Unknown original raw fields remain
+in the original canonical record payload, which stays opaque data to context.
+
+The genuine `NativeViewProjection::callable_signature(record, stop)` handoff
+supplies a `NativeCallableSignature` minted by the Reference owner's retained
+catalog during native projection. Its original Reference generation/view digest,
+record key/digest and source ID must match the accepted association. No public
+constructor or decoded annotation sidecar can mint this typed owner result.
+The selected L1 validates that binding before retaining the observations.
+
+The observations preserve the existing source normalizer's ordered parameters
+and returns, original names and type_name identities, optional inner_type,
+tri-state nilable, original raw default/stride_index values and source spans.
+Missing nilability stays missing, distinct from explicit false and true. Raw
+values retain their original kind/value/span; context does not evaluate them or
+turn a default/stride observation into runtime values or inferred optionality.
+An empty projected return list does not assert runtime no-return behavior.
+
+These types are qualified as `original_source_type_identities_unresolved`.
+Source type resolution, corrected-overlay application, annotation display
+lowering, broader restriction interpretation and runtime qualification remain
+unevaluated. Context does not import annotations/emmy, parse the record payload,
+interpret restriction prose, widen unknown types, add restrictions or infer API
+legality. JSON and Markdown retain the original record and typed observations
+under their existing canonical/escaping and trace rules; rendering cannot
+upgrade authority.
 
 ## Scoped custody and nonclaims
 
 The embedded map keeps its original `ReferenceContractNotEvaluated` source
-custody. This selected L1 facet proves only the exact record/source-ID association
-and accepted original support described above. It does not rewrite the map,
-attest a new source-byte acquisition, emit excerpts or authorize source inclusion.
-Original signatures, other unselected facets and scoped omissions keep their
-existing availability; no complete normalized signature/type claim is added.
+custody. This selected L1 facet adds the exact record/source-ID association and
+source-normalized observations with accepted original support described above.
+It does not rewrite the map, attest a new source-byte acquisition, emit excerpts
+or authorize source inclusion. Original native project signatures, other
+unselected facets and scoped omissions keep their existing availability; no
+complete resolved signature/type or annotation-consumer claim is added.
 
 Original partition coverage and graph confidence/support remain explicit.
 Partial/Truncated output retains `absence_authoritative=false`; omitted,
@@ -81,6 +103,9 @@ mandatory checked read/store closure precedes payload delivery.
 The selected nested L1 profile/schema and optional l1_profile_id bind the explicit
 recipe. Omission/default preserves EntityV1 requests/artifacts, old profile and
 schema bytes and NotEvaluated omissions; state selections retain their own bytes.
+The retained typed catalog is skipped by serialization: persisted Project and
+Reference records, identities and replay/storage recipes remain unchanged.
+This selection has one closed ReferenceFactsV1 recipe and no transient alias.
 This projection adds no native input selection, producer rewrite,
 project configuration, registry, replay, storage or renderer-family migration.
 Gate outcomes and remaining broad Reference/type, privacy/excerpt/token,

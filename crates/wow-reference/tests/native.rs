@@ -64,6 +64,197 @@ fn enums_are_classified_by_type_not_collection() {
         RawKind::Boolean(false)
     );
 }
+
+#[test]
+fn source_normalized_callable_signature_retains_owner_custody() {
+    use wow_core::ReferenceGenerationId;
+    use wow_reference::native_view::{
+        NATIVE_API_PARTITION, NativeCallableCorpus, NativeViewIssue, NativeViewSource,
+        project_callables,
+    };
+    use wow_reference::{LookupResult, ReferenceRecord, ReferenceView};
+
+    let stop = AtomicBool::new(false);
+    let doc = read(SOURCE);
+    let selection = ReferenceGenerationId::derive(&"native-signature-witness").unwrap();
+    let mut projection = project_callables(
+        std::slice::from_ref(&doc),
+        "All",
+        selection,
+        NativeCallableCorpus::explicit_partial(),
+        &stop,
+    )
+    .unwrap();
+    let record = match projection
+        .view
+        .lookup(NATIVE_API_PARTITION, "function:C_Example.Read")
+    {
+        LookupResult::Found(record) => record.clone(),
+        other => panic!("expected original callable, got {other:?}"),
+    };
+    let signature = projection.callable_signature(&record, &stop).unwrap();
+    assert_eq!(
+        signature.reference_generation(),
+        projection.view.generation_id()
+    );
+    assert_eq!(
+        signature.reference_view_digest(),
+        projection.view.self_digest()
+    );
+    assert_eq!(signature.record_key(), record.key());
+    assert_eq!(signature.record_digest(), record.digest().unwrap());
+    assert_eq!(signature.source_id(), record.source_ids()[0].as_ref());
+
+    let encoded = serde_json::to_value(signature).unwrap();
+    let data = &encoded["signature"];
+    let normalized = normalize_document(&doc);
+    let function = &normalized.systems[0].as_ref().unwrap().functions[0];
+    assert_eq!(data["name"], function.name);
+    assert_eq!(data["namespace"], "C_Example");
+    assert_eq!(
+        data["type_qualification"],
+        "original_source_type_identities_unresolved"
+    );
+    for (label, original) in [
+        ("arguments", &function.arguments),
+        ("returns", &function.returns),
+    ] {
+        let fields = data[label].as_array().unwrap();
+        assert_eq!(fields.len(), original.len());
+        for (retained, original) in fields.iter().zip(original) {
+            assert_eq!(retained["name"], original.name);
+            assert_eq!(retained["type_name"], original.type_name);
+            assert_eq!(
+                retained["nilable"],
+                serde_json::to_value(original.nilable).unwrap()
+            );
+            assert_eq!(
+                retained["source_span"],
+                serde_json::to_value(original.raw.span).unwrap()
+            );
+            assert_eq!(
+                retained.get("inner_type"),
+                original.inner_type.map(serde_json::Value::from).as_ref()
+            );
+            assert_eq!(
+                retained.get("default"),
+                original
+                    .default
+                    .map(|value| serde_json::to_value(value).unwrap())
+                    .as_ref()
+            );
+            assert_eq!(
+                retained.get("stride_index"),
+                original
+                    .stride_index
+                    .map(|value| serde_json::to_value(value).unwrap())
+                    .as_ref()
+            );
+        }
+    }
+    assert_eq!(data["arguments"][0]["nilable"], false);
+    assert_eq!(data["arguments"][0]["default"]["kind"]["Boolean"], false);
+    assert_eq!(data["returns"][0]["nilable"], true);
+
+    // The retained catalog cannot change the successful legacy report wire.
+    #[derive(serde::Serialize)]
+    struct LegacyProjection<'a> {
+        schema: &'a str,
+        view: &'a ReferenceView,
+        candidates: &'a [ReferenceRecord],
+        sources: &'a [NativeViewSource],
+        issues: &'a [NativeViewIssue],
+        negative_authority: bool,
+    }
+    let legacy = LegacyProjection {
+        schema: projection.schema,
+        view: &projection.view,
+        candidates: &projection.candidates,
+        sources: &projection.sources,
+        issues: &projection.issues,
+        negative_authority: projection.negative_authority,
+    };
+    assert_eq!(
+        serde_json::to_vec(&projection).unwrap(),
+        serde_json::to_vec(&legacy).unwrap()
+    );
+
+    let altered = ReferenceRecord::new(
+        record.key(),
+        record.kind(),
+        format!("{} ", record.payload()),
+        record
+            .source_ids()
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(
+        projection
+            .callable_signature(&altered, &stop)
+            .unwrap_err()
+            .code,
+        NativeErrorCode::InvalidIdentity
+    );
+    assert_eq!(
+        projection
+            .callable_signature(&record, &AtomicBool::new(true))
+            .unwrap_err()
+            .code,
+        NativeErrorCode::Cancelled
+    );
+
+    // Replacing a public report does not relabel its sealed source catalog.
+    projection.view = ReferenceView::new(
+        "foreign-reference-generation",
+        projection.view.partitions().to_vec(),
+        projection.view.conflicts().to_vec(),
+    )
+    .unwrap();
+    let retained = projection.callable_signature(&record, &stop).unwrap();
+    assert_eq!(serde_json::to_value(retained).unwrap(), encoded);
+    assert_ne!(
+        retained.reference_generation(),
+        projection.view.generation_id()
+    );
+    assert_ne!(
+        retained.reference_view_digest(),
+        projection.view.self_digest()
+    );
+
+    let other_doc = ingest_document(
+        REV,
+        "Interface/OtherAPI.lua",
+        SOURCE,
+        &source_digest(SOURCE.as_bytes()),
+        &stop,
+    )
+    .unwrap();
+    let conflicted = project_callables(
+        &[doc, other_doc],
+        "All",
+        selection,
+        NativeCallableCorpus::explicit_partial(),
+        &stop,
+    )
+    .unwrap();
+    assert_eq!(conflicted.candidates.len(), 2);
+    assert!(matches!(
+        conflicted.view.lookup(NATIVE_API_PARTITION, record.key()),
+        LookupResult::Conflict(_)
+    ));
+    for candidate in &conflicted.candidates {
+        assert_eq!(
+            conflicted
+                .callable_signature(candidate, &stop)
+                .unwrap_err()
+                .code,
+            NativeErrorCode::InvalidIdentity
+        );
+    }
+}
 #[test]
 fn script_objects_do_not_become_globals() {
     let doc = read(

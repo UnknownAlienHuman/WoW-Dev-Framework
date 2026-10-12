@@ -157,7 +157,7 @@ evidence or infer an API edge from a name.
 
 L1 and its existing structural pack and JSON/Markdown consumers preserve this
 static `UsesApi` assertion separately from `Calls`. Original API source handles
-retain their identity, digest and span. Structured Reference record/type
+retain their identity, digest and span. With default L1, structured Reference
 enrichment remains `NotEvaluated`, including the existing
 `ReferenceContractNotEvaluated` source-custody state; no Reference association or
 source bytes are manufactured in context. Existing native signature observations
@@ -168,6 +168,12 @@ This handoff introduces no context profile/schema or changed request recipe.
 Absent native API selection preserves the previous route and bytes. Output stays
 Partial/Truncated with nonauthoritative absence and existing cumulative bounds;
 broader Reference enrichment and Tier A/X qualification remain open.
+
+The explicit [Reference-facts L1 selection](NATIVE_PRIMARY_REFERENCE_FACTS.md)
+retains original records and genuine ordered source-normalized observations
+separately. Source type resolution, corrected overlays, annotation display
+lowering, broader restrictions and runtime qualification remain unevaluated;
+default/state profiles and persisted Project/Reference bytes stay unchanged.
 
 ## Bounds and remaining qualification
 

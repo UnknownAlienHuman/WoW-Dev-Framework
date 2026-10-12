@@ -18,6 +18,9 @@ use crate::{
     ReferenceView, RestrictionFacet, RestrictionState,
 };
 
+mod signatures;
+pub use signatures::{NativeCallableField, NativeCallableSignature, NativeCallableSignatureData};
+
 pub const NATIVE_API_PARTITION: &str = "reference.native.apidoc.api";
 pub const NATIVE_RESTRICTION_PARTITION: &str = "reference.native.apidoc.restriction";
 pub const NATIVE_VIEW_PROFILE: &str = "wow-reference/native-callable-view/1";
@@ -119,6 +122,21 @@ pub struct NativeViewProjection {
     pub issues: Vec<NativeViewIssue>,
     /// Negative authority applies only to the native API callable partition.
     pub negative_authority: bool,
+    #[serde(skip)]
+    signatures: signatures::SignatureCatalog,
+}
+
+impl NativeViewProjection {
+    /// Read genuine source-normalized data for one exact original callable record.
+    /// The result retains its immutable original view binding, even if a caller
+    /// subsequently replaces the public report's view field.
+    pub fn callable_signature(
+        &self,
+        record: &ReferenceRecord,
+        stop: &AtomicBool,
+    ) -> Result<NativeCallableSignature<'_>, NativeError> {
+        self.signatures.read(record, stop)
+    }
 }
 
 fn error(code: NativeErrorCode) -> NativeError {
@@ -182,6 +200,7 @@ pub fn project_callables(
 
     let mut api_grouped: BTreeMap<String, Vec<ReferenceRecord>> = BTreeMap::new();
     let mut restriction_grouped: BTreeMap<String, Vec<ReferenceRecord>> = BTreeMap::new();
+    let mut signatures: BTreeMap<String, Vec<signatures::SignatureRow>> = BTreeMap::new();
     let mut sources = Vec::new();
     let mut issues = Vec::new();
     let mut candidate_bytes = 0usize;
@@ -263,6 +282,12 @@ pub fn project_callables(
                     sha256: doc.sha256().to_owned(),
                     span: function.raw.span,
                 });
+                signatures
+                    .entry(key.clone())
+                    .or_default()
+                    .push(signatures::SignatureRow::capture(
+                        &record, namespace, function, stop,
+                    )?);
                 api_grouped.entry(key.clone()).or_default().push(record);
 
                 if corpus.carries_restriction_facts() {
@@ -323,6 +348,7 @@ pub fn project_callables(
     .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
     let view = ReferenceView::new(generation.to_string(), partitions, conflicts)
         .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
+    let signatures = signatures::SignatureCatalog::finish(&view, signatures, stop)?;
     checkpoint(stop)?;
     Ok(NativeViewProjection {
         schema: projection_profile,
@@ -331,6 +357,7 @@ pub fn project_callables(
         sources,
         issues,
         negative_authority,
+        signatures,
     })
 }
 

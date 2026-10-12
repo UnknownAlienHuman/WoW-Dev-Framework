@@ -183,6 +183,72 @@ fn fixture() -> TestResult<(FixtureRoot, Value)> {
     Ok((root, config))
 }
 
+// Assertions over the sealed original producer value; no payload decoding.
+fn assert_transport_signature(
+    signature: wow_reference::native_view::NativeCallableSignature<'_>,
+) -> TestResult<Value> {
+    let value = serde_json::to_value(signature)?;
+    assert_eq!(
+        value["profile"],
+        "wow-reference/native-source-callable-signature/1"
+    );
+    let data = &value["signature"];
+    assert_eq!(data["name"], "Read");
+    assert_eq!(data["namespace"], "C_Transport");
+    assert_eq!(
+        data["type_qualification"],
+        "original_source_type_identities_unresolved"
+    );
+    assert!(data.get("documentation").is_none());
+    let arguments = data["arguments"]
+        .as_array()
+        .ok_or("original signature arguments")?;
+    let returns = data["returns"]
+        .as_array()
+        .ok_or("original signature returns")?;
+    assert_eq!(arguments.len(), 1);
+    assert_eq!(returns.len(), 1);
+    let argument = &arguments[0];
+    let returned = &returns[0];
+    assert_eq!(argument["name"], "flag");
+    assert_eq!(argument["type_name"], "bool");
+    assert_eq!(argument["nilable"], false);
+    assert_eq!(argument["default"]["kind"], json!({"Boolean": false}));
+    assert_eq!(returned["name"], "value");
+    assert_eq!(returned["type_name"], "number");
+    assert_eq!(returned["nilable"], true);
+    assert!(returned.get("default").is_none());
+    for field in [argument, returned] {
+        assert!(field.get("inner_type").is_none());
+        assert!(field.get("stride_index").is_none());
+        let span = &field["source_span"];
+        assert!(
+            span["start"].as_u64().ok_or("field span start")?
+                < span["end"].as_u64().ok_or("field span end")?
+        );
+    }
+    let default_span = &argument["default"]["span"];
+    let start = default_span["start"].as_u64().ok_or("default span start")?;
+    let end = default_span["end"].as_u64().ok_or("default span end")?;
+    assert_eq!(
+        end.checked_sub(start),
+        Some(5),
+        "original false literal span"
+    );
+    assert!(
+        start
+            >= argument["source_span"]["start"]
+                .as_u64()
+                .ok_or("argument start")?
+    );
+    assert!(
+        end <= argument["source_span"]["end"]
+            .as_u64()
+            .ok_or("argument end")?
+    );
+    Ok(value)
+}
+
 fn native_fixture() -> TestResult<(FixtureRoot, Value)> {
     let (root, mut config) = fixture()?;
     let mut manifest: Value =
@@ -196,7 +262,7 @@ fn native_fixture() -> TestResult<(FixtureRoot, Value)> {
         (
             "Blizzard_APIDocumentationGenerated/API.lua",
             "generated_api",
-            "APIDocumentation:AddDocumentationTable({Name=\"Transport\",Type=\"System\",Namespace=\"C_Transport\",Environment=\"All\",Functions={{Name=\"Read\",Type=\"Function\"}}})",
+            "APIDocumentation:AddDocumentationTable({Name=\"Transport\",Type=\"System\",Namespace=\"C_Transport\",Environment=\"All\",Functions={{Name=\"Read\",Type=\"Function\",Arguments={{Name=\"flag\",Type=\"bool\",Nilable=false,Default=false}},Returns={{Name=\"value\",Type=\"number\",Nilable=true}}}}})",
         ),
         (
             "Blizzard_APIDocumentationGenerated/Bad.lua",
@@ -485,6 +551,19 @@ fn native_library_inputs_requalify_after_published_source_absent_reopen() -> Tes
     };
     assert_eq!(record, expected_record);
     assert_eq!(record.digest()?, origin.record_digest());
+    let signature = rebuilt.reference().callable_signature(record, &stop)?;
+    assert_eq!(
+        signature.reference_generation(),
+        rebuilt.reference().view.generation_id()
+    );
+    assert_eq!(
+        signature.reference_view_digest(),
+        rebuilt.reference().view.self_digest()
+    );
+    assert_eq!(signature.record_key(), origin.key());
+    assert_eq!(signature.record_digest(), origin.record_digest());
+    assert_eq!(signature.source_id(), origin.source_id());
+    assert_transport_signature(signature)?;
     assert_eq!(record.source_ids()[0].as_ref(), origin.source_id());
 
     // Mutate only the received SymbolTarget; never rebuild the native fixture.
@@ -592,7 +671,7 @@ fn native_library_inputs_requalify_after_published_source_absent_reopen() -> Tes
         None,
         None,
     )?
-    .with_l1_profile(ContextL1Profile::ReferenceRecordsV1)?;
+    .with_l1_profile(ContextL1Profile::ReferenceFactsV1)?;
     drop(resolver);
     drop(rebuilt);
     read.close()?;
@@ -910,8 +989,11 @@ fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResu
         Some(expected_source.span().end())
     );
     assert_eq!(
-        api_handle.reference_generation().map(|id| id.to_string()),
-        Some(expected_generation)
+        api_handle
+            .reference_generation()
+            .map(|id| id.to_string())
+            .as_deref(),
+        Some(expected_generation.as_str())
     );
 
     let provenance = read
@@ -1059,6 +1141,15 @@ fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResu
     };
     assert_eq!(original_record.digest()?, expected_record_digest);
     let expected_reference_record = serde_json::to_value(original_record)?;
+    let signature = rebuilt
+        .reference()
+        .callable_signature(original_record, &stop)?;
+    assert_eq!(signature.reference_generation(), expected_generation);
+    assert_eq!(signature.reference_view_digest(), expected_view_digest);
+    assert_eq!(signature.record_key(), expected_key);
+    assert_eq!(signature.record_digest(), expected_record_digest);
+    assert_eq!(signature.source_id(), expected_source_id);
+    let expected_reference_signature = assert_transport_signature(signature)?;
     let reference_partition = reference
         .partitions()
         .iter()
@@ -1319,10 +1410,10 @@ fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResu
     assert_eq!(rendered_skeletons, pack["core"]["skeletons"]);
 
     // The explicit facet shares this publication and the original native support.
-    let reference_profile = ContextL1Profile::ReferenceRecordsV1;
+    let reference_profile = ContextL1Profile::ReferenceFactsV1;
     let reference_inspect_request = inspect_request.clone().with_l1_profile(reference_profile)?;
     let reference_build_request = build_request.clone().with_l1_profile(reference_profile)?;
-    const REFERENCE_L1: &str = "wow-context/primary-reference-record-l1/1";
+    const REFERENCE_L1: &str = "wow-context/primary-reference-facts-l1/1";
     for request in [
         serde_json::to_value(&reference_inspect_request)?,
         serde_json::to_value(&reference_build_request)?,
@@ -1336,7 +1427,7 @@ fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResu
         let default_core = &inspected_json["payload"]["skeletons"]["l1"]["core"];
         assert_eq!(
             core["schema"],
-            "wow-context/l1-skeleton/primary-reference-record/1"
+            "wow-context/l1-skeleton/primary-reference-facts/1"
         );
         assert_eq!(core["profile"], REFERENCE_L1);
         assert_eq!(core["root"], expected_caller);
@@ -1353,6 +1444,10 @@ fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResu
         assert_eq!(core["context"]["absence_authoritative"], false);
         assert!(
             rows(&core["not_evaluated"])?.contains(&json!("complete_corpus_or_runtime_behavior"))
+        );
+        assert!(
+            rows(&core["not_evaluated"])?
+                .contains(&json!("reference_type_resolution_and_annotation_lowering"))
         );
         let facets = rows(&core["reference_records"])?;
         assert_eq!(
@@ -1371,6 +1466,7 @@ fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResu
         assert_eq!(facet["record"], expected_reference_record);
         assert_eq!(facet["record"]["key"], expected_key);
         assert_eq!(facet["record_digest"], expected_record_digest);
+        assert_eq!(facet["signature"], expected_reference_signature);
         // Payload remains an opaque string; its bytes, source IDs and restrictions
         // are compared as original data, never parsed into context semantics.
         assert_eq!(
@@ -1415,6 +1511,7 @@ fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResu
                 "payload_interpretation",
                 "record",
                 "record_digest",
+                "signature",
                 "source",
                 "source_association",
             ]
@@ -1462,7 +1559,7 @@ fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResu
     assert_reference_l1(&reference_pack["core"]["skeletons"])?;
     let omissions = rows(&reference_pack["core"]["omissions"]["not_evaluated"])?;
     assert!(!omissions.contains(&json!("reference_fact_enrichment")));
-    assert!(omissions.contains(&json!("reference_record_normalization_and_type_lowering")));
+    assert!(omissions.contains(&json!("reference_type_resolution_and_annotation_lowering")));
     assert!(
         rows(&pack["core"]["omissions"]["not_evaluated"])?
             .contains(&json!("reference_fact_enrichment"))

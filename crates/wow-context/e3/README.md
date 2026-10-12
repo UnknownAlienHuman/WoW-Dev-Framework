@@ -1,9 +1,12 @@
 # `wow-context` E3-B Project Map, L0/L1, and context-pack contract
 
-**Status:** partial executable primary direct navigation. See
-[`NATIVE_PRIMARY_MAP.md`](NATIVE_PRIMARY_MAP.md) for the implemented profile and
-its precise input/output boundaries. The complete E3-B contract below remains
-the target; broader operations and acceptance are pending under Issue #122.
+**Status:** partial executable selected Primary maps, L0/L1 inspection,
+packs/rendering and one native frontier round. The selected
+[Reference-facts L1 contract](NATIVE_PRIMARY_REFERENCE_FACTS.md) adds original
+records and retained source-normalized signature observations with exact support.
+Source type resolution and annotation display lowering remain unevaluated.
+The complete E3-B contract below remains the target; broader operations and
+acceptance are pending under Issue #122.
 
 **Contract ID:** `wow-context/e3-b/project-map-l0-l1-context-pack`
 

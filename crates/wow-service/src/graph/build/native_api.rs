@@ -25,6 +25,7 @@ use wow_graph::{
 };
 use wow_project::{NativeApiUseRecipe, ProjectView};
 use wow_recognizers::source_calls::{SOURCE_API_ENTITY_KIND, SourceApiTargetBinding};
+use wow_reference::{LookupResult, ReferenceRecordKind, native::NativeErrorCode};
 
 pub(super) const NATIVE_API_PARTITION: &str = "wow-service.native-api-callables";
 pub(super) const NATIVE_API_PROFILE: &str = "wow-service/native-api-callables/1";
@@ -171,7 +172,14 @@ impl NativeApiProvenance {
         if graph.owner().source_context_id() != self.context.context_id() {
             return Err(incompatible());
         }
-        let view = wow_context::open_project_map_view(map, stop).map_err(|_| incompatible())?;
+        let view =
+            wow_context::open_project_map_view(map, stop).map_err(|error| match error.code() {
+                wow_context::ContextErrorCode::Cancelled => ServiceError::new(
+                    ServiceErrorCode::Cancelled,
+                    "native Reference origin acquisition cancelled",
+                ),
+                _ => incompatible(),
+            })?;
         if self.endpoints.len() > NATIVE_JOIN_MAX_WORK || view.nodes().len() > NATIVE_JOIN_MAX_WORK
         {
             return Err(ServiceError::new(
@@ -184,8 +192,8 @@ impl NativeApiProvenance {
             checkpoint(stop)?;
             let GraphAssertionRef::Producer {
                 partition_id,
+                batch_id,
                 assertion,
-                ..
             } = &endpoint.assertion
             else {
                 return Err(incompatible());
@@ -197,15 +205,55 @@ impl NativeApiProvenance {
                 .node(node.node_id())
                 .is_some_and(|selected| std::ptr::eq(selected, node))
             {
-                origins.push(wow_context::ReferenceOriginInput::new(
-                    &endpoint.assertion,
-                    self.source_handles
-                        .get(&endpoint.source_handle_id)
-                        .ok_or_else(incompatible)?,
-                    self.evidence
-                        .get(&endpoint.evidence_id)
-                        .ok_or_else(incompatible)?,
-                ));
+                let producer = graph
+                    .owner()
+                    .partition(partition_id)
+                    .ok_or_else(incompatible)?;
+                if producer.batch().batch_id() != batch_id.as_ref() {
+                    return Err(incompatible());
+                }
+                let proposal = producer
+                    .batch()
+                    .entity_proposal(&assertion.proposal_id)
+                    .ok_or_else(incompatible)?;
+                let Some(GraphProposalValue::String(record_key)) =
+                    proposal.semantic_key().get("record_key")
+                else {
+                    return Err(incompatible());
+                };
+                let projection = self.library.reference();
+                let lookup = projection
+                    .view
+                    .lookup(wow_reference::native_view::NATIVE_API_PARTITION, record_key);
+                checkpoint(stop)?;
+                let record = match lookup {
+                    LookupResult::Found(record) if record.kind() == ReferenceRecordKind::Api => {
+                        record
+                    }
+                    _ => return Err(incompatible()),
+                };
+                let signature = projection
+                    .callable_signature(record, stop)
+                    .map_err(|error| match error.code {
+                        NativeErrorCode::Cancelled => ServiceError::new(
+                            ServiceErrorCode::Cancelled,
+                            "native callable signature acquisition cancelled",
+                        ),
+                        NativeErrorCode::Limit => exhausted(),
+                        _ => incompatible(),
+                    })?;
+                origins.push(
+                    wow_context::ReferenceOriginInput::new(
+                        &endpoint.assertion,
+                        self.source_handles
+                            .get(&endpoint.source_handle_id)
+                            .ok_or_else(incompatible)?,
+                        self.evidence
+                            .get(&endpoint.evidence_id)
+                            .ok_or_else(incompatible)?,
+                    )
+                    .with_signature(signature),
+                );
             }
         }
         Ok(origins)

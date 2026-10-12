@@ -121,8 +121,8 @@ impl Options {
             Some(ContextL1Profile::StateDetailV1) => request
                 .with_l1_profile(ContextL1Profile::StateDetailV1)
                 .map_err(|_| "invalid context build request syntax")?,
-            Some(ContextL1Profile::ReferenceRecordsV1) => request
-                .with_l1_profile(ContextL1Profile::ReferenceRecordsV1)
+            Some(ContextL1Profile::ReferenceFactsV1) => request
+                .with_l1_profile(ContextL1Profile::ReferenceFactsV1)
                 .map_err(|_| "invalid context build request syntax")?,
             // Entity remains an optional assertion of the existing primary constructor.
             Some(ContextL1Profile::EntityV1) | None => request,
