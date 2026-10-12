@@ -131,14 +131,21 @@ Renderer failure cannot mutate or relabel the semantic pack. Policy decides whet
 
 ### Selected combined native inspect/build
 
+The optional non-null `l0_profile_id` selects only
+`wow-context/primary-state-root-l0/1` with L0/GraphEntity. It invokes the original
+StateRootV1 L0 on the ordinary navigation map and continuing Budget. Native
+state_root provenance/TOC support is mandatory; state_path refuses with checked
+closure. Explicit L0 fields cannot coexist with an explicit L1 recipe, and L1/Both,
+project/null/default/unknown L0 choices refuse before acquisition. No L1 is emitted.
+
 The combined transport accepts the explicit L1 IDs
 `wow-context/primary-state-detail-l1/1` and `wow-context/primary-reference-facts-l1/1`,
 each with `level="l1"` and an exact GraphEntity root. StateDetail also admits
 `level="both"`: the existing StateRoot L0 precedes StateDetail L1 under the same
 continuing Budget and exact map/root. Only a native state_root is eligible;
 state_path refuses after native kind validation with checked resource closure.
-Omission preserves default recipe request/artifact bytes. ReferenceFacts Both,
-explicit L0, project roots, null, the default ID and unknown IDs refuse before
+Omission of both recipe fields preserves default request/artifact bytes. ReferenceFacts Both,
+either L1 profile with level L0, project roots, null, the default ID and unknown IDs refuse before
 owner acquisition. The held native API
 supplies original `reference_origins` to the existing L1 Reference engine.
 Origin-vector construction, graph reconstruction, exact Reference lookup and

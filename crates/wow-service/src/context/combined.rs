@@ -9,8 +9,8 @@ use super::{
     ContextMapHostInput, ContextMapPublication, ContextMapRequest, ContextMapResult,
     ContextMapRoot, ContextMapStatus, ContextPlatformHostInput, ContextPlatformOperation,
     ContextPlatformRequest, ContextRenderSelection, PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
-    PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID, PRIMARY_STATE_DETAIL_L1_PROFILE_ID, checkpoint,
-    context_error, failure,
+    PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID, PRIMARY_STATE_DETAIL_L1_PROFILE_ID,
+    PRIMARY_STATE_ROOT_L0_PROFILE_ID, checkpoint, context_error, failure,
     operation::{
         Envelope, encode, failed_operation, preflight, with_checked_context_read,
         with_primary_composition,
@@ -123,10 +123,29 @@ fn non_null_build<'de, D: serde::Deserializer<'de>>(
     BuildSelection::deserialize(deserializer).map(Some)
 }
 
-fn non_null_l1_profile_id<'de, D: serde::Deserializer<'de>>(
+fn non_null_profile_id<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<Box<str>>, D::Error> {
     Box::<str>::deserialize(deserializer).map(Some)
+}
+
+fn select_l0_recipe(
+    profile_id: Option<&str>,
+    l1_profile_id_is_explicit: bool,
+    level: wow_context::SkeletonLevel,
+    root: &ContextMapRoot,
+) -> ServiceResult<Option<CombinedL0Recipe>> {
+    match profile_id {
+        None => Ok(None),
+        Some(PRIMARY_STATE_ROOT_L0_PROFILE_ID)
+            if !l1_profile_id_is_explicit
+                && level == wow_context::SkeletonLevel::L0
+                && matches!(root, ContextMapRoot::GraphEntity(_)) =>
+        {
+            Ok(Some(CombinedL0Recipe::StateRoot))
+        }
+        Some(_) => Err(failure(ServiceErrorCode::InvalidRequest)),
+    }
 }
 
 fn select_l1_recipe(
@@ -160,13 +179,24 @@ enum CombinedL1Recipe {
     ReferenceFacts,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CombinedL0Recipe {
+    StateRoot,
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Inspection {
     level: Box<str>,
     #[serde(
         default,
-        deserialize_with = "non_null_l1_profile_id",
+        deserialize_with = "non_null_profile_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    l0_profile_id: Option<Box<str>>,
+    #[serde(
+        default,
+        deserialize_with = "non_null_profile_id",
         skip_serializing_if = "Option::is_none"
     )]
     l1_profile_id: Option<Box<str>>,
@@ -190,11 +220,17 @@ fn skeleton_level(value: &str) -> ServiceResult<wow_context::SkeletonLevel> {
 #[serde(deny_unknown_fields)]
 struct BuildSelection {
     level: Box<str>,
+    #[serde(
+        default,
+        deserialize_with = "non_null_profile_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    l0_profile_id: Option<Box<str>>,
     context_profile_id: Box<str>,
     renderer_profile_ids: Vec<Box<str>>,
     #[serde(
         default,
-        deserialize_with = "non_null_l1_profile_id",
+        deserialize_with = "non_null_profile_id",
         skip_serializing_if = "Option::is_none"
     )]
     l1_profile_id: Option<Box<str>>,
@@ -256,6 +292,8 @@ pub struct ContextCombinedRequest {
     #[serde(skip)]
     l1_recipe: Option<CombinedL1Recipe>,
     #[serde(skip)]
+    l0_recipe: Option<CombinedL0Recipe>,
+    #[serde(skip)]
     render: ContextRenderSelection,
     #[serde(skip)]
     primary_request: ContextMapRequest,
@@ -276,7 +314,7 @@ impl ContextCombinedRequest {
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
-        let (operation, selected_level, render, l1_recipe) = match (
+        let (operation, selected_level, render, l1_recipe, l0_recipe) = match (
             document.operation.as_ref(),
             document.inspection.as_ref(),
             document.build.as_mut(),
@@ -286,6 +324,7 @@ impl ContextCombinedRequest {
                 None,
                 ContextRenderSelection::None,
                 None,
+                None,
             ),
             ("inspect", Some(selection), None) => {
                 let level = selection.level()?;
@@ -294,11 +333,18 @@ impl ContextCombinedRequest {
                     level,
                     &document.primary.root,
                 )?;
+                let l0_recipe = select_l0_recipe(
+                    selection.l0_profile_id.as_deref(),
+                    selection.l1_profile_id.is_some(),
+                    level,
+                    &document.primary.root,
+                )?;
                 (
                     ContextCombinedOperation::Inspect,
                     Some(level),
                     ContextRenderSelection::None,
                     l1_recipe,
+                    l0_recipe,
                 )
             }
             ("build", None, Some(selection)) => {
@@ -308,11 +354,18 @@ impl ContextCombinedRequest {
                     level,
                     &document.primary.root,
                 )?;
+                let l0_recipe = select_l0_recipe(
+                    selection.l0_profile_id.as_deref(),
+                    selection.l1_profile_id.is_some(),
+                    level,
+                    &document.primary.root,
+                )?;
                 (
                     ContextCombinedOperation::Build,
                     Some(level),
                     render,
                     l1_recipe,
+                    l0_recipe,
                 )
             }
             _ => return Err(failure(ServiceErrorCode::InvalidRequest)),
@@ -355,6 +408,7 @@ impl ContextCombinedRequest {
             build: document.build,
             selected_level,
             l1_recipe,
+            l0_recipe,
             render,
             primary_request,
         })
@@ -491,8 +545,13 @@ pub fn execute_context_combined(
                                                 wow_context::L0Scope::Entity(id.clone())
                                             }
                                         };
-                                        let inspect = match request.l1_recipe {
-                                            Some(CombinedL1Recipe::StateDetail) => {
+                                        let inspect = match (request.l0_recipe, request.l1_recipe) {
+                                            (Some(CombinedL0Recipe::StateRoot), None) => {
+                                                wow_context::build_combined_state_root_l0_inspect(
+                                                    &mut map, &universe, graph, &scope, stop,
+                                                )
+                                            }
+                                            (None, Some(CombinedL1Recipe::StateDetail)) => {
                                                 wow_context::build_combined_state_detail_inspect_with_level(
                                                     &mut map,
                                                     &universe,
@@ -502,7 +561,7 @@ pub fn execute_context_combined(
                                                     stop,
                                                 )
                                             }
-                                            Some(CombinedL1Recipe::ReferenceFacts) => {
+                                            (None, Some(CombinedL1Recipe::ReferenceFacts)) => {
                                                 wow_context::build_combined_reference_facts_inspect(
                                                     &mut map,
                                                     &universe,
@@ -514,9 +573,14 @@ pub fn execute_context_combined(
                                                     stop,
                                                 )
                                             }
-                                            None => wow_context::build_combined_context_inspect(
+                                            (None, None) => wow_context::build_combined_context_inspect(
                                                 &mut map, &universe, graph, &scope, level, stop,
                                             ),
+                                            (Some(_), Some(_)) => {
+                                                return Err(failure(
+                                                    ServiceErrorCode::InternalContractViolation,
+                                                ));
+                                            }
                                         }
                                         .map_err(context_error)?;
                                         if request.build.is_some() {

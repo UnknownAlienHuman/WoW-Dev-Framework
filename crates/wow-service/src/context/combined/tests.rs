@@ -98,6 +98,18 @@ fn build(level: &str, profile: Option<&str>) -> TestResult<Value> {
     Ok(value)
 }
 
+fn inspect_l0(profile: &str) -> TestResult<Value> {
+    let mut value = inspect("l0", None)?;
+    value["inspection"]["l0_profile_id"] = json!(profile);
+    Ok(value)
+}
+
+fn build_l0(profile: &str) -> TestResult<Value> {
+    let mut value = build("l0", None)?;
+    value["build"]["l0_profile_id"] = json!(profile);
+    Ok(value)
+}
+
 fn refused(value: &Value, expected: ServiceErrorCode) -> TestResult {
     let bytes = serde_json::to_vec(value)?;
     let actual = ContextCombinedRequest::from_json_slice(&bytes, &AtomicBool::new(false))
@@ -236,5 +248,101 @@ fn supported_l1_decode_preserves_compatibility_and_refuses_invalid_admission() -
         Some(ServiceErrorCode::Cancelled),
         "cancellation is observed before request admission",
     );
+    Ok(())
+}
+
+#[test]
+fn explicit_state_root_l0_decode_is_narrow_and_preserves_omission() -> TestResult {
+    for omitted in [inspect("l0", None)?, build("l0", None)?] {
+        let request = ContextCombinedRequest::from_json_slice(
+            &serde_json::to_vec(&omitted)?,
+            &AtomicBool::new(false),
+        )?;
+        assert_eq!(
+            wow_core::canonical_json_bytes(&request)?,
+            wow_core::canonical_json_bytes(&omitted)?,
+        );
+    }
+
+    for value in [
+        inspect_l0(PRIMARY_STATE_ROOT_L0_PROFILE_ID)?,
+        build_l0(PRIMARY_STATE_ROOT_L0_PROFILE_ID)?,
+    ] {
+        let request = ContextCombinedRequest::from_json_slice(
+            &serde_json::to_vec(&value)?,
+            &AtomicBool::new(false),
+        )?;
+        let encoded: Value = serde_json::from_slice(&serde_json::to_vec(&request)?)?;
+        let selection = if request.operation() == ContextCombinedOperation::Inspect {
+            &encoded["inspection"]
+        } else {
+            &encoded["build"]
+        };
+        assert_eq!(selection["level"], "l0");
+        assert_eq!(selection["l0_profile_id"], PRIMARY_STATE_ROOT_L0_PROFILE_ID);
+        assert_eq!(
+            wow_core::canonical_json_bytes(&request)?,
+            wow_core::canonical_json_bytes(&value)?,
+        );
+    }
+
+    for mut value in [
+        inspect_l0(PRIMARY_STATE_ROOT_L0_PROFILE_ID)?,
+        build_l0(PRIMARY_STATE_ROOT_L0_PROFILE_ID)?,
+    ] {
+        let key = if value["operation"] == "inspect" {
+            "inspection"
+        } else {
+            "build"
+        };
+        for invalid in [
+            Value::Null,
+            json!(false),
+            json!("wow-context/primary-l0/1"),
+            json!("wow-context/unknown-l0/1"),
+        ] {
+            value[key]["l0_profile_id"] = invalid;
+            refused(&value, ServiceErrorCode::InvalidRequest)?;
+        }
+    }
+
+    for (level, l1_profile) in [
+        ("l1", None),
+        ("both", None),
+        ("l0", Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)),
+        ("l0", Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID)),
+    ] {
+        for mut value in [
+            inspect_l0(PRIMARY_STATE_ROOT_L0_PROFILE_ID)?,
+            build_l0(PRIMARY_STATE_ROOT_L0_PROFILE_ID)?,
+        ] {
+            let key = if value["operation"] == "inspect" {
+                "inspection"
+            } else {
+                "build"
+            };
+            value[key]["level"] = json!(level);
+            if let Some(profile) = l1_profile {
+                value[key]["l1_profile_id"] = json!(profile);
+            }
+            refused(&value, ServiceErrorCode::InvalidRequest)?;
+        }
+    }
+
+    for mut value in [
+        inspect_l0(PRIMARY_STATE_ROOT_L0_PROFILE_ID)?,
+        build_l0(PRIMARY_STATE_ROOT_L0_PROFILE_ID)?,
+    ] {
+        value["primary"]["root"] = json!({"kind":"project","id":"fixture-primary"});
+        refused(&value, ServiceErrorCode::InvalidRequest)?;
+    }
+    let mut map = fixture()?;
+    map["operation"] = json!("map");
+    map.as_object_mut().ok_or("request object")?.remove("build");
+    map.as_object_mut().ok_or("request object")?.insert(
+        "l0_profile_id".into(),
+        json!(PRIMARY_STATE_ROOT_L0_PROFILE_ID),
+    );
+    refused(&map, ServiceErrorCode::InvalidRequest)?;
     Ok(())
 }

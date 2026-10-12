@@ -258,14 +258,19 @@ The request selects `operation="build"`, outer profile
 and the original platform Map request with exact candidate and native binding.
 The required non-null `build` object has `level` (`l0|l1|both`),
 `context_profile_id="wow-context/combined-native-structural-pack/1"`,
-`renderer_profile_ids` and optional `l1_profile_id`. Omission preserves the
+`renderer_profile_ids` and optional `l0_profile_id` / `l1_profile_id`. Recipe fields
+cannot coexist. Explicit `l0_profile_id="wow-context/primary-state-root-l0/1"`
+requires L0/GraphEntity and the original native StateRootV1 kind/provenance/TOC
+custody. It emits only L0 through the same navigation map and continuing Budget;
+state_path refuses with checked closure. Other explicit L0 profile/level/root
+combinations refuse before acquisition. Omission of both recipe fields preserves the
 existing default Primary recipe with unchanged request/artifact bytes. The only
-accepted non-null explicit values are `wow-context/primary-state-detail-l1/1` and
+accepted non-null `l1_profile_id` values are `wow-context/primary-state-detail-l1/1` and
 `wow-context/primary-reference-facts-l1/1`; either accepts `level="l1"` and an
 exact GraphEntity root. StateDetail also accepts `level="both"` for a native
 state_root, with original StateRoot L0 followed by StateDetail L1 on the same
 detail map and continuing Budget. State_path Both refuses after native kind
-validation and checked closure. ReferenceFacts Both, explicit L0, project roots,
+validation and checked closure. ReferenceFacts Both, either L1 profile with level L0, project roots,
 null, non-string, default ID and unknown IDs refuse before owner acquisition. Mixed
 operation fields also refuse. StateDetail retains its original nested
 `wow-context/l1-skeleton/primary-state-detail/1` schema and artifact ID;

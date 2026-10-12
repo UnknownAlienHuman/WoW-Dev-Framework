@@ -1419,22 +1419,28 @@ pub(crate) fn build_primary_reference_facts_on_budget<'m, 'a>(
 }
 
 /// Continue an existing construction ledger; the origin map was already charged.
-/// Only the default container/entity recipes are selected by combined inspect.
+/// Combined inspect selects the default recipe or the explicit StateRoot L0.
 pub(crate) fn build_primary_skeletons_on_budget<'m, 'a>(
     universe: &'m ContextUniverseSet<'a>,
     map: &'m ProjectMap<'a>,
     graph: &GraphPartitionRead<'a>,
     selection: (&L0Scope, SkeletonLevel),
+    profile: PrimaryL0Profile,
     budget: &mut Budget,
     stop: &AtomicBool,
 ) -> ContextResult<PrimarySkeletons<'m, 'a>> {
+    if profile == PrimaryL0Profile::StateRootV1
+        && (selection.1 != SkeletonLevel::L0 || !matches!(selection.0, L0Scope::Entity(_)))
+    {
+        return Err(invalid());
+    }
     budget.work(1, stop)?;
     let view = validate_input(universe, map, graph, stop)?;
     primary_skeletons_from_view(
         universe,
         map,
         graph,
-        (selection.0, selection.1, PrimaryL0Profile::ContainersV1),
+        (selection.0, selection.1, profile),
         &view,
         budget,
         stop,

@@ -18,7 +18,7 @@ use crate::skeleton::{
     build_primary_state_detail_on_budget,
 };
 use crate::{
-    ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, L0Scope,
+    ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, L0Scope, PrimaryL0Profile,
     PrimaryMapForComposition, PrimaryMapLimits, PrimarySkeletons, ProjectMap, ProjectMapState,
     SkeletonLevel, build_platform_context_map, open_project_map_view,
 };
@@ -382,6 +382,24 @@ pub fn build_combined_context_inspect<'m, 'p, 'f>(
     )
 }
 
+/// Explicit original StateRoot L0 on the continuing combined construction ledger.
+/// The existing StateRootV1 owner validates the exact root and its native custody.
+pub fn build_combined_state_root_l0_inspect<'m, 'p, 'f>(
+    map: &'m mut CombinedContextMap<'p, 'f>,
+    universe: &'m ContextUniverseSet<'p>,
+    graph: &GraphPartitionRead<'p>,
+    root: &L0Scope,
+    stop: &AtomicBool,
+) -> ContextResult<CombinedContextInspect<'m, 'p, 'f>> {
+    build_combined_inspect(
+        map,
+        universe,
+        graph,
+        CombinedInspection::StateRootL0 { root },
+        stop,
+    )
+}
+
 /// Explicit Primary StateDetail L1 with the unchanged original platform inspect.
 /// Both components continue the same held combined construction ledger.
 pub fn build_combined_state_detail_inspect<'m, 'p, 'f>(
@@ -447,6 +465,9 @@ enum CombinedInspection<'r, 'p> {
         root: &'r L0Scope,
         level: SkeletonLevel,
     },
+    StateRootL0 {
+        root: &'r L0Scope,
+    },
     ReferenceFacts {
         root: &'r L0Scope,
         origins: &'r [crate::reference::ReferenceOriginInput<'p>],
@@ -478,6 +499,7 @@ fn build_combined_inspect<'m, 'p, 'f>(
             &map.core.primary,
             graph,
             (root, level),
+            PrimaryL0Profile::ContainersV1,
             budget,
             stop,
         )?,
@@ -486,6 +508,15 @@ fn build_combined_inspect<'m, 'p, 'f>(
             &map.core.primary,
             graph,
             (root, level),
+            budget,
+            stop,
+        )?,
+        CombinedInspection::StateRootL0 { root } => build_primary_skeletons_on_budget(
+            universe,
+            &map.core.primary,
+            graph,
+            (root, SkeletonLevel::L0),
+            PrimaryL0Profile::StateRootV1,
             budget,
             stop,
         )?,

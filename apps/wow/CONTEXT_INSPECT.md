@@ -343,13 +343,18 @@ Reuse the exact combined host and `wow-service/context-combined-request/1`
 request family with `operation="inspect"`,
 `profile_id="wow-context/combined-native-one-hop/1"` and required
 `inspection`, for example `{"level":"both"}`; level is exactly `l0`, `l1` or
-`both`. The optional nested `inspection.l1_profile_id` accepts only
+`both`. Optional `inspection.l0_profile_id="wow-context/primary-state-root-l0/1"`
+selects only L0/GraphEntity through the original native StateRootV1 owner and
+navigation map on the continuing Budget. It preserves original root/path/TOC
+custody and emits no L1. Native state_path refuses with checked closure; other
+explicit L0 profile/level/root combinations refuse before acquisition. Explicit
+L0/L1 recipe fields cannot coexist. The optional `inspection.l1_profile_id` accepts only
 `wow-context/primary-state-detail-l1/1` or
 `wow-context/primary-reference-facts-l1/1`, each paired with `level="l1"` and an
 exact GraphEntity root. StateDetail also supports `level="both"` for a genuine
 state_root: original StateRoot L0 precedes StateDetail L1 on the same detail map
 and continuing Budget. State_path Both refuses after native kind validation and
-checked closure; ReferenceFacts Both refuses before acquisition. Omission
+checked closure; ReferenceFacts Both refuses before acquisition. Omission of both recipe fields
 preserves default recipe request/artifact bytes. Null, non-string, the default ID,
 unknown IDs and incompatible level/root or mixed operation fields refuse before
 owner acquisition. The platform
@@ -370,7 +375,7 @@ The service result uses the same combined /1 schema, operation
 `context_combined_inspect` and original `payload.combined_inspect`.
 Unselected map requests/artifacts remain exact. See the
 [combined owner contract](../../crates/wow-context/e3/NATIVE_COMBINED_MAP.md#selected-combined-inspection)
-for budget scope and conservative omissions. Selected qualification remains
-pending under #122; combined build/pack is implemented as described in its
+for budget scope and conservative omissions. Selected verification is tracked
+under #122; full acceptance remains open. Combined build/pack is described in its
 [build contract](CONTEXT_BUILD.md#selected-combined-native-build). Combined links
 and full acceptance remain open.
