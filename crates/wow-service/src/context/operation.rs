@@ -523,7 +523,11 @@ fn with_native_map_construction<T>(
                 wow_context::primary_project_navigation_queries(universe, &id, &graph, stop)
                     .map_err(context_error)?;
             let neighborhoods = graph
-                .neighbors_batch(request.navigation_queries(), stop)
+                .neighbors_batch(
+                    request.navigation_queries(),
+                    request.navigation_batch_limits().map_err(context_error)?,
+                    stop,
+                )
                 .map_err(graph_error)?;
             for view in neighborhoods {
                 checkpoint(stop)?;

@@ -164,13 +164,15 @@ impl<'a> GraphPartitionRead<'a> {
 
     /// Evaluate a finite set of exact one-hop reads with one physical edge scan.
     /// Results retain the original query order and each query's logical full-scan
-    /// counters, filters, truncation and coverage semantics.
+    /// counters, filters, truncation and coverage semantics. Cumulative admission
+    /// precedes collector/index and output growth; failure returns no prefix.
     pub fn neighbors_batch(
         &self,
         queries: &[crate::GraphNeighborReadQuery],
+        limits: crate::GraphNeighborBatchLimits,
         stop: &AtomicBool,
     ) -> GraphResult<Vec<crate::GraphNeighborView<'a>>> {
-        crate::GraphNeighborReadQuery::execute_batch_on_read(queries, self, stop)
+        crate::GraphNeighborReadQuery::execute_batch_on_read(queries, self, limits, stop)
     }
 
     /// Original retained support and admitted evidence; no source is reopened.

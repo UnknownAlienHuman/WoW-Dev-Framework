@@ -89,6 +89,12 @@ impl Budget {
             limits,
         }
     }
+    pub(crate) fn remaining_metadata_bytes(&self) -> ContextResult<u64> {
+        self.limits
+            .max_metadata_bytes
+            .checked_sub(self.retained_bytes)
+            .ok_or_else(exhausted)
+    }
     pub(crate) fn work(&mut self, amount: usize, stop: &AtomicBool) -> ContextResult<()> {
         checkpoint(stop)?;
         self.work = self
@@ -104,11 +110,7 @@ impl Budget {
         value: &T,
         stop: &AtomicBool,
     ) -> ContextResult<()> {
-        let left = self
-            .limits
-            .max_metadata_bytes
-            .checked_sub(self.retained_bytes)
-            .ok_or_else(exhausted)?;
+        let left = self.remaining_metadata_bytes()?;
         let bytes = encoded_len(value, left, stop)?;
         self.retained_bytes = self
             .retained_bytes

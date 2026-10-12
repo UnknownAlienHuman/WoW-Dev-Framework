@@ -15,8 +15,8 @@ use crate::{
 };
 
 pub use neighbors::{
-    GRAPH_NEIGHBOR_READ_SCHEMA, GraphNeighborReadLimits, GraphNeighborReadQuery,
-    GraphNeighborTruncation, GraphNeighborView,
+    GRAPH_NEIGHBOR_READ_SCHEMA, GraphNeighborBatchLimits, GraphNeighborReadLimits,
+    GraphNeighborReadQuery, GraphNeighborTruncation, GraphNeighborView,
 };
 
 pub const GRAPH_ENTITY_QUERY_SCHEMA: &str = "wow-graph/entity-exact/e2-a/1";

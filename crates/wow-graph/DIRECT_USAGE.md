@@ -78,6 +78,19 @@ measuring serialization and around canonical allocation. Owner validation and a
 single core canonicalizer invocation are not forcibly interrupted. Cancellation
 returns a typed error, not an incomplete successful view or background work.
 
+The sealed partition read also exposes `neighbors_batch(queries, limits, stop)`.
+`GraphNeighborBatchLimits` supplies runtime ceilings for logical Q*E scan work
+and the sum of actual compact encoded views. The complete logical scope is checked
+before preparation; collector/endpoint-index entries and selected edge/node
+references are cumulatively admitted before growth, including repeated roots.
+One physical edge traversal dispatches only to requested endpoints. Original query
+order, per-query scan counts and selection/truncation semantics remain unchanged.
+The aggregate counts final-prefix metadata and actual payload/array separators;
+it does not reserve per-query maxima or add their 2 KiB selection pads. Refusal
+returns no batch prefix. These runtime ceilings do not change query digests,
+serialized views, persisted profiles or graph identity. Encoded bytes bound
+retained representation, not measured allocator or OS peak memory.
+
 ## Compatibility and routing
 
 The existing `GraphNeighborQuery`/`GraphNeighborResult` wire layout and accepted

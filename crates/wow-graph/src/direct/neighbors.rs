@@ -3,6 +3,13 @@ use std::sync::atomic::AtomicBool;
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+thread_local! {
+    static PHYSICAL_EDGE_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 use super::{
     admit_snapshot, budget, checkpoint, encoded_len, ensure_fits, invalid, query_digest,
     validate_output_limit,
@@ -14,6 +21,16 @@ use crate::{
 };
 
 pub const GRAPH_NEIGHBOR_READ_SCHEMA: &str = "wow-graph/neighbors/e2-a/1";
+
+/// Runtime admission for the complete batch, including repeated roots. Bytes
+/// are the sum of compact encoded views, not per-query maxima or heap usage.
+/// Logical scan work remains query count times the complete edge inventory.
+/// These ceilings do not participate in query/output identities or persistence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GraphNeighborBatchLimits {
+    pub max_logical_scanned_edges: u64,
+    pub max_output_bytes: u64,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -128,6 +145,7 @@ impl GraphNeighborReadQuery {
     pub(crate) fn execute_batch_on_read<'a>(
         queries: &[Self],
         read: &crate::GraphPartitionRead<'a>,
+        limits: GraphNeighborBatchLimits,
         stop: &AtomicBool,
     ) -> GraphResult<Vec<GraphNeighborView<'a>>> {
         let snapshot = read.owner().snapshot();
@@ -138,10 +156,17 @@ impl GraphNeighborReadQuery {
         if queries.len() > snapshot.limits().max_nodes as usize {
             return Err(budget());
         }
+        u64::try_from(queries.len())
+            .ok()
+            .and_then(|count| count.checked_mul(u64::try_from(snapshot.edges().len()).ok()?))
+            .filter(|work| *work <= limits.max_logical_scanned_edges)
+            .ok_or_else(budget)?;
+        // The existing per-query preflight also bounds work against the sealed
+        // snapshot and each selected scan policy. No dispatch can exceed Q*E.
         for query in queries {
             query.preflight(snapshot, stop)?;
         }
-        collect_batch(queries, snapshot, stop)
+        collect_batch(queries, snapshot, limits, stop)
     }
 
     fn preflight(&self, snapshot: &GraphSnapshot, stop: &AtomicBool) -> GraphResult<()> {
@@ -167,34 +192,52 @@ impl GraphNeighborReadQuery {
         snapshot: &'a GraphSnapshot,
         stop: &AtomicBool,
     ) -> GraphResult<GraphNeighborView<'a>> {
-        collect_batch(std::slice::from_ref(self), snapshot, stop)?
-            .pop()
-            .ok_or_else(|| invalid("neighbor read batch lost its result"))
+        collect_batch(
+            std::slice::from_ref(self),
+            snapshot,
+            GraphNeighborBatchLimits {
+                max_logical_scanned_edges: u64::from(self.limits.max_scanned_edges),
+                max_output_bytes: u64::from(self.limits.max_output_bytes),
+            },
+            stop,
+        )?
+        .pop()
+        .ok_or_else(|| invalid("neighbor read batch lost its result"))
     }
 }
 
 fn collect_batch<'a>(
     queries: &[GraphNeighborReadQuery],
     snapshot: &'a GraphSnapshot,
+    limits: GraphNeighborBatchLimits,
     stop: &AtomicBool,
 ) -> GraphResult<Vec<GraphNeighborView<'a>>> {
-    let mut collectors = Vec::with_capacity(queries.len());
+    let mut output = BatchOutputBudget {
+        used: 0,
+        limit: usize::try_from(limits.max_output_bytes).map_err(|_| budget())?,
+    };
+    let mut collectors = Vec::new();
     let mut roots = BTreeMap::<&str, Vec<usize>>::new();
     for query in queries {
         checkpoint(stop)?;
+        // At most one individually bounded candidate exists before cumulative
+        // admission. Charge it before retaining a collector or dispatch entry.
+        let collector = GraphNeighborCollector::new(query, snapshot, &mut output, stop)?;
         let index = collectors.len();
         roots
             .entry(query.query().node_id().as_str())
             .or_default()
             .push(index);
-        collectors.push(GraphNeighborCollector::new(query, snapshot, stop)?);
+        collectors.push(collector);
     }
     for edge in snapshot.edges() {
         checkpoint(stop)?;
+        #[cfg(test)]
+        PHYSICAL_EDGE_VISITS.with(|visits| visits.set(visits.get() + 1));
         if let Some(indices) = roots.get(edge.from().as_str()) {
             for &index in indices {
                 checkpoint(stop)?;
-                collectors[index].observe(snapshot, edge, stop)?;
+                collectors[index].observe(snapshot, edge, &mut output, stop)?;
             }
         }
         if edge.to() != edge.from()
@@ -202,15 +245,54 @@ fn collect_batch<'a>(
         {
             for &index in indices {
                 checkpoint(stop)?;
-                collectors[index].observe(snapshot, edge, stop)?;
+                collectors[index].observe(snapshot, edge, &mut output, stop)?;
             }
         }
     }
-    let scanned_edges = u32::try_from(snapshot.edges().len()).map_err(|_| budget())?;
     collectors
         .into_iter()
-        .map(|collector| collector.finish(scanned_edges, stop))
+        .map(|collector| collector.finish(stop))
         .collect()
+}
+
+struct BatchOutputBudget {
+    used: usize,
+    limit: usize,
+}
+impl BatchOutputBudget {
+    fn replace(&mut self, before: usize, after: usize) -> GraphResult<()> {
+        self.used = self
+            .used
+            .checked_sub(before)
+            .and_then(|used| used.checked_add(after))
+            .filter(|used| *used <= self.limit)
+            .ok_or_else(budget)?;
+        Ok(())
+    }
+}
+
+/// Only these scalar/finite fields change as a prefix grows. Count them through
+/// serde, using the same values as the final view. Payloads and array separators
+/// are charged separately, so earlier prefixes are never reencoded per edge.
+#[derive(Serialize)]
+struct NeighborProgress<'a> {
+    state: GraphQueryState,
+    scanned_edges: u32,
+    matching_edges: u32,
+    omitted_edges: u32,
+    truncations: &'a [GraphNeighborTruncation],
+    no_new_evidence: bool,
+    absence_authoritative: bool,
+}
+impl NeighborProgress<'_> {
+    fn apply(&self, view: &mut GraphNeighborView<'_>) {
+        view.state = self.state;
+        view.scanned_edges = self.scanned_edges;
+        view.matching_edges = self.matching_edges;
+        view.omitted_edges = self.omitted_edges;
+        view.no_new_evidence = self.no_new_evidence;
+        view.absence_authoritative = self.absence_authoritative;
+    }
 }
 
 struct GraphNeighborCollector<'a> {
@@ -218,12 +300,15 @@ struct GraphNeighborCollector<'a> {
     nodes: BTreeMap<&'a GraphNodeId, &'a GraphNode>,
     used: usize,
     limit: usize,
+    output_bytes: usize,
+    progress_bytes: usize,
 }
 
 impl<'a> GraphNeighborCollector<'a> {
     fn new(
         query: &GraphNeighborReadQuery,
         snapshot: &'a GraphSnapshot,
+        output: &mut BatchOutputBudget,
         stop: &AtomicBool,
     ) -> GraphResult<Self> {
         let root = snapshot
@@ -262,11 +347,21 @@ impl<'a> GraphNeighborCollector<'a> {
         if used > limit {
             return Err(budget());
         }
+        // Preserve the original per-query pad/selection algorithm above. The
+        // aggregate counter uses actual final-prefix bytes without that pad.
+        result.scanned_edges = u32::try_from(snapshot.edges().len()).map_err(|_| budget())?;
+        let progress = result.progress(0, &[]);
+        let progress_bytes = encoded_len(&progress, limit, stop)?.ok_or_else(budget)?;
+        progress.apply(&mut result);
+        let output_bytes = encoded_len(&result, limit, stop)?.ok_or_else(budget)?;
+        output.replace(0, output_bytes)?;
         Ok(Self {
             result,
             nodes: BTreeMap::new(),
             used,
             limit,
+            output_bytes,
+            progress_bytes,
         })
     }
 
@@ -274,6 +369,7 @@ impl<'a> GraphNeighborCollector<'a> {
         &mut self,
         snapshot: &'a GraphSnapshot,
         edge: &'a GraphEdge,
+        output: &mut BatchOutputBudget,
         stop: &AtomicBool,
     ) -> GraphResult<()> {
         if !self.result.query.query().matches_edge(edge)
@@ -281,13 +377,20 @@ impl<'a> GraphNeighborCollector<'a> {
         {
             return Ok(());
         }
-        self.result.matching_edges += 1;
-        if !self.result.truncations.is_empty() {
+        self.result.matching_edges = self
+            .result
+            .matching_edges
+            .checked_add(1)
+            .ok_or_else(budget)?;
+        if let Some(truncation) = self.result.truncations.first().copied() {
+            let truncations = [truncation];
+            let progress = self.result.progress(self.result.edges.len(), &truncations);
+            self.charge_progress(&progress, 0, output, stop)?;
+            progress.apply(&mut self.result);
             return Ok(());
         }
         if self.result.edges.len() >= self.result.query.query().max_edges() as usize {
-            self.result.truncations.push(GraphNeighborTruncation::Edges);
-            return Ok(());
+            return self.truncate(GraphNeighborTruncation::Edges, output, stop);
         }
         let adjacent_id = if edge.from() == self.result.query.query().node_id() {
             edge.to()
@@ -312,11 +415,19 @@ impl<'a> GraphNeighborCollector<'a> {
             .zip(node_size)
             .and_then(|(edge, node)| edge.checked_add(node)?.checked_add(2));
         let Some(size) = size.filter(|size| *size <= self.limit - self.used) else {
-            self.result
-                .truncations
-                .push(GraphNeighborTruncation::OutputBytes);
-            return Ok(());
+            return self.truncate(GraphNeighborTruncation::OutputBytes, output, stop);
         };
+        let payload_bytes = edge_size
+            .zip(node_size)
+            .and_then(|(edge, node)| {
+                edge.checked_add(usize::from(!self.result.edges.is_empty()))?
+                    .checked_add(node)?
+                    .checked_add(usize::from(new_node.is_some() && !self.nodes.is_empty()))
+            })
+            .ok_or_else(budget)?;
+        let progress = self.result.progress(self.result.edges.len() + 1, &[]);
+        self.charge_progress(&progress, payload_bytes, output, stop)?;
+        progress.apply(&mut self.result);
         self.used += size;
         self.result.edges.push(edge);
         if let Some(node) = new_node {
@@ -325,28 +436,50 @@ impl<'a> GraphNeighborCollector<'a> {
         Ok(())
     }
 
-    fn finish(
-        mut self,
-        scanned_edges: u32,
+    fn truncate(
+        &mut self,
+        truncation: GraphNeighborTruncation,
+        output: &mut BatchOutputBudget,
         stop: &AtomicBool,
-    ) -> GraphResult<GraphNeighborView<'a>> {
-        self.result.scanned_edges = scanned_edges;
+    ) -> GraphResult<()> {
+        let truncations = [truncation];
+        let progress = self.result.progress(self.result.edges.len(), &truncations);
+        self.charge_progress(&progress, 0, output, stop)?;
+        progress.apply(&mut self.result);
+        self.result.truncations.push(truncation);
+        Ok(())
+    }
+
+    fn charge_progress(
+        &mut self,
+        progress: &NeighborProgress<'_>,
+        payload_bytes: usize,
+        output: &mut BatchOutputBudget,
+        stop: &AtomicBool,
+    ) -> GraphResult<()> {
+        let progress_bytes = encoded_len(progress, self.limit, stop)?.ok_or_else(budget)?;
+        let bytes = self
+            .output_bytes
+            .checked_sub(self.progress_bytes)
+            .and_then(|bytes| {
+                bytes
+                    .checked_add(progress_bytes)?
+                    .checked_add(payload_bytes)
+            })
+            .ok_or_else(budget)?;
+        output.replace(self.output_bytes, bytes)?;
+        self.output_bytes = bytes;
+        self.progress_bytes = progress_bytes;
+        Ok(())
+    }
+
+    fn finish(mut self, stop: &AtomicBool) -> GraphResult<GraphNeighborView<'a>> {
         self.result.adjacent_nodes = self.nodes.into_values().collect();
-        self.result.omitted_edges = self.result.matching_edges - self.result.edges.len() as u32;
-        self.result.no_new_evidence = self.result.edges.is_empty();
-        self.result.state = crate::query::query_state(
-            !self.result.truncations.is_empty(),
-            !self.result.missing_coverage.is_empty(),
-            self.result.coverage.iter().copied(),
-        );
-        self.result.absence_authoritative = self.result.no_new_evidence
-            && self.result.state == GraphQueryState::Complete
-            && self.result.query.confidence() != GraphPathConfidence::IncludeCandidate
-            && self
-                .result
-                .coverage
-                .iter()
-                .all(|record| record.negative_authority());
+        if encoded_len(&self.result, self.limit, stop)? != Some(self.output_bytes) {
+            return Err(invalid(
+                "neighbor batch byte accounting disagrees with its view",
+            ));
+        }
         ensure_fits(&self.result, self.limit, stop)?;
         Ok(self.result)
     }
@@ -382,6 +515,34 @@ pub struct GraphNeighborView<'a> {
     absence_authoritative: bool,
 }
 impl<'a> GraphNeighborView<'a> {
+    fn progress<'b>(
+        &self,
+        selected_edges: usize,
+        truncations: &'b [GraphNeighborTruncation],
+    ) -> NeighborProgress<'b> {
+        let state = crate::query::query_state(
+            !truncations.is_empty(),
+            !self.missing_coverage.is_empty(),
+            self.coverage.iter().copied(),
+        );
+        let no_new_evidence = selected_edges == 0;
+        NeighborProgress {
+            state,
+            scanned_edges: self.scanned_edges,
+            matching_edges: self.matching_edges,
+            omitted_edges: self.matching_edges - selected_edges as u32,
+            truncations,
+            no_new_evidence,
+            absence_authoritative: no_new_evidence
+                && state == GraphQueryState::Complete
+                && self.query.confidence() != GraphPathConfidence::IncludeCandidate
+                && self
+                    .coverage
+                    .iter()
+                    .all(|record| record.negative_authority()),
+        }
+    }
+
     #[must_use]
     pub fn query(&self) -> &GraphNeighborReadQuery {
         &self.query

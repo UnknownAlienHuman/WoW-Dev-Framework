@@ -1,7 +1,7 @@
 //! Exact admitted file-root navigation for the original project container.
 use super::*;
 use crate::profile::{PRIMARY_PROJECT_MAP_PROFILE_BYTES, PROJECT_PROFILE};
-use wow_graph::GraphPartitionRead;
+use wow_graph::{GraphNeighborBatchLimits, GraphPartitionRead};
 use wow_project::{
     ProjectId,
     graph::{ProjectGraphFile, SOURCE_GRAPH_PARTITION},
@@ -36,6 +36,20 @@ impl<'a> ProjectNavigationRequest<'a> {
     #[must_use]
     pub fn navigation_queries(&self) -> &[GraphNeighborReadQuery] {
         &self.queries
+    }
+    /// Pass the actual remaining ledger to graph before materializing the batch.
+    /// Full-scope logical scan work was already reserved during root enumeration;
+    /// this ceiling verifies that reservation without charging it a second time.
+    pub fn navigation_batch_limits(&self) -> ContextResult<GraphNeighborBatchLimits> {
+        let work = self
+            .queries
+            .len()
+            .checked_mul(self.universe.pair.graph().snapshot().edges().len())
+            .ok_or_else(exhausted)?;
+        Ok(GraphNeighborBatchLimits {
+            max_logical_scanned_edges: u64::try_from(work).map_err(|_| exhausted())?,
+            max_output_bytes: self.budget.remaining_metadata_bytes()?,
+        })
     }
     /// Validate and charge one genuine native view before retaining it. The
     /// complete root batch must fit cumulatively, not just one view at a time.

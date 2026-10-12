@@ -4,6 +4,137 @@ use wow_core::{EvidenceId, GenerationContextId, StableHandleId};
 use wow_graph::*;
 type ResultOf<T = ()> = Result<T, Box<dyn Error>>;
 
+#[test]
+fn sealed_neighbor_batch_uses_actual_aggregate_allowance() -> ResultOf {
+    let stop = AtomicBool::new(false);
+    let owner = fixture()?;
+    let read = owner.open_read_view(&stop)?;
+    let root = read
+        .published_entity("producer:axis", "root", &stop)?
+        .node_id();
+    let child = read
+        .published_entity("producer:axis", "child", &stop)?
+        .node_id();
+    let mut queries = Vec::new();
+    for (node, direction, relation, max_edges, confidence) in [
+        (
+            root,
+            GraphDirection::Both,
+            GraphRelationKind::Owns,
+            10,
+            GraphPathConfidence::ProvenAndDerived,
+        ),
+        (
+            root,
+            GraphDirection::Outgoing,
+            GraphRelationKind::Owns,
+            1,
+            GraphPathConfidence::ProvenAndDerived,
+        ),
+        (
+            child,
+            GraphDirection::Incoming,
+            GraphRelationKind::Owns,
+            10,
+            GraphPathConfidence::ProvenAndDerived,
+        ),
+        (
+            root,
+            GraphDirection::Incoming,
+            GraphRelationKind::Owns,
+            10,
+            GraphPathConfidence::ProvenAndDerived,
+        ),
+        (
+            root,
+            GraphDirection::Both,
+            GraphRelationKind::Calls,
+            10,
+            GraphPathConfidence::ProvenAndDerived,
+        ),
+        (
+            root,
+            GraphDirection::Both,
+            GraphRelationKind::Owns,
+            10,
+            GraphPathConfidence::Proven,
+        ),
+    ] {
+        queries.push(
+            GraphNeighborReadQuery::new(
+                owner.snapshot().snapshot_id().clone(),
+                GraphNeighborQuery::new(node.clone(), direction, vec![relation], max_edges)?,
+                GraphNeighborReadLimits::default(),
+            )?
+            .with_confidence(confidence),
+        );
+    }
+    let expected = queries
+        .iter()
+        .map(|query| {
+            Ok(wow_core::canonical_json_bytes(
+                &read.neighbors(query, &stop)?,
+            )?)
+        })
+        .collect::<ResultOf<Vec<_>>>()?;
+    let limits = GraphNeighborBatchLimits {
+        max_logical_scanned_edges: (queries.len() * owner.snapshot().edges().len()) as u64,
+        max_output_bytes: expected.iter().map(|bytes| bytes.len() as u64).sum(),
+    };
+    let views = read.neighbors_batch(&queries, limits, &stop)?;
+    assert_eq!(views.len(), expected.len());
+    for (view, bytes) in views.iter().zip(&expected) {
+        assert_eq!(&wow_core::canonical_json_bytes(view)?, bytes);
+        assert_eq!(
+            view.scanned_edges() as usize,
+            owner.snapshot().edges().len()
+        );
+    }
+    assert_eq!(views[1].truncations(), &[GraphNeighborTruncation::Edges]);
+    assert!(views[3..].iter().all(|view| view.edges().is_empty()));
+    for refused in [
+        GraphNeighborBatchLimits {
+            max_output_bytes: limits.max_output_bytes - 1,
+            ..limits
+        },
+        GraphNeighborBatchLimits {
+            max_logical_scanned_edges: limits.max_logical_scanned_edges - 1,
+            ..limits
+        },
+    ] {
+        assert_eq!(
+            read.neighbors_batch(&queries, refused, &stop)
+                .err()
+                .ok_or("batch accepted insufficient work or bytes")?
+                .code(),
+            GraphErrorCode::BudgetExceeded
+        );
+    }
+    assert_eq!(
+        read.neighbors_batch(&queries, limits, &AtomicBool::new(true))
+            .err()
+            .ok_or("cancelled batch returned success")?
+            .code(),
+        GraphErrorCode::Cancelled
+    );
+    // Self-loops are rejected by the admitted E2-A owner, not a usable fixture.
+    assert_eq!(
+        GraphEdge::new(
+            root.clone(),
+            root.clone(),
+            GraphRelationKind::Owns,
+            GraphConfidence::Derived,
+            Vec::new(),
+            GraphLimits::default()
+        )
+        .err()
+        .ok_or("self-loop admitted by the E2-A owner")?
+        .code(),
+        GraphErrorCode::SelfEdgeInvalid
+    );
+    Ok(())
+}
+
 fn registry() -> ResultOf<GraphRegistryBundle> {
     Ok(GraphRegistryBundle::build(
         "registry:axis-definitions",

@@ -65,6 +65,12 @@ their custody must fit the full aggregate work/metadata budget: no first-file or
 root-prefix fallback is returned. Native adjacency scan work is reserved for the
 whole root batch before execution; each view and resolved receipt is admitted
 cumulatively. Native per-query limits remain separate from these aggregate guards.
+The sealed navigation request passes its actual remaining metadata allowance and
+already-reserved logical scan scope to graph before batch materialization. Graph
+checks cumulative encoded output before collector/index or edge/node growth;
+Context still charges every genuine returned view against the same ledger. This
+does not reserve the sum of per-query maxima or charge scan work twice. The batch
+uses one physical edge scan while preserving original per-root logical counters.
 Work is finite and cancellable.
 The service additionally reserves the combined encoded Reference, graph and
 evidence-catalog inputs before its one necessary catalog copy. Encoded accounting

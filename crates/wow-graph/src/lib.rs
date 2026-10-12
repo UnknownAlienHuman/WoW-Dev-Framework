@@ -87,8 +87,8 @@ pub use axes::{
 
 pub use direct::{
     GRAPH_ENTITY_QUERY_SCHEMA, GRAPH_NEIGHBOR_READ_SCHEMA, GraphEntityLookup, GraphEntityQuery,
-    GraphEntityResult, GraphNeighborReadLimits, GraphNeighborReadQuery, GraphNeighborTruncation,
-    GraphNeighborView,
+    GraphEntityResult, GraphNeighborBatchLimits, GraphNeighborReadLimits, GraphNeighborReadQuery,
+    GraphNeighborTruncation, GraphNeighborView,
 };
 
 pub use evidence::{
