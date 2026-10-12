@@ -189,6 +189,18 @@ pub(super) struct ReplayConfiguration {
         deserialize_with = "non_null_physical_function_signatures"
     )]
     physical_function_signatures: Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null_native_library_input"
+    )]
+    native_library_input: Option<crate::NativeLibraryInput>,
+}
+
+fn non_null_native_library_input<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<crate::NativeLibraryInput>, D::Error> {
+    crate::NativeLibraryInput::deserialize(deserializer).map(Some)
 }
 
 fn non_null_xml_classification<'de, D: serde::Deserializer<'de>>(
@@ -210,6 +222,9 @@ fn non_null_physical_function_signatures<'de, D: serde::Deserializer<'de>>(
 }
 
 impl ReplayConfiguration {
+    pub(super) const fn native_library_input(&self) -> Option<&crate::NativeLibraryInput> {
+        self.native_library_input.as_ref()
+    }
     pub(super) const fn physical_function_signatures(
         &self,
     ) -> Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe> {
@@ -259,6 +274,7 @@ impl ReplayConfiguration {
                 .map(|profile| ReplayXmlClassification::capture(profile)),
             physical_function_declarations: config.physical_function_declarations(),
             physical_function_signatures: config.physical_function_signatures(),
+            native_library_input: config.native_library_input().cloned(),
         })
     }
     pub(super) fn profile(&self) -> &ProfileIdentity {
@@ -362,6 +378,10 @@ impl ReplayConfiguration {
             None => builder,
         };
         let config = builder.build()?;
+        let config = match &self.native_library_input {
+            Some(input) => config.with_native_library_input(input.clone())?,
+            None => config,
+        };
         if config.configuration_digest() != self.expected_configuration_digest {
             return Err(invalid());
         }

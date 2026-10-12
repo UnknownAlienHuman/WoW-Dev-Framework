@@ -254,12 +254,12 @@ pub(super) struct InputFailure {
 
 /// Labels describe an explicitly selected source corpus, not a currentness or
 /// release-acceptance claim. Identities are derived from the actual pinned bytes.
-#[derive(Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct NativeProfile {
     pub(super) profile_id: ProfileId,
     pub(super) flavor: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) edition: Option<String>,
     pub(super) interface: u64,
     pub(super) client_version: ToolVersion,
@@ -343,7 +343,7 @@ impl NativeProfile {
     }
 }
 
-fn native_error(error: NativeError) -> ServiceError {
+pub(super) fn native_error(error: NativeError) -> ServiceError {
     match error.code {
         NativeErrorCode::Cancelled => ServiceError::new(
             ServiceErrorCode::Cancelled,

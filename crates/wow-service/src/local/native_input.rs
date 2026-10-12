@@ -648,6 +648,18 @@ impl LocalProjectInput {
                 invalid("native callable binding has incompatible producer origins")
             }
         })?;
+        let native_library_input = super::native_library_input::capture(
+            super::native_library_input::NativeLibraryCapture {
+                profile: &input.profile,
+                sources: &captured,
+                source_manifest: source_manifest.as_ref(),
+                annotation_inputs: annotation_inputs.as_ref(),
+                reference: &reference,
+                artifact: &annotation_artifact,
+                sidecars: &annotation_sidecars,
+            },
+            stop,
+        )?;
         let libraries = library
             .files
             .into_iter()
@@ -686,6 +698,10 @@ impl LocalProjectInput {
             libraries,
             load_plan,
         )?;
+        assembled.bundle = assembled
+            .bundle
+            .with_native_library_input(native_library_input)
+            .map_err(super::disk_input::acquisition_error)?;
         assembled.native_input = Some(Arc::new(NativeInputEvidence {
             receipt,
             report: report.into_boxed_slice(),

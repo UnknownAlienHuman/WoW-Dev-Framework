@@ -20,6 +20,35 @@ pub struct PinnedLuaSource {
 }
 
 impl PinnedLuaSource {
+    /// Re-admit exact archived input data without filesystem effects or role claims.
+    /// This proves byte/path custody only; semantic consumers must parse it again.
+    pub fn from_retained(
+        path: String,
+        text: String,
+        digest: ContentDigest<SourceContent>,
+        stop: &AtomicBool,
+    ) -> ProjectResult<Self> {
+        checkpoint(stop)?;
+        if text.len() > DISK_SOURCE_MAX_BYTES {
+            return Err(failure(
+                ProjectErrorCode::SourceBudgetExceeded,
+                "retained Lua input exceeds the acquisition profile",
+            ));
+        }
+        let declaration =
+            ProjectDiskFile::new(path.clone()).with_identity(digest, text.len() as u64);
+        declaration.validate()?;
+        if !path.ends_with(".lua") {
+            return Err(failure(
+                ProjectErrorCode::InvalidInputInventory,
+                "retained source requires a canonical Lua path",
+            ));
+        }
+        declaration.verify(text.as_bytes())?;
+        checkpoint(stop)?;
+        Ok(Self { path, text, digest })
+    }
+
     #[must_use]
     pub fn path(&self) -> &str {
         &self.path

@@ -18,6 +18,7 @@ mod identity;
 mod ids;
 mod inventory;
 pub mod load;
+mod native_library_input;
 pub mod platform_source;
 mod publication;
 mod registry;
@@ -45,6 +46,7 @@ pub use inventory::{
     ProjectFileManifestEntry, ProjectFileRole, ProjectInputBundle, ProjectInputFile,
     ProjectInputInventory, ProjectLanguageKind,
 };
+pub use native_library_input::{NATIVE_LIBRARY_INPUT_MAX_BYTES, NativeLibraryInput};
 pub use publication::ProjectPublisher;
 pub use registry::{
     ProjectFileRecord, ProjectSourceOrigin, ProjectSourceOriginKind, ProjectSourceRegistry,

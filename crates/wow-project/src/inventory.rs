@@ -560,6 +560,15 @@ impl ProjectInputBundle {
         &self.libraries
     }
 
+    /// Retain exact raw producer input before the initial project publication.
+    pub fn with_native_library_input(
+        mut self,
+        input: crate::NativeLibraryInput,
+    ) -> ProjectResult<Self> {
+        self.configuration = self.configuration.with_native_library_input(input)?;
+        Ok(self)
+    }
+
     pub(crate) fn into_parts(
         self,
     ) -> (

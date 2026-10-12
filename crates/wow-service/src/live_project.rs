@@ -101,6 +101,14 @@ impl LiveProjectRead {
     pub fn project(&self) -> &ProjectView {
         self.pair.project()
     }
+    /// Re-run the native producers over exact retained inputs after publication.
+    /// No cached report or generic graph proposal grants native callable authority.
+    pub fn requalify_native_library(
+        &self,
+        stop: &AtomicBool,
+    ) -> ServiceResult<crate::local::RequalifiedNativeLibrary> {
+        crate::local::native_library_input::rebuild_for_project(self.project(), stop)
+    }
     pub fn graph(&self) -> &GraphPartitionSnapshot {
         self.pair.graph()
     }
@@ -167,6 +175,16 @@ impl LiveProjectStore {
             .map_err(store_error)?,
         })
     }
+    fn create_native_library_input(root: &Path, owner: &str) -> ServiceResult<Self> {
+        Ok(Self {
+            store: ProjectStore::create_with_gc(
+                root,
+                owner,
+                catalog_for(publication::STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1)?,
+            )
+            .map_err(store_error)?,
+        })
+    }
     pub fn open(root: &Path) -> ServiceResult<Self> {
         Self::open_selected(root, None, None)
     }
@@ -189,7 +207,10 @@ impl LiveProjectStore {
                 continue;
             }
             for selected in [false, true] {
-                if selected && schemas == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1 {
+                if selected
+                    && (schemas == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1
+                        || schemas == publication::STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1)
+                {
                     continue;
                 }
                 if candidate_catalog.is_some_and(|expected| expected != selected) {
@@ -383,7 +404,9 @@ fn catalog_accepts_components(
         Option<PhysicalFunctionSignatureRecipe>,
     ),
 ) -> bool {
-    if schemas == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1 {
+    if schemas == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1
+        || schemas == publication::STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1
+    {
         return false;
     }
     match components.2 {

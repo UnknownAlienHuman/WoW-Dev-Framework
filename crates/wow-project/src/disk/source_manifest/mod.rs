@@ -2,9 +2,11 @@
 //! Lua closure or platform inventory. No Git, network, scanning or execution.
 mod model;
 mod platform;
+mod replay;
 pub use platform::{
     ManifestedPlatformInput, ManifestedPlatformSource, PlatformSourceManifestReceipt,
 };
+pub use replay::ManifestedLuaReplayInput;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::AtomicBool;
@@ -80,9 +82,16 @@ pub struct SourceManifestReceipt {
     pub git_membership: &'static str,
     pub unconsumed_source_bytes: &'static str,
     pub negative_authority: bool,
+    #[serde(skip)]
+    retained_input: std::sync::Arc<ManifestedLuaReplayInput>,
 }
 
 impl SourceManifestReceipt {
+    /// Original manifest/TOC/version inputs. These are data, not a decoded receipt.
+    #[must_use]
+    pub fn retained_input(&self) -> &ManifestedLuaReplayInput {
+        &self.retained_input
+    }
     #[must_use]
     pub fn selected_toc(&self) -> &LoadSource {
         &self.toc.source
@@ -192,12 +201,33 @@ impl ProjectInputDirectory {
         }
         let sources = directory.read_pinned_lua_sources(".", &selected, stop)?;
         checkpoint(stop)?;
-        let receipt = SourceManifestReceipt {
+        let retained = ManifestedLuaReplayInput::capture(request, bytes, toc_bytes, version_bytes)?;
+        let receipt = retained.receipt(
+            manifest,
+            toc,
+            generated_api_complete,
+            declared_generated_api_files,
+            sources.len(),
+        );
+        Ok(ManifestedLuaSources { sources, receipt })
+    }
+}
+
+impl ManifestedLuaReplayInput {
+    fn receipt(
+        self: std::sync::Arc<Self>,
+        manifest: SourceManifest,
+        toc: DocumentTocSelection,
+        generated_api_complete: bool,
+        declared_generated_api_files: u64,
+        source_count: usize,
+    ) -> SourceManifestReceipt {
+        SourceManifestReceipt {
             schema: "wow-project/source-manifest-admission/2",
             manifest: LoadSource {
-                path: request.manifest.path.clone(),
-                content_digest: crate::identity::source_digest(&bytes),
-                byte_length: bytes.len() as u64,
+                path: self.manifest_path().to_owned(),
+                content_digest: crate::identity::source_digest(self.manifest_bytes()),
+                byte_length: self.manifest_bytes().len() as u64,
             },
             manifest_sha256: manifest.manifest_sha256,
             source_revision: manifest.source.revision,
@@ -215,18 +245,18 @@ impl ProjectInputDirectory {
                 "partial_manifest_toc_selection"
             },
             generated_api_closure_complete: generated_api_complete,
-            verified_source_files: sources.len() + 2,
+            verified_source_files: source_count + 2,
             version_file: LoadSource {
                 path: "version.txt".to_owned(),
-                content_digest: crate::identity::source_digest(&version_bytes),
-                byte_length: version_bytes.len() as u64,
+                content_digest: crate::identity::source_digest(self.version_bytes()),
+                byte_length: self.version_bytes().len() as u64,
             },
             toc,
             git_membership: "not_attested",
             unconsumed_source_bytes: "non_api_source_bytes_not_verified",
             negative_authority: false,
-        };
-        Ok(ManifestedLuaSources { sources, receipt })
+            retained_input: self,
+        }
     }
 }
 

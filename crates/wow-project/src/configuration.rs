@@ -543,6 +543,10 @@ pub struct ProjectConfiguration {
     physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
     #[serde(skip_serializing_if = "Option::is_none")]
     physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    native_library_input_digest: Option<ContentDigest<CanonicalResult>>,
+    #[serde(skip)]
+    native_library_input: Option<crate::NativeLibraryInput>,
 }
 
 impl ProjectConfiguration {
@@ -555,6 +559,20 @@ impl ProjectConfiguration {
             )
         })?;
         self.analyzer_binding.validate()?;
+        if self.native_library_input_digest
+            != self
+                .native_library_input
+                .as_ref()
+                .map(crate::NativeLibraryInput::digest)
+            || (self.native_library_input.is_some()
+                && self.project_kind == ProjectKind::BlizzardUiPlatformSource)
+        {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidConfiguration,
+                ProjectPhase::Configuration,
+                "native Library producer input is not retained by its configuration",
+            ));
+        }
         if self.load_plan_digest != self.retained_load_plan.as_ref().map(|plan| plan.digest()) {
             return Err(ProjectError::new(
                 ProjectErrorCode::InvalidConfiguration,
@@ -749,6 +767,7 @@ impl ProjectConfiguration {
             self.xml_schema_classification.as_ref(),
             self.physical_function_declarations,
             self.physical_function_signatures,
+            self.native_library_input_digest,
         )?;
         if expected != self.configuration_digest {
             return Err(ProjectError::new(
@@ -896,6 +915,53 @@ impl ProjectConfiguration {
     #[must_use]
     pub const fn configuration_digest(&self) -> ContentDigest<CanonicalResult> {
         self.configuration_digest
+    }
+
+    /// Borrow original producer inputs. Qualification belongs to service, not Project.
+    #[must_use]
+    pub const fn native_library_input(&self) -> Option<&crate::NativeLibraryInput> {
+        self.native_library_input.as_ref()
+    }
+
+    pub(crate) fn with_native_library_input(
+        mut self,
+        input: crate::NativeLibraryInput,
+    ) -> ProjectResult<Self> {
+        if self.native_library_input.is_some()
+            || self.project_kind == ProjectKind::BlizzardUiPlatformSource
+        {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidConfiguration,
+                ProjectPhase::Configuration,
+                "native Library producer input is already selected",
+            ));
+        }
+        self.native_library_input_digest = Some(input.digest());
+        self.native_library_input = Some(input);
+        self.configuration_digest = configuration_digest(
+            &self.project_id,
+            self.project_kind,
+            &self.workspace_id,
+            &self.source_origin_id,
+            &self.logical_root,
+            &self.selected_profile,
+            self.reference_generation,
+            &self.analyzer_binding,
+            &self.capability_policy,
+            self.budget_policy,
+            self.load_plan_digest,
+            self.package_load_plan_digest,
+            self.package_main_plan_digest,
+            self.platform_package_binding_digest,
+            self.package_xml_binding_profile,
+            self.platform_graph_profile,
+            self.xml_schema_classification.as_ref(),
+            self.physical_function_declarations,
+            self.physical_function_signatures,
+            self.native_library_input_digest,
+        )?;
+        self.validate()?;
+        Ok(self)
     }
 }
 
@@ -1178,6 +1244,7 @@ impl ProjectConfigurationBuilder {
             self.xml_schema_classification.as_ref(),
             self.physical_function_declarations,
             self.physical_function_signatures,
+            None,
         )?;
         let configuration = ProjectConfiguration {
             project_id: self.project_id,
@@ -1205,6 +1272,8 @@ impl ProjectConfigurationBuilder {
             xml_schema_classification: self.xml_schema_classification,
             physical_function_declarations: self.physical_function_declarations,
             physical_function_signatures: self.physical_function_signatures,
+            native_library_input_digest: None,
+            native_library_input: None,
         };
         configuration.validate()?;
         Ok(configuration)
@@ -1232,6 +1301,7 @@ fn configuration_digest(
     xml_schema_classification: Option<&RetainedXmlClassification>,
     physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
     physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
+    native_library_input_digest: Option<ContentDigest<CanonicalResult>>,
 ) -> ProjectResult<ContentDigest<CanonicalResult>> {
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -1268,6 +1338,8 @@ fn configuration_digest(
         physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
         #[serde(skip_serializing_if = "Option::is_none")]
         physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        native_library_input_digest: Option<ContentDigest<CanonicalResult>>,
     }
     canonical_digest(
         "wow-project/configuration/e0-d/1",
@@ -1295,6 +1367,7 @@ fn configuration_digest(
             xml_schema_classification,
             physical_function_declarations,
             physical_function_signatures,
+            native_library_input_digest,
         },
         ProjectPhase::Configuration,
     )

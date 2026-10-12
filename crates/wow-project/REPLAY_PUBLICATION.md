@@ -34,6 +34,27 @@ Library sources remain separate from Main. The resulting ProjectView offers the
 existing freshly recomputed report capabilities; no additional semantic operation
 or target-client runtime capability follows.
 
+Ordinary native Library input custody selects
+`wow-project/native-project-replay/native-library-input/1` and the separate
+`wow-project.live-replay.native-library-input.v1` catalog. One immutable service
+producer-input JSON object contributes its domain-separated digest to configuration
+identity; Project neither interprets it nor grants native Reference authority.
+Absence omits the new identity/archive fields and retains earlier recipes. The
+existing base recipe guards still apply, including physical callable selection;
+this channel cannot select platform/candidate publication or widen a prior epoch.
+
+Raw producer inputs have a 16 MiB allowance and count toward the existing 32 MiB
+aggregate retained-source and complete encoded-record limits. Configuration copies
+share the immutable input. Hydration retains those bytes through the original
+configuration/snapshot/analyzer comparison and exact recapture fences. The service
+must strictly decode them and rerun the actual Reference/annotation producers,
+then compare the configured profile, Reference generation and generated Library
+snapshot identities before exposing reconstructed callable bindings. Original
+manifest/TOC/version selection is rebuilt through the source-manifest validator
+and TOC owner over the exact retained document set; archived report or receipt
+labels cannot replace those inputs. This custody channel alone proves neither
+accepted API-use graph receipts nor current-source/runtime qualification.
+
 Genuine retained native platform graph configuration may select a positive
 `ProjectBudgetPolicy.source_graph.max_metadata_bytes` component. It applies to
 collection and native producer metadata accounting, separately from analyzer

@@ -64,6 +64,10 @@ const PRIMARY_CALLABLES_REPLAY_SCHEMA: &str =
     "wow-project/native-project-replay/primary-callables/1";
 pub(super) const PRIMARY_CALLABLES_STORAGE_SCHEMA: &str =
     "wow-project.live-replay.primary-callables.v1";
+const NATIVE_LIBRARY_INPUT_REPLAY_SCHEMA: &str =
+    "wow-project/native-project-replay/native-library-input/1";
+pub(super) const NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA: &str =
+    "wow-project.live-replay.native-library-input.v1";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -166,7 +170,9 @@ impl ProjectReplay {
         } else {
             inputs.len()
         };
-        let mut bytes = 0usize;
+        let mut bytes = configuration
+            .native_library_input()
+            .map_or(0, |input| input.bytes().len());
         // Charge borrowed input bytes before copying an archive.
         for file in inputs
             .iter()
@@ -271,6 +277,9 @@ impl ProjectReplay {
             2 => Some(2),
             _ => return Err(invalid()),
         };
+        if configuration.native_library_input().is_some() && generation_schema_version != Some(2) {
+            return Err(invalid());
+        }
         // The package graph projection is selected only together with the
         // genuine platform owner, the same-session XML binding profile, the
         // library-bound generation and the explicit platform graph selector.
@@ -381,6 +390,11 @@ impl ProjectReplay {
         Ok(replay)
     }
     fn expected_schema(&self) -> ProjectResult<&'static str> {
+        if self.configuration.native_library_input().is_some()
+            && self.generation_schema_version != Some(2)
+        {
+            return Err(invalid());
+        }
         let schema = self.expected_base_schema()?;
         if let Some(budget) = self.configuration.source_graph_budget() {
             return if self
@@ -484,7 +498,14 @@ impl ProjectReplay {
             return Err(invalid());
         }
         let mut count = 0usize;
-        let mut bytes = 0usize;
+        let mut bytes = self
+            .configuration
+            .native_library_input()
+            .map_or(0, |input| input.bytes().len());
+        if self.configuration.native_library_input().is_some() {
+            // Producer JSON escaping counts toward the complete stored record.
+            encoded_size(self, stop)?;
+        }
         if let Some(platform) = &self.platform {
             encoded_size(self, stop)?;
             platform.validate_budget(&mut count, &mut bytes, stop)?;
@@ -675,12 +696,31 @@ impl ProjectReplay {
             }
             SELECTED_COMPONENTS_REPLAY_SCHEMA => Ok(SELECTED_COMPONENTS_STORAGE_SCHEMA),
             PRIMARY_CALLABLES_REPLAY_SCHEMA => Ok(PRIMARY_CALLABLES_STORAGE_SCHEMA),
+            NATIVE_LIBRARY_INPUT_REPLAY_SCHEMA => Ok(NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA),
             _ => Err(invalid()),
         }
     }
 }
 /// A finite recipe matrix shared by capture and exact expected-schema validation.
 fn selected_component_schema(
+    base: &'static str,
+    configuration: &ReplayConfiguration,
+    function_calls: bool,
+    physical_primary: bool,
+) -> ProjectResult<&'static str> {
+    let selected =
+        selected_component_base_schema(base, configuration, function_calls, physical_primary)?;
+    if configuration.native_library_input().is_some() {
+        if configuration.is_platform() {
+            return Err(invalid());
+        }
+        Ok(NATIVE_LIBRARY_INPUT_REPLAY_SCHEMA)
+    } else {
+        Ok(selected)
+    }
+}
+
+fn selected_component_base_schema(
     base: &'static str,
     configuration: &ReplayConfiguration,
     function_calls: bool,

@@ -81,6 +81,8 @@ pub(super) struct NativeAnnotationResources {
     pub(super) corrections: Option<ValidatedCorrections>,
     pub(super) aliases: Vec<AliasDocument>,
     pub(super) selection: NativeAnnotationSelection,
+    pub(super) correction_input: Option<Vec<u8>>,
+    pub(super) alias_inputs: Vec<wow_project::disk::PinnedLuaSource>,
 }
 
 impl NativeAnnotationInputs {
@@ -124,6 +126,7 @@ impl NativeAnnotationInputs {
             git_membership: "not_attested",
             review_authority: "caller_declared_not_authenticated",
         };
+        let mut correction_input = None;
         let corrections = if let Some(file) = &self.corrections {
             let bytes = directory
                 .read_json_artifact_with_limit(file, MAX_CORRECTION_SET_BYTES, stop)
@@ -145,11 +148,13 @@ impl NativeAnnotationInputs {
                 byte_length: bytes.len() as u64,
             });
             selection.correction_set_sha256 = Some(corrections.id().to_owned());
+            correction_input = Some(bytes);
             Some(corrections)
         } else {
             None
         };
         let mut aliases = Vec::new();
+        let mut alias_inputs = Vec::new();
         if let Some(catalogs) = &self.alias_catalogs {
             let sources = directory
                 .read_pinned_lua_sources_with_limits(
@@ -161,7 +166,7 @@ impl NativeAnnotationInputs {
                 )
                 .map_err(acquisition_error)?;
             let mut declarations = 0usize;
-            for file in sources {
+            for file in &sources {
                 cancelled(stop)?;
                 let document = ingest_alias_catalog(
                     &catalogs.revision,
@@ -194,12 +199,15 @@ impl NativeAnnotationInputs {
                 });
                 aliases.push(document);
             }
+            alias_inputs = sources;
         }
         cancelled(stop)?;
         Ok(NativeAnnotationResources {
             corrections,
             aliases,
             selection,
+            correction_input,
+            alias_inputs,
         })
     }
 }

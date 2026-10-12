@@ -255,8 +255,14 @@ pub const STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1: &[&str] = &[
     super::PRIMARY_CALLABLES_STORAGE_SCHEMA,
     "wow-project.live-pair.v1",
 ];
+/// Ordinary native Library producer-input custody; prior epoch catalogs are frozen.
+pub const STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1: &[&str] = &[
+    super::NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA,
+    "wow-project.live-pair.v1",
+];
 /// Exact catalogs admitted by open/recovery/migration. Never widen a retained epoch.
 pub const STORAGE_SCHEMA_CATALOGS: &[&[&str]] = &[
+    STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1,
     STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1,
     STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1,
     STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1,
@@ -534,6 +540,7 @@ impl AcquiredProjectPair {
                 | super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA
                 | super::SELECTED_COMPONENTS_STORAGE_SCHEMA
                 | super::PRIMARY_CALLABLES_STORAGE_SCHEMA
+                | super::NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA
         ) {
             return Err(invalid().into());
         }

@@ -221,6 +221,7 @@ pub(super) fn publish_input(
     // LocalProjectInput has already validated this immutable configuration.
     // Select the ordinary catalog before graph composition consumes the input.
     let configuration = input.project_bundle().configuration();
+    let native_library_input = configuration.native_library_input().is_some();
     let primary_callables = matches!(
         configuration.project_kind(),
         wow_project::ProjectKind::Fixture | wow_project::ProjectKind::Repository
@@ -229,7 +230,9 @@ pub(super) fn publish_input(
     let (bundle, owner) = crate::graph::live_publication(input, graph_request, stop)?;
     super::publication_checkpoint(stop)?;
     let mut store = if request.initialize {
-        if primary_callables {
+        if native_library_input {
+            LiveProjectStore::create_native_library_input(root, &owner)?
+        } else if primary_callables {
             LiveProjectStore::create_primary_callables(root, &owner)?
         } else {
             LiveProjectStore::create(root, &owner)?

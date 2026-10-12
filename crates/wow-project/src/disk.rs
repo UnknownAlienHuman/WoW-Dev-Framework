@@ -3,8 +3,8 @@ mod pinned;
 mod source_manifest;
 pub use pinned::PinnedLuaSource;
 pub use source_manifest::{
-    ManifestedLuaRequest, ManifestedLuaSources, ManifestedPlatformInput, ManifestedPlatformSource,
-    PlatformSourceManifestReceipt, SourceManifestReceipt,
+    ManifestedLuaReplayInput, ManifestedLuaRequest, ManifestedLuaSources, ManifestedPlatformInput,
+    ManifestedPlatformSource, PlatformSourceManifestReceipt, SourceManifestReceipt,
 };
 use std::collections::BTreeSet;
 use std::io::{ErrorKind, Read};

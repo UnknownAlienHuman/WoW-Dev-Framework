@@ -269,6 +269,156 @@ fn native_fixture() -> TestResult<(FixtureRoot, Value)> {
 }
 
 #[test]
+fn native_library_inputs_requalify_after_published_source_absent_reopen() -> TestResult {
+    use crate::{
+        graph::GraphBuildRequest,
+        live_project::{LiveProjectPublishRequest, LiveProjectStore, publish_local_project},
+    };
+    use wow_project::{ProjectPublisher, replay::ProjectReplay};
+    use wow_store::project::ReadSelector;
+    let (root, config) = native_fixture()?;
+    let stop = AtomicBool::new(false);
+    let native_manifest = json!({
+        "schema": crate::local::LOCAL_NATIVE_SCHEMA,
+        "project_id": config["project_id"], "workspace_id": config["workspace_id"],
+        "source_origin_id": config["source_origin_id"], "logical_root": config["logical_root"],
+        "profile": config["native_reference"]["profile"], "analyzer": config["analyzer"],
+        "main": {"root": "UI", "files": [ProjectDiskFile::new("main.lua")]},
+        "native_source": config["native_reference"]["native_source"]
+    });
+    write_json(&root, "native-project.json", &native_manifest)?;
+    let input = LocalProjectInput::from_config_path(&root.0.join("native-project.json"), &stop)?;
+    let reference = serde_json::to_value(input.reference_view())?;
+    let artifact = input
+        .native_annotation_artifact()
+        .ok_or("native artifact")?
+        .artifact_id()
+        .to_owned();
+    let sidecars = input
+        .native_annotation_sidecars()
+        .ok_or("native sidecars")?;
+    let map_bytes = sidecars.source_map_bytes().to_vec();
+    let loss_bytes = sidecars.loss_report_bytes().to_vec();
+    let expected_bindings = input
+        .native_callable_bindings()
+        .ok_or("native bindings")?
+        .bindings()
+        .iter()
+        .map(|b| {
+            (
+                b.generated_path().to_owned(),
+                b.generated_sha256().to_owned(),
+                b.generated(),
+                b.mapping_id().to_owned(),
+                b.source_id().to_owned(),
+                b.key().to_owned(),
+                b.record_digest().to_owned(),
+                b.status(),
+                b.ambiguous_origin(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let input_digest = input
+        .bundle
+        .configuration()
+        .native_library_input()
+        .ok_or("producer input")?
+        .digest();
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(input.bundle.clone(), &stop)?;
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let archive = serde_json::to_value(&replay)?;
+    assert_eq!(
+        archive["schema"],
+        "wow-project/native-project-replay/native-library-input/1"
+    );
+    // Selected input cannot be silently dropped, relabeled or null-decoded.
+    let mut dropped = archive.clone();
+    dropped["configuration"]
+        .as_object_mut()
+        .ok_or("replay config")?
+        .remove("native_library_input");
+    assert!(ProjectReplay::from_json(&serde_json::to_vec(&dropped)?, &stop).is_err());
+    let mut null = archive.clone();
+    null["configuration"]["native_library_input"] = Value::Null;
+    assert!(ProjectReplay::from_json(&serde_json::to_vec(&null)?, &stop).is_err());
+    let mut old = archive.clone();
+    old["schema"] = json!("wow-project/native-project-replay/4");
+    assert!(ProjectReplay::from_json(&serde_json::to_vec(&old)?, &stop).is_err());
+    let original_snapshot = publisher.open_current()?.snapshot_id().to_owned();
+    let original_analyzer = publisher.open_current()?.analyzer_snapshot_id().to_owned();
+    let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
+        .with_input_profile(&input);
+    let store_root = FixtureRoot(root.0.with_extension("native-library-store"));
+    assert!(!store_root.0.exists());
+    publish_local_project(
+        &root.0.join("native-project.json"),
+        &request,
+        &store_root.0,
+        &LiveProjectPublishRequest::new("fixture-native-library-input", "absent", true, true)?,
+        &stop,
+    )?;
+    drop(input);
+    drop(publisher);
+    std::fs::remove_dir_all(&root.0)?;
+    assert!(!root.0.exists());
+    let decoded = ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?;
+    let hydrated = decoded.hydrate(&stop)?;
+    assert_eq!(hydrated.snapshot_id(), original_snapshot);
+    assert_eq!(hydrated.analyzer_snapshot_id(), original_analyzer);
+    assert_eq!(
+        hydrated
+            .configuration()
+            .native_library_input()
+            .ok_or("hydrated producer input")?
+            .digest(),
+        input_digest
+    );
+    let store = LiveProjectStore::open(&store_root.0)?;
+    let read = store.read(&ReadSelector::Current, &stop)?;
+    let rebuilt = read.requalify_native_library(&stop)?;
+    assert_eq!(read.project().snapshot_id(), original_snapshot);
+    assert_eq!(serde_json::to_value(&rebuilt.reference().view)?, reference);
+    assert_eq!(rebuilt.input_failure_count(), 1);
+    assert!(!rebuilt.reference().negative_authority);
+    assert_eq!(rebuilt.artifact().artifact_id(), artifact);
+    assert_eq!(rebuilt.sidecars().source_map_bytes(), map_bytes);
+    assert_eq!(rebuilt.sidecars().loss_report_bytes(), loss_bytes);
+    let actual_bindings = rebuilt
+        .callable_bindings()
+        .bindings()
+        .iter()
+        .map(|b| {
+            (
+                b.generated_path().to_owned(),
+                b.generated_sha256().to_owned(),
+                b.generated(),
+                b.mapping_id().to_owned(),
+                b.source_id().to_owned(),
+                b.key().to_owned(),
+                b.record_digest().to_owned(),
+                b.status(),
+                b.ambiguous_origin(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert!(!actual_bindings.is_empty());
+    assert_eq!(actual_bindings, expected_bindings);
+    let cancelled = AtomicBool::new(true);
+    assert_eq!(
+        read.requalify_native_library(&cancelled)
+            .err()
+            .ok_or("pre-cancel admitted")?
+            .code(),
+        crate::ServiceErrorCode::Cancelled
+    );
+    drop(rebuilt);
+    read.close()?;
+    store.close()?;
+    Ok(())
+}
+
+#[test]
 fn native_reference_composes_exact_platform_input_without_losing_partial_coverage() -> TestResult {
     use crate::graph::{GraphBuildRequest, GraphReadStatus, execute_graph_build};
     let (root, config) = native_fixture()?;
