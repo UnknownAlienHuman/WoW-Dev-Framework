@@ -30,6 +30,22 @@ pub enum ContextStatusDetail {
     Generations,
 }
 
+impl<'de> serde::Deserialize<'de> for ContextStatusDetail {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = <String as serde::Deserialize>::deserialize(deserializer)?;
+        match value.as_str() {
+            "summary" => Ok(Self::Summary),
+            "capabilities" => Ok(Self::Capabilities),
+            "profiles" => Ok(Self::Profiles),
+            "generations" => Ok(Self::Generations),
+            _ => Err(serde::de::Error::unknown_variant(
+                &value,
+                &["summary", "capabilities", "profiles", "generations"],
+            )),
+        }
+    }
+}
+
 /// Inert selection. Host registrations and filesystem paths are separate.
 #[derive(Debug, Clone, Serialize)]
 pub struct ContextStatusRequest {
@@ -182,8 +198,8 @@ struct Generations<'a> {
 }
 
 // Counted writers traverse original bounded metadata only. No record/body copies.
-struct ReferenceCoverage<'a>(&'a [ReferencePartition]);
-struct ProjectDeferred<'a>(&'a [wow_project::ProjectDeferredCapability]);
+pub(super) struct ReferenceCoverage<'a>(pub(super) &'a [ReferencePartition]);
+pub(super) struct ProjectDeferred<'a>(pub(super) &'a [wow_project::ProjectDeferredCapability]);
 impl Serialize for ProjectDeferred<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         #[derive(Serialize)]
@@ -220,7 +236,7 @@ impl Serialize for ReferenceCoverage<'_> {
         rows.end()
     }
 }
-struct GraphCoverage<'a>(&'a [GraphProducerPartition]);
+pub(super) struct GraphCoverage<'a>(pub(super) &'a [GraphProducerPartition]);
 impl Serialize for GraphCoverage<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         #[derive(Serialize)]

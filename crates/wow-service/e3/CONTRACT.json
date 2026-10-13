@@ -25,7 +25,7 @@
     "resource_closure": "checked_before_success",
     "not_evaluated": ["context_generation", "evaluation", "last_known_good", "failed_targets"],
     "deferred": [
-      "platform_or_composed_status",
+      "composed_status",
       "context_continue",
       "context_validate",
       "context_render",
@@ -37,6 +37,20 @@
       "all_roots_or_profiles_will_complete",
       "runtime_or_full_e3_acceptance"
     ],
+    "acceptance": "pending"
+  },
+  "platform_status_slice": {
+    "operation": "context_platform_status",
+    "entry": "execute_context_platform_status",
+    "request_schema": "wow-service/context-platform-status-request/1",
+    "result_schema": "wow-service/context-platform-status-result/1",
+    "scope": "exact_candidate_retained_metadata_only",
+    "selectors": ["registration", "store_generation", "publication_set", "candidate_id", "candidate_digest"],
+    "details": ["summary", "capabilities", "profiles", "generations"],
+    "reference_guard": "optional_complete_profile_generation_view_tuple",
+    "success_status": "partial",
+    "resource_closure": "checked_before_success",
+    "nonclaims": ["root_coverage", "context_generation", "evaluation", "runtime", "full_e3_acceptance"],
     "acceptance": "pending"
   },
   "selected_source_excerpt": {

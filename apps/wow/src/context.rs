@@ -4,6 +4,7 @@ mod build;
 mod combined;
 mod inspect;
 mod platform;
+mod platform_status;
 mod status;
 
 use std::{
@@ -25,6 +26,8 @@ use wow_service::{
 };
 
 const HELP: &str = concat!(
+    "wow context status --platform native --native-host-config <host.json> ",
+    "--platform-status-request-input <request.json> [--output envelope-json]\n",
     "wow context status --native-host-config <host.json> --project-store <registration-key> ",
     "--publication current|store-generation:<ProjectStoreGenerationId> ",
     "[--detail summary|capabilities|profiles|generations] [--platform omitted] ",
@@ -138,6 +141,7 @@ enum Request {
     Inspect(ContextInspectRequest),
     Build(ContextBuildRequest),
     Status(ContextStatusRequest),
+    PlatformStatus(platform_status::Request),
     Platform(platform::Request),
     Combined(combined::Request),
 }
@@ -177,6 +181,9 @@ pub fn run(values: Vec<OsString>) -> u8 {
     let Some(stop) = crate::cancellation_flag() else {
         return 64;
     };
+    if let Request::PlatformStatus(request) = &arguments.request {
+        return platform_status::run(&arguments.host_config, request, &stop);
+    }
     if let Request::Platform(request) = &arguments.request {
         return platform::run(&arguments.host_config, request, &stop);
     }
@@ -212,6 +219,10 @@ pub fn run(values: Vec<OsString>) -> u8 {
             &stop,
         ),
         Request::Status(request) => execute_context_status(&host, request, &stop),
+        Request::PlatformStatus(_) => {
+            crate::diagnostic("native platform status dispatch invariant failed");
+            return 4;
+        }
         Request::Platform(_) => {
             crate::diagnostic("native context dispatch invariant failed");
             return 4;
@@ -279,6 +290,9 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         .ok_or("context argument size overflow")?;
     if values.len() > MAX_ARGUMENTS || bytes > MAX_ARGUMENT_BYTES {
         return Err("context argument limit exceeded");
+    }
+    if let Some(arguments) = platform_status::parse(&values)? {
+        return Ok(arguments);
     }
     if let Some(arguments) = status::parse(&values)? {
         return Ok(arguments);
@@ -681,7 +695,7 @@ mod tests {
             Request::Inspect(request) => serde_json::to_value(request),
             Request::Build(request) => serde_json::to_value(request),
             Request::Status(request) => serde_json::to_value(request),
-            Request::Platform(_) | Request::Combined(_) => {
+            Request::PlatformStatus(_) | Request::Platform(_) | Request::Combined(_) => {
                 return Err("native request is explicit file transport");
             }
         }
@@ -727,6 +741,52 @@ mod tests {
             parse(incomplete_reference),
             Err("context reference guards require the complete three-option group")
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn platform_status_routes_without_intercepting_map_or_inspect() -> Result<(), &'static str> {
+        for command in ["map", "inspect", "status"] {
+            let input_flag = if command == "status" {
+                "--platform-status-request-input"
+            } else {
+                "--platform-request-input"
+            };
+            let values = [
+                "context",
+                command,
+                "--platform",
+                "native",
+                "--native-host-config",
+                "host.json",
+                input_flag,
+                "request.json",
+            ]
+            .into_iter()
+            .map(OsString::from)
+            .collect::<Vec<_>>();
+            let parsed = parse(values.clone())?;
+            match (command, parsed.request) {
+                ("status", Request::PlatformStatus(_))
+                | ("map" | "inspect", Request::Platform(_)) => {}
+                _ => return Err("native command routed to wrong service operation"),
+            }
+            let mut mixed = values.clone();
+            push(&mut mixed, "--publication", "current");
+            assert!(parse(mixed).is_err());
+            if command == "status" {
+                let mut duplicate = values.clone();
+                push(&mut duplicate, input_flag, "other.json");
+                assert!(parse(duplicate).is_err());
+                let mut wrong_transport = values;
+                let input_index = wrong_transport
+                    .iter()
+                    .position(|value| value == input_flag)
+                    .ok_or("missing status input option")?;
+                wrong_transport[input_index] = "--platform-request-input".into();
+                assert!(parse(wrong_transport).is_err());
+            }
+        }
         Ok(())
     }
 

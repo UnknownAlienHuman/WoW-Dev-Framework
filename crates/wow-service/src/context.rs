@@ -6,6 +6,7 @@ mod host;
 mod inspect;
 mod operation;
 mod platform;
+mod platform_status;
 mod request;
 mod status;
 #[cfg(test)]
@@ -40,6 +41,10 @@ pub use platform::{
     ContextPlatformNotEvaluated, ContextPlatformOperation, ContextPlatformRequest,
     ContextPlatformResult, ContextPlatformSummary, PLATFORM_NATIVE_ONE_HOP_PROFILE_ID,
     execute_context_platform,
+};
+pub use platform_status::{
+    CONTEXT_PLATFORM_STATUS_REQUEST_MAX_BYTES, CONTEXT_PLATFORM_STATUS_REQUEST_SCHEMA,
+    ContextPlatformStatusRequest, execute_context_platform_status,
 };
 pub use status::{ContextStatusDetail, ContextStatusRequest, execute_context_status};
 pub use wow_context::PrimaryL0Profile as ContextL0Profile;

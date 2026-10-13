@@ -122,10 +122,20 @@ capability/profile/generation detail. Its successful Service result is
 `partial`, with context generation and evaluation `NotEvaluated`; it is not a
 context-generation pass. It creates no map, skeleton, pack, source excerpt, or
 rendered artifact and returns no source body. Service checks and closes its
-retained resources before emitting success. Platform/composed status and full
+retained resources before emitting success.
+
+```text
+wow context status --platform native --native-host-config <host.json>
+  --platform-status-request-input <request.json> [--output envelope-json]
+```
+
+This alternative transports one strict exact candidate metadata request to
+`execute_context_platform_status`. It accepts no Primary selector or root flags.
+The four details are carried in the request file. Checked Partial envelopes keep
+root coverage and generation/evaluation NotEvaluated. Composed status and full
 E3-C acceptance remain pending.
 
-See [Primary context status](../CONTEXT_STATUS.md) for the host input, result
+See [context status](../CONTEXT_STATUS.md) for the host input, result
 fields, refusal behavior, and scope limits.
 
 ## `wow context map`

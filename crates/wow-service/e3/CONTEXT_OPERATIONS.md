@@ -47,7 +47,7 @@ host metadata/input/work budgets and cancellation
 The CLI command is `wow context status`. It accepts an explicit host config,
 store ID, `current` or `store-generation:<ID>`, the four details above, optional
 Current and Reference guards, and only `envelope-json` output. It does not accept
-publication-set selectors, platform acquisitions, roots, map/build/profile
+publication-set selectors, roots, map/build/profile
 options, or artifact/text output. The app constructs one typed Service request;
 only Service resolves Current.
 
@@ -84,8 +84,18 @@ Project Map, skeleton, semantic-pack, source-excerpt, or renderer operations and
 returns no map/skeleton/pack/source/render artifact or source body. Success is
 finalized only after checked read/store closure. Budget, cancellation, guard,
 identity, and closure failures return a failure/cancelled envelope without a
-success payload. Platform and composed status are not selected or implemented in
-this slice. Full E3-C acceptance remains pending.
+success payload. This Primary route does not select platform metadata.
+
+The separate `execute_context_platform_status` operation accepts
+`wow-service/context-platform-status-request/1`: an exact registration,
+store generation, publication set, candidate ID/digest, platform one-hop profile
+and closed detail string. It reacquires the original namespace/candidate and
+checks configured Project/Reference compatibility without opening a root or
+skeleton view. Original coverage remains distinct; Primary/combined operations
+require Primary selection. Its optional Reference guard is a complete exact
+tuple. The result remains Partial with root coverage and generation/evaluation
+NotEvaluated and checked closure. See [the CLI route](../../../apps/wow/CONTEXT_STATUS.md).
+Composed status and full E3-C acceptance remain pending.
 
 ## `context_map`
 

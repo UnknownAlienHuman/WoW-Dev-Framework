@@ -298,8 +298,7 @@ pub(super) fn with_checked_platform_read<T>(
     stop: &AtomicBool,
     build: impl FnOnce(&LiveProjectRead) -> ServiceResult<T>,
 ) -> (ServiceResult<T>, &'static str) {
-    let closure = Cell::new("not_acquired");
-    let outcome = (|| {
+    let admitted: ServiceResult<()> = (|| {
         host.validate(stop)?;
         let document = host;
         if document.project_store_id != request.document.project_store_id {
@@ -321,8 +320,27 @@ pub(super) fn with_checked_platform_read<T>(
             input_limit,
             stop,
         )?;
+        Ok(())
+    })();
+    if let Err(error) = admitted {
+        return (Err(error), "not_acquired");
+    }
+    with_checked_platform_generation(host, &request.document.store_generation_id, stop, build)
+}
+
+/// Shared exact-generation custody after the caller's request/config admission.
+/// This seam acquires no root, query, skeleton, or context artifact.
+pub(super) fn with_checked_platform_generation<T>(
+    host: &ContextPlatformHostInput,
+    generation: &StoreGenerationId,
+    stop: &AtomicBool,
+    build: impl FnOnce(&LiveProjectRead) -> ServiceResult<T>,
+) -> (ServiceResult<T>, &'static str) {
+    let closure = Cell::new("not_acquired");
+    let outcome = (|| {
+        checkpoint(stop)?;
         let store = match LiveProjectStore::open_in_namespace_checked(
-            &document.project_store_root,
+            &host.project_store_root,
             host.selection.owner(),
         ) {
             Ok(store) => store,
@@ -332,7 +350,7 @@ pub(super) fn with_checked_platform_read<T>(
             }
         };
         closure.set("pending");
-        let selector = ReadSelector::Exact(request.document.store_generation_id.clone());
+        let selector = ReadSelector::Exact(generation.clone());
         let draft = match store.read_in_namespace_checked(host.selection.owner(), &selector, stop) {
             Ok(read) => {
                 let draft = build(&read);

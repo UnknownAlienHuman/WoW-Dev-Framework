@@ -1,5 +1,6 @@
 //! Shared native fixture lifecycle: selected publication/update/removal, exact
 //! source-absent reopen and candidate-required Skeleton. No decoded authority.
+mod platform_status;
 use super::*;
 use crate::{
     ServiceErrorCode,

@@ -126,13 +126,22 @@ only with Current and mismatch fails without retry. An exact StoreGeneration
 request remains on that generation even if Current has moved; the returned
 Current observation is separate metadata. An optional Reference guard binds
 the exact profile, generation, and view. The CLI selects only omitted platform
-status; platform/composed status remains unimplemented in this slice.
+status. The separate platform status request selects an exact retained candidate.
 
 Status is metadata-only: it invokes no map, skeleton, semantic pack, source
 excerpt, or renderer operation and returns no such artifact or source body.
 The service finalizes the partial success only after checked read/store closure.
 Budget/cancellation/guard/acquisition/closure failures do not expose a success
 payload. This selected operation does not complete E3-C acceptance.
+
+The platform schemas are `wow-service/context-platform-status-request/1` and
+`wow-service/context-platform-status-result/1`. The payload retains exact
+candidate/publication/store and original Project/Graph/Reference identities,
+coverage, counts and selected detail. No root is acquired. `root_coverage`,
+`context_generation`, `evaluation`, `last_known_good` and `failed_targets` are
+`NotEvaluated`; `optional_platform_status=selected_metadata_only`. Success is
+Partial and checked closed. Primary and combined availability requires Primary
+selection. Composed status remains pending.
 
 ### `ContextMapPayload`
 

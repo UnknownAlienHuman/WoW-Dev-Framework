@@ -1,4 +1,4 @@
-# Primary context status
+# Context status
 
 `wow context status` requests one metadata-only status operation from
 `wow-service`. It requires an explicit native host configuration and project
@@ -46,5 +46,27 @@ operations. It returns no such artifact and no source body. Service publishes
 the result only after checked closure of the retained read and store. Guard,
 identity, budget, cancellation, and closure failures have no success payload.
 
-This implementation covers Primary metadata only. Platform/composed status and
-full E3-C acceptance remain pending.
+## Exact platform candidate metadata
+
+```text
+wow context status --platform native --native-host-config <host.json>
+  --platform-status-request-input <request.json> [--output envelope-json]
+```
+
+The strict request schema `wow-service/context-platform-status-request/1`
+requires the registered `project_store_id`, exact `store_generation_id`,
+`publication_set_id`, `candidate_id`, `candidate_digest`,
+`profile_id=wow-context/platform-native-one-hop/1`, and one of the four `detail`
+strings. The optional `reference` guard requires all three fields `profile`,
+`generation`, and `view`. This route has no Current selector or root input.
+
+Service reacquires the genuine selected namespace and retained candidate and
+checks exact Project/Reference compatibility. The
+`wow-service/context-platform-status-result/1` envelope exposes original
+Project/Graph/Reference metadata and coverage; capabilities requiring Primary
+selection remain explicit. It invokes no root, Map, skeleton, pack, or renderer.
+Root coverage, generation, evaluation, last-known-good and failed targets remain
+`NotEvaluated`; continuation retention remains `not_implemented`. Delivery waits
+for checked read/store closure. Success remains `partial`.
+
+Composed status and full E3-C acceptance remain pending.
