@@ -22,6 +22,42 @@ pub struct RenderedMember {
     pub(crate) lowering: RenderedTypeToken,
 }
 
+/// One input atom and its exact lowered spelling, with a range relative to the
+/// final lowered type token. It is captured during the renderer's single pass.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct LoweredTypeAtom {
+    pub(crate) source_name: String,
+    pub(crate) rendered_name: String,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct LoweredType {
+    pub(crate) text: String,
+    pub(crate) atoms: Vec<LoweredTypeAtom>,
+}
+
+impl LoweredType {
+    pub(crate) fn is_union(&self) -> bool {
+        self.atoms.len() > 1
+    }
+
+    pub(crate) fn shift_atoms(&mut self, amount: usize) -> Result<(), RenderError> {
+        for atom in &mut self.atoms {
+            atom.start = atom
+                .start
+                .checked_add(amount)
+                .ok_or(RenderError::OutputLimit)?;
+            atom.end = atom
+                .end
+                .checked_add(amount)
+                .ok_or(RenderError::OutputLimit)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct RenderedTypeToken {
     pub(crate) start: usize,
@@ -29,6 +65,7 @@ pub(crate) struct RenderedTypeToken {
     pub(crate) optional_marker: Option<(usize, usize)>,
     pub(crate) lowered_type: String,
     pub(crate) optional: bool,
+    pub(crate) atoms: Vec<LoweredTypeAtom>,
 }
 
 impl Renderer {

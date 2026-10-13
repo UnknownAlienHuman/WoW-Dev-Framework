@@ -7,12 +7,13 @@
   "canonicalization_version": "wow-core-json/e0-1",
   "callable_emission_data": {
     "schema": "wow-core/callable-lowering-observation/1",
-    "types": ["CallableLoweringLane", "CallableFieldLowering", "CallableLoweringObservation"],
+    "types": ["CallableLoweringLane", "CallableFieldLowering", "CallableTypeAtom", "CallableAliasDefinition", "CallableLoweringObservation"],
+    "additional_schema": "wow-core/callable-alias-definition/1",
     "consumers": ["wow-annotations", "wow-service", "wow-context"],
-    "admission": "private fields; bounded exact borrowed owner IDs, paths/digests and ordered nested source/member/token/optional-marker ranges",
-    "authority": "inert syntax data only; consumer must bind genuine Reference and Project Library views and verify exact emitted bytes",
-    "compatibility": "no existing E0 wire, canonical hash or persistence input changes",
-    "nonclaims": ["lowering implementation", "producer authority", "consumer semantic or runtime qualification"]
+    "admission": "private Serialize-only data; bounded exact owner identities and relative paths; typed SourceContent digests; nested byte ranges; at most 16 atoms and dependencies per item; at most 4096 definitions from one generated alias file and 16 MiB combined retained text",
+    "authority": "inert emitted syntax and annotation alias descriptors only; Context must bind genuine Reference and Project Library views and verify exact emitted bytes; actual annotation producer custody remains NotEvaluated",
+    "compatibility": "optional fields are omitted when unselected, preserving existing E0 serialized bytes",
+    "nonclaims": ["parsing or lowering", "dependency evaluation or cycle proof", "producer custody proof", "consumer semantic or runtime qualification"]
   },
   "digest_algorithm": "sha256",
   "normative_documents": [

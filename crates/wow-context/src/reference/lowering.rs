@@ -20,6 +20,8 @@ pub(super) struct AnnotationLoweringInput<'a> {
     pub(super) observation: CallableLoweringObservation<'a>,
     #[serde(skip)]
     pub(super) file: ProjectLibraryFileView<'a>,
+    #[serde(skip)]
+    pub(super) alias_file: Option<ProjectLibraryFileView<'a>>,
 }
 
 #[derive(Serialize)]
@@ -147,6 +149,22 @@ pub(super) fn admit<'a>(
         if token != field.lowered_type() {
             return Err(mismatch());
         }
+        for atom in field.type_atoms() {
+            let (atom_start, atom_end) = range(atom.generated_span())?;
+            budget.work(
+                atom.source_name()
+                    .len()
+                    .checked_add(atom.rendered_name().len())
+                    .ok_or_else(exhausted)?,
+                stop,
+            )?;
+            if atom_start < token_start
+                || atom_end > token_end
+                || verified_slice(file, atom_start, atom_end, stop)? != atom.rendered_name()
+            {
+                return Err(mismatch());
+            }
+        }
         if let Some(marker) = field.optional_marker_span() {
             let (marker_start, marker_end) = range(marker)?;
             budget.work(1, stop)?;
@@ -156,6 +174,44 @@ pub(super) fn admit<'a>(
             {
                 return Err(mismatch());
             }
+        }
+    }
+    let aliases = observation.alias_definitions();
+    if aliases.is_empty() != input.alias_file.is_none() {
+        return Err(mismatch());
+    }
+    if let Some(alias_file) = input.alias_file {
+        budget.work(aliases.len().checked_add(144).ok_or_else(exhausted)?, stop)?;
+        let alias_digest = ContentDigest::<SourceContent>::parse(alias_file.sha256())
+            .map_err(|_| mismatch())?
+            .into_value();
+        if alias_file.project_snapshot_id() != file.project_snapshot_id()
+            || alias_file.project_generation() != file.project_generation()
+            || alias_file.library_snapshot_id() != file.library_snapshot_id()
+        {
+            return Err(mismatch());
+        }
+        for definition in aliases {
+            checkpoint(stop)?;
+            let work = definition
+                .generated_path()
+                .len()
+                .checked_add(71)
+                .and_then(|work| work.checked_add(definition.lowered_definition().len()))
+                .ok_or_else(exhausted)?;
+            budget.work(work, stop)?;
+            let (declaration_start, declaration_end) = range(definition.declaration_span())?;
+            let (token_start, token_end) = range(definition.type_token_span())?;
+            if definition.generated_path() != alias_file.path()
+                || definition.generated_sha256() != &alias_digest
+                || token_start < declaration_start
+                || token_end > declaration_end
+                || verified_slice(alias_file, token_start, token_end, stop)?
+                    != definition.lowered_definition()
+            {
+                return Err(mismatch());
+            }
+            verified_slice(alias_file, declaration_start, declaration_end, stop)?;
         }
     }
     Ok(AnnotationLoweringFacet {

@@ -61,8 +61,25 @@ impl<'a> ReferenceOriginInput<'a> {
         observation: CallableLoweringObservation<'a>,
         file: wow_project::ProjectLibraryFileView<'a>,
     ) -> Self {
-        self.annotation_lowering = Some(AnnotationLoweringInput { observation, file });
+        self.annotation_lowering = Some(AnnotationLoweringInput {
+            observation,
+            file,
+            alias_file: None,
+        });
         self
+    }
+
+    /// Attach the one verified Library file containing the selected external
+    /// alias definitions. The supplied provenance remains inert data.
+    pub fn with_annotation_alias_file(
+        mut self,
+        file: wow_project::ProjectLibraryFileView<'a>,
+    ) -> ContextResult<Self> {
+        self.annotation_lowering
+            .as_mut()
+            .ok_or_else(mismatch)?
+            .alias_file = Some(file);
+        Ok(self)
     }
 }
 

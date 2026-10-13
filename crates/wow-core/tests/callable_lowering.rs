@@ -1,5 +1,6 @@
 use wow_core::{
-    CallableFieldLowering, CallableLoweringLane, CallableLoweringObservation, SourceSpan,
+    CallableAliasDefinition, CallableFieldLowering, CallableLoweringLane,
+    CallableLoweringObservation, CallableTypeAtom, SourceSpan,
 };
 
 fn span(start: u64, end: u64) -> wow_core::CoreResult<SourceSpan> {
@@ -26,6 +27,42 @@ fn field(
 fn callable_lowering_admission_enforces_ranges_and_identity_shape()
 -> Result<(), Box<dyn std::error::Error>> {
     let valid = field(0, Some(span(14, 15)?))?;
+    let atom = CallableTypeAtom::admit("boolean", "boolean", span(16, 23)?)?;
+    let with_atom = valid
+        .clone()
+        .with_type_atoms(vec![atom].into_boxed_slice())?;
+    assert_eq!(with_atom.type_atoms().len(), 1);
+    assert!(
+        valid
+            .clone()
+            .with_type_atoms(
+                vec![CallableTypeAtom::admit(
+                    "boolean",
+                    "boolean",
+                    span(24, 31)?
+                )?]
+                .into_boxed_slice()
+            )
+            .is_err(),
+        "type atom range must remain inside the emitted token"
+    );
+    let old_field_json = serde_json::to_value(&valid)?;
+    let old_field_bytes = wow_core::canonical_json_bytes(&valid)?;
+    let empty_atoms = valid.clone().with_type_atoms(Box::default())?;
+    assert!(
+        old_field_json.get("type_atoms").is_none(),
+        "omitted atoms preserve the old wire shape"
+    );
+    assert!(
+        serde_json::to_value(&empty_atoms)?
+            .get("type_atoms")
+            .is_none(),
+        "zero atoms are absent, not null"
+    );
+    assert_eq!(
+        wow_core::canonical_json_bytes(&empty_atoms)?,
+        old_field_bytes
+    );
     assert!(
         field(0, None).is_err(),
         "optional marker is mandatory when optional"
@@ -64,6 +101,23 @@ fn callable_lowering_admission_enforces_ranges_and_identity_shape()
         )
     };
     let admitted = observation("library/Fixture.lua", &fields)?;
+    let old_observation_json = serde_json::to_value(admitted)?;
+    let old_observation_bytes = wow_core::canonical_json_bytes(&admitted)?;
+    let empty_definitions = admitted.with_alias_definitions(&[])?;
+    assert!(
+        old_observation_json.get("alias_definitions").is_none(),
+        "omitted definitions are absent"
+    );
+    assert!(
+        serde_json::to_value(empty_definitions)?
+            .get("alias_definitions")
+            .is_none(),
+        "zero definitions are absent, not null"
+    );
+    assert_eq!(
+        wow_core::canonical_json_bytes(&empty_definitions)?,
+        old_observation_bytes
+    );
     assert_eq!(admitted.consumer_semantics(), "NotEvaluated");
     assert_eq!(admitted.fields()[0].lowered_type(), "boolean");
     let required = CallableFieldLowering::admit(
@@ -80,6 +134,59 @@ fn callable_lowering_admission_enforces_ranges_and_identity_shape()
     assert!(!String::from_utf8(encoded)?.contains("optional_marker_span"));
     assert!(observation("../Fixture.lua", &fields).is_err());
     assert!(observation("C:/Fixture.lua", &fields).is_err());
+    let lowered = "boolean";
+    let token_start = 21;
+    let token_end = token_start + lowered.len() as u64;
+    let alias = CallableAliasDefinition::admit(
+        "FixtureType",
+        &"a".repeat(40),
+        "docs/aliases.lua",
+        &digest,
+        span(0, 12)?,
+        "library/Fixture.lua",
+        &digest,
+        span(0, 40)?,
+        span(token_start, token_end)?,
+        lowered,
+        Vec::new(),
+    )?;
+    assert_eq!(alias.lowered_definition(), "boolean");
+    assert_eq!(alias.declaration_span(), span(0, 40)?);
+    assert_eq!(alias.type_token_span(), span(21, 28)?);
+    assert!(
+        CallableAliasDefinition::admit(
+            "FixtureType",
+            &"a".repeat(40),
+            "docs/aliases.lua",
+            &digest,
+            span(0, 12)?,
+            "library/Fixture.lua",
+            &digest,
+            span(0, 40)?,
+            span(token_start, token_end + 1)?,
+            lowered,
+            Vec::new(),
+        )
+        .is_err(),
+        "expression bytes must match the projected token span length"
+    );
+    let bad_digest = CallableAliasDefinition::admit(
+        "FixtureType",
+        &"a".repeat(40),
+        "docs/aliases.lua",
+        "sha256:BAD",
+        span(0, 12)?,
+        "library/Fixture.lua",
+        &digest,
+        span(0, lowered.len() as u64)?,
+        span(token_start, token_end)?,
+        lowered,
+        Vec::new(),
+    );
+    assert!(
+        bad_digest.is_err(),
+        "source digests require canonical typed SourceContent spelling"
+    );
     let skipped = [field(1, Some(span(14, 15)?))?];
     assert!(
         observation("library/Fixture.lua", &skipped).is_err(),

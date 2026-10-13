@@ -486,9 +486,24 @@ and `wow-context`. Private fields and bounded identifiers, digests, logical path
 ordered lanes/ordinals and nested byte ranges prevent unchecked construction.
 Fields retain the original member range, emitted type token and optional marker.
 The borrowed observation retains the exact native Reference/artifact/map binding.
-Core neither emits nor lowers syntax, performs owner lookups, reads bytes, nor
-attests producer custody. Native catalog IDs retain their owner grammar; they are
-not reminted as Core identity families. Serialization exposes data only.
+Optional `CallableTypeAtom` entries associate exact qualified source/rendered
+names with ordered, nonoverlapping byte ranges inside the already-emitted type
+token. `CallableAliasDefinition` records one bounded emitted declaration, exact
+source/generated paths, revisions, typed source digests, spans, and explicit
+dependency names under `wow-core/callable-alias-definition/1`. Its fixed
+`source_scope`, `consumer_semantics`, and `custody` values are
+`annotation_alias_catalog`, `NotEvaluated`, and `NotEvaluated`. Alias definitions
+must be name-ordered and dependencies must refer to definitions in the selected
+subgraph. The aggregate retained text allowance is 16 MiB; each definition is at
+most 256 KiB, with at most 16 atoms and 16 dependencies per item and 4096
+definitions per observation.
+
+Core neither emits, parses, or lowers syntax; performs owner lookups; reads bytes;
+resolves dependency meaning; proves acyclicity; nor attests producer custody.
+Alias/native type terms that are not alias dependencies are not listed as graph
+edges. Native catalog IDs retain their owner grammar; they are not reminted as
+Core identity families. Zero atoms and zero definitions are skipped, preserving the existing serialized
+bytes. Serialization exposes data only.
 
 Profile and generation values are admitted through the existing `ProfileId` and `ReferenceGenerationId` family parsers. Reference-view and record digests use `ContentDigest<CanonicalResult>`; source and generated-file hashes use `ContentDigest<SourceContent>`. These checks validate typed identity and canonical spelling, while leaving producer custody unevaluated.
 

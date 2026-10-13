@@ -153,3 +153,22 @@ compatibility promise to an external strict-field decoder; that consumer is
 unevaluated until its named acceptance gate.
 Gate outcomes and remaining broad Reference/type, privacy/excerpt/token,
 progressive/platform and Tier A/X qualification stay in #122.
+
+## Selected callable alias dependencies
+
+The Annotation owner captures exact input-name associations during its existing
+type-lowering pass and retains only the projected aliases used by those names
+and their direct alias dependency closure. Array and union syntax remains the
+emitter's responsibility. Context receives the admitted observation and at most
+one additional verified Project Library alias file. It checks each input atom,
+alias declaration range and type-expression bytes against those held files
+under the continuing construction Budget; it neither parses nor resolves types.
+
+Alias definitions retain their independent resource revision, relative path,
+digest and source span with `source_scope=annotation_alias_catalog`. They are
+external annotation overlay data, separate from the original Blizzard signature
+and Reference atomic-type catalog. Missing, rejected, duplicate and cyclic alias
+definitions are not admitted as resolved facts. No selected alias is proof of
+complete inventory, producer custody, consumer type semantics or runtime safety.
+The optional typed fields are omitted when empty; NativeLibrary serialization,
+Reference identities and retained producer-input/1 and /2 remain unchanged.

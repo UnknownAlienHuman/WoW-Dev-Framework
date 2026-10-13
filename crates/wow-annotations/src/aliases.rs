@@ -8,7 +8,8 @@ use wow_reference::native::Span;
 use wow_reference::native_aliases::AliasDocument;
 
 use crate::ketho::{RenderError, Renderer, qualified_identifier};
-use crate::native::{ProjectionIssue, SourceLink, SourceMapping};
+use crate::native::{CaptureBudget, ProjectionIssue, SourceLink, SourceMapping};
+pub(crate) mod callable;
 mod function_containers;
 mod global_colors;
 mod namespaces;
@@ -60,6 +61,7 @@ pub(crate) struct ProjectedAliases<'a> {
     pub text: String,
     pub mappings: Vec<SourceMapping>,
     pub issues: Vec<ProjectionIssue>,
+    pub callable_definitions: Vec<callable::PendingDefinition<'a>>,
 }
 
 fn primitive(name: &str) -> bool {
@@ -129,6 +131,7 @@ pub(crate) fn project<'a>(
     catalogs: &[&'a AliasDocument],
     defined: &BTreeSet<String>,
     reserved: &BTreeSet<String>,
+    capture_budget: &mut CaptureBudget,
     cancelled: &AtomicBool,
 ) -> Result<ProjectedAliases<'a>, RenderError> {
     if cancelled.load(Ordering::Relaxed) {
@@ -210,6 +213,27 @@ pub(crate) fn project<'a>(
     known.extend(function_containers.defined.iter().cloned());
     let mut states = vec![None; facts.len()];
     let mut lowered = vec![None; facts.len()];
+    let dependency_bytes = facts.iter().try_fold(
+        facts
+            .len()
+            .checked_mul(std::mem::size_of::<Vec<String>>())
+            .ok_or(RenderError::OutputLimit)?,
+        |total, fact| {
+            fact.terms
+                .as_deref()
+                .unwrap_or(&[])
+                .iter()
+                .try_fold(total, |total, term| {
+                    // Enum qualification adds at most five bytes to an input atom.
+                    total
+                        .checked_add(term.len())
+                        .and_then(|n| n.checked_add(5 + std::mem::size_of::<String>()))
+                        .ok_or(RenderError::OutputLimit)
+                })
+        },
+    )?;
+    capture_budget.reserve(0, 0, dependency_bytes, cancelled)?;
+    let mut direct_dependencies = vec![Vec::<String>::new(); facts.len()];
     let mut candidates = BTreeMap::new();
     for (index, fact) in facts.iter().enumerate() {
         if cancelled.load(Ordering::Relaxed) {
@@ -242,9 +266,14 @@ pub(crate) fn project<'a>(
         } else if fact.string_base.is_some() {
             Some("unsupported_alias_type")
         } else if let Some(terms) = &fact.terms {
-            match renderer.lower_type(&terms.join("|")) {
+            match renderer.lower_type_mapped(&terms.join("|")) {
                 Ok(ty) => {
-                    lowered[index] = Some(ty);
+                    direct_dependencies[index] = ty
+                        .atoms
+                        .iter()
+                        .map(|atom| atom.rendered_name.clone())
+                        .collect();
+                    lowered[index] = Some(ty.text);
                     None
                 }
                 Err(_) => Some("unsupported_alias_type"),
@@ -262,14 +291,12 @@ pub(crate) fn project<'a>(
     let mut ready = BTreeSet::new();
     for (&name, &index) in &candidates {
         // Literal values are not type names, even when they contain a pipe.
-        if facts[index].string_values.is_none()
-            && let Some(ty) = &lowered[index]
-        {
-            for target in ty.split('|') {
+        if facts[index].string_values.is_none() && lowered[index].is_some() {
+            for target in &direct_dependencies[index] {
                 if primitive(target) || known.contains(target) {
                     continue;
                 }
-                if let Some(&dependency) = candidates.get(target) {
+                if let Some(&dependency) = candidates.get(target.as_str()) {
                     indegree[index] += 1;
                     dependents[dependency].push(index);
                 } else {
@@ -318,8 +345,42 @@ pub(crate) fn project<'a>(
         function_containers.unresolved_returns(&renderer, &known, cancelled)?;
     let unresolved_global_color_types = global_colors.unresolved_types(&known, cancelled)?;
     emitted.sort_by_key(|&index| &facts[index].name);
+    let mut pending_bytes = emitted
+        .len()
+        .checked_mul(std::mem::size_of::<callable::PendingDefinition<'_>>())
+        .ok_or(RenderError::OutputLimit)?;
+    for &index in &emitted {
+        if cancelled.load(Ordering::Relaxed) {
+            return Err(RenderError::Cancelled);
+        }
+        let lowered_len = lowered[index]
+            .as_ref()
+            .ok_or(RenderError::InvalidSource)?
+            .len();
+        let dependency_count = direct_dependencies[index]
+            .iter()
+            .filter(|name| candidates.contains_key(name.as_str()))
+            .count();
+        let dependency_bytes = direct_dependencies[index]
+            .iter()
+            .filter(|name| candidates.contains_key(name.as_str()))
+            .try_fold(
+                dependency_count
+                    .checked_mul(std::mem::size_of::<&str>() + std::mem::size_of::<Box<str>>())
+                    .ok_or(RenderError::OutputLimit)?,
+                |total, name| name.len().checked_add(1).and_then(|n| total.checked_add(n)),
+            )
+            .ok_or(RenderError::OutputLimit)?;
+        pending_bytes = pending_bytes
+            .checked_add(facts[index].name.len())
+            .and_then(|n| n.checked_add(lowered_len))
+            .and_then(|n| n.checked_add(dependency_bytes))
+            .ok_or(RenderError::OutputLimit)?;
+    }
+    capture_budget.reserve(0, 0, pending_bytes, cancelled)?;
     let mut text = String::new();
     let mut mappings = Vec::new();
+    let mut callable_definitions = Vec::with_capacity(emitted.len());
     if !emitted.is_empty()
         || structures.has_output()
         || namespaces.has_output()
@@ -340,7 +401,41 @@ pub(crate) fn project<'a>(
             let ty = lowered[index]
                 .as_deref()
                 .ok_or(RenderError::InvalidSource)?;
-            text.push_str(&format!("---@alias {} {ty}\n", facts[index].name));
+            text.push_str("---@alias ");
+            text.push_str(&facts[index].name);
+            text.push(' ');
+            let type_start = text.len();
+            text.push_str(ty);
+            let type_end = text.len();
+            text.push('\n');
+            callable_definitions.push(callable::PendingDefinition {
+                source: entries[index].0,
+                name: facts[index].name.clone().into_boxed_str(),
+                source_span: facts[index].span,
+                declaration_span: Span {
+                    start,
+                    end: text.len() - 1,
+                },
+                type_token_span: Span {
+                    start: type_start,
+                    end: type_end,
+                },
+                lowered_definition: ty.to_owned().into_boxed_str(),
+                dependency_names: {
+                    let mut names = direct_dependencies[index]
+                        .iter()
+                        .filter(|name| candidates.contains_key(name.as_str()))
+                        .map(String::as_str)
+                        .collect::<Vec<_>>();
+                    names.sort_unstable();
+                    names.dedup();
+                    names
+                        .into_iter()
+                        .map(Box::<str>::from)
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice()
+                },
+            });
             mappings.push(SourceMapping {
                 granularity: "declaration",
                 generated: Span {
@@ -425,5 +520,6 @@ pub(crate) fn project<'a>(
         text,
         mappings,
         issues,
+        callable_definitions,
     })
 }

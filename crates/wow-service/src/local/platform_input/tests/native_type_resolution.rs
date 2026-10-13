@@ -8,11 +8,14 @@ use wow_store::project::ReadSelector;
 const TYPE_PROFILE: &str = "wow-reference/native-callable-type-resolution/1";
 const CONTEXT_STORE_ID: &str = "project-store:fixture-native-type-resolution";
 const CORRECTION_ID: &str = "fixture-correct-return-type";
+const ALIAS_REVISION: &str = "2222222222222222222222222222222222222222";
+const ALIAS_SOURCE: &str =
+    "---@alias LeafId number|string\n---@alias OuterId LeafId\n---@alias RejectedId MissingType\n";
 
 fn add_main_and_manifest(root: &FixtureRoot, config: &mut Value) -> TestResult {
     let main = "function FixtureFunction() return C_Transport.Read() end\n";
     std::fs::write(root.0.join("UI/main.lua"), main)?;
-    let api = r#"APIDocumentation:AddDocumentationTable({Name="Transport",Type="System",Namespace="C_Transport",Environment="All",Functions={{Name="Read",Type="Function",Arguments={{Name="flag",Type="bool",Nilable=false,Default=false}},Returns={{Name="value",Type="number",Nilable=true}}}},Tables={{Name="FixtureRecord",Type="Structure",Fields={{Name="label",Type="string",Nilable=false}}}}})"#;
+    let api = r#"APIDocumentation:AddDocumentationTable({Name="Transport",Type="System",Namespace="C_Transport",Environment="All",Functions={{Name="Read",Type="Function",Arguments={{Name="flag",Type="bool",Nilable=false,Default=false},{Name="ids",Type="table",InnerType="OuterId",Nilable=false}},Returns={{Name="value",Type="number",Nilable=true}}}},Tables={{Name="FixtureRecord",Type="Structure",Fields={{Name="label",Type="string",Nilable=false}}}}})"#;
     let api_path = "Blizzard_APIDocumentationGenerated/API.lua";
     std::fs::write(root.0.join(api_path), api)?;
     let mut manifest: Value =
@@ -186,6 +189,14 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
         .ok_or("fixture revision")?;
     let corrections = correction_pack(&root, revision)?;
     let correction_file = write_json(&root, "corrections.json", &corrections)?;
+    std::fs::create_dir(root.0.join("Aliases"))?;
+    std::fs::write(root.0.join("Aliases/Types.lua"), ALIAS_SOURCE)?;
+    let alias_file = ProjectDiskFile::new("Types.lua").with_identity(
+        wow_core::ContentDigest::<wow_core::SourceContent>::from_bytes(
+            Sha256::digest(ALIAS_SOURCE.as_bytes()).into(),
+        ),
+        u64::try_from(ALIAS_SOURCE.len())?,
+    );
     let native_manifest = json!({
         "schema": crate::local::LOCAL_NATIVE_SCHEMA,
         "project_id": config["project_id"], "workspace_id": config["workspace_id"],
@@ -194,7 +205,9 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
         "main": {"root": "UI", "files": [ProjectDiskFile::new("main.lua")]},
         "native_source": config["native_reference"]["native_source"],
         "native_api_uses": "reference_v1",
-        "annotation_inputs": {"corrections": correction_file}
+        "annotation_inputs": {"corrections": correction_file,
+            "alias_catalogs": {"root":"Aliases", "revision":ALIAS_REVISION,
+                "files":[alias_file]}}
     });
     write_json(&root, "native-project.json", &native_manifest)?;
     let stop = AtomicBool::new(false);
@@ -215,6 +228,14 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
             .ok_or("retained selected corrections")?,
     )?;
     assert_eq!(retained_corrections, corrections);
+    assert_eq!(
+        retained_wire["annotation_inputs"]["selected_resources"]["alias_revision"],
+        ALIAS_REVISION
+    );
+    assert_eq!(
+        retained_wire["annotation_inputs"]["selected_resources"]["aliases"][0]["text"],
+        ALIAS_SOURCE
+    );
     let request = GraphBuildRequest::new(
         input.bundle.configuration().project_id().as_str().into(),
         "current".into(),
@@ -232,7 +253,7 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
     std::fs::remove_dir_all(&root.0)?;
     assert!(
         !root.0.exists(),
-        "all selected source/correction inputs removed before reopen"
+        "all selected source/correction/alias inputs removed before reopen"
     );
 
     let store = LiveProjectStore::open(&store_path)?;
@@ -285,7 +306,7 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
     let verified_file = binding.file_view(&annotation_file.path, &annotation_file.text, &stop)?;
     assert_eq!(verified_file.path(), lowering.generated_path());
     assert_eq!(verified_file.sha256(), lowering.generated_sha256());
-    assert_eq!(lowering.fields().len(), 2);
+    assert_eq!(lowering.fields().len(), 3);
     let byte_range = |span: wow_core::SourceSpan| -> TestResult<std::ops::Range<usize>> {
         Ok(
             usize::try_from(span.byte_start().ok_or("missing byte start")?)?
@@ -315,7 +336,62 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
         verified_file.slice(parameter_token.start, parameter_token.end, &stop)?,
         "boolean"
     );
-    let returned_lowering = &lowering.fields()[1];
+    let alias_parameter = &lowering.fields()[1];
+    assert_eq!(alias_parameter.lowered_type(), "OuterId[]");
+    let [alias_atom] = alias_parameter.type_atoms() else {
+        return Err("expected one original InnerType atom".into());
+    };
+    assert_eq!(alias_atom.source_name(), "OuterId");
+    assert_eq!(alias_atom.rendered_name(), "OuterId");
+    let alias_atom_range = byte_range(alias_atom.generated_span())?;
+    assert_eq!(
+        verified_file.slice(alias_atom_range.start, alias_atom_range.end, &stop)?,
+        "OuterId"
+    );
+    let definitions = lowering.alias_definitions();
+    assert_eq!(
+        definitions.len(),
+        2,
+        "only the used projected dependency subgraph"
+    );
+    assert_eq!(definitions[0].name(), "LeafId");
+    assert_eq!(definitions[0].lowered_definition(), "number|string");
+    assert!(definitions[0].dependency_names().is_empty());
+    assert_eq!(definitions[1].name(), "OuterId");
+    assert_eq!(definitions[1].lowered_definition(), "LeafId");
+    assert_eq!(
+        definitions[1].dependency_names(),
+        &[Box::<str>::from("LeafId")]
+    );
+    let alias_file = rebuilt
+        .annotation_files()
+        .iter()
+        .find(|file| file.path == definitions[0].generated_path())
+        .ok_or("retained generated alias file")?;
+    let alias_view = binding.file_view(&alias_file.path, &alias_file.text, &stop)?;
+    for definition in definitions {
+        assert_eq!(definition.source_scope(), "annotation_alias_catalog");
+        assert_eq!(definition.source_revision(), ALIAS_REVISION);
+        assert_eq!(definition.source_path(), "Types.lua");
+        assert_eq!(
+            definition.source_sha256().canonical(),
+            wow_reference::native::source_digest(ALIAS_SOURCE.as_bytes())
+        );
+        assert_eq!(definition.generated_sha256().canonical(), alias_file.sha256);
+        let token = byte_range(definition.type_token_span())?;
+        assert_eq!(
+            alias_view.slice(token.start, token.end, &stop)?,
+            definition.lowered_definition()
+        );
+    }
+    let mut corrupted_alias = alias_file.text.clone();
+    let alias_token = byte_range(definitions[0].type_token_span())?;
+    corrupted_alias.replace_range(alias_token.clone(), &"x".repeat(alias_token.len()));
+    assert!(
+        matches!(binding.file_view(&alias_file.path, &corrupted_alias, &stop),
+        Err(error) if error.code() == wow_project::ProjectErrorCode::FileDigestMismatch)
+    );
+    let returned_lowering = &lowering.fields()[2];
     assert_eq!(returned_lowering.lane(), CallableLoweringLane::Return);
     assert_eq!(returned_lowering.ordinal(), 0);
     // The fixture explicitly corrects number -> FixtureRecord before emission;
@@ -357,18 +433,38 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
         Err(wow_annotations::reference_links::NativeCallableBindingError::Cancelled)
     ));
     assert_eq!(
-        assert_transport_signature(rebuilt.reference().callable_signature(record, &stop)?)?,
+        serde_json::to_value(rebuilt.reference().callable_signature(record, &stop)?)?,
         original_signature
+    );
+    let original_arguments = original_signature["signature"]["arguments"]
+        .as_array()
+        .ok_or("original arguments")?;
+    assert_eq!(original_arguments.len(), 2);
+    assert_eq!(original_arguments[0]["type_name"], "bool");
+    assert_eq!(
+        original_arguments[0]["default"]["kind"],
+        json!({"Boolean":false})
+    );
+    assert_eq!(original_arguments[1]["type_name"], "table");
+    assert_eq!(original_arguments[1]["inner_type"], "OuterId");
+    assert_eq!(
+        original_signature["signature"]["returns"][0]["type_name"],
+        "number"
     );
     let owner_observation = original_signature.clone();
     let type_signature = require_one_profile(&owner_observation, TYPE_PROFILE)?.clone();
     let fields = type_signature["fields"]
         .as_array()
         .ok_or("owner type fields")?;
-    assert_eq!(fields.len(), 2);
+    assert_eq!(fields.len(), 3);
     assert_eq!(fields[0]["original_type"], "bool");
     assert_eq!(fields[0]["status"], "unresolved");
-    let returned = &fields[1];
+    assert_eq!(fields[1]["original_type"], "table");
+    assert_eq!(
+        fields[1]["status"], "unsupported",
+        "Reference atomic catalog remains separate from annotation aliases"
+    );
+    let returned = &fields[2];
     assert_eq!(returned["lane"], "returns");
     assert_eq!(returned["ordinal"], 0);
     assert_eq!(returned["original_type"], "number");
@@ -595,7 +691,7 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
         (
             "source-absence.json",
             wow_core::canonical_json_bytes(
-                &json!({"source_and_corrections_removed_before_reopen":true,"fixture_claim":"synthetic only"}),
+                &json!({"source_and_corrections_removed_before_reopen":true,"alias_resources_removed_before_reopen":true,"fixture_claim":"synthetic only"}),
             )?,
         ),
     ] {

@@ -30,10 +30,10 @@ use crate::selected_literals::{LiteralExecution, SelectedLiterals};
 use wow_render_contract::LiteralBridge;
 
 mod fields;
-mod lowering;
+pub(crate) mod lowering;
 mod maps;
 mod numbers;
-pub(crate) use lowering::CapturedCallable;
+pub(crate) use lowering::{CaptureBudget, CapturedCallable};
 
 const MAX_FILES: usize = 4096;
 const MAX_UNITS: usize = 65_536;
@@ -805,27 +805,37 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
     if cancelled.load(Ordering::Relaxed) {
         return Err(RenderError::Cancelled);
     }
-    let alias_report = (!aliases.is_empty())
-        .then(|| {
-            let projected = crate::aliases::project(
-                aliases,
-                &defined_alias_targets,
-                &reserved_alias_names,
+    let alias_report = if aliases.is_empty() {
+        None
+    } else {
+        let projected = crate::aliases::project(
+            aliases,
+            &defined_alias_targets,
+            &reserved_alias_names,
+            &mut lowering_budget,
+            cancelled,
+        )?;
+        issues.extend(projected.issues);
+        if !projected.text.is_empty() {
+            push_file(
+                &mut files,
+                &mut total_bytes,
+                "aliases",
+                projected.text,
+                projected.mappings,
+            )?;
+            let alias_file = files.last().ok_or(RenderError::InvalidSource)?;
+            crate::aliases::callable::attach(
+                &mut lowering_catalog,
+                &projected.callable_definitions,
+                &alias_file.path,
+                &alias_file.sha256,
+                &mut lowering_budget,
                 cancelled,
             )?;
-            issues.extend(projected.issues);
-            if !projected.text.is_empty() {
-                push_file(
-                    &mut files,
-                    &mut total_bytes,
-                    "aliases",
-                    projected.text,
-                    projected.mappings,
-                )?;
-            }
-            Ok::<_, RenderError>(projected.report)
-        })
-        .transpose()?;
+        }
+        Some(projected.report)
+    };
     if cancelled.load(Ordering::Relaxed) {
         return Err(RenderError::Cancelled);
     }

@@ -236,7 +236,10 @@ impl NativeApiProvenance {
         let mut origins = Vec::with_capacity(capacity);
         let selected_lowering = self.annotation_lowering_selected();
         let file_capacity = if selected_lowering {
-            self.library.annotation_files().len().min(capacity)
+            self.library
+                .annotation_files()
+                .len()
+                .min(capacity.checked_add(1).ok_or_else(exhausted)?)
         } else {
             0
         };
@@ -345,68 +348,90 @@ impl NativeApiProvenance {
                             NativeCallableBindingError::IncompatibleInput => incompatible(),
                         })?;
                     if let Some(observation) = observation {
-                        if let Some(preparation) = preparation.as_mut() {
-                            preparation
-                                .reserve_library_verification(0, files.len(), stop)
+                        let file = self.verified_annotation_file(
+                            observation.generated_path(),
+                            &mut files,
+                            file_capacity,
+                            preparation.as_deref_mut(),
+                            stop,
+                        )?;
+                        origin = origin.with_annotation_lowering(observation, file);
+                        if let Some(definition) = observation.alias_definitions().first() {
+                            let alias_file = self.verified_annotation_file(
+                                definition.generated_path(),
+                                &mut files,
+                                file_capacity,
+                                preparation.as_deref_mut(),
+                                stop,
+                            )?;
+                            origin = origin
+                                .with_annotation_alias_file(alias_file)
                                 .map_err(crate::context::context_error)?;
                         }
-                        let file = if let Some(file) = files
-                            .iter()
-                            .copied()
-                            .find(|file| file.path() == observation.generated_path())
-                        {
-                            file
-                        } else {
-                            if let Some(preparation) = preparation.as_mut() {
-                                preparation
-                                    .reserve_library_verification(
-                                        0,
-                                        self.library.annotation_files().len(),
-                                        stop,
-                                    )
-                                    .map_err(crate::context::context_error)?;
-                            }
-                            let source = self
-                                .library
-                                .annotation_files()
-                                .iter()
-                                .find(|file| file.path == observation.generated_path())
-                                .ok_or_else(incompatible)?;
-                            if let Some(preparation) = preparation.as_mut() {
-                                preparation
-                                    .reserve_library_verification(
-                                        source.text.len(),
-                                        self.library.annotation_files().len(),
-                                        stop,
-                                    )
-                                    .map_err(crate::context::context_error)?;
-                            }
-                            let verified = self
-                                .library
-                                .library_binding()
-                                .file_view(&source.path, &source.text, stop)
-                                .map_err(|error| match error.code() {
-                                    wow_project::ProjectErrorCode::AnalysisCancelled => {
-                                        ServiceError::new(
-                                            ServiceErrorCode::Cancelled,
-                                            "Library byte verification cancelled",
-                                        )
-                                    }
-                                    _ => incompatible(),
-                                })?;
-                            if files.len() == file_capacity {
-                                return Err(exhausted());
-                            }
-                            files.push(verified);
-                            verified
-                        };
-                        origin = origin.with_annotation_lowering(observation, file);
                     }
                 }
                 origins.push(origin);
             }
         }
         Ok(origins)
+    }
+
+    fn verified_annotation_file<'a>(
+        &'a self,
+        path: &str,
+        files: &mut Vec<wow_project::ProjectLibraryFileView<'a>>,
+        capacity: usize,
+        mut preparation: Option<&mut wow_context::ReferenceOriginPreparation<'_>>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<wow_project::ProjectLibraryFileView<'a>> {
+        checkpoint(stop)?;
+        if let Some(preparation) = preparation.as_mut() {
+            let work = path.len().checked_mul(files.len()).ok_or_else(exhausted)?;
+            preparation
+                .reserve_library_verification(work, files.len(), stop)
+                .map_err(crate::context::context_error)?;
+        }
+        if let Some(file) = files.iter().copied().find(|file| file.path() == path) {
+            return Ok(file);
+        }
+        if let Some(preparation) = preparation.as_mut() {
+            let count = self.library.annotation_files().len();
+            let work = path.len().checked_mul(count).ok_or_else(exhausted)?;
+            preparation
+                .reserve_library_verification(work, count, stop)
+                .map_err(crate::context::context_error)?;
+        }
+        let source = self
+            .library
+            .annotation_files()
+            .iter()
+            .find(|file| file.path == path)
+            .ok_or_else(incompatible)?;
+        if let Some(preparation) = preparation.as_mut() {
+            preparation
+                .reserve_library_verification(
+                    source.text.len(),
+                    self.library.annotation_files().len(),
+                    stop,
+                )
+                .map_err(crate::context::context_error)?;
+        }
+        if files.len() == capacity {
+            return Err(exhausted());
+        }
+        let verified = self
+            .library
+            .library_binding()
+            .file_view(&source.path, &source.text, stop)
+            .map_err(|error| match error.code() {
+                wow_project::ProjectErrorCode::AnalysisCancelled => ServiceError::new(
+                    ServiceErrorCode::Cancelled,
+                    "Library byte verification cancelled",
+                ),
+                _ => incompatible(),
+            })?;
+        files.push(verified);
+        Ok(verified)
     }
 
     /// The held native proof supplies the producer declaration; graph admission

@@ -6,9 +6,10 @@
   "crate": "wow-annotations",
   "native_callable_emission_capture": {
     "operation": "NativeCallableBindings::callable_lowering",
-    "capture": "already-computed mapped renderer type and optional-marker ranges; private bounded catalog skipped by serialization",
+    "capture": "already-computed mapped renderer type, optional-marker and input-atom ranges plus projected aliases and their existing dependency graph; private bounded shared catalog skipped by serialization",
     "handoff": "one inert wow-core callable observation bound to exact native Reference/source/artifact/map descriptors",
     "compatibility": "existing renderer text, NativeLibrary, artifact, map, loss and retained producer identities unchanged",
+    "aliases": "only unique emitted aliases used by effective callable atoms and their bounded transitive dependency subgraph; one composed alias file, exact independent external resource revision/path/digest/spans, no Reference type-catalog widening",
     "nonclaims": ["AnnotationSemanticModel acceptance", "complete type closure", "consumer semantic parity", "current-source or runtime qualification"]
   },
   "direct_framework_dependencies": [

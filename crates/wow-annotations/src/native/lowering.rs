@@ -4,7 +4,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-use wow_core::{CallableFieldLowering, SourceSpan};
+use wow_core::{CallableAliasDefinition, CallableFieldLowering, SourceSpan};
 
 pub(crate) const MAX_CAPTURE_BYTES: usize = 64 * 1024 * 1024;
 
@@ -16,27 +16,29 @@ pub(crate) struct CapturedCallable {
     pub(crate) source_sha256: Box<str>,
     pub(crate) source_span: SourceSpan,
     pub(crate) fields: Arc<[CallableFieldLowering]>,
+    /// One name-ordered, shared used-alias closure for this callable.
+    pub(crate) alias_definitions: Arc<[CallableAliasDefinition]>,
 }
 
-pub(super) struct CaptureBudget {
+pub(crate) struct CaptureBudget {
     callables: usize,
     fields: usize,
     bytes: usize,
 }
 
 impl CaptureBudget {
-    pub(super) const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             callables: 0,
             fields: 0,
             bytes: 0,
         }
     }
-    pub(super) const fn metadata_bytes(&self) -> usize {
+    pub(crate) const fn metadata_bytes(&self) -> usize {
         self.bytes
     }
 
-    pub(super) fn reserve(
+    pub(crate) fn reserve(
         &mut self,
         callables: usize,
         fields: usize,

@@ -1,27 +1,32 @@
 //! Native callback signatures beyond the donor's argument-only byte profile.
 use super::{
-    Field, MemberPosition, Output, RenderError, RenderedMember, RenderedTypeToken, Renderer,
-    safe_text, validate_fields,
+    Field, LoweredType, MemberPosition, Output, RenderError, RenderedMember, RenderedTypeToken,
+    Renderer, safe_text, validate_fields,
 };
 
 impl Renderer {
     /// The same type lowering serves fields and function-type components.
     /// Parentheses preserve union precedence before arrays and nilability.
-    pub(super) fn field_type(&self, field: &Field) -> Result<String, RenderError> {
-        let mut name = self.lower_type(field.inner_type.as_deref().unwrap_or(&field.type_name))?;
+    pub(super) fn field_type(&self, field: &Field) -> Result<LoweredType, RenderError> {
+        let mut lowered =
+            self.lower_type_mapped(field.inner_type.as_deref().unwrap_or(&field.type_name))?;
         if field.inner_type.is_some() {
-            if name.contains('|') {
-                name = format!("({name})");
+            if lowered.is_union() {
+                lowered.text.insert(0, '(');
+                lowered.text.push(')');
+                lowered.shift_atoms(1)?;
             }
-            name.push_str("[]");
+            lowered.text.push_str("[]");
         }
         if (field.nilable || field.default_text.is_some())
-            && name.contains('|')
+            && lowered.is_union()
             && field.inner_type.is_none()
         {
-            name = format!("({name})");
+            lowered.text.insert(0, '(');
+            lowered.text.push(')');
+            lowered.shift_atoms(1)?;
         }
-        Ok(name)
+        Ok(lowered)
     }
 
     pub(super) fn callback_signature(
@@ -65,9 +70,9 @@ impl Renderer {
                     None
                 };
             out.push(": ")?;
-            let lowered_type = self.field_type(argument)?;
+            let lowered = self.field_type(argument)?;
             let type_start = out.bytes.len();
-            out.push(&lowered_type)?;
+            out.push(&lowered.text)?;
             let type_end = out.bytes.len();
             let optional_marker = if argument.variadic && argument.nilable {
                 let marker_start = out.bytes.len();
@@ -85,8 +90,9 @@ impl Renderer {
                     start: type_start,
                     end: type_end,
                     optional_marker,
-                    lowered_type,
+                    lowered_type: lowered.text,
                     optional: argument.nilable || argument.default_text.is_some(),
+                    atoms: lowered.atoms,
                 },
             });
         }
@@ -99,9 +105,9 @@ impl Renderer {
                 out.push(", ")?;
             }
             let start = out.bytes.len();
-            let lowered_type = self.field_type(result)?;
+            let lowered = self.field_type(result)?;
             let type_start = out.bytes.len();
-            out.push(&lowered_type)?;
+            out.push(&lowered.text)?;
             let type_end = out.bytes.len();
             let optional_marker = if result.nilable || result.default_text.is_some() {
                 let marker_start = out.bytes.len();
@@ -119,8 +125,9 @@ impl Renderer {
                     start: type_start,
                     end: type_end,
                     optional_marker,
-                    lowered_type,
+                    lowered_type: lowered.text,
                     optional: result.nilable || result.default_text.is_some(),
+                    atoms: lowered.atoms,
                 },
             });
         }

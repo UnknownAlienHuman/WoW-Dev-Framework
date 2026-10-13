@@ -5,8 +5,9 @@ use super::{
     link,
 };
 use crate::ketho::{MemberPosition, RenderedSystem};
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use wow_core::{CallableFieldLowering, CallableLoweringLane};
+use wow_core::{CallableFieldLowering, CallableLoweringLane, CallableTypeAtom};
 
 pub(super) const MAX_MEMBERS: usize = 65_536;
 
@@ -117,28 +118,73 @@ pub(super) fn append_members(
                     return Err(RenderError::InvalidSource);
                 }
                 if !declaration.table {
-                    capture_budget.reserve(0, 0, token.lowered_type.len(), stop)?;
+                    let atom_bytes = token
+                        .atoms
+                        .iter()
+                        .try_fold(0usize, |total, atom| {
+                            total
+                                .checked_add(std::mem::size_of::<CallableTypeAtom>())
+                                .and_then(|n| n.checked_add(atom.source_name.len()))
+                                .and_then(|n| n.checked_add(atom.rendered_name.len()))
+                        })
+                        .ok_or(RenderError::OutputLimit)?;
+                    capture_budget.reserve(
+                        0,
+                        0,
+                        token
+                            .lowered_type
+                            .len()
+                            .checked_add(atom_bytes)
+                            .ok_or(RenderError::OutputLimit)?,
+                        stop,
+                    )?;
+                    let mut type_atoms = Vec::with_capacity(token.atoms.len());
+                    for atom in std::mem::take(&mut token.atoms) {
+                        capture_budget.reserve(0, 0, 0, stop)?;
+                        let atom_start = token
+                            .start
+                            .checked_add(atom.start)
+                            .ok_or(RenderError::OutputLimit)?;
+                        let atom_end = token
+                            .start
+                            .checked_add(atom.end)
+                            .ok_or(RenderError::OutputLimit)?;
+                        if rendered.text.get(atom_start..atom_end)
+                            != Some(atom.rendered_name.as_str())
+                        {
+                            return Err(RenderError::InvalidSource);
+                        }
+                        type_atoms.push(
+                            CallableTypeAtom::admit(
+                                atom.source_name.into_boxed_str(),
+                                atom.rendered_name.into_boxed_str(),
+                                span(atom_start, atom_end)?,
+                            )
+                            .map_err(|_| RenderError::InvalidSource)?,
+                        );
+                    }
                     let lane = match position {
                         MemberPosition::Parameter => CallableLoweringLane::Parameter,
                         MemberPosition::Return => CallableLoweringLane::Return,
                         MemberPosition::Field => return Err(RenderError::InvalidSource),
                     };
-                    captured_fields.push(
-                        CallableFieldLowering::admit(
-                            lane,
-                            index,
-                            span(field.raw.span.start, field.raw.span.end)?,
-                            span(member.start, member.end)?,
-                            span(token.start, token.end)?,
-                            token
-                                .optional_marker
-                                .map(|(start, end)| span(start, end))
-                                .transpose()?,
-                            std::mem::take(&mut token.lowered_type).into_boxed_str(),
-                            token.optional,
-                        )
-                        .map_err(|_| RenderError::InvalidSource)?,
-                    );
+                    let field = CallableFieldLowering::admit(
+                        lane,
+                        index,
+                        span(field.raw.span.start, field.raw.span.end)?,
+                        span(member.start, member.end)?,
+                        span(token.start, token.end)?,
+                        token
+                            .optional_marker
+                            .map(|(start, end)| span(start, end))
+                            .transpose()?,
+                        std::mem::take(&mut token.lowered_type).into_boxed_str(),
+                        token.optional,
+                    )
+                    .map_err(|_| RenderError::InvalidSource)?
+                    .with_type_atoms(type_atoms.into_boxed_slice())
+                    .map_err(|_| RenderError::InvalidSource)?;
+                    captured_fields.push(field);
                 }
                 // Bound local tables retain their definition spans, which need
                 // not be nested inside the source callable's byte range.
@@ -169,6 +215,7 @@ pub(super) fn append_members(
                 source_sha256: document.sha256().into(),
                 source_span: span(function.raw.span.start, function.raw.span.end)?,
                 fields: captured_fields.into(),
+                alias_definitions: Arc::from([]),
             });
         }
     }
