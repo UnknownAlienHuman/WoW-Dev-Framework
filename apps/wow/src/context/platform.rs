@@ -111,6 +111,7 @@ pub(super) fn parse(values: &[OsString]) -> Result<Option<Arguments>, &'static s
     }
     platform.ok_or("platform request input requires --platform native")?;
     Ok(Some(Arguments {
+        source_root: None,
         host_config: host_config.ok_or("native context requires explicit native host input")?,
         request: super::Request::Platform(Request {
             command,

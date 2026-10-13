@@ -45,11 +45,14 @@ pub use pack::{
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE,
     PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE,
     PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE,
-    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE, build_combined_context_semantic_pack,
+    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE, PRIMARY_SOURCE_CONTEXT_JSON_RENDERER_PROFILE,
+    PRIMARY_SOURCE_CONTEXT_MARKDOWN_RENDERER_PROFILE, PRIMARY_SOURCE_CONTEXT_PACK_PROFILE,
+    PreparedPrimarySourceExcerpt, PrimarySourceExcerptPolicy, PrimarySourceExcerptSelection,
+    adopt_primary_source_excerpt, build_combined_context_semantic_pack,
     build_context_semantic_pack, build_context_semantic_pack_from_expansion,
     build_context_semantic_pack_with_l1_profile, build_context_semantic_pack_with_profile,
-    build_context_semantic_pack_with_reference_facts, validate_combined_context_semantic_pack,
-    validate_context_semantic_pack,
+    build_context_semantic_pack_with_reference_facts, prepare_primary_source_excerpt,
+    validate_combined_context_semantic_pack, validate_context_semantic_pack,
 };
 pub use platform::{
     PLATFORM_NATIVE_ONE_HOP_PROFILE, PLATFORM_NATIVE_ONE_HOP_PROFILE_BYTES, PlatformContextInspect,

@@ -2,7 +2,8 @@
 //! The shared runner retains native custody through encoding and checked close.
 use super::operation::{
     Envelope, FrontierExpansion, current_record_digest, encode, failed_operation,
-    with_checked_context_read, with_native_frontier, with_native_origins, with_native_progressive,
+    with_checked_context_read, with_native_frontier, with_native_origins,
+    with_native_origins_with_catalog, with_native_progressive,
 };
 use super::request::ProgressiveExpansion;
 use super::{
@@ -14,6 +15,7 @@ use super::{
 };
 use crate::{ServiceErrorCode, ServiceResult, live_project::LiveProjectRead};
 use serde::Serialize;
+use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use wow_core::{CanonicalResult, ContentDigest};
 use wow_store::project::ReadSelector;
@@ -61,6 +63,27 @@ const PROGRESSIVE_BOTH_RENDERER_PROFILE_IDS: &[&str] = &[
     PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
 ];
 
+pub const PRIMARY_SOURCE_CONTEXT_PACK_PROFILE_ID: &str =
+    wow_context::PRIMARY_SOURCE_CONTEXT_PACK_PROFILE;
+pub const PRIMARY_SOURCE_CONTEXT_JSON_RENDERER_PROFILE_ID: &str =
+    wow_context::PRIMARY_SOURCE_CONTEXT_JSON_RENDERER_PROFILE;
+pub const PRIMARY_SOURCE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID: &str =
+    wow_context::PRIMARY_SOURCE_CONTEXT_MARKDOWN_RENDERER_PROFILE;
+const SOURCE_JSON_RENDERER_PROFILE_IDS: &[&str] =
+    &[PRIMARY_SOURCE_CONTEXT_JSON_RENDERER_PROFILE_ID];
+const SOURCE_MARKDOWN_RENDERER_PROFILE_IDS: &[&str] =
+    &[PRIMARY_SOURCE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID];
+const SOURCE_BOTH_RENDERER_PROFILE_IDS: &[&str] = &[
+    PRIMARY_SOURCE_CONTEXT_JSON_RENDERER_PROFILE_ID,
+    PRIMARY_SOURCE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+];
+
+#[derive(Debug, Clone, Copy, Serialize)]
+struct SourceExcerptRequest {
+    selection: wow_context::PrimarySourceExcerptSelection,
+    policy: wow_context::PrimarySourceExcerptPolicy,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ContextBuildRequest {
     schema: &'static str,
@@ -84,6 +107,8 @@ pub struct ContextBuildRequest {
     current: Option<ContextMapCurrentGuard>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reference: Option<ContextMapReferenceGuard>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_excerpt: Option<SourceExcerptRequest>,
 }
 impl ContextBuildRequest {
     pub fn primary(
@@ -123,6 +148,7 @@ impl ContextBuildRequest {
             progressive: None,
             current,
             reference,
+            source_excerpt: None,
         })
     }
 
@@ -138,16 +164,18 @@ impl ContextBuildRequest {
     }
 
     pub fn with_l1_profile(mut self, profile: ContextL1Profile) -> ServiceResult<Self> {
-        if !matches!(
-            self.level,
-            ContextInspectLevel::L1 | ContextInspectLevel::Both
-        ) || (matches!(
-            profile,
-            ContextL1Profile::StateDetailV1 | ContextL1Profile::ReferenceFactsV1
-        ) && (self.level != ContextInspectLevel::L1
-            || !matches!(&self.root, ContextMapRoot::GraphEntity(_))
-            || self.expansion.is_some()
-            || self.progressive.is_some()))
+        if (self.source_excerpt.is_some() && profile != ContextL1Profile::EntityV1)
+            || !matches!(
+                self.level,
+                ContextInspectLevel::L1 | ContextInspectLevel::Both
+            )
+            || (matches!(
+                profile,
+                ContextL1Profile::StateDetailV1 | ContextL1Profile::ReferenceFactsV1
+            ) && (self.level != ContextInspectLevel::L1
+                || !matches!(&self.root, ContextMapRoot::GraphEntity(_))
+                || self.expansion.is_some()
+                || self.progressive.is_some()))
         {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
@@ -160,7 +188,8 @@ impl ContextBuildRequest {
     }
 
     pub fn with_frontier_expansion(mut self, frontier: Vec<ContextMapRoot>) -> ServiceResult<Self> {
-        if self.l1_profile_id == Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)
+        if self.source_excerpt.is_some()
+            || self.l1_profile_id == Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)
             || self.l1_profile_id == Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID)
             || self.progressive.is_some()
         {
@@ -181,7 +210,8 @@ impl ContextBuildRequest {
         mut self,
         rounds: Vec<Vec<ContextMapRoot>>,
     ) -> ServiceResult<Self> {
-        if self.expansion.is_some()
+        if self.source_excerpt.is_some()
+            || self.expansion.is_some()
             || self.l1_profile_id == Some(PRIMARY_STATE_DETAIL_L1_PROFILE_ID)
             || self.l1_profile_id == Some(PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID)
         {
@@ -197,6 +227,31 @@ impl ContextBuildRequest {
         };
         Ok(self)
     }
+
+    pub fn with_source_excerpt(
+        mut self,
+        selection: wow_context::PrimarySourceExcerptSelection,
+        policy: wow_context::PrimarySourceExcerptPolicy,
+    ) -> ServiceResult<Self> {
+        if self.level != ContextInspectLevel::L1
+            || !matches!(self.root, ContextMapRoot::GraphEntity(_))
+            || self.l1_profile_id != Some(PRIMARY_L1_PROFILE_ID)
+            || self.expansion.is_some()
+            || self.progressive.is_some()
+            || self.source_excerpt.is_some()
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        self.source_excerpt = Some(SourceExcerptRequest { selection, policy });
+        self.context_profile_id = PRIMARY_SOURCE_CONTEXT_PACK_PROFILE_ID;
+        self.renderer_profile_ids = match self.render {
+            ContextRenderSelection::None => &[],
+            ContextRenderSelection::Json => SOURCE_JSON_RENDERER_PROFILE_IDS,
+            ContextRenderSelection::Markdown => SOURCE_MARKDOWN_RENDERER_PROFILE_IDS,
+            ContextRenderSelection::Both => SOURCE_BOTH_RENDERER_PROFILE_IDS,
+        };
+        Ok(self)
+    }
 }
 
 pub fn execute_context_build(
@@ -204,6 +259,20 @@ pub fn execute_context_build(
     request: &ContextBuildRequest,
     stop: &AtomicBool,
 ) -> ServiceResult<ContextMapResult> {
+    execute_context_build_with_source(host, request, None, stop)
+}
+
+/// The source root is an explicit local capability, separate from the canonical
+/// request and artifact identities. The old entrypoint supplies no capability.
+pub fn execute_context_build_with_source(
+    host: &ContextMapHostInput,
+    request: &ContextBuildRequest,
+    source_root: Option<&Path>,
+    stop: &AtomicBool,
+) -> ServiceResult<ContextMapResult> {
+    if request.source_excerpt.is_some() != source_root.is_some() {
+        return Err(failure(ServiceErrorCode::InvalidRequest));
+    }
     let l0_profile = super::l0_profile_from_id(request.l0_profile_id)?;
     let l1_profile = super::l1_profile_from_id(request.l1_profile_id)?;
     let digest = wow_core::domain_separated_digest(CONTEXT_BUILD_REQUEST_SCHEMA, request)
@@ -218,7 +287,15 @@ pub fn execute_context_build(
     };
     let (result, closure) =
         with_checked_context_read(host, &request.project_store_id, &selector, stop, |read| {
-            build(read, host, request, &id, l0_profile, l1_profile, stop)
+            build(
+                read,
+                host,
+                request,
+                &id,
+                (l0_profile, l1_profile),
+                source_root,
+                stop,
+            )
         });
     match result {
         Ok((bytes, status)) => Ok(ContextMapResult {
@@ -263,10 +340,11 @@ fn build(
     host: &ContextMapHostInput,
     request: &ContextBuildRequest,
     request_id: &str,
-    l0_profile: ContextL0Profile,
-    l1_profile: ContextL1Profile,
+    profiles: (ContextL0Profile, ContextL1Profile),
+    source_root: Option<&Path>,
     stop: &AtomicBool,
 ) -> ServiceResult<(Vec<u8>, ContextMapStatus)> {
+    let (l0_profile, l1_profile) = profiles;
     checkpoint(stop)?;
     let project = read.project();
     if project.configuration().project_id() != &host.project_id {
@@ -396,7 +474,8 @@ fn build(
             failure_code: None,
             payload: Some(payload),
         };
-        let remaining = if request.expansion.is_some()
+        let remaining = if request.source_excerpt.is_some()
+            || request.expansion.is_some()
             || request.progressive.is_some()
             || matches!(
                 l1_profile,
@@ -410,6 +489,63 @@ fn build(
             usize::try_from(remaining).map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
         Ok((encode(&envelope, limit, stop)?, status))
     };
+    if let Some(excerpt_selection) = &request.source_excerpt {
+        let root = source_root.ok_or_else(|| failure(ServiceErrorCode::InvalidRequest))?;
+        return with_native_origins_with_catalog(
+            &universe,
+            read,
+            host,
+            request.root.clone(),
+            true,
+            stop,
+            |map, graph, catalog| {
+                let mut pack = wow_context::build_context_semantic_pack_with_profile(
+                    &universe,
+                    map,
+                    graph,
+                    &scope,
+                    request.level,
+                    l0_profile,
+                    stop,
+                )
+                .map_err(context_error)?;
+                let prepared = wow_context::prepare_primary_source_excerpt(
+                    &mut pack,
+                    map,
+                    catalog,
+                    excerpt_selection.selection,
+                    excerpt_selection.policy,
+                    stop,
+                )
+                .map_err(context_error)?;
+                let manifest =
+                    wow_project::graph::RetainedProjectSourceManifest::admit_project_handles(
+                        project,
+                        catalog,
+                        &[prepared.source_handle()],
+                        stop,
+                    )
+                    .map_err(crate::live_project::project_error)?;
+                let directory = wow_project::disk::ProjectInputDirectory::open(root)
+                    .map_err(crate::live_project::project_error)?;
+                let outcome = manifest.read_sources(
+                    &directory,
+                    catalog,
+                    &[prepared.source_handle()],
+                    prepared.read_limits(),
+                    prepared.max_output_bytes(),
+                    stop,
+                );
+                // This read-only directory owner closes synchronously on drop;
+                // retained Project/store owners use the outer checked-close path.
+                drop(directory);
+                let report = outcome.map_err(crate::live_project::project_error)?;
+                wow_context::adopt_primary_source_excerpt(&mut pack, prepared, &report, stop)
+                    .map_err(context_error)?;
+                deliver(pack)
+            },
+        );
+    }
     if let Some(progressive) = &request.progressive {
         with_native_progressive(
             &universe,

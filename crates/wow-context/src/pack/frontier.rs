@@ -169,6 +169,7 @@ pub fn build_context_semantic_pack_from_expansion<'m, 'a: 'm>(
         l0_profile_id: None,
         l1_profile_id: None,
         expansion_id: Some(expansion.expansion_id().into()),
+        source_excerpt: None,
     };
     budget.retain(&request_core, stop)?;
     let request = PackRequest {
@@ -252,6 +253,7 @@ pub fn build_context_semantic_pack_from_expansion<'m, 'a: 'm>(
         boundary_notice: BOUNDARY_NOTICE,
         skeletons,
         expansion: Some(expansion),
+        source_excerpt: None,
         items,
         selection_trace,
         omissions: PackOmissions {
@@ -299,6 +301,9 @@ pub(super) fn validate_expansion(
     stop: &AtomicBool,
 ) -> ContextResult<()> {
     let Some(expansion) = &pack.core.expansion else {
+        if pack.core.source_excerpt.is_some() {
+            return super::source_excerpt::validate_ready(pack, stop);
+        }
         if pack.core.schema != PACK_SCHEMA
             || pack.core.profile.profile_id != PRIMARY_CONTEXT_PACK_PROFILE
         {

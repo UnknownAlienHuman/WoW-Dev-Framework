@@ -18,8 +18,8 @@ use wow_service::{
         ContextBuildRequest, ContextInspectRequest, ContextMapCurrentGuard, ContextMapHostInput,
         ContextMapPublication, ContextMapReferenceGuard, ContextMapRequest, ContextMapResult,
         ContextMapRoot, ContextMapStatus, PRIMARY_NAVIGATION_MAP_PROFILE_ID,
-        PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID, execute_context_build, execute_context_inspect,
-        execute_context_map,
+        PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID, execute_context_build_with_source,
+        execute_context_inspect, execute_context_map,
     },
 };
 
@@ -77,6 +77,14 @@ const HELP: &str = concat!(
     "  Same explicit host/root, omitted platform, optional current guards, complete reference ",
     "guard group and envelope-json output. Build supports the same explicit state-root L0 profile; ",
     "service owns profile/root/level compatibility.\n",
+    "  Exact local source excerpts: --context-profile-id wow-context/primary-source-excerpt-pack/1 ",
+    "--level l1 --source-excerpt-handle <exact-handle-id> --source-root <Main-root> ",
+    "--source-policy local-project-source.\n",
+    "  [--renderer-profile-id wow-context/primary-source-excerpt-json/1] ",
+    "[--renderer-profile-id wow-context/primary-source-excerpt-markdown/1]\n",
+    "  The policy records declared local project-source labels and permission for local use. ",
+    "It grants no external transmission permission. Only the selected root's original physical ",
+    "byte span is read after whole-file verification; expansion and other L1 recipes refuse.\n",
     "wow context map|inspect --platform native --native-host-config <host.json> ",
     "--platform-request-input <request.json> [--output envelope-json|text]\n",
     "  Native map/inspect use a bounded explicit service host and request document. ",
@@ -128,6 +136,7 @@ enum Request {
 struct Arguments {
     host_config: PathBuf,
     request: Request,
+    source_root: Option<PathBuf>,
 }
 
 pub fn run(values: Vec<OsString>) -> u8 {
@@ -187,7 +196,12 @@ pub fn run(values: Vec<OsString>) -> u8 {
     let operation = match &arguments.request {
         Request::Map(request) => execute_context_map(&host, request, &stop),
         Request::Inspect(request) => execute_context_inspect(&host, request, &stop),
-        Request::Build(request) => execute_context_build(&host, request, &stop),
+        Request::Build(request) => execute_context_build_with_source(
+            &host,
+            request,
+            arguments.source_root.as_deref(),
+            &stop,
+        ),
         Request::Platform(_) => {
             crate::diagnostic("native context dispatch invariant failed");
             return 4;
@@ -273,6 +287,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         _ => return Err("expected context map, inspect or build"),
     };
     let mut host_config = None;
+    let mut source_root = None;
     let mut project_store = None;
     let mut publication = None;
     let mut current_record = None;
@@ -313,6 +328,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
                 inspect::Options::accepts(option)
                     || inspect::Options::accepts_expansion(option)
                     || build::Options::accepts(option)
+                    || option == "--source-root"
             }
         };
         if !common && !selected {
@@ -328,6 +344,10 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         }
         if option == "--native-host-config" {
             set(&mut host_config, PathBuf::from(value), command)?;
+            continue;
+        }
+        if option == "--source-root" {
+            set(&mut source_root, PathBuf::from(value), command)?;
             continue;
         }
         let value = value
@@ -408,7 +428,10 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             | "--frontier-round" => {
                 inspect_options.option(option, &value, command)?;
             }
-            "--context-profile-id" | "--renderer-profile-id" => {
+            "--context-profile-id"
+            | "--renderer-profile-id"
+            | "--source-excerpt-handle"
+            | "--source-policy" => {
                 build_options.option(option, &value)?;
             }
             _ => {
@@ -421,6 +444,11 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         }
     }
     let host_config = host_config.ok_or("context requires explicit native host input")?;
+    if source_root.is_some() != build_options.has_source_excerpt() {
+        return Err(
+            "source excerpts require an explicit source root, handle and local source policy",
+        );
+    }
     let project_store = project_store.ok_or("context requires --project-store")?;
     let publication = publication.ok_or("context requires --publication")?;
     let current_guard = if current_record.is_some() || current_digest.is_some() {
@@ -478,6 +506,7 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     Ok(Arguments {
         host_config,
         request,
+        source_root,
     })
 }
 

@@ -2,13 +2,15 @@
 use super::{Command, inspect::Selection, set};
 use wow_service::context::{
     ContextBuildRequest, ContextL1Profile, ContextMapCurrentGuard, ContextMapPublication,
-    ContextMapReferenceGuard, ContextRenderSelection, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+    ContextMapReferenceGuard, ContextRenderSelection, ContextSourceExcerptPolicy,
+    ContextSourceExcerptSelection, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_PACK_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID, PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
-    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID,
+    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID, PRIMARY_SOURCE_CONTEXT_JSON_RENDERER_PROFILE_ID,
+    PRIMARY_SOURCE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID, PRIMARY_SOURCE_CONTEXT_PACK_PROFILE_ID,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -16,6 +18,7 @@ enum Family {
     Structural,
     Frontier,
     Progressive,
+    SourceExcerpt,
 }
 
 #[derive(Default)]
@@ -23,11 +26,23 @@ pub(super) struct Options {
     context_profile: Option<Family>,
     json_renderer: Option<Family>,
     markdown_renderer: Option<Family>,
+    source_handle: Option<String>,
+    source_policy: Option<ContextSourceExcerptPolicy>,
 }
 
 impl Options {
     pub(super) fn accepts(option: &str) -> bool {
-        matches!(option, "--context-profile-id" | "--renderer-profile-id")
+        matches!(
+            option,
+            "--context-profile-id"
+                | "--renderer-profile-id"
+                | "--source-excerpt-handle"
+                | "--source-policy"
+        )
+    }
+
+    pub(super) fn has_source_excerpt(&self) -> bool {
+        self.source_handle.is_some() || self.source_policy.is_some()
     }
 
     pub(super) fn option(&mut self, option: &str, value: &str) -> Result<(), &'static str> {
@@ -37,6 +52,7 @@ impl Options {
                     PRIMARY_CONTEXT_PACK_PROFILE_ID => Family::Structural,
                     PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID => Family::Frontier,
                     PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID => Family::Progressive,
+                    PRIMARY_SOURCE_CONTEXT_PACK_PROFILE_ID => Family::SourceExcerpt,
                     _ => return Err("unsupported exact context pack profile"),
                 };
                 set(&mut self.context_profile, family, Command::Build)
@@ -66,8 +82,31 @@ impl Options {
                     Family::Progressive,
                     Command::Build,
                 ),
+                PRIMARY_SOURCE_CONTEXT_JSON_RENDERER_PROFILE_ID => set(
+                    &mut self.json_renderer,
+                    Family::SourceExcerpt,
+                    Command::Build,
+                ),
+                PRIMARY_SOURCE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID => set(
+                    &mut self.markdown_renderer,
+                    Family::SourceExcerpt,
+                    Command::Build,
+                ),
                 _ => Err("unsupported exact context renderer profile"),
             },
+            "--source-excerpt-handle" => {
+                set(&mut self.source_handle, value.to_owned(), Command::Build)
+            }
+            "--source-policy" => {
+                if value != "local-project-source" {
+                    return Err("unsupported source excerpt policy");
+                }
+                set(
+                    &mut self.source_policy,
+                    ContextSourceExcerptPolicy::LocalProjectSource,
+                    Command::Build,
+                )
+            }
             _ => Err("unknown context build option"),
         }
     }
@@ -91,11 +130,26 @@ impl Options {
             frontier,
             progressive,
         } = selection;
-        let selected_family = match (frontier.is_some(), progressive.is_some()) {
-            (false, false) => Family::Structural,
-            (true, false) => Family::Frontier,
-            (false, true) => Family::Progressive,
-            (true, true) => return Err("context expansion families cannot be mixed"),
+        let source = match (self.source_handle, self.source_policy) {
+            (None, None) => None,
+            (Some(handle), Some(policy)) => Some((
+                ContextSourceExcerptSelection::new(
+                    handle
+                        .parse()
+                        .map_err(|_| "invalid exact source handle ID")?,
+                ),
+                policy,
+            )),
+            _ => {
+                return Err("source excerpts require both an exact handle and local source policy");
+            }
+        };
+        let selected_family = match (frontier.is_some(), progressive.is_some(), source.is_some()) {
+            (false, false, false) => Family::Structural,
+            (true, false, false) => Family::Frontier,
+            (false, true, false) => Family::Progressive,
+            (false, false, true) => Family::SourceExcerpt,
+            _ => return Err("context expansion and source excerpt families cannot be mixed"),
         };
         if family != selected_family {
             return Err("context build pack profile conflicts with expansion selection");
@@ -146,6 +200,11 @@ impl Options {
             // Entity remains an optional assertion of the existing primary constructor.
             Some(ContextL1Profile::EntityV1) | None => request,
         };
+        if let Some((selection, policy)) = source {
+            return request
+                .with_source_excerpt(selection, policy)
+                .map_err(|_| "invalid context source excerpt selection");
+        }
         if let Some(rounds) = progressive {
             return request
                 .with_progressive_expansion(rounds)

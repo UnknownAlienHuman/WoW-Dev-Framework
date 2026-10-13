@@ -58,6 +58,43 @@ There is no `--render` flag, standalone render/import route, auto profile select
 or text/artifact stdout mode. Requested renderers are required: refusal suppresses
 the delivery payload rather than returning a pack-only fallback.
 
+## Exact local source excerpt
+
+Select `--context-profile-id wow-context/primary-source-excerpt-pack/1`,
+`--level l1` and one exact `graph-entity@` root with default EntityV1 detail.
+Supply these three options together:
+
+```text
+--source-excerpt-handle <original-root-source-handle-id>
+--source-root <explicit-Main-source-directory>
+--source-policy local-project-source
+```
+
+Optional renderers are `wow-context/primary-source-excerpt-json/1` and
+`wow-context/primary-source-excerpt-markdown/1`; output is `envelope-json`.
+The selected handle must be an original physical ByteRange in the root's
+admitted native support. The existing Project reader verifies the whole file's
+digest and length before returning that range. Source work and report/item/pack
+retention are reserved on the continuing Context budget before opening the
+directory. The directory closes before adoption, and retained owners close
+before delivery. Files are bounded to 16 MiB, excerpts to 64 KiB, with the
+caller's remaining budgets also enforced.
+
+The policy records an operator-declared `LocalProjectSource` materialization
+label and permission for local use. It grants no external transmission or
+license attestation. Source text is a separate untrusted item. Markdown retains
+quoted `SOURCE_METADATA`, generated `SOURCE_DATA_BEGIN`/`SOURCE_DATA_END`, and
+numbered JSON-quoted `SRC` lines; source cannot create a boundary or policy record.
+Unknown or incomplete options, incompatible profiles, wrong-root handles,
+unverified files, exhausted budgets and cancellation refuse without a payload.
+
+The route supports omitted platform and default L1 only. Both, other L1 recipes,
+frontier/progressive expansion, adjacent ranges, source tokenization and
+continuation remain outside this selection. Omitting the source options
+preserves the existing metadata-only request, pack and renderer bytes.
+Selected native/Windows CLI qualification is recorded in #122; broader source
+and E3 acceptance remains open.
+
 ## Native XML handler L1 metadata in packs
 
 Existing default EntityV1 L1 build selection carries the original handler facet

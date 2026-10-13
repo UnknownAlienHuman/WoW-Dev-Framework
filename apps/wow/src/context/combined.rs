@@ -103,6 +103,7 @@ pub(super) fn parse(values: &[OsString]) -> Result<Option<Arguments>, &'static s
     }
     platform.ok_or("combined request input requires --platform combined")?;
     Ok(Some(Arguments {
+        source_root: None,
         host_config: host_config.ok_or("combined context requires explicit native host input")?,
         request: super::Request::Combined(Request {
             command,

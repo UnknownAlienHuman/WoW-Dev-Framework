@@ -2,11 +2,15 @@ use std::collections::BTreeMap;
 use std::sync::atomic::AtomicBool;
 
 use serde::Serialize;
-use wow_core::{CoverageRecord, SourceHandle, SourceOriginKind, SourceSpanKind, StableHandleId};
+use wow_core::{
+    ContentDigest, CoverageRecord, SourceContent, SourceHandle, SourceOriginKind, SourceSpanKind,
+    StableHandleId,
+};
 use wow_graph::{
-    GraphDirection, GraphEdge, GraphEdgeId, GraphExplainQuery, GraphExplainSubject,
-    GraphExplainedRecord, GraphNeighborQuery, GraphNeighborReadQuery, GraphNeighborView, GraphNode,
-    GraphNodeId, GraphPathConfidence, GraphQueryState, GraphResolvedExplanation,
+    GraphDirection, GraphEdge, GraphEdgeId, GraphEvidenceCatalog, GraphExplainQuery,
+    GraphExplainSubject, GraphExplainedRecord, GraphNeighborQuery, GraphNeighborReadQuery,
+    GraphNeighborView, GraphNode, GraphNodeId, GraphPathConfidence, GraphQueryState,
+    GraphResolvedExplanation,
 };
 use wow_project::ProjectSourceOrigin;
 use wow_project::load::{
@@ -139,6 +143,13 @@ struct LoadCustody<'a> {
     package_load: Option<&'a ProjectPackageLoadPlan>,
     #[serde(skip_serializing_if = "Option::is_none")]
     package_main: Option<&'a ProjectPackageMainPlan>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct SelectedRootSourceCustody<'a> {
+    pub(crate) handle: &'a SourceHandle,
+    pub(crate) content_digest: ContentDigest<SourceContent>,
+    pub(crate) byte_length: u64,
 }
 
 #[derive(Serialize)]
@@ -985,6 +996,65 @@ impl<'a> ProjectMapView<'_, 'a> {
             MapNavigation::Project(_) => None,
             MapNavigation::Expansion(view) => Some(view.root),
         }
+    }
+    /// Exact project-source custody admitted by this map's exact root support.
+    /// Preserves the original native pointers and never reconstructs authority
+    /// from serialized map fields or from a same-ID record in another view.
+    pub(crate) fn selected_root_source_custody(
+        &self,
+        root_id: &GraphNodeId,
+        handle_id: &StableHandleId,
+        catalog: &GraphEvidenceCatalog,
+    ) -> Option<SelectedRootSourceCustody<'a>> {
+        let root = self.root_node()?;
+        if root.node_id() != root_id {
+            return None;
+        }
+        let root_handle = self.map.core.supports.iter().find_map(|support| {
+            let is_exact_root = matches!(
+                support.explanation().record(),
+                GraphExplainedRecord::Entity { node } if std::ptr::eq(*node, root)
+            );
+            is_exact_root.then(|| {
+                support
+                    .evidence_resolution()
+                    .source_handles()
+                    .iter()
+                    .copied()
+                    .find(|handle| handle.handle_id() == *handle_id)
+            })?
+        })?;
+        let catalog_handle = catalog.source_handle(handle_id)?;
+        if !std::ptr::eq(catalog_handle, root_handle) {
+            return None;
+        }
+        self.map
+            .core
+            .source_custody
+            .iter()
+            .find_map(|custody| match custody {
+                SourceCustody::Primary {
+                    handle,
+                    content_digest,
+                    byte_length,
+                    ..
+                } if handle.handle_id() == *handle_id
+                    && std::ptr::eq(*handle, root_handle)
+                    && *handle.content_digest() == *content_digest
+                    && handle.span().kind() == SourceSpanKind::ByteRange
+                    && handle
+                        .span()
+                        .byte_end()
+                        .is_some_and(|end| end <= *byte_length) =>
+                {
+                    Some(SelectedRootSourceCustody {
+                        handle,
+                        content_digest: *content_digest,
+                        byte_length: *byte_length,
+                    })
+                }
+                _ => None,
+            })
     }
     pub(crate) fn has_detail_vocabulary(&self) -> bool {
         matches!(self.map.core.navigation, MapNavigation::Detail(_))

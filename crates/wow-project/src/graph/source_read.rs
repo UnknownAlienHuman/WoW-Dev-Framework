@@ -13,15 +13,27 @@ use wow_graph::GraphEvidenceCatalog;
 
 use super::ProjectGraphFile;
 use crate::disk::{ProjectDiskFile, ProjectInputDirectory};
-use crate::{ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult};
+use crate::{
+    ProjectError, ProjectErrorCode, ProjectKind, ProjectPhase, ProjectResult, ProjectView,
+};
 
-/// Can only be obtained by complete retained project/graph evidence admission.
-/// It is not an inventory supplied by the source-read request.
+/// Obtained either by complete retained project/graph evidence admission or by
+/// sealing a finite native ProjectView/catalog handle selection. A native
+/// selection is not a complete project/source inventory.
 #[derive(Debug)]
 pub struct RetainedProjectSourceManifest {
     context_id: GenerationContextId,
     catalog_digest: Box<str>,
-    files: BTreeMap<String, ProjectGraphFile>,
+    files: BTreeMap<String, ProjectSourceManifestFile>,
+    /// When present, later reads must use this exact finite selection.
+    selected_handles: Option<BTreeMap<StableHandleId, SourceHandle>>,
+}
+
+#[derive(Debug)]
+struct ProjectSourceManifestFile {
+    path: String,
+    content_digest: ContentDigest<SourceContent>,
+    byte_length: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -134,8 +146,80 @@ pub struct ProjectSourceReadReport {
     filesystem_snapshot_acquired: bool,
 }
 impl ProjectSourceReadReport {
+    #[must_use]
+    pub const fn context_id(&self) -> GenerationContextId {
+        self.context_id
+    }
+    #[must_use]
+    pub fn evidence_catalog_digest(&self) -> &str {
+        &self.evidence_catalog_digest
+    }
+    #[must_use]
+    pub fn files(&self) -> &[ProjectSourceFileRead] {
+        &self.files
+    }
+    #[must_use]
+    pub const fn reserved_read_bytes(&self) -> u64 {
+        self.reserved_read_bytes
+    }
+    #[must_use]
+    pub const fn returned_excerpt_bytes(&self) -> u64 {
+        self.returned_excerpt_bytes
+    }
+    #[must_use]
+    pub const fn all_requested_files_verified(&self) -> bool {
+        self.all_requested_files_verified
+    }
+    #[must_use]
+    pub const fn all_requested_spans_verified(&self) -> bool {
+        self.all_requested_spans_verified
+    }
     pub fn truncations(&self) -> &BTreeSet<ProjectSourceReadTruncation> {
         &self.truncations
+    }
+}
+impl ProjectSourceFileRead {
+    #[must_use]
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+    #[must_use]
+    pub const fn expected_content_digest(&self) -> &ContentDigest<SourceContent> {
+        &self.expected_content_digest
+    }
+    #[must_use]
+    pub const fn expected_byte_length(&self) -> u64 {
+        self.expected_byte_length
+    }
+    #[must_use]
+    pub const fn status(&self) -> ProjectSourceFileStatus {
+        self.status
+    }
+    #[must_use]
+    pub fn excerpts(&self) -> &[ProjectSourceExcerpt] {
+        &self.excerpts
+    }
+}
+impl ProjectSourceExcerpt {
+    #[must_use]
+    pub const fn source_handle_id(&self) -> &StableHandleId {
+        &self.source_handle_id
+    }
+    #[must_use]
+    pub const fn span(&self) -> &SourceSpan {
+        &self.span
+    }
+    #[must_use]
+    pub const fn status(&self) -> ProjectSourceExcerptStatus {
+        self.status
+    }
+    #[must_use]
+    pub const fn span_verified(&self) -> bool {
+        self.span_verified
+    }
+    #[must_use]
+    pub fn text(&self) -> Option<&str> {
+        self.text.as_deref()
     }
 }
 
@@ -150,9 +234,124 @@ impl RetainedProjectSourceManifest {
             catalog_digest,
             files: files
                 .into_iter()
-                .map(|file| (file.path.clone(), file))
+                .map(|file| {
+                    (
+                        file.path.clone(),
+                        ProjectSourceManifestFile {
+                            path: file.path,
+                            content_digest: file.content_digest,
+                            byte_length: file.byte_length,
+                        },
+                    )
+                })
                 .collect(),
+            selected_handles: None,
         }
+    }
+
+    /// Seal a finite selection of physical Main-project or fixture byte ranges against the
+    /// held ProjectView and already-admitted graph catalog. No source file is
+    /// opened here; readback still uses the existing `read_sources` owner.
+    pub fn admit_project_handles(
+        project: &ProjectView,
+        catalog: &GraphEvidenceCatalog,
+        handles: &[&SourceHandle],
+        stop: &AtomicBool,
+    ) -> ProjectResult<Self> {
+        crate::disk::checkpoint(stop)?;
+        let context = catalog.context();
+        let project_generation = project.project_generation();
+        let reference_generation = project.configuration().reference_generation();
+        if !matches!(
+            project.configuration().project_kind(),
+            ProjectKind::Repository | ProjectKind::Fixture
+        ) || context.validate().is_err()
+            || context.project_generation() != Some(project_generation)
+            || context.reference_generation() != reference_generation
+            || handles.is_empty()
+            || handles.len() > 4096
+        {
+            return Err(invalid());
+        }
+
+        let (expected_origin, _) =
+            crate::registry::source_handle_identity(project.configuration(), project_generation)?;
+
+        let mut files: BTreeMap<String, ProjectSourceManifestFile> = BTreeMap::new();
+        let mut folded_paths = BTreeMap::new();
+        let mut selected_handles = BTreeMap::new();
+        for handle in handles {
+            crate::disk::checkpoint(stop)?;
+            if handle.span().kind() != SourceSpanKind::ByteRange
+                || handle.origin_kind() != expected_origin
+                || handle.origin_id() != project.configuration().source_origin_id().as_str()
+                || catalog.source_handle(&handle.handle_id()) != Some(*handle)
+                || selected_handles
+                    .insert(handle.handle_id(), (**handle).clone())
+                    .is_some()
+            {
+                return Err(invalid());
+            }
+
+            let path = handle.path().as_str();
+            path.parse::<wow_core::NormalizedSourcePath>()
+                .map_err(|_| invalid())?;
+            if folded_paths
+                .insert(path.to_lowercase(), path)
+                .is_some_and(|previous| previous != path)
+            {
+                return Err(failure(ProjectErrorCode::FileCaseCollision));
+            }
+
+            let project_file = project
+                .file_by_path(path)?
+                .filter(|file| {
+                    &file.content_digest() == handle.content_digest()
+                        && file.byte_length() <= 9_007_199_254_740_991
+                })
+                .ok_or_else(invalid)?;
+            let artifact = project
+                .source_artifact(path)?
+                .filter(|artifact| {
+                    artifact.content_digest() == *handle.content_digest()
+                        && artifact.byte_length() == project_file.byte_length()
+                })
+                .ok_or_else(invalid)?;
+            let expected =
+                project.source_handle(path, handle.span(), handle.entity_key().cloned())?;
+            if &expected != *handle
+                || handle
+                    .span()
+                    .byte_end()
+                    .is_none_or(|end| end > artifact.byte_length())
+            {
+                return Err(invalid());
+            }
+
+            match files.entry(path.to_owned()) {
+                std::collections::btree_map::Entry::Occupied(existing) => {
+                    if existing.get().content_digest != *handle.content_digest()
+                        || existing.get().byte_length != artifact.byte_length()
+                    {
+                        return Err(invalid());
+                    }
+                }
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(ProjectSourceManifestFile {
+                        path: path.to_owned(),
+                        content_digest: *handle.content_digest(),
+                        byte_length: artifact.byte_length(),
+                    });
+                }
+            }
+        }
+
+        Ok(Self {
+            context_id: context.context_id(),
+            catalog_digest: catalog.digest().into(),
+            files,
+            selected_handles: Some(selected_handles),
+        })
     }
 
     /// Read only the selected *admitted* source handles. Every whole-file digest
@@ -172,6 +371,10 @@ impl RetainedProjectSourceManifest {
         if self.context_id != catalog.context().context_id()
             || self.catalog_digest.as_ref() != catalog.digest()
             || handles.len() > 65_536
+            || self
+                .selected_handles
+                .as_ref()
+                .is_some_and(|selected| selected.len() != handles.len())
         {
             return Err(failure(ProjectErrorCode::SourceRegistryInvalid));
         }
@@ -189,6 +392,13 @@ impl RetainedProjectSourceManifest {
                 .get(handle.path().as_str())
                 .ok_or_else(|| failure(ProjectErrorCode::UndeclaredFile))?;
             let path = handle.path().as_str();
+            if self
+                .selected_handles
+                .as_ref()
+                .is_some_and(|selected| selected.get(&handle.handle_id()) != Some(*handle))
+            {
+                return Err(failure(ProjectErrorCode::SourceHandleInvalid));
+            }
             if paths
                 .insert(path.to_lowercase(), path)
                 .is_some_and(|previous| previous != path)
@@ -321,7 +531,7 @@ enum ReadFailure {
 }
 fn read_file(
     directory: &ProjectInputDirectory,
-    file: &ProjectGraphFile,
+    file: &ProjectSourceManifestFile,
     limits: ProjectSourceReadLimits,
     output: &mut ProjectSourceReadReport,
     stop: &AtomicBool,
@@ -453,4 +663,7 @@ fn encoded_len(value: &impl Serialize, limit: usize) -> ProjectResult<usize> {
 }
 fn failure(code: ProjectErrorCode) -> ProjectError {
     ProjectError::new(code, ProjectPhase::View, "retained source read failed")
+}
+fn invalid() -> ProjectError {
+    failure(ProjectErrorCode::SourceRegistryInvalid)
 }

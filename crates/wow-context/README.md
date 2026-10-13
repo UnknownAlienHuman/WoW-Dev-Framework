@@ -14,6 +14,8 @@ configured Reference binding, original support and load/source custody:
   syntax/signature metadata, [original XML handler L1 metadata](e3/NATIVE_PRIMARY_INSPECT.md#native-xml-handler-l1-metadata)
   and ordinary TOC state-root L0 inspect/build.
 - [Sealed semantic packs and canonical JSON/metadata-safe Markdown](e3/NATIVE_PRIMARY_PACK.md).
+- [One explicitly permitted Primary L1 source excerpt through Build](../../apps/wow/CONTEXT_BUILD.md#exact-local-source-excerpt),
+  preserving the original physical range and typed untrusted data boundary.
 - [One explicit native frontier round](e3/NATIVE_PRIMARY_EXPANSION.md) and its
   [build/pack/JSON/Markdown consumer](e3/NATIVE_PRIMARY_FRONTIER_PACK.md).
 - [Explicit ordered native progressive batches and inspect/pack/render selection](e3/NATIVE_PRIMARY_PROGRESSIVE.md).
@@ -99,7 +101,11 @@ functional/build-verified: selected maps, L0/L1, native syntax/signature metadat
   and progressive batches
 bounded functional lifecycle/CLI: selected state-detail L1 inspect/build/render,
   candidate-qualified native platform map/inspect
+bounded functional source/CLI qualification: one explicit Primary EntityV1 L1 source excerpt from the
+  selected entity root's exact admitted physical ByteRange; one file, with the
+  continuing pack budget charged before the Project read and the directory closed
+  before excerpt adoption
 remaining: broader facets, automatic expansion/continuation, broader Reference/type enrichment,
-  broader platform facets/combined views, excerpts/privacy/exact tokens/continuation,
-  full fixtures, Tier A/X and the specified E6-B mapped-root handoff
+  broader platform facets/combined views, broader excerpt selection/privacy/exact-token/
+  continuation coverage, full fixtures, Tier A/X and the specified E6-B mapped-root handoff
 ```

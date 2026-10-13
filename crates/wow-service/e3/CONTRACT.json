@@ -11,6 +11,17 @@
     "tracker": "https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122",
     "acceptance": "pending"
   },
+  "selected_source_excerpt": {
+    "operation": "context_build",
+    "public_entry": "execute_context_build_with_source",
+    "source_owner": "wow-project/RetainedProjectSourceManifest::admit_project_handles/read_sources",
+    "context_owner": "wow-context/prepare_primary_source_excerpt/adopt_primary_source_excerpt",
+    "scope": "Primary default EntityV1 L1; one exact root member physical ByteRange handle and one verified Main file",
+    "capability": "explicit source directory is separate from request identity and is dropped before typed excerpt adoption; retained Project/store owners use checked closure",
+    "policy": "local-project-source declares LocalProjectSource materialization and local-use permission; no external-transmission or license attestation",
+    "compatibility": "omitted source selection preserves the metadata-only wrapper, requests, profiles and bytes",
+    "acceptance": "pending"
+  },
   "work_package": "E3-C",
   "crate": "wow-service",
   "context_path_direct_dependencies": [

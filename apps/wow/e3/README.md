@@ -8,9 +8,9 @@ explicit combined Build request/host route and optional pack JSON/Markdown recor
 Each command invokes one service operation; selected Build/combined output is
 envelope JSON, while native platform Map/Inspect also has its bounded text summary.
 Status/continue/validate/standalone render, general artifact output and broader
-facets/links/excerpts/tokens/continuation remain specified; full E3-C acceptance
-remains open in [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
-The command list below is the complete target surface.
+facets/links/excerpt selection/tokens/continuation remain specified; full E3-C
+acceptance remains open in [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
+The command list below is the complete target surface. One narrow exact source-excerpt Build route is functionally qualified on the selected native input and Windows CLI; broader excerpt, privacy, token and continuation coverage remains pending.
 
 **Contract ID:** `apps/wow/e3-c/context-cli`
 
@@ -81,6 +81,32 @@ Inspect/build roots use a closed token:
 ```
 
 The app validates grammar/size and passes the decoded exact kind/ID. It does not inspect meaning, search by name, resolve paths, or rank candidates.
+
+### Source excerpt Build (bounded functional qualification)
+
+The single supported recipe is an explicit Primary `EntityV1` L1 Build rooted at
+one exact `graph-entity@...` entity using the existing `--root` selector and
+the default `EntityV1` L1 profile. Supply the exact source handle, explicit Main
+source root, and local policy together:
+
+```text
+--context-profile-id wow-context/primary-source-excerpt-pack/1
+--root graph-entity@<base64url-no-pad(canonical entity ID)>
+--level l1
+--source-excerpt-handle <exact-handle-id>
+--source-root <Main-root>
+--source-policy local-project-source
+```
+
+The JSON and Markdown renderer profile IDs are distinct optional selections:
+`wow-context/primary-source-excerpt-json/1` and
+`wow-context/primary-source-excerpt-markdown/1`. Omitting source-excerpt selection
+preserves the existing default pack behavior; renderer selection remains optional.
+This recipe does not accept platform or combined mode, frontiers,
+progressive rounds, `Both`, state/reference L1 profiles, adjacent ranges, or
+source tokenization. `local-project-source` is an operator `LocalProjectSource`
+materialization label plus local-use permission; it grants no external
+transmission/license attestation and performs no secret detection.
 
 ## Artifact input
 

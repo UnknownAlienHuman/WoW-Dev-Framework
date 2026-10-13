@@ -25,3 +25,17 @@ fixture does not qualify Gethe, Ketho, a WoW client, complete E3 or launch.
 Primary recipe admission, richer context selection and coherent Tier A/X remain
 open in #122. The separately focused renderer regression covers cancellation
 after serde_json's opening quote without a panic or catch_unwind.
+
+## Additional source-excerpt route (bounded functional qualification)
+
+The selected service route is limited to one explicit Primary `EntityV1` L1
+entity root and one exact admitted source handle. It precharges the continuing
+pack work and retained-byte budget before opening the explicit local project
+root, verifies one file against the manifest digest/length, and closes the source
+directory before adopting or delivering the excerpt. A file over 16 MiB or an
+excerpt over 64 KiB, identity/digest mismatch, unsafe or invalid source,
+cancellation, or work/output-cap exhaustion refuses conservatively. The
+`local-project-source` policy records the operator's `LocalProjectSource`
+materialization label and local-use permission; it is not a license or external
+transmission attestation and does not detect secrets. Broader privacy, source
+selection, exact-token, continuation, fixture, and E3 acceptance remain pending.

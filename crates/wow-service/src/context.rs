@@ -17,7 +17,9 @@ pub use build::{
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID, PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
-    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID, execute_context_build,
+    PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID, PRIMARY_SOURCE_CONTEXT_JSON_RENDERER_PROFILE_ID,
+    PRIMARY_SOURCE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID, PRIMARY_SOURCE_CONTEXT_PACK_PROFILE_ID,
+    execute_context_build, execute_context_build_with_source,
 };
 pub use combined::{
     COMBINED_CONTEXT_JSON_RENDERER_PROFILE_ID, COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
@@ -40,6 +42,8 @@ pub use platform::{
 };
 pub use wow_context::PrimaryL0Profile as ContextL0Profile;
 pub use wow_context::PrimaryL1Profile as ContextL1Profile;
+pub use wow_context::PrimarySourceExcerptPolicy as ContextSourceExcerptPolicy;
+pub use wow_context::PrimarySourceExcerptSelection as ContextSourceExcerptSelection;
 pub use wow_context::RenderSelection as ContextRenderSelection;
 pub use wow_context::SkeletonLevel as ContextInspectLevel;
 pub const PRIMARY_L0_PROFILE_ID: &str = wow_context::PRIMARY_L0_PROFILE;

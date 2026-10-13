@@ -10,6 +10,18 @@
     "tracker": "https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122",
     "acceptance": "pending"
   },
+  "selected_source_excerpt": {
+    "command": "context build",
+    "service_entry": "execute_context_build_with_source",
+    "required_group": ["--source-excerpt-handle", "--source-root", "--source-policy local-project-source"],
+    "context_profile_id": "wow-context/primary-source-excerpt-pack/1",
+    "optional_renderer_profile_ids": ["wow-context/primary-source-excerpt-json/1", "wow-context/primary-source-excerpt-markdown/1"],
+    "selection": "omitted platform, l1, default EntityV1 profile and exact graph-entity root; no expansion",
+    "source_root": "bounded explicit local capability passed unchanged to service, excluded from semantic request and output",
+    "output": "envelope-json",
+    "one_service_call": true,
+    "acceptance": "pending"
+  },
   "work_package": "E3-C",
   "application": "wow",
   "framework_dependencies": [

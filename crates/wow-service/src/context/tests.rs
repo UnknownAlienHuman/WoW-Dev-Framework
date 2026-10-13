@@ -1,6 +1,7 @@
 //! One small synthetic retained native service lifecycle, not live/Ketho evidence.
 mod build;
 mod inspect;
+mod source_excerpt;
 
 use super::*;
 use crate::ServiceErrorCode;

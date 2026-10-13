@@ -28,9 +28,23 @@
       "deeper/progressive expansion",
       "Reference enrichment",
       "platform and combined maps",
-      "source excerpts, privacy, exact tokens and continuation",
+      "broader source-excerpt selection, privacy, exact tokens and continuation",
       "complete fixtures, Tier A and required Tier X"
     ]
+  },
+  "selected_source_excerpt": {
+    "status": "functional_selected_native_and_cli",
+    "profile_ids": [
+      "wow-context/primary-source-excerpt-pack/1",
+      "wow-context/primary-source-excerpt-json/1",
+      "wow-context/primary-source-excerpt-markdown/1"
+    ],
+    "scope": "one explicit Primary EntityV1 L1 source excerpt selected by exact root entity and source-handle ID; one admitted physical ByteRange and one verified file; no expansion or other L1 recipe",
+    "limits": "source file at most 16 MiB; excerpt at most 64 KiB; continued pack work/retention is charged before the Project read; close the source directory before adopting the excerpt",
+    "policy_ceiling": "local-project-source is an operator LocalProjectSource materialization label plus local-use permission; it is not external-transmission or license attestation and does not detect secrets",
+    "refusals": "identity or digest mismatch, unsafe or invalid source, cancellation, and work/output budget exhaustion fail conservatively",
+    "rendering": "optional distinct JSON and Markdown renderer IDs; Markdown uses SOURCE_METADATA and generated SOURCE_DATA_BEGIN/END around JSON-quoted numbered SRC data lines",
+    "acceptance": "pending"
   },
   "work_package": "E3-B",
   "crate": "wow-context",

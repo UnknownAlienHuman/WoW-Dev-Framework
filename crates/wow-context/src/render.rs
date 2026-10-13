@@ -8,6 +8,7 @@ use sha2::{Digest as _, Sha256};
 use wow_core::{CanonicalResult, ContentDigest};
 
 use crate::budget::{Budget, canonical, checkpoint, exhausted};
+use crate::pack::source_excerpt::renderer_profiles as source_renderer_profiles;
 use crate::pack::{
     COMBINED_RENDER_SCHEMA, CombinedContextSemanticPack, CombinedPackCore, ContextSemanticPack,
     JSON_PROFILE, MARKDOWN_PROFILE, PackCore, RendererProfile, combined_renderer_profiles,
@@ -118,7 +119,9 @@ impl Format {
     ) -> ContextResult<&'static RendererProfile> {
         let (json, markdown) = match core {
             NativePackCore::Primary(core) => {
-                if core.expansion.is_some() {
+                if core.source_excerpt.is_some() {
+                    source_renderer_profiles()
+                } else if core.expansion.is_some() {
                     expansion_renderer_profiles(core)?
                 } else {
                     (&JSON_PROFILE, &MARKDOWN_PROFILE)
@@ -140,6 +143,9 @@ struct Input<'r, 'm, 'p, 'f> {
 impl Input<'_, '_, '_, '_> {
     fn rendered_schema(&self) -> &'static str {
         match self.core {
+            NativePackCore::Primary(core) if core.source_excerpt.is_some() => {
+                crate::pack::SOURCE_RENDER_SCHEMA
+            }
             NativePackCore::Primary(_) => SCHEMA,
             NativePackCore::Combined(_) => COMBINED_RENDER_SCHEMA,
         }
@@ -160,12 +166,14 @@ struct TraceRef<'p> {
 enum Payload<'p> {
     CanonicalPack(&'p str),
     QuotedJson(Box<str>),
+    SourceLine(&'p str),
 }
 impl Payload<'_> {
     fn text(&self) -> &str {
         match self {
             Self::CanonicalPack(text) => text,
             Self::QuotedJson(text) => text,
+            Self::SourceLine(text) => text,
         }
     }
 }
@@ -174,6 +182,7 @@ struct Record<'p> {
     label: &'static str,
     payload: Payload<'p>,
     trace: TraceRef<'p>,
+    source_line: bool,
 }
 struct Plan<'p> {
     records: Vec<Record<'p>>,
@@ -266,6 +275,7 @@ impl<'p> Planner<'_, '_, 'p> {
     ) -> ContextResult<()> {
         // One conservative unit per input UTF-8 byte covers each character visit.
         self.budget.work(payload.text().len(), self.stop)?;
+        let source_line = matches!(&payload, Payload::SourceLine(_));
         let mut record = Record {
             label,
             payload,
@@ -277,6 +287,7 @@ impl<'p> Planner<'_, '_, 'p> {
                 byte_start: self.measure.bytes,
                 byte_end: self.measure.bytes,
             },
+            source_line,
         };
         let emitted = emit_record(&record, &mut self.measure);
         checkpoint(self.stop)?;
@@ -286,6 +297,52 @@ impl<'p> Planner<'_, '_, 'p> {
         emitted.map_err(|_| encoding())?;
         record.trace.byte_end = self.measure.bytes;
         // The owned range/list entry is retained only after its borrowed charge.
+        self.budget.retain(&record.trace, self.stop)?;
+        self.records.push(record);
+        Ok(())
+    }
+
+    fn add_source_line(
+        &mut self,
+        record_id: &'p str,
+        ordinal: usize,
+        text: &'p str,
+    ) -> ContextResult<()> {
+        #[derive(Serialize)]
+        struct SourceLineRef<'a> {
+            ordinal: usize,
+            text: &'a str,
+        }
+        self.budget
+            .work(text.len().checked_add(32).ok_or_else(exhausted)?, self.stop)?;
+        let line_number = ordinal.checked_add(1).ok_or_else(exhausted)?;
+        self.budget.retain(
+            &SourceLineRef {
+                ordinal: line_number,
+                text,
+            },
+            self.stop,
+        )?;
+        let mut record = Record {
+            label: "",
+            payload: Payload::SourceLine(text),
+            trace: TraceRef {
+                record_id,
+                template_id: "source_data_line",
+                semantic_fields: &["core.source_excerpt.text"],
+                item_index: Some(line_number),
+                byte_start: self.measure.bytes,
+                byte_end: self.measure.bytes,
+            },
+            source_line: true,
+        };
+        let emitted = emit_record(&record, &mut self.measure);
+        checkpoint(self.stop)?;
+        if self.measure.exceeded {
+            return Err(exhausted());
+        }
+        emitted.map_err(|_| encoding())?;
+        record.trace.byte_end = self.measure.bytes;
         self.budget.retain(&record.trace, self.stop)?;
         self.records.push(record);
         Ok(())
@@ -351,7 +408,8 @@ fn prepare<'p>(
                     &Header {
                         schema: core.schema,
                         semantic_pack_id: input.id,
-                        item_count: core.items.len(),
+                        item_count: core.items.len()
+                            + if core.source_excerpt.is_some() { 1 } else { 0 },
                     },
                 )?;
                 planner.add(
@@ -418,6 +476,44 @@ fn prepare<'p>(
                         &["core.items"],
                         Some(index),
                         item,
+                    )?;
+                }
+                if let Some(source) = &core.source_excerpt {
+                    #[derive(Serialize)]
+                    struct SourceMetadata<'a> {
+                        source_excerpt_id: &'a str,
+                        #[serde(flatten)]
+                        metadata: &'a crate::pack::source_excerpt::SourceExcerptMetadata,
+                    }
+                    planner.add(
+                        source.source_excerpt_id.as_ref(),
+                        "source_excerpt_metadata",
+                        "SOURCE_METADATA",
+                        &["core.source_excerpt"],
+                        None,
+                        &SourceMetadata {
+                            source_excerpt_id: &source.source_excerpt_id,
+                            metadata: &source.core.metadata,
+                        },
+                    )?;
+                    planner.add_payload(
+                        source.source_excerpt_id.as_ref(),
+                        "source_data_begin",
+                        "",
+                        &["core.source_excerpt.untrusted_source_data"],
+                        None,
+                        Payload::CanonicalPack("SOURCE_DATA_BEGIN\n"),
+                    )?;
+                    for (index, line) in source.core.text.split('\n').enumerate() {
+                        planner.add_source_line(source.source_excerpt_id.as_ref(), index, line)?;
+                    }
+                    planner.add_payload(
+                        source.source_excerpt_id.as_ref(),
+                        "source_data_end",
+                        "",
+                        &["generated_boundary"],
+                        None,
+                        Payload::CanonicalPack("SOURCE_DATA_END\n"),
                     )?;
                 }
                 planner.add(
@@ -541,6 +637,36 @@ fn prepare<'p>(
 /// Unicode-escaped, including every Markdown/HTML delimiter. Bidi formatting,
 /// directional marks, Unicode line separators and controls cannot change lines.
 fn emit_record(record: &Record<'_>, output: &mut impl fmt::Write) -> fmt::Result {
+    if record.source_line {
+        write!(
+            output,
+            "SRC {:06} \"",
+            record.trace.item_index.unwrap_or_default()
+        )?;
+        for ch in record.payload.text().chars() {
+            match ch {
+                '"' => output.write_str("\\\"")?,
+                '\\' => output.write_str("\\\\")?,
+                '\n' => output.write_str("\\n")?,
+                '\r' => output.write_str("\\r")?,
+                '\t' => output.write_str("\\t")?,
+                ch if ch.is_ascii_punctuation()
+                    || ch.is_control()
+                    || matches!(
+                        ch,
+                        '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{2028}' | '\u{2029}'
+                    )
+                    || ('\u{202a}'..='\u{202e}').contains(&ch)
+                    || ('\u{2066}'..='\u{2069}').contains(&ch) =>
+                {
+                    write!(output, "\\u{:04x}", u32::from(ch))?
+                }
+                ch => output.write_char(ch)?,
+            }
+        }
+        output.write_str("\"\n")?;
+        return Ok(());
+    }
     let quoted = matches!(record.payload, Payload::QuotedJson(_));
     if quoted {
         output.write_str(record.label)?;
@@ -744,6 +870,9 @@ fn render_input(
 ) -> ContextResult<RenderedContextArtifact> {
     let id = input.id;
     let schema = input.rendered_schema();
+    if let NativePackCore::Primary(core) = input.core {
+        crate::pack::source_excerpt::validate_render_ready(core, input.canonical_bytes)?;
+    }
     let profile = format.profile(input.core)?;
     let plan = prepare(&input, format, budget, limit, stop)?;
     let core = core_ref(schema, id, &plan, profile, stop);
@@ -986,10 +1115,12 @@ fn validate_rendered_input(
     let format = match artifact.core.profile.profile_id {
         crate::pack::COMBINED_CONTEXT_JSON_RENDERER_PROFILE
         | crate::pack::PRIMARY_CONTEXT_JSON_RENDERER_PROFILE
+        | crate::pack::PRIMARY_SOURCE_CONTEXT_JSON_RENDERER_PROFILE
         | crate::pack::PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE
         | crate::pack::PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE => Format::Json,
         crate::pack::COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE
         | crate::pack::PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE
+        | crate::pack::PRIMARY_SOURCE_CONTEXT_MARKDOWN_RENDERER_PROFILE
         | crate::pack::PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE
         | crate::pack::PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE => Format::Markdown,
         _ => return Err(encoding()),
@@ -1121,6 +1252,7 @@ mod tests {
                 byte_start: 0,
                 byte_end: 0,
             },
+            source_line: false,
         }];
         let content = Content { records: &records };
         let result = serde_json::to_writer(CancelAfterOpeningQuote(&stop), &content);
