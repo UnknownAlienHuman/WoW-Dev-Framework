@@ -129,11 +129,24 @@ wow context status --platform native --native-host-config <host.json>
   --platform-status-request-input <request.json> [--output envelope-json]
 ```
 
-This alternative transports one strict exact candidate metadata request to
+This native-only route transports one strict exact candidate metadata request to
 `execute_context_platform_status`. It accepts no Primary selector or root flags.
 The four details are carried in the request file. Checked Partial envelopes keep
-root coverage and generation/evaluation NotEvaluated. Composed status and full
-E3-C acceptance remain pending.
+root coverage and generation/evaluation NotEvaluated. Full E3-C acceptance remains pending.
+
+Composed status uses a separate explicit route:
+
+```text
+wow context status --platform combined --native-host-config <combined-host.json>
+  --combined-status-request-input <request.json> [--output envelope-json]
+```
+
+It decodes `wow-service/context-combined-status-request/1` and invokes exactly
+one `execute_context_combined_status` call. The request names exact Primary and
+platform store generations/publication sets and an exact platform candidate;
+the host supplies the shared Reference view. The result remains Partial and
+root coverage/generation/evaluation remain NotEvaluated. Both owners remain held
+through metadata construction, with checked platform-then-Primary closure.
 
 See [context status](../CONTEXT_STATUS.md) for the host input, result
 fields, refusal behavior, and scope limits.

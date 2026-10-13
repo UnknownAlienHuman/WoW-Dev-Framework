@@ -28,8 +28,10 @@ pub use combined::{
     COMBINED_CONTEXT_PACK_PROFILE_ID, COMBINED_NATIVE_MAP_PROFILE_ID,
     CONTEXT_COMBINED_HOST_INPUT_MAX_BYTES, CONTEXT_COMBINED_HOST_SCHEMA,
     CONTEXT_COMBINED_REQUEST_MAX_BYTES, CONTEXT_COMBINED_REQUEST_SCHEMA,
-    CONTEXT_COMBINED_RESULT_SCHEMA, ContextCombinedHostInput, ContextCombinedOperation,
-    ContextCombinedRequest, execute_context_combined,
+    CONTEXT_COMBINED_RESULT_SCHEMA, CONTEXT_COMBINED_STATUS_REQUEST_MAX_BYTES,
+    CONTEXT_COMBINED_STATUS_REQUEST_SCHEMA, ContextCombinedHostInput, ContextCombinedOperation,
+    ContextCombinedRequest, ContextCombinedStatusRequest, execute_context_combined,
+    execute_context_combined_status,
 };
 pub use host::{CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_HOST_SCHEMA, ContextMapHostInput};
 pub use inspect::{ContextInspectRequest, execute_context_inspect};

@@ -141,7 +141,23 @@ coverage, counts and selected detail. No root is acquired. `root_coverage`,
 `context_generation`, `evaluation`, `last_known_good` and `failed_targets` are
 `NotEvaluated`; `optional_platform_status=selected_metadata_only`. Success is
 Partial and checked closed. Primary and combined availability requires Primary
-selection. Composed status remains pending.
+selection.
+
+Composed status uses
+`wow-service/context-combined-status-request/1` and
+`wow-service/context-combined-status-result/1`. Its payload keeps Primary and
+platform candidate identities, coverage, counts, and optional generations in
+separate objects, with the exact shared Reference profile/generation/view and
+coverage/conflict count alongside them. It preserves `Partial`, checked
+resource closure, `root_coverage=NotEvaluated`,
+`context_generation=NotEvaluated`, `evaluation=NotEvaluated`,
+`last_known_good=NotEvaluated`, `failed_targets=NotEvaluated`,
+`continuation_retention=not_implemented`, and
+`optional_platform_status=selected_metadata_only`. No root is acquired.
+
+Platform metadata also carries `native_project_store_id`. Both original
+Project/Graph identity tuples and shared Reference schema are bound into the
+resolved request digest. This metadata route does not complete E3-C acceptance.
 
 ### `ContextMapPayload`
 

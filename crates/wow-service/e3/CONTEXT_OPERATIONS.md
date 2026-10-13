@@ -95,7 +95,27 @@ skeleton view. Original coverage remains distinct; Primary/combined operations
 require Primary selection. Its optional Reference guard is a complete exact
 tuple. The result remains Partial with root coverage and generation/evaluation
 NotEvaluated and checked closure. See [the CLI route](../../../apps/wow/CONTEXT_STATUS.md).
-Composed status and full E3-C acceptance remain pending.
+Full E3-C acceptance remains pending.
+
+The `context_combined_status` operation uses request schema
+`wow-service/context-combined-status-request/1` and result schema
+`wow-service/context-combined-status-result/1`. Its exact request selects a
+Primary registration/store generation/publication set and a platform
+registration/store generation/publication set/candidate ID/digest/profile,
+plus one closed detail value. It has no Current selector or root; the explicit
+combined host supplies the shared Reference view and limits. The
+`execute_context_combined_status` operation reacquires both exact retained
+selections, checks candidate and shared Reference compatibility, and serializes
+separate Primary/platform metadata with the shared Reference identity. It does
+not invoke a root, map, skeleton, pack, excerpt, or renderer. Success is Partial
+only after checked platform-then-Primary closure; root coverage, context
+generation, evaluation, last-known-good, and failed targets remain
+`NotEvaluated`.
+
+Both configured Reference copies validate under one cumulative work budget;
+matching claimed digest fields alone are insufficient. The metadata preserves
+the platform namespace ID and both original Project/Graph identity tuples,
+without creating a context-universe binding or invoking context engines.
 
 ## `context_map`
 

@@ -25,7 +25,6 @@
     "nonclaims": [
       "context_generation_and_evaluation_NotEvaluated",
       "no_map_skeleton_pack_source_or_rendered_artifact",
-      "composed_status_not_implemented",
       "full_e3_acceptance_pending"
     ],
     "acceptance": "pending"
@@ -40,6 +39,18 @@
     "output": "envelope-json",
     "one_service_call": true,
     "route": "apps/wow/CONTEXT_STATUS.md",
+    "acceptance": "pending"
+  },
+  "composed_status_slice": {
+    "command": "context status --platform combined",
+    "service_entry": "execute_context_combined_status",
+    "request_schema": "wow-service/context-combined-status-request/1",
+    "result_schema": "wow-service/context-combined-status-result/1",
+    "request_input_flag": "--combined-status-request-input",
+    "scope": "exact_primary_and_candidate_retained_metadata_only",
+    "output": "envelope-json",
+    "one_service_call": true,
+    "resource_closure": "checked_platform_then_primary_before_success",
     "acceptance": "pending"
   },
   "selected_source_excerpt": {

@@ -25,7 +25,6 @@
     "resource_closure": "checked_before_success",
     "not_evaluated": ["context_generation", "evaluation", "last_known_good", "failed_targets"],
     "deferred": [
-      "composed_status",
       "context_continue",
       "context_validate",
       "context_render",
@@ -51,6 +50,20 @@
     "success_status": "partial",
     "resource_closure": "checked_before_success",
     "nonclaims": ["root_coverage", "context_generation", "evaluation", "runtime", "full_e3_acceptance"],
+    "acceptance": "pending"
+  },
+  "composed_status_slice": {
+    "operation": "context_combined_status",
+    "entry": "execute_context_combined_status",
+    "request_schema": "wow-service/context-combined-status-request/1",
+    "result_schema": "wow-service/context-combined-status-result/1",
+    "scope": "exact_primary_and_candidate_retained_metadata_only",
+    "selectors": ["primary_registration", "primary_store_generation", "primary_publication_set", "platform_registration", "platform_store_generation", "platform_publication_set", "candidate_id", "candidate_digest", "profile_id"],
+    "details": ["summary", "capabilities", "profiles", "generations"],
+    "success_status": "partial",
+    "resource_closure": "checked_platform_then_primary_before_success",
+    "nonclaims": ["root_coverage", "context_generation", "evaluation", "runtime", "full_e3_acceptance"],
+    "reference_validation": "both_configured_copies_under_one_cumulative_work_budget",
     "acceptance": "pending"
   },
   "selected_source_excerpt": {

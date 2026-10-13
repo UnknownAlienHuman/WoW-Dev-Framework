@@ -69,4 +69,39 @@ Root coverage, generation, evaluation, last-known-good and failed targets remain
 `NotEvaluated`; continuation retention remains `not_implemented`. Delivery waits
 for checked read/store closure. Success remains `partial`.
 
-Composed status and full E3-C acceptance remain pending.
+Full E3-C acceptance remains pending.
+
+## Composed Primary and platform candidate metadata
+
+```text
+wow context status --platform combined --native-host-config <combined-host.json>
+  --combined-status-request-input <request.json> [--output envelope-json]
+```
+
+The strict request schema is
+`wow-service/context-combined-status-request/1`. It selects an exact Primary
+`project_store_id`, `store_generation_id`, and `publication_set_id`, plus an
+exact platform `project_store_id`, `store_generation_id`, `publication_set_id`,
+`candidate_id`, `candidate_digest`, and
+`profile_id=wow-context/platform-native-one-hop/1`. `detail` is one of
+`summary`, `capabilities`, `profiles`, or `generations`. The request has no
+Current selector or root. The explicit combined host supplies the shared exact
+Reference view and limits.
+
+The single Service operation is
+`execute_context_combined_status`; it reacquires both exact retained selections,
+checks candidate and shared Reference compatibility, and returns separate
+`primary` and `platform` metadata plus `shared_reference`. Success remains
+`partial` after checked closure, with root coverage, context generation,
+evaluation, last-known-good, and failed targets `NotEvaluated`; continuation
+retention remains `not_implemented`. It produces no root result or context
+artifact.
+
+Service holds Primary while it acquires the exact platform candidate, then
+checks and closes platform before Primary. Both configured Reference copies
+must validate against one cumulative work budget; matching claimed digest fields
+alone do not prove compatibility. The platform metadata includes the original
+`native_project_store_id`; both owners expose their original Project/Graph
+identities without constructing a context universe or artifact. Resolved identity
+binds those owners, namespace, shared Reference schema/profile/generation/view
+and limits. Full E3-C acceptance remains pending.

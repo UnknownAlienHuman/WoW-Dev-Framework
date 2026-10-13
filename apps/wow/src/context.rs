@@ -2,6 +2,7 @@
 //! The native host document is a separate transport input, never an E3 semantic selector.
 mod build;
 mod combined;
+mod combined_status;
 mod inspect;
 mod platform;
 mod platform_status;
@@ -26,6 +27,8 @@ use wow_service::{
 };
 
 const HELP: &str = concat!(
+    "wow context status --platform combined --native-host-config <combined-host.json> ",
+    "--combined-status-request-input <request.json> [--output envelope-json]\n",
     "wow context status --platform native --native-host-config <host.json> ",
     "--platform-status-request-input <request.json> [--output envelope-json]\n",
     "wow context status --native-host-config <host.json> --project-store <registration-key> ",
@@ -141,6 +144,7 @@ enum Request {
     Inspect(ContextInspectRequest),
     Build(ContextBuildRequest),
     Status(ContextStatusRequest),
+    CombinedStatus(combined_status::Request),
     PlatformStatus(platform_status::Request),
     Platform(platform::Request),
     Combined(combined::Request),
@@ -184,6 +188,9 @@ pub fn run(values: Vec<OsString>) -> u8 {
     if let Request::PlatformStatus(request) = &arguments.request {
         return platform_status::run(&arguments.host_config, request, &stop);
     }
+    if let Request::CombinedStatus(request) = &arguments.request {
+        return combined_status::run(&arguments.host_config, request, &stop);
+    }
     if let Request::Platform(request) = &arguments.request {
         return platform::run(&arguments.host_config, request, &stop);
     }
@@ -219,6 +226,10 @@ pub fn run(values: Vec<OsString>) -> u8 {
             &stop,
         ),
         Request::Status(request) => execute_context_status(&host, request, &stop),
+        Request::CombinedStatus(_) => {
+            crate::diagnostic("combined status dispatch invariant failed");
+            return 4;
+        }
         Request::PlatformStatus(_) => {
             crate::diagnostic("native platform status dispatch invariant failed");
             return 4;
@@ -290,6 +301,9 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         .ok_or("context argument size overflow")?;
     if values.len() > MAX_ARGUMENTS || bytes > MAX_ARGUMENT_BYTES {
         return Err("context argument limit exceeded");
+    }
+    if let Some(arguments) = combined_status::parse(&values)? {
+        return Ok(arguments);
     }
     if let Some(arguments) = platform_status::parse(&values)? {
         return Ok(arguments);
@@ -695,7 +709,10 @@ mod tests {
             Request::Inspect(request) => serde_json::to_value(request),
             Request::Build(request) => serde_json::to_value(request),
             Request::Status(request) => serde_json::to_value(request),
-            Request::PlatformStatus(_) | Request::Platform(_) | Request::Combined(_) => {
+            Request::CombinedStatus(_)
+            | Request::PlatformStatus(_)
+            | Request::Platform(_)
+            | Request::Combined(_) => {
                 return Err("native request is explicit file transport");
             }
         }
@@ -787,6 +804,82 @@ mod tests {
                 assert!(parse(wrong_transport).is_err());
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn combined_status_grammar_is_explicit_and_closed() -> Result<(), &'static str> {
+        let values = [
+            "context",
+            "status",
+            "--platform",
+            "combined",
+            "--native-host-config",
+            "combined-host.json",
+            "--combined-status-request-input",
+            "status-request.json",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect::<Vec<_>>();
+        let parsed = parse(values.clone())?;
+        assert_eq!(parsed.host_config, PathBuf::from("combined-host.json"));
+        assert!(matches!(parsed.request, Request::CombinedStatus(_)));
+
+        let mut explicit_output = values.clone();
+        push(&mut explicit_output, "--output", "envelope-json");
+        assert!(matches!(
+            parse(explicit_output)?.request,
+            Request::CombinedStatus(_)
+        ));
+
+        for (flag, value) in [
+            ("--native-host-config", "another-host.json"),
+            ("--combined-status-request-input", "another-request.json"),
+            ("--platform", "combined"),
+            ("--output", "envelope-json"),
+        ] {
+            let mut duplicate = values.clone();
+            if flag == "--output" {
+                push(&mut duplicate, flag, value);
+            }
+            push(&mut duplicate, flag, value);
+            assert!(parse(duplicate).is_err(), "duplicate {flag}");
+        }
+        for (flag, value) in [
+            ("--platform", "native"),
+            ("--platform-status-request-input", "native-request.json"),
+            ("--project-store", "primary-store"),
+            ("--publication", "current"),
+            ("--detail", "summary"),
+            ("--root", GRAPH_ROOT),
+            ("--output", "text"),
+            ("--unknown", "value"),
+        ] {
+            let mut mixed = values.clone();
+            push(&mut mixed, flag, value);
+            assert!(parse(mixed).is_err(), "mixed or unsupported {flag}");
+        }
+
+        let mut request_without_platform = values;
+        let platform_index = request_without_platform
+            .iter()
+            .position(|value| value == "--platform")
+            .ok_or("missing combined platform selector")?;
+        request_without_platform.drain(platform_index..platform_index + 2);
+        assert!(matches!(
+            parse(request_without_platform),
+            Err("combined status request requires --platform combined")
+        ));
+
+        // A flag-like Primary path remains a transport value.
+        let mut primary = status_arguments();
+        replace(
+            &mut primary,
+            "--native-host-config",
+            "--combined-status-request-input",
+        )?;
+        assert!(matches!(parse(primary)?.request, Request::Status(_)));
         Ok(())
     }
 

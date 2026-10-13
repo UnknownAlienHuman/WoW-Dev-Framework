@@ -41,22 +41,26 @@ The [explicit frontier](../crates/wow-context/e3/NATIVE_PRIMARY_EXPANSION.md)
 also reaches inspect and the
 [frontier pack/render route](../crates/wow-context/e3/NATIVE_PRIMARY_FRONTIER_PACK.md)
 under one continuing budget.
-Broader facets/scopes, Reference enrichment, deeper expansion/excerpts/continuation,
-platform views and full acceptance remain open in #122 and the census.
+Selected candidate-qualified platform Map/Inspect and consuming Primary-plus-
+platform Map/Inspect/Build now have service/CLI owners; selected platform-root
+facets and the bounded Primary excerpt/Reference handoffs are covered in the
+current #122 scope. Primary, exact-candidate platform and composed metadata
+status have Service/CLI routes. Broader combined recipes/cross-universe links, correction/type
+inventory, excerpt privacy/tokens/continuation, and full acceptance remain open
+in #122 and the census.
 
-[#121](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/121) retains the
-latest full-corpus functions refusal and targeted capacity evidence.
-[#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113) owns
-complete-corpus qualification. Unreached scopes remain NotEvaluated. That
-qualification debt blocks its corpus claim; independent bounded implementation
-follows the current #106 claim.
+The bounded performance repairs in [#121](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/121)
+and #123 are closed historical work. [#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113)
+owns complete-corpus qualification; unreached scopes remain NotEvaluated, and
+that qualification does not block independent bounded #122 implementation.
 
 Classification and fingerprint acceptance remain in
 [#117](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117) and
 [#118](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118).
-[#119](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/119) retains
-machine-contract/freeze and downstream handoff obligations. **W17 is not
-accepted**; a published checkpoint or Quick pass does not close these scopes.
+The bounded #119 contract/freeze reviews are historical routing evidence, not a
+current implementation queue. **W17 is not accepted**; #106 remains its
+acceptance tracker, and a published checkpoint or Quick pass does not close the
+scoped #117/#118 obligations.
 
 ## Existing owner and application routes
 

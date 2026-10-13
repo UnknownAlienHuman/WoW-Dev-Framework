@@ -1,4 +1,9 @@
 //! One selected native operation retaining distinct Primary/platform authority.
+mod status;
+pub use status::{
+    CONTEXT_COMBINED_STATUS_REQUEST_MAX_BYTES, CONTEXT_COMBINED_STATUS_REQUEST_SCHEMA,
+    ContextCombinedStatusRequest, execute_context_combined_status,
+};
 use std::{cell::Cell, sync::atomic::AtomicBool};
 
 use serde::{Deserialize, Serialize};
