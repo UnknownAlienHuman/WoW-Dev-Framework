@@ -1,9 +1,41 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract_id": "wow-annotations/e1-projection-and-parity",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "preimplementation_freeze": {"status": "missed", "evaluation": "NotEvaluated"},
+  "canonical_issue": 120,
+  "functional_checkpoint": {"commit": "c2408f69f25a7907d8d76991db269d750db57320", "quick_run": 38349903202},
   "work_package": "E1-C",
   "crate": "wow-annotations",
+  "operation_inventory_role": "specified final E1-C surface; code presence and the selected capability rows below do not establish full implementation or acceptance",
+  "capability_routing": [
+    {
+      "capability": "native-library-projection",
+      "status": "partial-functional",
+      "owners": [{"path": "crates/wow-annotations/src/native.rs", "symbol": "project_with_alias_catalogs"}],
+      "application_routes": [{"path": "crates/wow-service/src/local/native_library_input.rs", "symbol": "rebuild_for_project"}, {"path": "apps/wow/src/native.rs", "symbol": "run"}],
+      "acceptance_status": "pending",
+      "blocking_issues": [120, 122]
+    },
+    {
+      "capability": "source-bound-callable-lowering",
+      "status": "partial-functional",
+      "owners": [{"path": "crates/wow-annotations/src/reference_links.rs", "symbol": "callable_lowering"}],
+      "application_routes": [{"path": "crates/wow-service/src/graph/build/native_api.rs", "symbol": "reference_origins_prepared"}, {"path": "apps/wow/src/context.rs", "symbol": "run"}],
+      "acceptance_status": "pending",
+      "blocking_issues": [120, 122]
+    },
+    {
+      "capability": "native-artifact-and-projection-sidecars",
+      "status": "partial-functional",
+      "owners": [{"path": "crates/wow-annotations/src/artifact.rs", "symbol": "from_native_library"}, {"path": "crates/wow-annotations/src/sidecars.rs", "symbol": "from_library_cancellable"}],
+      "application_routes": [{"path": "crates/wow-service/src/local/native_input.rs", "symbol": "from_native_manifest"}, {"path": "apps/wow/src/native.rs", "symbol": "run"}],
+      "acceptance_status": "pending",
+      "blocking_issues": [120, 122]
+    }
+  ],
   "native_callable_emission_capture": {
     "operation": "NativeCallableBindings::callable_lowering",
     "capture": "already-computed mapped renderer type, optional-marker and input-atom ranges plus projected aliases and their existing dependency graph; private bounded shared catalog skipped by serialization",
@@ -332,11 +364,16 @@
   ],
   "checksum_contract": {
     "algorithm": "sha256",
-    "state": "reference-renderer-oracle-consumer-semantic-file-map-loss-parity-probe-and-byte-digests-must-freeze-before-first-rust-implementation",
+    "state": "pending-acceptance-freeze",
     "manifest": "crates/wow-annotations/e1/examples/CHECKSUMS.json",
-    "rule": "null pins identities and digests are allowed only while implementation state is not-started"
+    "rule": "partial functional implementation may retain null pins and digests; full acceptance requires actual reviewed prerequisite, profile, parity, consumer and checksum qualification"
   },
-  "implementation_gate": [
+  "acceptance_rules": [
+    "Selected native capabilities are partial functional code; the specified final operation inventory is not an implementation claim.",
+    "Null prerequisite, profile, parity, consumer and checksum inputs remain pending; full acceptance requires real reviewed qualification.",
+    "The missed preimplementation freeze remains historical and NotEvaluated."
+  ],
+  "historical_preimplementation_requirements": [
     "wow-core-and-wow-reference-prerequisites-frozen",
     "exact-reference-view-profile-reference-renderer-oracle-and-consumer-pins-frozen",
     "semantic-model-retains-declarations-members-types-restrictions-reference-links-and-statuses",

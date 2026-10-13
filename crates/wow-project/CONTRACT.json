@@ -1,9 +1,33 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract_id": "wow-project/e0-d/1",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "preimplementation_freeze": {"status": "missed", "evaluation": "NotEvaluated"},
+  "canonical_issue": 120,
+  "functional_checkpoint": {"commit": "c2408f69f25a7907d8d76991db269d750db57320", "quick_run": 38349903202},
   "work_package": "E0-D",
   "crate": "wow-project",
+  "operation_inventory_role": "specified final E0-D surface; the selected capability rows describe existing code without accepting the complete package",
+  "capability_routing": [
+    {
+      "capability": "native-project-publication",
+      "status": "partial-functional",
+      "owners": [{"path": "crates/wow-project/src/publication.rs", "symbol": "publish_initial_cancellable"}, {"path": "crates/wow-project/src/publication.rs", "symbol": "apply_update_cancellable"}, {"path": "crates/wow-project/src/snapshot.rs", "symbol": "open_view"}],
+      "application_routes": [{"path": "crates/wow-service/src/local/backend.rs", "symbol": "acquire_project"}, {"path": "apps/wow/src/project.rs", "symbol": "run"}],
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "native-library-byte-view",
+      "status": "partial-functional",
+      "owners": [{"path": "crates/wow-project/src/library_view.rs", "symbol": "qualify"}, {"path": "crates/wow-project/src/library_view.rs", "symbol": "file_view"}, {"path": "crates/wow-project/src/library_view.rs", "symbol": "slice"}],
+      "application_routes": [{"path": "crates/wow-service/src/graph/build/native_api.rs", "symbol": "reference_origins_prepared"}, {"path": "apps/wow/src/context.rs", "symbol": "run"}],
+      "acceptance_status": "pending",
+      "blocking_issues": [120, 122]
+    }
+  ],
   "native_library_byte_view": {
     "types": ["ProjectLibraryBinding", "ProjectLibraryFileView"],
     "operations": ["qualify", "file_view", "slice"],
@@ -371,11 +395,16 @@
   ],
   "checksum_contract": {
     "algorithm": "sha256",
-    "state": "pin-file-generation-and-byte-digests-must-be-frozen-before-first-rust-implementation",
+    "state": "pending-acceptance-freeze",
     "manifest": "crates/wow-project/examples/CHECKSUMS.json",
-    "rule": "null identities and digests are allowed only while implementation_state is not-started"
+    "rule": "partial functional implementation may retain null identities and digests; full acceptance requires actual reviewed prerequisite, analyzer, generation, publication and checksum qualification"
   },
-  "implementation_gate": [
+  "acceptance_rules": [
+    "Selected native capabilities are partial functional code; the specified final operation inventory is not an implementation claim.",
+    "Null prerequisite, analyzer, generation, publication and checksum inputs remain pending; full acceptance requires real reviewed qualification.",
+    "The missed preimplementation freeze remains historical and NotEvaluated."
+  ],
+  "historical_preimplementation_requirements": [
     "wow-core E0-A implementation merged",
     "wow-emmy E0-C implementation has accepted exact pin/probe",
     "project and analyzer fixture source bytes/digests frozen and identical",

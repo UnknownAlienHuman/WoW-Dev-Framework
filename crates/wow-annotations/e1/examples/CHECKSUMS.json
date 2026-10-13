@@ -1,9 +1,12 @@
 {
-  "schema_version": 1,
-  "manifest_id": "wow-annotations-e1-checksums-v1",
+  "schema_version": 2,
+  "manifest_id": "wow-annotations-e1-pending-acceptance-v2",
   "algorithm": "sha256",
-  "state": "pending-byte-freeze-before-first-rust-implementation",
-  "implementation_state": "not-started",
+  "state": "pending-acceptance-freeze",
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "preimplementation_freeze": {"status": "missed", "evaluation": "NotEvaluated"},
+  "canonical_issue": 120,
   "contract_id": "wow-annotations/e1-projection-and-parity",
   "prerequisite_pins": {
     "wow_core_contract_id": "wow-core/e0-a/1",
@@ -214,7 +217,13 @@
     "bundle_sha256": null,
     "canonicalization_profile_id": null
   },
-  "freeze_rules": [
+  "acceptance_rules": [
+    "Partial functional implementation with pending acceptance may retain null pins, identities and digests.",
+    "Acceptance requires all applicable prerequisite, profile, semantic parity, consumer and checksum requirements to be reviewed and actually frozen.",
+    "Tests verify committed bytes; no automatic state edits, pin filling or golden updates.",
+    "The missed preimplementation freeze remains historical and NotEvaluated."
+  ],
+  "historical_preimplementation_requirements": [
     "null pins ids and digests are valid only while implementation_state is not-started",
     "before the first Rust implementation commit every required pin id member digest and bundle digest must be non-null",
     "tests verify committed canonical bytes and never rewrite golden files automatically",

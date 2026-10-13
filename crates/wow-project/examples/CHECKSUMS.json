@@ -1,9 +1,14 @@
 {
-  "schema_version": 1,
-  "manifest_id": "wow-project-e0-d-checksums-v1",
+  "schema_version": 2,
+  "manifest_id": "wow-project-e0-d-pending-acceptance-v2",
+  "contract_id": "wow-project/e0-d/1",
   "algorithm": "sha256",
   "canonicalization_contract": "wow-core-json/e0-1",
-  "state": "pending-prerequisite-pin-generation-and-byte-freeze-before-first-rust-implementation",
+  "state": "pending-acceptance-freeze",
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "preimplementation_freeze": {"status": "missed", "evaluation": "NotEvaluated"},
+  "canonical_issue": 120,
   "freeze_required": true,
   "selected_profile_id": "fixture-retail-120100-e0-v1",
   "reference_generation_id": null,
@@ -14,9 +19,9 @@
   "baseline_analyzer_snapshot_id": null,
   "baseline_project_snapshot_sha256": null,
   "rules": [
-    "E0-A canonicalization and E0-C accepted pin/probe are required before implementation starts.",
+    "E0-A canonicalization and E0-C accepted pin/probe remain required for package acceptance; the preimplementation freeze was historically missed.",
     "Project Main-file bytes and SHA-256 values must equal the frozen E0-C Main fixture values.",
-    "All prerequisite identities and normative member digests must be non-null before wow-project implementation_state changes from not-started.",
+    "Partial functional implementation with pending acceptance may retain null identities and digests; actual acceptance requires reviewed prerequisite, analyzer, generation, publication and checksum qualification.",
     "Digests cover canonical UTF-8 bytes with LF line endings and one final newline.",
     "Baseline/update ProjectGenerationId vectors and snapshot digests must be frozen with the member digests.",
     "Tests verify this manifest and never rewrite it automatically.",
@@ -67,7 +72,13 @@
     }
   ],
   "bundle_sha256": null,
-  "freeze_gate": {
+  "acceptance_rules": [
+    "Partial functional implementation with pending acceptance may retain null pins, identities and digests.",
+    "Acceptance requires all applicable prerequisite, analyzer, generation, publication and checksum requirements to be reviewed and actually frozen.",
+    "Tests verify committed bytes; no automatic state edits, pin filling or golden updates.",
+    "The missed preimplementation freeze remains historical and NotEvaluated."
+  ],
+  "historical_preimplementation_requirements": {
     "required_work_package": "E0-D-implementation",
     "invalid_after_implementation_starts_when_any_required_value_is_null": true,
     "required_non_null_values": [
