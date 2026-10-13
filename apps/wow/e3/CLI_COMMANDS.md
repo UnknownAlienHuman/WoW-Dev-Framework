@@ -95,16 +95,38 @@ The app checks one delimiter, known kind, base64url alphabet, decoded byte limit
 ## `wow context status`
 
 ```text
-wow context status
-  [primary selector options]
-  [platform selector options]
-  [reference guards]
+wow context status --native-host-config <host.json>
+  --project-store <registration-key>
+  --publication current|store-generation:<ProjectStoreGenerationId>
   [--detail summary|capabilities|profiles|generations]
-  [operation/budget profile]
-  [--output envelope-json|text]
+  [--platform omitted]
+  [--expect-current-record <CurrentPublicationRecordId>]
+  [--expect-current-digest <ContentDigest>]
+  [--expect-profile <ProfileId>
+   --expect-reference-generation <ReferenceGenerationId>
+   --expect-reference-view <ReferenceViewId>]
+  [--output envelope-json]
 ```
 
-`artifact` output is invalid for status.
+Detail defaults to `summary`. Only `envelope-json` is implemented for this
+route; it writes the finalized canonical Service envelope unchanged followed
+by one LF. Current record/digest guards require `--publication current`; they
+are checked once by Service and a mismatch is not retried. An exact store
+generation remains selected even when Current has advanced. Reference guards
+are optional but, when supplied, require the complete profile/generation/view
+group. The only accepted platform value is `omitted`; this CLI route does not
+acquire platform or composed status.
+
+Status reports Primary retained project/graph/reference metadata and selected
+capability/profile/generation detail. Its successful Service result is
+`partial`, with context generation and evaluation `NotEvaluated`; it is not a
+context-generation pass. It creates no map, skeleton, pack, source excerpt, or
+rendered artifact and returns no source body. Service checks and closes its
+retained resources before emitting success. Platform/composed status and full
+E3-C acceptance remain pending.
+
+See [Primary context status](../CONTEXT_STATUS.md) for the host input, result
+fields, refusal behavior, and scope limits.
 
 ## `wow context map`
 

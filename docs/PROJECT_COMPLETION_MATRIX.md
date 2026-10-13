@@ -56,7 +56,7 @@ evidence, Windows/process-loss acceptance and the remaining Reference Pack gates
 `apps/wow` now provides a one-shot CLI over inline inputs or an explicit
 [disk file manifest](../apps/wow/FILES_INPUT.md); see
 [LOCAL_INPUT.md](../apps/wow/LOCAL_INPUT.md). The bounded primary
-[context map](../apps/wow/CONTEXT_MAP.md), [inspection](../apps/wow/CONTEXT_INSPECT.md)
+[context status](../apps/wow/CONTEXT_STATUS.md), [map](../apps/wow/CONTEXT_MAP.md), [inspection](../apps/wow/CONTEXT_INSPECT.md)
 and [pack/render build](../apps/wow/CONTEXT_BUILD.md) are executable. `wow-search`, `wow-cbm` and `tools/wow-release` have
 no Rust implementation in the audited source. Their documentation is not a binary.
 

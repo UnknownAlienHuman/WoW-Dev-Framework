@@ -7,6 +7,7 @@ mod inspect;
 mod operation;
 mod platform;
 mod request;
+mod status;
 #[cfg(test)]
 mod tests;
 
@@ -40,6 +41,7 @@ pub use platform::{
     ContextPlatformResult, ContextPlatformSummary, PLATFORM_NATIVE_ONE_HOP_PROFILE_ID,
     execute_context_platform,
 };
+pub use status::{ContextStatusDetail, ContextStatusRequest, execute_context_status};
 pub use wow_context::PrimaryL0Profile as ContextL0Profile;
 pub use wow_context::PrimaryL1Profile as ContextL1Profile;
 pub use wow_context::PrimarySourceExcerptPolicy as ContextSourceExcerptPolicy;

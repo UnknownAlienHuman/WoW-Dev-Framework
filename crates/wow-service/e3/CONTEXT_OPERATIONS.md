@@ -26,27 +26,66 @@ No operation refreshes current, searches for roots, retries against another gene
 
 ## `context_status`
 
-Purpose: report whether configured selectors, owners, contracts, profiles, and capabilities can support E3-C operations without claiming that context generation or evaluation passed.
+Implemented slice: Primary retained-publication metadata status. This is a bounded
+availability/identity report, not a context-generation or evaluation operation.
+The result remains `partial`; context generation and evaluation remain
+`NotEvaluated`.
 
 Request:
 
 ```text
-primary project selector
-optional platform selector
-optional exact reference guard
-requested detail = summary | capabilities | profiles | generations
-budgets/cancellation
+explicit native host registration
+primary project store registration
+publication = Current | exact StoreGeneration
+optional exact current-record and/or current-digest guard (Current only)
+optional complete exact Reference profile/generation/view guard
+platform = omitted
+detail = summary | capabilities | profiles | generations (default summary)
+host metadata/input/work budgets and cancellation
 ```
 
-Behavior:
+The CLI command is `wow context status`. It accepts an explicit host config,
+store ID, `current` or `store-generation:<ID>`, the four details above, optional
+Current and Reference guards, and only `envelope-json` output. It does not accept
+publication-set selectors, platform acquisitions, roots, map/build/profile
+options, or artifact/text output. The app constructs one typed Service request;
+only Service resolves Current.
 
-1. resolve selectors once and acquire bounded metadata/read views;
-2. validate exact project/graph/reference compatibility where available;
-3. report current/exact publication identities, E3-A/E3-B contract availability, profile registries, owner-port catalogs, capability/coverage/conflict state, continuation retention support, and deferred operations;
-4. close all resources;
-5. return `ContextStatusPayload`.
+Service resolves Current once or opens the requested exact retained generation,
+checks the optional expected-current guard against the single acquired Current
+observation, checks the exact Reference guard when supplied, binds the retained
+Primary project/graph and configured exact Reference view, and charges bounded
+metadata work. A stale Current guard or wrong Reference guard fails with checked
+resource closure. An exact-old generation stays selected even when Current has
+advanced; Current metadata in the result records the observation made with that
+read.
 
-It does not build a Project Map, skeleton, semantic pack, source excerpt, or rendered artifact. `available` does not mean a later operation will be complete for every root/profile.
+The result reports exact publication/store, project, graph, and Reference
+identities; project/reference/graph coverage and conflict summaries; and finite
+capability/profile availability. Detail is closed: `summary` omits optional
+detail arrays, while each of `capabilities`, `profiles`, and `generations`
+includes only its matching array/object. Generation detail includes project and
+graph snapshot/generation IDs, graph universe/registry digest, source registry
+ID, and analyzer snapshot ID.
+
+For this Primary-only implementation, `context_generation`, `evaluation`,
+`last_known_good`, and `failed_targets` are `NotEvaluated`; continuation
+retention is `not_implemented`; optional platform status is `not_selected`.
+Capability entries mark the implemented operations and the deferred
+continuation/validate/render operations separately. Profile availability means
+the profile is registered for a selected operation. Platform and combined
+profiles report `requires_platform_selection` for this Primary-only request.
+Availability does not establish
+root-specific completeness, successful context generation, or runtime
+behavior.
+
+The status path reads metadata from the acquired owners only. It never calls
+Project Map, skeleton, semantic-pack, source-excerpt, or renderer operations and
+returns no map/skeleton/pack/source/render artifact or source body. Success is
+finalized only after checked read/store closure. Budget, cancellation, guard,
+identity, and closure failures return a failure/cancelled envelope without a
+success payload. Platform and composed status are not selected or implemented in
+this slice. Full E3-C acceptance remains pending.
 
 ## `context_map`
 

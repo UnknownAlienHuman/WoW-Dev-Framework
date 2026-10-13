@@ -10,6 +10,26 @@
     "tracker": "https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122",
     "acceptance": "pending"
   },
+  "context_status_slice": {
+    "command": "context status",
+    "service_entry": "execute_context_status",
+    "request_schema": "wow-service/context-status-request/1",
+    "result_schema": "wow-service/context-status-result/1",
+    "route": "apps/wow/CONTEXT_STATUS.md",
+    "publication_selectors": ["current", "store-generation:<ProjectStoreGenerationId>"],
+    "detail": ["summary", "capabilities", "profiles", "generations"],
+    "platform": "omitted_only",
+    "output": "envelope-json",
+    "one_service_call": true,
+    "scope": "primary_retained_metadata_only",
+    "nonclaims": [
+      "context_generation_and_evaluation_NotEvaluated",
+      "no_map_skeleton_pack_source_or_rendered_artifact",
+      "platform_or_composed_status_not_implemented",
+      "full_e3_acceptance_pending"
+    ],
+    "acceptance": "pending"
+  },
   "selected_source_excerpt": {
     "command": "context build",
     "service_entry": "execute_context_build_with_source",
@@ -63,7 +83,7 @@
     "artifact"
   ],
   "output_mode_restrictions": {
-    "context status": ["envelope-json", "text"],
+    "context status": ["envelope-json"],
     "context map": ["envelope-json", "text"],
     "context inspect": ["envelope-json", "text"],
     "context build": ["envelope-json", "text", "artifact-if-exactly-one-eligible-rendered-artifact"],
@@ -131,6 +151,7 @@
     "apps/wow/e3/README.md",
     "apps/wow/e3/AGENTS.md",
     "apps/wow/e3/CLI_COMMANDS.md",
+    "apps/wow/CONTEXT_STATUS.md",
     "apps/wow/e3/OUTPUT_EXIT_AND_STREAMS.md",
     "apps/wow/e3/SECURITY_AND_CONFIG.md",
     "apps/wow/e3/TEST_MATRIX.md",

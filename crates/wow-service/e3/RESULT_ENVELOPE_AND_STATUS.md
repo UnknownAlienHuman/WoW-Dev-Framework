@@ -90,14 +90,49 @@ Represented as `ContextServiceCancelledResult`; no success envelope or late resu
 
 ### `ContextStatusPayload`
 
-```text
-resolved exact publication/reference identities
-owner-port/contract/profile registry state
-available/partial/deferred capabilities
-coverage/conflicts/warnings
-last-known-good and failed targets distinctly labeled
-no context-generation pass claim
-```
+The implemented Primary-only request/result schemas are
+`wow-service/context-status-request/1` and
+`wow-service/context-status-result/1`. Successful status results carry
+`status=partial` and `resource_closure=closed`; this records useful retained
+metadata while explicitly leaving context generation and evaluation
+`NotEvaluated`.
+
+Common payload fields report `configured_registration_id`, exact
+`publication_set_id` and `store_generation_id`, the Current observation and its
+digest when available, `context_universe_set_id`, exact `project_id`, Reference
+profile/generation/view identity, `source_context_id`, project publication
+status and coverage/deferred-capability records, Reference coverage/conflict
+count, graph partition coverage, and file/node/edge counts. Host paths and
+source bodies are excluded.
+
+`detail` is one of `summary`, `capabilities`, `profiles`, or `generations`.
+Summary omits the optional detail fields. Each other detail selects only its
+corresponding `capabilities`, `profiles`, or `generations` field. Generation
+detail reports project snapshot/generation, graph snapshot/generation/universe,
+graph registry digest, source registry, and analyzer snapshot identities.
+
+The capability registry distinguishes `partial_functional` Primary/selected
+operations from `not_implemented` continuation, external validation, and
+external rendering. The finite profile registry reports selected profile IDs
+and roles as `partial_functional` for Primary selections; platform and combined
+profiles report `requires_platform_selection`. These values describe registered selected
+support only; they are not proof that later generation succeeds for every
+input. `context_generation`, `evaluation`, `last_known_good`, and
+`failed_targets` remain `NotEvaluated`; continuation retention is
+`not_implemented`; optional platform status is `not_selected`.
+
+Current is resolved once at Service. An optional record/digest guard is valid
+only with Current and mismatch fails without retry. An exact StoreGeneration
+request remains on that generation even if Current has moved; the returned
+Current observation is separate metadata. An optional Reference guard binds
+the exact profile, generation, and view. The CLI selects only omitted platform
+status; platform/composed status remains unimplemented in this slice.
+
+Status is metadata-only: it invokes no map, skeleton, semantic pack, source
+excerpt, or renderer operation and returns no such artifact or source body.
+The service finalizes the partial success only after checked read/store closure.
+Budget/cancellation/guard/acquisition/closure failures do not expose a success
+payload. This selected operation does not complete E3-C acceptance.
 
 ### `ContextMapPayload`
 

@@ -1,9 +1,10 @@
-//! Closed E3 context-map, inspect and build projections. Semantics are service-owned.
+//! Closed E3 context status/map/inspect/build projections. Semantics are service-owned.
 //! The native host document is a separate transport input, never an E3 semantic selector.
 mod build;
 mod combined;
 mod inspect;
 mod platform;
+mod status;
 
 use std::{
     ffi::{OsStr, OsString},
@@ -17,13 +18,20 @@ use wow_service::{
         CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_ID_MAX_BYTES, CONTEXT_MAP_RESULT_MAX_BYTES,
         ContextBuildRequest, ContextInspectRequest, ContextMapCurrentGuard, ContextMapHostInput,
         ContextMapPublication, ContextMapReferenceGuard, ContextMapRequest, ContextMapResult,
-        ContextMapRoot, ContextMapStatus, PRIMARY_NAVIGATION_MAP_PROFILE_ID,
+        ContextMapRoot, ContextMapStatus, ContextStatusRequest, PRIMARY_NAVIGATION_MAP_PROFILE_ID,
         PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID, execute_context_build_with_source,
-        execute_context_inspect, execute_context_map,
+        execute_context_inspect, execute_context_map, execute_context_status,
     },
 };
 
 const HELP: &str = concat!(
+    "wow context status --native-host-config <host.json> --project-store <registration-key> ",
+    "--publication current|store-generation:<ProjectStoreGenerationId> ",
+    "[--detail summary|capabilities|profiles|generations] [--platform omitted] ",
+    "[--expect-current-record <id>] [--expect-current-digest <digest>] ",
+    "[--expect-profile <id> --expect-reference-generation <id> --expect-reference-view <id>] ",
+    "[--output envelope-json]\n",
+    "Status reports configured metadata; it does not run context generation.\n",
     "wow context map --native-host-config <host.json> --project-store <registration-key> ",
     "--publication current|store-generation:<ProjectStoreGenerationId> ",
     "--map-target primary --map-profile-id <exact-reviewed-profile-id>\n",
@@ -129,6 +137,7 @@ enum Request {
     Map(ContextMapRequest),
     Inspect(ContextInspectRequest),
     Build(ContextBuildRequest),
+    Status(ContextStatusRequest),
     Platform(platform::Request),
     Combined(combined::Request),
 }
@@ -143,9 +152,9 @@ pub fn run(values: Vec<OsString>) -> u8 {
     if values.first().is_some_and(|value| value == "context")
         && (values.len() == 2
             || (values.len() == 3
-                && values
-                    .get(1)
-                    .is_some_and(|value| value == "map" || value == "inspect" || value == "build")))
+                && values.get(1).is_some_and(|value| {
+                    value == "status" || value == "map" || value == "inspect" || value == "build"
+                })))
         && values
             .last()
             .is_some_and(|value| value == "--help" || value == "-h")
@@ -202,6 +211,7 @@ pub fn run(values: Vec<OsString>) -> u8 {
             arguments.source_root.as_deref(),
             &stop,
         ),
+        Request::Status(request) => execute_context_status(&host, request, &stop),
         Request::Platform(_) => {
             crate::diagnostic("native context dispatch invariant failed");
             return 4;
@@ -269,6 +279,9 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         .ok_or("context argument size overflow")?;
     if values.len() > MAX_ARGUMENTS || bytes > MAX_ARGUMENT_BYTES {
         return Err("context argument limit exceeded");
+    }
+    if let Some(arguments) = status::parse(&values)? {
+        return Ok(arguments);
     }
     if let Some(arguments) = combined::parse(&values)? {
         return Ok(arguments);
@@ -630,6 +643,22 @@ mod tests {
         .collect()
     }
 
+    fn status_arguments() -> Vec<OsString> {
+        [
+            "context",
+            "status",
+            "--native-host-config",
+            "private-native-host.json",
+            "--project-store",
+            "context-cli-store",
+            "--publication",
+            "current",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect()
+    }
+
     fn push(values: &mut Vec<OsString>, flag: &str, value: &str) {
         values.push(flag.into());
         values.push(value.into());
@@ -651,11 +680,54 @@ mod tests {
             Request::Map(request) => serde_json::to_value(request),
             Request::Inspect(request) => serde_json::to_value(request),
             Request::Build(request) => serde_json::to_value(request),
+            Request::Status(request) => serde_json::to_value(request),
             Request::Platform(_) | Request::Combined(_) => {
                 return Err("native request is explicit file transport");
             }
         }
         .map_err(|_| "request serialization failed")
+    }
+
+    #[test]
+    fn context_status_grammar_is_closed_and_single_request() -> Result<(), &'static str> {
+        for detail in ["summary", "capabilities", "profiles", "generations"] {
+            let mut values = status_arguments();
+            push(&mut values, "--detail", detail);
+            let request = request_json(values)?;
+            assert_eq!(request["detail"], detail);
+            assert_eq!(request["project_store_id"], "context-cli-store");
+            assert_eq!(request["publication"]["kind"], "current");
+            assert_eq!(request["platform"], "omitted");
+        }
+        let default = request_json(status_arguments())?;
+        assert_eq!(default["detail"], "summary");
+        for (flag, value) in [
+            ("--root", GRAPH_ROOT),
+            ("--level", "l1"),
+            ("--map-target", "primary"),
+            ("--platform", "native"),
+            ("--combined-request-input", "request.json"),
+            ("--platform-request-input", "request.json"),
+        ] {
+            let mut values = status_arguments();
+            push(&mut values, flag, value);
+            assert!(parse(values).is_err());
+        }
+        let mut duplicate = status_arguments();
+        push(&mut duplicate, "--detail", "summary");
+        push(&mut duplicate, "--detail", "profiles");
+        assert!(matches!(
+            parse(duplicate),
+            Err("duplicate context status option")
+        ));
+
+        let mut incomplete_reference = status_arguments();
+        push(&mut incomplete_reference, "--expect-profile", PROFILE);
+        assert!(matches!(
+            parse(incomplete_reference),
+            Err("context reference guards require the complete three-option group")
+        ));
+        Ok(())
     }
 
     #[test]

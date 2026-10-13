@@ -11,6 +11,34 @@
     "tracker": "https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122",
     "acceptance": "pending"
   },
+  "context_status_slice": {
+    "operation": "context_status",
+    "request_schema": "wow-service/context-status-request/1",
+    "result_schema": "wow-service/context-status-result/1",
+    "entry": "execute_context_status",
+    "route": "apps/wow/CONTEXT_STATUS.md",
+    "scope": "primary_exact_retained_metadata_only",
+    "publication_selectors": ["Current", "exact StoreGeneration"],
+    "details": ["summary", "capabilities", "profiles", "generations"],
+    "platform": "omitted_only",
+    "success_status": "partial",
+    "resource_closure": "checked_before_success",
+    "not_evaluated": ["context_generation", "evaluation", "last_known_good", "failed_targets"],
+    "deferred": [
+      "platform_or_composed_status",
+      "context_continue",
+      "context_validate",
+      "context_render",
+      "full_e3_acceptance"
+    ],
+    "nonclaims": [
+      "map_skeleton_pack_source_excerpt_or_rendered_artifact_produced",
+      "source_body_returned",
+      "all_roots_or_profiles_will_complete",
+      "runtime_or_full_e3_acceptance"
+    ],
+    "acceptance": "pending"
+  },
   "selected_source_excerpt": {
     "operation": "context_build",
     "public_entry": "execute_context_build_with_source",

@@ -2,6 +2,7 @@
 mod build;
 mod inspect;
 mod source_excerpt;
+mod status;
 
 use super::*;
 use crate::ServiceErrorCode;
