@@ -164,7 +164,8 @@ Selected behavioral verification is tracked in #122; full E3 acceptance remains 
 
 `inspection.platform_root_facet="callable_metadata"` explicitly requests the
 selected platform root's original native callable metadata. The closed optional
-field accepts `callable_metadata` or `xml_handler_metadata`; null and other values
+field accepts `callable_metadata`, `xml_handler_metadata`,
+`xml_declaration_metadata` or `xml_reference_metadata`; null and other values
 refuse before acquisition. A facet can accompany any valid default or explicit
 Primary recipe. The ordinary Primary level/root rules
 remain: project roots use default L0, and L1/Both require an eligible GraphEntity.
@@ -224,6 +225,38 @@ mismatched, ambiguous or incomplete custody refuses with checked closure.
 Omission and the callable/XML-handler selections preserve their bytes and
 counters. No second parser, map, native read, ledger or schema family is added.
 
+### Selected platform-root XML reference facet
+
+`inspection.platform_root_facet="xml_reference_metadata"` selects an exact
+accepted native `xml_source_declaration` and reuses the sealed declaration-custody
+join above. The supplemental `platform_root_xml_reference` preserves that original
+declaration facet and the root's original `XmlReferenceRecord` rows from the held
+package plan, including resolution, order, ordinal, span, target/name-group and
+cycle records when present. The original package plan resolves its local document
+key to the declaration's qualified path; names and path prefixes do not mint
+custody.
+
+Inheritance rows retain their matching original `ProjectGraphXmlReference`
+receipts. Reference IDs are package-local; the join selects the exact package,
+qualified document and load-plan digest. Equal reference IDs in other packages
+are separate owner rows, while conflicting or duplicate custody in the selected
+scope refuses. `Projected` remains a producer proposal, without proving an accepted
+graph relation or runtime inheritance. Parent rows explicitly retain
+`parent_no_producer_outcome`. Unresolved, ambiguous, dynamic, invalid and
+out-of-scope states preserve their original meaning; none proves absence.
+
+The facet retains the original `package_load_coverage` and selected plan's
+`external_files_complete` flags. A partial wider load closure does not erase
+known captured source observations. The exact declaration, selected plan,
+document digest/span, targets and receipts must still join; these positive
+metadata rows do not establish complete closure or negative authority.
+
+All joins use the held native view and continuing Budget. Missing, duplicate,
+mixed or incomplete custody and wrong-kind roots refuse with checked closure.
+The same original Inspect supplies Build and renderer origins. Omitted selectors
+and the previous facets retain their bytes and counters; no additional parser,
+map, read, ledger, public facet framework or persistence schema is introduced.
+
 ## Selected combined semantic pack and rendering
 
 Build consumes the genuine combined Inspect with
@@ -253,8 +286,8 @@ L0/L1 recipe fields cannot coexist with each other. Explicit `l0_profile_id` sel
 StateRootV1 owner on the navigation map and continuing Budget. Its kind/custody
 checks and original L0 schema/identity also govern pack/render; no L1 is emitted.
 Other explicit L0 profile/level/root combinations refuse before acquisition.
-`build.platform_root_facet="callable_metadata"`, `"xml_handler_metadata"` or
-`"xml_declaration_metadata"` selects
+`build.platform_root_facet="callable_metadata"`, `"xml_handler_metadata"`,
+`"xml_declaration_metadata"` or `"xml_reference_metadata"` selects
 the original platform-root facet independently of any valid Primary recipe.
 The consuming pack retains both original owners in Inspect origins;
 None/JSON/Markdown share one semantic pack identity and never rebuild that facet.

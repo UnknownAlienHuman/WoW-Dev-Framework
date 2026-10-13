@@ -162,6 +162,25 @@ same Inspect/Build path and cumulative Budget. Missing, mismatched, ambiguous or
 incomplete custody refuses with checked closure. Omission preserves existing
 bytes.
 
+The closed value `xml_reference_metadata` selects only an exact accepted native
+`xml_source_declaration` root. Its declaration identity/span must match the
+original declaration, producer assertion and accepted final root. The original
+source, evidence and root support remain those of the held `SkeletonInputView`.
+The projection joins the per-root `XmlDeclarationSite` and `XmlReferenceRecord`
+to applicable `ProjectGraphXmlReference` receipts through exact package, load-
+plan, occurrence, content-digest and owner `source_path` custody. Receipt
+documents are package-qualified; report/site documents are package-local and
+are bound only by that exact owner mapping. Preserve original parent/inherits
+kinds, ordinals, spans, names, targets/name groups, resolution/order/cycle/
+ambiguity outcomes and receipt outcomes. `ProducerOutcomeProjected` is a
+producer proposal; it does not establish an accepted graph relation or runtime/
+effective class, type, parent, inheritance or bridge behavior. No XML text is
+parsed or emitted. Reuse the original declaration, map, read and cumulative
+Budget; do not acquire a second view. Missing, mismatched, ambiguous or
+incomplete custody refuses with checked closure. Existing facets and omission
+retain their bytes and counters. Positive integrated reference-fixture and
+runtime qualification remain NotEvaluated.
+
 The optional non-null `l0_profile_id` selects only
 `wow-context/primary-state-root-l0/1` with L0/GraphEntity. It invokes the original
 StateRootV1 L0 on the ordinary navigation map and continuing Budget. Native

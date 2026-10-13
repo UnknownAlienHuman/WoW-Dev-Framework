@@ -408,3 +408,21 @@ custody only, with no XML contents or schema/classification/type/inheritance/
 parent/runtime/bridge inference. It composes with each valid Primary recipe
 under the cumulative Budget. Missing, mismatched, ambiguous or incomplete
 custody refuses with checked closure; omission preserves existing bytes.
+
+`inspection.platform_root_facet="xml_reference_metadata"` selects only an
+exact accepted native `xml_source_declaration` root. Its declaration identity,
+source span, source/evidence and root support remain bound to the held
+`SkeletonInputView`. The projection joins the original per-root
+`XmlDeclarationSite` and `XmlReferenceRecord` values to applicable original
+`ProjectGraphXmlReference` receipts through exact package, load-plan, occurrence,
+content-digest and owner `source_path` custody. Receipt documents are package-
+qualified; report/site documents are package-local and bind through that exact
+owner mapping. Parent/inherits kinds, ordinals, spans, names, targets/name groups,
+resolution/order/cycle/ambiguity and receipt outcomes remain original.
+`ProducerOutcomeProjected` is a proposal, not an accepted graph relation or
+runtime/effective class, type, parent, inheritance or bridge fact. No XML text is
+parsed or emitted. Reuse the original declaration, map, read and cumulative
+Budget; do not acquire another view. Missing, mismatched, ambiguous or
+incomplete custody refuses. Existing facets and omission retain bytes/counters.
+Positive integrated reference-fixture and runtime qualification remain
+NotEvaluated.

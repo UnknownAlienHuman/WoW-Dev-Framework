@@ -5,6 +5,7 @@ use std::sync::atomic::AtomicBool;
 use serde::{Deserialize, Serialize};
 use wow_core::{
     EvidenceRecord, GenerationContext, ProfileIdentity, ReferenceGenerationId, SourceHandle,
+    SourceSpan,
 };
 use wow_graph::{
     GraphAssertionKind, GraphAssertionRef, GraphAssertionSupport, GraphLocalAssertion,
@@ -17,9 +18,15 @@ use wow_project::{
     ProjectError, ProjectErrorCode, ProjectKind,
     graph::{
         ProjectCallableMetadata, ProjectGraphInlineHandler, ProjectGraphScriptSource,
-        ProjectGraphXmlDeclaration,
+        ProjectGraphXmlDeclaration, ProjectGraphXmlReference,
     },
-    load::XmlScriptSource,
+    load::{
+        PACKAGE_MAIN_NAMESPACE_ROOT, ProjectLoadPlan, XmlScriptSource,
+        xml_references::{
+            XmlDeclarationSite, XmlReferenceCycle, XmlReferenceKind, XmlReferenceRecord,
+            XmlReferenceResolution,
+        },
+    },
 };
 use wow_reference::{ReferenceConflict, ReferenceView, ReferenceViewError};
 
@@ -38,6 +45,7 @@ pub enum PlatformRootFacet {
     CallableMetadata,
     XmlHandlerMetadata,
     XmlDeclarationMetadata,
+    XmlReferenceMetadata,
 }
 
 #[derive(Serialize)]
@@ -1269,6 +1277,479 @@ pub(crate) fn build_platform_root_xml_declaration_facet_on_budget<'m, 'a>(
     };
     budget.retain(&facet, stop)?;
     Ok(facet)
+}
+
+/// Original per-root XML source references, joined through the exact retained
+/// package plan. Inheritance receipts remain producer proposals, not accepted
+/// graph relations or runtime inheritance.
+#[derive(Serialize)]
+pub(crate) struct PlatformRootXmlReferenceFacet<'m, 'a> {
+    selection: PlatformRootFacet,
+    interpretation: &'static str,
+    declaration: PlatformRootXmlDeclarationFacet<'m, 'a>,
+    package: &'a str,
+    /// Package-qualified graph document identity.
+    document: &'a str,
+    /// Local document key inside the retained package ProjectLoadPlan.
+    load_plan_document: &'a str,
+    load_plan_digest: wow_core::ContentDigest<wow_core::CanonicalResult>,
+    package_load_coverage: wow_project::load::ProjectPackageLoadCoverage,
+    external_files_complete: bool,
+    references: Vec<PlatformRootXmlReferenceRecord<'a>>,
+}
+
+#[derive(Serialize)]
+struct PlatformRootXmlReferenceRecord<'a> {
+    record: &'a XmlReferenceRecord,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    target: Option<&'a XmlDeclarationSite>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name_group: Option<&'a [String]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cycle: Option<&'a XmlReferenceCycle>,
+    producer: PlatformXmlReferenceProducer<'a>,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+enum PlatformXmlReferenceProducer<'a> {
+    /// The source graph XML owner emits inheritance receipts only.
+    ParentNoProducerOutcome,
+    Inheritance {
+        receipt: &'a ProjectGraphXmlReference,
+    },
+}
+
+pub(crate) fn build_platform_root_xml_reference_facet_on_budget<'m, 'a>(
+    map: &'m PlatformMapArtifact<'a>,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<PlatformRootXmlReferenceFacet<'m, 'a>> {
+    // Reuse the existing complete root declaration custody join on this exact
+    // ledger; this facet adds only source-reference projection.
+    let declaration = build_platform_root_xml_declaration_facet_on_budget(map, budget, stop)?;
+    let native_view: &'a SkeletonInputView<'a> = map.native_view;
+    let (native, _, _) = native_view.context_parts();
+    let project = native.project();
+    let configuration = project.configuration();
+    let packages = configuration
+        .package_load_plan()
+        .ok_or_else(facet_missing)?;
+    // Captured source observations remain usable when the wider load closure
+    // is partial. Preserve those owner flags; exact row custody is still joined
+    // below, and this metadata never establishes complete or negative authority.
+
+    // Bind the original package-local site through the package owner's exact
+    // path resolver, then compare that qualified path with the graph receipt.
+    let qualified_document = declaration.declaration.path.as_str();
+    let package_nodes = packages.packages();
+    budget.work(package_nodes.len(), stop)?;
+    let mut selected = None;
+    for package_node in package_nodes {
+        checkpoint(stop)?;
+        budget.work(
+            package_node
+                .package
+                .len()
+                .checked_mul(package_nodes.len().max(1).ilog2() as usize + 1)
+                .ok_or_else(exhausted)?,
+            stop,
+        )?;
+        let plan = packages
+            .package_plan(&package_node.package)
+            .ok_or_else(facet_missing)?;
+        let report = plan.xml_references();
+        budget.work(
+            declaration
+                .declaration
+                .occurrence_id
+                .len()
+                .checked_mul(report.declarations().len().max(1).ilog2() as usize + 1)
+                .ok_or_else(exhausted)?,
+            stop,
+        )?;
+        let Some(site) = report
+            .declarations()
+            .get(&declaration.declaration.occurrence_id)
+        else {
+            continue;
+        };
+        let sources = plan.sources();
+        budget.work(sources.len(), stop)?;
+        let mut source_path_scan_bytes = 0usize;
+        for source in sources {
+            checkpoint(stop)?;
+            budget.work(source.path.len(), stop)?;
+            source_path_scan_bytes = source_path_scan_bytes
+                .checked_add(source.path.len())
+                .ok_or_else(exhausted)?;
+        }
+        let resolver_work = sources
+            .len()
+            .checked_add(
+                sources
+                    .len()
+                    .checked_mul(site.document.len())
+                    .and_then(|n| n.checked_add(source_path_scan_bytes))
+                    .ok_or_else(exhausted)?,
+            )
+            .ok_or_else(exhausted)?;
+        budget.work(resolver_work, stop)?;
+        let resolved_path_bytes = PACKAGE_MAIN_NAMESPACE_ROOT
+            .len()
+            .checked_add(1)
+            .and_then(|n| n.checked_add(package_node.package.len()))
+            .and_then(|n| n.checked_add(1))
+            .and_then(|n| n.checked_add(site.document.len()))
+            .ok_or_else(exhausted)?;
+        budget.work(resolved_path_bytes, stop)?;
+        budget.retained_bytes = budget
+            .retained_bytes
+            .checked_add(u64::try_from(resolved_path_bytes).map_err(|_| exhausted())?)
+            .ok_or_else(exhausted)?;
+        budget.remaining_metadata_bytes()?;
+        let scoped_path = packages
+            .source_path(&package_node.package, &site.document)
+            .ok_or_else(facet_missing)?;
+        if scoped_path != qualified_document {
+            continue;
+        }
+        if package_node.selected_plan_digest != plan.digest() {
+            return Err(facet_mismatch());
+        }
+        let profile_bytes = encoded_len(
+            configuration.selected_profile(),
+            budget
+                .remaining_metadata_bytes()?
+                .min(budget.remaining_context_work()),
+            stop,
+        )?;
+        budget.work(
+            usize::try_from(profile_bytes).map_err(|_| exhausted())?,
+            stop,
+        )?;
+        budget.retain(configuration.selected_profile(), stop)?;
+        plan.validate_profile(configuration.selected_profile())
+            .map_err(project_error)?;
+        if site.occurrence_id != declaration.declaration.occurrence_id
+            || declaration.source_handle.content_digest() != &site.content_digest
+        {
+            return Err(facet_mismatch());
+        }
+        validate_xml_declaration_site(plan, site, budget, stop)?;
+        let source_span = SourceSpan::byte_range(site.span.byte_start, site.span.byte_end)
+            .map_err(|_| facet_mismatch())?;
+        if declaration.source_handle.span() != source_span {
+            return Err(facet_mismatch());
+        }
+        if selected
+            .replace((package_node, plan, site, report))
+            .is_some()
+        {
+            return Err(facet_mismatch());
+        }
+    }
+    let (package_node, plan, root_site, report) = selected.ok_or_else(facet_missing)?;
+    let package = package_node.package.as_str();
+    let load_plan_digest = plan.digest();
+    let receipts = native.source().xml_inheritance();
+
+    // First count root-owned records. Charge the full source-reference scan
+    // before comparing IDs; no report or plan is cloned.
+    let all_references = report.references();
+    budget.work(all_references.len(), stop)?;
+    let mut reference_count = 0usize;
+    let mut inheritance_count = 0usize;
+    for record in all_references {
+        checkpoint(stop)?;
+        budget.work(
+            record
+                .source_id
+                .len()
+                .checked_add(declaration.declaration.occurrence_id.len())
+                .and_then(|n| n.checked_add(1))
+                .ok_or_else(exhausted)?,
+            stop,
+        )?;
+        if record.source_id == declaration.declaration.occurrence_id {
+            reference_count = reference_count.checked_add(1).ok_or_else(exhausted)?;
+            if record.kind == XmlReferenceKind::Inherits {
+                inheritance_count = inheritance_count.checked_add(1).ok_or_else(exhausted)?;
+            }
+        }
+    }
+    let receipt_scan = inheritance_count
+        .checked_mul(receipts.len())
+        .ok_or_else(exhausted)?;
+    budget.work(receipt_scan, stop)?;
+
+    let allocation_bytes = reference_count
+        .checked_mul(std::mem::size_of::<PlatformRootXmlReferenceRecord<'a>>())
+        .and_then(|bytes| u64::try_from(bytes).ok())
+        .ok_or_else(exhausted)?;
+    let work_allocation = reference_count.checked_add(1).ok_or_else(exhausted)?;
+    budget.work(work_allocation, stop)?;
+    budget.retained_bytes = budget
+        .retained_bytes
+        .checked_add(allocation_bytes)
+        .ok_or_else(exhausted)?;
+    budget.remaining_metadata_bytes()?;
+    let mut references = Vec::new();
+    references
+        .try_reserve_exact(reference_count)
+        .map_err(|_| exhausted())?;
+
+    budget.work(all_references.len(), stop)?;
+    for record in all_references {
+        checkpoint(stop)?;
+        budget.work(
+            record
+                .source_id
+                .len()
+                .checked_add(declaration.declaration.occurrence_id.len())
+                .and_then(|n| n.checked_add(record.reference_id.len()))
+                .ok_or_else(exhausted)?,
+            stop,
+        )?;
+        if record.source_id != declaration.declaration.occurrence_id {
+            continue;
+        }
+
+        let target = match &record.resolution {
+            XmlReferenceResolution::UniqueLocalDeclaration { declaration_id }
+            | XmlReferenceResolution::InvalidTarget { declaration_id } => {
+                budget.work(
+                    declaration_id
+                        .len()
+                        .checked_mul(report.declarations().len().max(1).ilog2() as usize + 1)
+                        .ok_or_else(exhausted)?,
+                    stop,
+                )?;
+                let target = report
+                    .declarations()
+                    .get(declaration_id)
+                    .ok_or_else(facet_missing)?;
+                if target.occurrence_id != *declaration_id {
+                    return Err(facet_mismatch());
+                }
+                validate_xml_declaration_site(plan, target, budget, stop)?;
+                Some(target)
+            }
+            _ => None,
+        };
+        let name_group = match &record.resolution {
+            XmlReferenceResolution::AmbiguousName { name_group } => {
+                budget.work(
+                    name_group
+                        .len()
+                        .checked_mul(report.names().len().max(1).ilog2() as usize + 1)
+                        .ok_or_else(exhausted)?,
+                    stop,
+                )?;
+                let group = report
+                    .names()
+                    .get(name_group)
+                    .filter(|group| group.len() > 1)
+                    .ok_or_else(facet_missing)?;
+                budget.work(group.len(), stop)?;
+                for declaration_id in group {
+                    checkpoint(stop)?;
+                    budget.work(
+                        declaration_id
+                            .len()
+                            .checked_mul(report.declarations().len().max(1).ilog2() as usize + 1)
+                            .ok_or_else(exhausted)?,
+                        stop,
+                    )?;
+                    let site = report
+                        .declarations()
+                        .get(declaration_id)
+                        .ok_or_else(facet_missing)?;
+                    if site.occurrence_id != *declaration_id
+                        || site.name.as_deref() != Some(record.name.as_str())
+                    {
+                        return Err(facet_mismatch());
+                    }
+                    validate_xml_declaration_site(plan, site, budget, stop)?;
+                }
+                Some(group.as_slice())
+            }
+            _ => None,
+        };
+        let cycle = if let Some(cycle_id) = record.cycle_id.as_deref() {
+            budget.work(report.cycles().len(), stop)?;
+            let mut found = None;
+            for candidate in report.cycles() {
+                checkpoint(stop)?;
+                budget.work(candidate.cycle_id.len(), stop)?;
+                if candidate.cycle_id == cycle_id
+                    && (found.replace(candidate).is_some() || candidate.kind != record.kind)
+                {
+                    return Err(facet_mismatch());
+                }
+            }
+            let cycle = found.ok_or_else(facet_missing)?;
+            budget.work(cycle.declaration_ids.len(), stop)?;
+            budget.work(cycle.reference_ids.len(), stop)?;
+            let mut contains_reference = false;
+            for reference_id in &cycle.reference_ids {
+                checkpoint(stop)?;
+                budget.work(reference_id.len(), stop)?;
+                if reference_id == &record.reference_id {
+                    if contains_reference {
+                        return Err(facet_mismatch());
+                    }
+                    contains_reference = true;
+                }
+            }
+            if !contains_reference {
+                return Err(facet_mismatch());
+            }
+            for declaration_id in &cycle.declaration_ids {
+                checkpoint(stop)?;
+                budget.work(
+                    declaration_id
+                        .len()
+                        .checked_mul(report.declarations().len().max(1).ilog2() as usize + 1)
+                        .ok_or_else(exhausted)?,
+                    stop,
+                )?;
+                let site = report
+                    .declarations()
+                    .get(declaration_id)
+                    .ok_or_else(facet_missing)?;
+                if site.occurrence_id != *declaration_id {
+                    return Err(facet_mismatch());
+                }
+                validate_xml_declaration_site(plan, site, budget, stop)?;
+            }
+            Some(cycle)
+        } else {
+            None
+        };
+
+        let producer = match record.kind {
+            XmlReferenceKind::Parent => {
+                budget.work(receipts.len(), stop)?;
+                for receipt in receipts {
+                    checkpoint(stop)?;
+                    budget.work(
+                        receipt
+                            .reference_id
+                            .len()
+                            .checked_add(package.len())
+                            .and_then(|n| n.checked_add(root_site.document.len()))
+                            .and_then(|n| n.checked_add(1))
+                            .ok_or_else(exhausted)?,
+                        stop,
+                    )?;
+                    if receipt.reference_id == record.reference_id
+                        && receipt.package.as_deref() == Some(package)
+                        && receipt.document.as_deref() == Some(qualified_document)
+                    {
+                        return Err(facet_mismatch());
+                    }
+                }
+                PlatformXmlReferenceProducer::ParentNoProducerOutcome
+            }
+            XmlReferenceKind::Inherits => {
+                let mut matched = None;
+                for receipt in receipts {
+                    checkpoint(stop)?;
+                    budget.work(
+                        receipt
+                            .reference_id
+                            .len()
+                            .checked_add(package.len())
+                            .and_then(|n| n.checked_add(root_site.document.len()))
+                            .and_then(|n| n.checked_add(1))
+                            .ok_or_else(exhausted)?,
+                        stop,
+                    )?;
+                    if receipt.reference_id != record.reference_id {
+                        continue;
+                    }
+                    if receipt.package.as_deref() != Some(package)
+                        || receipt.document.as_deref() != Some(qualified_document)
+                    {
+                        continue;
+                    }
+                    if receipt.load_plan_digest != Some(load_plan_digest) {
+                        return Err(facet_mismatch());
+                    }
+                    if matched.replace(receipt).is_some() {
+                        return Err(facet_mismatch());
+                    }
+                }
+                PlatformXmlReferenceProducer::Inheritance {
+                    receipt: matched.ok_or_else(facet_missing)?,
+                }
+            }
+        };
+        let output = PlatformRootXmlReferenceRecord {
+            record,
+            target,
+            name_group,
+            cycle,
+            producer,
+        };
+        budget.retain(&output, stop)?;
+        references.push(output);
+    }
+    if references.len() != reference_count {
+        return Err(facet_mismatch());
+    }
+
+    let facet = PlatformRootXmlReferenceFacet {
+        selection: PlatformRootFacet::XmlReferenceMetadata,
+        interpretation: "original_root_xml_reference_records_with_inheritance_producer_proposals_only",
+        declaration,
+        package,
+        document: qualified_document,
+        load_plan_document: root_site.document.as_str(),
+        load_plan_digest,
+        package_load_coverage: packages.coverage(),
+        external_files_complete: plan.external_files_complete(),
+        references,
+    };
+    budget.retain(&facet, stop)?;
+    Ok(facet)
+}
+
+fn validate_xml_declaration_site(
+    plan: &ProjectLoadPlan,
+    site: &XmlDeclarationSite,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<()> {
+    let documents = plan.xml_documents();
+    let lookup_work = (documents.len().max(1).ilog2() as usize)
+        .checked_add(site.document.len())
+        .and_then(|n| n.checked_add(site.occurrence_id.len()))
+        .ok_or_else(exhausted)?;
+    budget.work(lookup_work, stop)?;
+    let document = documents.get(&site.document).ok_or_else(facet_missing)?;
+    if document.document() != site.document || document.source_digest() != site.content_digest {
+        return Err(facet_mismatch());
+    }
+    budget.work(
+        document
+            .elements()
+            .len()
+            .checked_add(site.occurrence_id.len())
+            .ok_or_else(exhausted)?,
+        stop,
+    )?;
+    let element = document
+        .element(&site.occurrence_id)
+        .ok_or_else(facet_missing)?;
+    if element.occurrence_id != site.occurrence_id
+        || element.span != site.span
+        || element.declaration.is_none()
+    {
+        return Err(facet_mismatch());
+    }
+    Ok(())
 }
 
 fn facet_missing() -> ContextError {

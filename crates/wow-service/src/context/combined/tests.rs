@@ -421,10 +421,23 @@ fn platform_root_facets_compose_with_valid_primary_recipes_in_inspect_and_build(
             Some(CombinedL1Recipe::ReferenceFactsBoth),
         ),
     ];
-    for facet in [
-        "callable_metadata",
-        "xml_handler_metadata",
-        "xml_declaration_metadata",
+    for (facet, expected_facet) in [
+        (
+            "callable_metadata",
+            wow_context::PlatformRootFacet::CallableMetadata,
+        ),
+        (
+            "xml_handler_metadata",
+            wow_context::PlatformRootFacet::XmlHandlerMetadata,
+        ),
+        (
+            "xml_declaration_metadata",
+            wow_context::PlatformRootFacet::XmlDeclarationMetadata,
+        ),
+        (
+            "xml_reference_metadata",
+            wow_context::PlatformRootFacet::XmlReferenceMetadata,
+        ),
     ] {
         for operation in ["inspect", "build"] {
             for (level, field, profile, expected_l0, expected_l1) in recipes {
@@ -444,16 +457,7 @@ fn platform_root_facets_compose_with_valid_primary_recipes_in_inspect_and_build(
                     &serde_json::to_vec(&value)?,
                     &AtomicBool::new(false),
                 )?;
-                assert_eq!(
-                    request.platform_root_facet,
-                    Some(match facet {
-                        "callable_metadata" => wow_context::PlatformRootFacet::CallableMetadata,
-                        "xml_handler_metadata" => {
-                            wow_context::PlatformRootFacet::XmlHandlerMetadata
-                        }
-                        _ => wow_context::PlatformRootFacet::XmlDeclarationMetadata,
-                    })
-                );
+                assert_eq!(request.platform_root_facet, Some(expected_facet));
                 assert!(request.l0_recipe == expected_l0);
                 assert!(request.l1_recipe == expected_l1);
                 let expected = wow_core::canonical_json_bytes(&value)?;
@@ -469,6 +473,7 @@ fn platform_root_facets_compose_with_valid_primary_recipes_in_inspect_and_build(
         "callable_metadata",
         "xml_handler_metadata",
         "xml_declaration_metadata",
+        "xml_reference_metadata",
     ] {
         for operation in ["inspect", "build"] {
             let mut mixed = if operation == "inspect" {
@@ -645,6 +650,10 @@ fn platform_xml_metadata_selectors_are_closed_and_additive() -> TestResult {
         (
             "xml_declaration_metadata",
             wow_context::PlatformRootFacet::XmlDeclarationMetadata,
+        ),
+        (
+            "xml_reference_metadata",
+            wow_context::PlatformRootFacet::XmlReferenceMetadata,
         ),
     ] {
         for level in ["l0", "l1", "both"] {

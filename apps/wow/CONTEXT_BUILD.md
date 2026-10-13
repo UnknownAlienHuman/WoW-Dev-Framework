@@ -299,6 +299,24 @@ inheritance/parent/runtime/bridge inference. It composes with each valid Primary
 recipe in the same Inspect origins, semantic pack and renderer path under the
 cumulative Budget. Missing, mismatched, ambiguous or incomplete custody refuses
 with checked closure. Omission preserves existing bytes.
+
+The closed `platform_root_facet="xml_reference_metadata"` selects only an
+exact accepted native `xml_source_declaration` root. Declaration identity/span,
+source/evidence and root support remain bound to the held `SkeletonInputView`.
+The projection joins its per-root `XmlDeclarationSite` and `XmlReferenceRecord`
+values to applicable original `ProjectGraphXmlReference` receipts through exact
+package, load-plan, occurrence, content-digest and owner `source_path` custody.
+Receipt documents are package-qualified; report/site documents are package-local
+and bind through that exact owner mapping. Preserve parent/inherits kinds,
+ordinals, spans, names, targets/name groups, resolution/order/cycle/ambiguity
+and receipt outcomes. `ProducerOutcomeProjected` is a producer proposal, not an
+accepted graph relation or runtime/effective class, type, parent, inheritance or
+bridge fact. No XML text is parsed or emitted. Reuse the original declaration,
+map, read and cumulative Budget; do not acquire another view. The required
+Inspect/Build consumer carries the held view through origins, semantic pack and
+renderers. Missing, mismatched, ambiguous or incomplete custody refuses;
+existing facets and omission retain bytes/counters. Positive integrated
+reference-fixture and runtime qualification remain NotEvaluated.
 StateDetail retains its original nested
 `wow-context/l1-skeleton/primary-state-detail/1` schema and artifact ID;
 ReferenceFacts retains `wow-context/l1-skeleton/primary-reference-facts/1`,

@@ -29,7 +29,7 @@ configured Reference binding, original support and load/source custody:
 - [Selected combined native map, L0/L1 inspection and semantic pack/JSON/Markdown](e3/NATIVE_COMBINED_MAP.md),
   retaining separate original owners/origins and exact shared Reference association
   under one continuing construction Budget through validation and final delivery;
-  selected native platform-root callable, XML-handler and XML-declaration metadata
+  selected native platform-root callable, XML-handler, XML-declaration and XML-reference metadata
   compose independently with each valid Primary recipe in Inspect/Build.
 
 Selected projections remain Partial or Truncated with absence_authoritative=false;

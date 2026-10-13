@@ -67,20 +67,28 @@ fn selected_skeleton_fixture_from_seed(
     stop: &AtomicBool,
     native_reference: bool,
 ) -> TestResult<SelectedSkeletonFixture> {
+    selected_skeleton_fixture_from_xml_seed(stop, native_reference, CLASSIFICATION_XML)
+}
+
+fn selected_skeleton_fixture_from_xml_seed(
+    stop: &AtomicBool,
+    native_reference: bool,
+    xml_text: &str,
+) -> TestResult<SelectedSkeletonFixture> {
     // Reuse the existing reviewed classification fixture and its positive closed
     // TextureType shape; no second fixture manifest/schema authority is invented.
     let xsd = skeleton_xsd();
     let (root, mut config) = if native_reference {
         classification_fixture_from_seed(
             &[("UI/classification.xsd", &xsd)],
-            CLASSIFICATION_XML,
+            xml_text,
             None,
             None,
             &[],
             true,
         )?
     } else {
-        classification_fixture(&xsd)?
+        classification_fixture_members(&xsd, xml_text, None, None)?
     };
     config["physical_function_declarations"] =
         serde_json::to_value(PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1)?;
