@@ -569,7 +569,9 @@ forms and overflow reject. An upstream decoder may already have discarded
 lexical information (serde_json 1.0.151 with `arbitrary_precision` turns JSON
 `-0` into integer zero). This Serialize boundary cannot reconstruct that token;
 strict lexical JSON admission belongs before the decoder's Value projection.
-The feature-profile regression explicitly distinguishes both representations.
+The feature-profile regression distinguishes normalized integer zero, a retained
+lexical `-0` token, and floating `-0.0`. Retained signed and floating spellings
+remain rejected even when an upstream numeric accessor reports integer zero.
 
 ## Raw E0 envelope input
 

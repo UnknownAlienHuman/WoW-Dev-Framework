@@ -567,21 +567,32 @@ fn canonical_017_feature_unified_number_values_keep_scalar_semantics() -> TestRe
             )?;
         }
     }
-    // serde_json's arbitrary_precision parser converts the lexical -0 token
-    // into an integer zero BEFORE this serialization API sees it. Without that
-    // feature it preserves a floating negative zero. Assert the precise boundary,
-    // rather than pretending a serializer can recover discarded lexical data.
+    // The resolved decoder/features can normalize -0 to zero, retain its token,
+    // or preserve floating negative zero. Check the actual serialization boundary;
+    // this API cannot recover lexical data already discarded by the decoder.
     let parsed_zero: Value = serde_json::from_str("-0")?;
-    if parsed_zero.as_u64() == Some(0) {
-        assert_eq!(serde_json::to_vec(&parsed_zero)?, b"0");
-        assert_eq!(canonical_json_bytes(&parsed_zero)?, b"0");
-    } else {
-        assert!(parsed_zero.is_f64());
-        assert_eq!(serde_json::to_vec(&parsed_zero)?, b"-0.0");
-        rejected(
-            canonical_json_bytes(&parsed_zero),
-            CoreErrorCode::CanonicalizationFailure,
-        )?;
+    match serde_json::to_vec(&parsed_zero)?.as_slice() {
+        b"0" => {
+            assert_eq!(parsed_zero.as_u64(), Some(0));
+            assert_eq!(canonical_json_bytes(&parsed_zero)?, b"0");
+        }
+        b"-0" => {
+            // Numeric equality with zero does not admit a retained sign.
+            assert_eq!(parsed_zero.as_i64(), Some(0));
+            assert!(!parsed_zero.is_f64());
+            rejected(
+                canonical_json_bytes(&parsed_zero),
+                CoreErrorCode::CanonicalizationFailure,
+            )?;
+        }
+        b"-0.0" => {
+            assert!(parsed_zero.is_f64());
+            rejected(
+                canonical_json_bytes(&parsed_zero),
+                CoreErrorCode::CanonicalizationFailure,
+            )?;
+        }
+        _ => return Err("unexpected upstream negative-zero representation".into()),
     }
     // When a noncanonical numeric token IS retained by the Number protocol,
     // it must fail before delegation could normalize it. This also tests the
