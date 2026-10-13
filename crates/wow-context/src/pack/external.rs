@@ -430,6 +430,8 @@ impl HeaderProbe {
             || matches_path(path, &["semantic_pack_id"])
             || matches_path(path, &["core", "profile", "profile_id"])
             || matches_path(path, &["core", "request", "core", "profile_id"])
+            || matches_path(path, &["core", "request", "core", "l0_profile_id"])
+            || matches_path(path, &["core", "request", "core", "l1_profile_id"])
             || matches_path(path, &["core", "request", "core", "level"])
             || matches_path(path, &["core", "request", "core", "root", "kind"])
             || matches_path(path, &["core", "skeletons", "level"])
@@ -1633,6 +1635,7 @@ fn classify(
     if header.profile_id.is_none()
         || header.request_profile_id.is_none()
         || header.level.is_none()
+        || header.skeleton_level.is_none()
         || header.root_kind.is_none()
     {
         return (
@@ -1650,6 +1653,14 @@ fn classify(
             PrimaryPackValidationState::Valid,
             PrimaryPackValidationState::NotEvaluated,
             PrimaryPackValidationCode::UnsupportedProfile,
+        );
+    }
+    if header.level != header.skeleton_level {
+        return (
+            PrimaryPackValidationState::Invalid,
+            PrimaryPackValidationState::Valid,
+            PrimaryPackValidationState::Invalid,
+            PrimaryPackValidationCode::WireSchemaMismatch,
         );
     }
     let level = match (header.level.as_deref(), header.skeleton_level.as_deref()) {

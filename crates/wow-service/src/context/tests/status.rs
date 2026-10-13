@@ -389,7 +389,9 @@ fn retained_context_status_reports_exact_generations_details_and_closes_without_
                     && row["scope"] == "primary_structural_pack_validation"
             }));
             assert!(capabilities.iter().any(|row| {
-                row["operation"] == "context_render" && row["availability"] == "not_implemented"
+                row["operation"] == "context_render"
+                    && row["availability"] == "partial_functional"
+                    && row["scope"] == "external_primary_default_l0_and_entity_v1_l1_structural_json_input; other_recipes_not_evaluated"
             }));
             assert!(capabilities.iter().any(|row| {
                 row["operation"] == "context_map" && row["availability"] == "partial_functional"

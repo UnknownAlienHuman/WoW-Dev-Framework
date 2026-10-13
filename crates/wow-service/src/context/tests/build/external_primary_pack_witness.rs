@@ -793,6 +793,116 @@ fn external_primary_pack_reader_accepts_native_l0_and_default_entity_l1() -> Tes
         Some(wow_context::PrimaryPackLevel::L1)
     );
 
+    assert_resealed_l1_mutation_state(
+        &l1_bytes,
+        &stop,
+        "retained receipt evidence identity without declaration joins",
+        wow_context::ValidationState::Invalid,
+        |pack| {
+            pack["core"]["skeletons"]["l1"]["core"]["declarations"] = json!([]);
+            let map = project_map_l1_mut(pack);
+            let record = map["core"]["supports"]
+                .as_array_mut()
+                .ok_or("native support receipts")?
+                .iter_mut()
+                .find_map(|receipt| {
+                    receipt["evidence_resolution"]["evidence_records"]
+                        .as_array_mut()?
+                        .first_mut()
+                })
+                .ok_or("native receipt evidence")?;
+            record["producer_version"] = json!("999.1.1");
+            Ok(())
+        },
+    )?;
+    assert_resealed_l1_mutation_state(
+        &l1_bytes,
+        &stop,
+        "retained source handle identity in equal support and custody copies",
+        wow_context::ValidationState::Invalid,
+        |pack| {
+            pack["core"]["skeletons"]["l1"]["core"]["declarations"] = json!([]);
+            let map = project_map_l1_mut(pack);
+            let original = map["core"]["supports"]
+                .as_array()
+                .ok_or("native support receipts")?
+                .iter()
+                .find_map(|receipt| {
+                    receipt["evidence_resolution"]["source_handles"]
+                        .as_array()?
+                        .first()
+                })
+                .cloned()
+                .ok_or("native source handle")?;
+            let id = original["handle_id"].clone();
+            let mut changed = original;
+            forge_digest_record_id(&mut changed, "revision")?;
+            for receipt in map["core"]["supports"]
+                .as_array_mut()
+                .ok_or("support receipts")?
+            {
+                for handle in receipt["evidence_resolution"]["source_handles"]
+                    .as_array_mut()
+                    .ok_or("source handles")?
+                {
+                    if handle["handle_id"] == id {
+                        *handle = changed.clone();
+                    }
+                }
+            }
+            let mut custody_matches = 0;
+            for custody in map["core"]["source_custody"]
+                .as_array_mut()
+                .ok_or("native custody")?
+            {
+                if custody["handle"]["handle_id"] == id {
+                    custody["handle"] = changed.clone();
+                    custody_matches += 1;
+                }
+            }
+            assert_eq!(custody_matches, 1);
+            Ok(())
+        },
+    )?;
+    for selector in ["l0_profile_id", "l1_profile_id"] {
+        let mutated = mutate_and_reseal_native_l1_pack(&l1_bytes, |pack| {
+            let request = &mut pack["core"]["request"];
+            request["core"][selector] = json!(false);
+            request["context_request_id"] = json!(domain_identity(
+                &request["core"],
+                "context-pack-request:sha256:"
+            )?);
+            Ok(())
+        })?;
+        let validation =
+            wow_context::validate_primary_pack(&mutated, reader_limits(READER_MAX_BYTES)?, &stop)?;
+        assert_eq!(
+            validation.overall_state(),
+            wow_context::ValidationState::Invalid,
+            "{selector}: {validation:?}"
+        );
+    }
+    for missing in [false, true] {
+        let mutated = mutate_and_reseal_native_l1_pack(&l1_bytes, |pack| {
+            let skeletons = pack["core"]["skeletons"]
+                .as_object_mut()
+                .ok_or("native skeleton wrapper")?;
+            if missing {
+                skeletons.remove("level");
+            } else {
+                skeletons.insert("level".into(), json!("l0"));
+            }
+            Ok(())
+        })?;
+        let validation =
+            wow_context::validate_primary_pack(&mutated, reader_limits(READER_MAX_BYTES)?, &stop)?;
+        assert_eq!(
+            validation.overall_state(),
+            wow_context::ValidationState::Invalid,
+            "missing={missing}: {validation:?}"
+        );
+    }
+
     let incomplete_chain = remove_native_derivation_chain(&l0_bytes, false)?;
     let incomplete = wow_context::validate_primary_pack(
         &incomplete_chain,

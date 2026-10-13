@@ -1182,6 +1182,17 @@ fn check_project_map_links_for_purpose<E: From<ContextError>>(
         let mut receipt_evidence_ids = std::collections::BTreeSet::new();
         for evidence in &receipt.evidence_resolution.evidence_records {
             reserve_work(1).map_err(ProjectMapWireCheckError::Work)?;
+            reserve_owner_validation(
+                evidence,
+                map.core.budget.limits.max_metadata_bytes,
+                &mut reserve_work,
+                stop,
+            )?;
+            if evidence.validate().is_err() {
+                return Err(ProjectMapWireCheckError::Invalid(
+                    "support evidence fails Core identity or invariant admission",
+                ));
+            }
             if evidence.context_id() != map.core.binding.source_context_id {
                 return Err(ProjectMapWireCheckError::Invalid(
                     "support evidence belongs to another source context",
@@ -1196,6 +1207,17 @@ fn check_project_map_links_for_purpose<E: From<ContextError>>(
         let mut receipt_handle_ids = std::collections::BTreeSet::new();
         for handle in &receipt.evidence_resolution.source_handles {
             reserve_work(1).map_err(ProjectMapWireCheckError::Work)?;
+            reserve_owner_validation(
+                handle,
+                map.core.budget.limits.max_metadata_bytes,
+                &mut reserve_work,
+                stop,
+            )?;
+            if handle.validate().is_err() {
+                return Err(ProjectMapWireCheckError::Invalid(
+                    "support source handle fails Core identity or invariant admission",
+                ));
+            }
             let id = handle.handle_id();
             if let Some(previous) = support_handles.get(&id) {
                 // The native builder deduplicates shared handles; equal repeated
@@ -1532,6 +1554,24 @@ fn check_project_map_links_for_purpose<E: From<ContextError>>(
             ProjectMapLinksOutcome::Supported
         },
     )
+}
+
+fn reserve_owner_validation<T: Serialize, E: From<ContextError>>(
+    record: &T,
+    max_bytes: u64,
+    reserve_work: &mut impl FnMut(usize) -> Result<(), E>,
+    stop: &std::sync::atomic::AtomicBool,
+) -> Result<(), ProjectMapWireCheckError<E>> {
+    reserve_work(1).map_err(ProjectMapWireCheckError::Work)?;
+    let length = crate::budget::encoded_len(record, max_bytes, stop)
+        .map_err(|error| ProjectMapWireCheckError::Work(E::from(error)))?;
+    // Core field validation, canonical identity encoding and hashing consume
+    // the caller's continuing allowance before any owner revalidation runs.
+    let work = usize::try_from(length)
+        .ok()
+        .and_then(|length| length.checked_mul(3))
+        .ok_or_else(|| ProjectMapWireCheckError::Work(E::from(crate::budget::exhausted())))?;
+    reserve_work(work).map_err(ProjectMapWireCheckError::Work)
 }
 
 fn graph_query_digest<T: Serialize, E: From<ContextError>>(

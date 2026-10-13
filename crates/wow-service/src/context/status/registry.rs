@@ -42,7 +42,7 @@ pub(super) const CAPABILITIES: &[Capability] = &[
     Capability {
         operation: "context_render",
         availability: "partial_functional",
-        scope: "external_primary_l0_structural_json_input; l1_source_and_other_recipes_not_evaluated",
+        scope: "external_primary_default_l0_and_entity_v1_l1_structural_json_input; other_recipes_not_evaluated",
     },
 ];
 

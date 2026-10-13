@@ -709,7 +709,9 @@ fn native_publication_refusal_preserves_runtime_cause_outside_graph_wire() -> Te
     let message = result.failure_message().ok_or("owner cause discarded")?;
     assert!(
         message.contains("SourceBudgetExceeded")
-            && message.contains("function-call facts exceed their bounded profile")
+            && message.contains("function-call AST visits budget exceeded")
+            && message.contains("observed 2, limit 1"),
+        "actual retained native refusal: {message}"
     );
     let bytes = result.canonical_bytes()?;
     let wire: Value = serde_json::from_slice(&bytes)?;
