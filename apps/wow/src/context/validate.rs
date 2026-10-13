@@ -19,7 +19,7 @@ const MAX_ARG_BYTES: usize = 1024 * 1024;
 const MAX_VALUE_BYTES: usize = 32768;
 const PROFILE: &str = "wow-context/primary-structural-pack/1";
 
-enum Input {
+pub(super) enum Input {
     File(PathBuf),
     Stdin,
 }
@@ -165,7 +165,11 @@ pub(super) fn run(request: &Request, stop: &AtomicBool) -> u8 {
     emit(&result, stop)
 }
 
-fn read_input(input: &Input, limit: usize, stop: &AtomicBool) -> Result<Vec<u8>, &'static str> {
+pub(super) fn read_input(
+    input: &Input,
+    limit: usize,
+    stop: &AtomicBool,
+) -> Result<Vec<u8>, &'static str> {
     match input {
         Input::File(path) => crate::graph::read_file(path, limit, stop),
         Input::Stdin => {

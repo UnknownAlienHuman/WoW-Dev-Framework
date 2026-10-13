@@ -41,8 +41,8 @@ pub(super) const CAPABILITIES: &[Capability] = &[
     },
     Capability {
         operation: "context_render",
-        availability: "not_implemented",
-        scope: "external_artifact_rendering",
+        availability: "partial_functional",
+        scope: "external_primary_l0_structural_json_input; l1_source_and_other_recipes_not_evaluated",
     },
 ];
 
@@ -83,6 +83,11 @@ pub(super) const PROFILES: &[Profile] = &[
         PRIMARY_REFERENCE_FACTS_L1_PROFILE_ID,
         "primary_reference_facts_l1",
     ),
+    Profile {
+        profile_id: wow_context::PRIMARY_REFERENCE_ROOT_L0_PROFILE,
+        role: "combined_reference_facts_both_internal",
+        availability: "not_requestable",
+    },
     profile(PRIMARY_FRONTIER_EXPANSION_PROFILE_ID, "primary_frontier"),
     profile(
         PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID,

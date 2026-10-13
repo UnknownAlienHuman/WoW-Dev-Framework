@@ -341,6 +341,28 @@ The public Service operation status is `complete` when the owner returns any of 
 
 Purpose: render one already validated semantic pack under one exact renderer profile without changing semantic selection.
 
+### Selected native route
+
+`ContextRenderRequest::primary_semantic_pack_structural` selects JSON or Markdown
+for the same finite external Primary L0 GraphEntity input supported by
+`context_validate`. `execute_context_render` hashes the supplied bytes, subtracts
+that work and invokes `validate_and_render_primary_l0_pack` exactly once. It
+borrows the unchanged validation report and optional artifact into its bounded
+envelope. Invalid and NotEvaluated reports carry no artifact or null placeholder.
+The payload's `work_usage` reports Service input-hash work, owner validation/render
+work and their checked cumulative total under the original caller allowance.
+The operation completes only after the selected owner call and envelope finish;
+its validation state remains distinct from operation status.
+
+One typed decode is retained only after successful structural admission. The
+existing native renderer templates, profiles, content, traces and artifact IDs
+are reused. Decoder metadata reservation and validation/render work continue
+under the same owner bounds. No native custody or exact owner/source/catalog/
+runtime authority is reconstructed. L1/Both, source excerpts, expansions,
+platform/combined families and ExactOwnerClosure remain unsupported here.
+
+### Broader contract (acceptance remains open)
+
 Request:
 
 ```text

@@ -108,6 +108,22 @@ not outer artifact JSON, source spans or character offsets. Trace does not grant
 source inclusion permission. Requested renderers are required; refusal cannot
 clip output or return a different semantic selection.
 
+## External default Primary L0 rendering
+
+`validate_and_render_primary_l0_pack` admits the same finite StructuralOnly
+external JSON input as `validate_primary_l0_pack`, then renders JSON or Markdown
+through the existing native templates. `PrimaryPackRenderResult` exposes the
+validation report, optional artifact and cumulative `total_work()`. Invalid or
+NotEvaluated input has no artifact. A success-only private decoded view preserves
+the original pack without creating native owner custody.
+
+The decoder's canonical-byte metadata reservation is made before decoding and
+carried into the render budget with the already-consumed validation work.
+Rendering cannot reset either allowance. Native and external artifacts retain
+identical content, digest, trace and artifact ID for the same supported pack.
+This route covers default L0 source_file/source_package GraphEntity metadata;
+broader levels, recipes, excerpts and exact owner/runtime closure stay deferred.
+
 ## Cumulative limits and honest coverage
 
 Construction continues the skeleton Budget. Native work and encoded reservations

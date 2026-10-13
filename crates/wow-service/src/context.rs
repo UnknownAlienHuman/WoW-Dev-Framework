@@ -7,6 +7,7 @@ mod inspect;
 mod operation;
 mod platform;
 mod platform_status;
+mod render;
 mod request;
 mod status;
 #[cfg(test)]
@@ -71,6 +72,10 @@ pub const PRIMARY_FRONTIER_EXPANSION_PROFILE_ID: &str =
     wow_context::PRIMARY_FRONTIER_EXPANSION_PROFILE;
 pub const PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID: &str =
     wow_context::PRIMARY_PROGRESSIVE_EXPANSION_PROFILE;
+pub use render::{
+    CONTEXT_RENDER_REQUEST_SCHEMA, CONTEXT_RENDER_RESULT_SCHEMA, ContextRenderFormat,
+    ContextRenderRequest, ContextRenderResult, execute_context_render,
+};
 pub use request::{
     ContextMapCurrentGuard, ContextMapPublication, ContextMapReferenceGuard, ContextMapRequest,
     ContextMapRoot,

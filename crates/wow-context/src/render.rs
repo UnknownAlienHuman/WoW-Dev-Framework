@@ -10,10 +10,15 @@ use wow_core::{CanonicalResult, ContentDigest};
 use crate::budget::{Budget, canonical, checkpoint, exhausted};
 use crate::pack::source_excerpt::renderer_profiles as source_renderer_profiles;
 use crate::pack::{
-    COMBINED_RENDER_SCHEMA, CombinedContextSemanticPack, CombinedPackCore, ContextSemanticPack,
-    JSON_PROFILE, MARKDOWN_PROFILE, PackCore, RendererProfile, combined_renderer_profiles,
-    expansion_renderer_profiles,
+    COMBINED_RENDER_SCHEMA, CombinedContextSemanticPack, CombinedPackCore, ContextItemWire,
+    ContextSemanticPack, ItemPayloadWire, JSON_PROFILE, MARKDOWN_PROFILE, OmissionsWire,
+    PackBudget, PackBudgetWire, PackCore, PackOmissions, PackProfile, PackProfileWire, PackRequest,
+    PrimaryPackRenderFormat, ProjectMapStateWire, RendererProfile, RequestWire, SelectionRecord,
+    SelectionRecordWire, SkeletonsWire, UniverseBindingWire, ValidatedPrimaryL0Pack,
+    combined_renderer_profiles, expansion_renderer_profiles,
 };
+use crate::skeleton::PrimarySkeletons;
+use crate::universe::UniverseBinding;
 use crate::{ContextError, ContextErrorCode, ContextResult};
 
 const SCHEMA: &str = "wow-context/rendered-context-artifact/primary/1";
@@ -110,6 +115,7 @@ enum Format {
 #[derive(Clone, Copy)]
 enum NativePackCore<'r, 'm, 'p, 'f> {
     Primary(&'r PackCore<'m, 'p>),
+    Structural(&'r ValidatedPrimaryL0Pack),
     Combined(&'r CombinedPackCore<'m, 'p, 'f>),
 }
 impl Format {
@@ -127,6 +133,7 @@ impl Format {
                     (&JSON_PROFILE, &MARKDOWN_PROFILE)
                 }
             }
+            NativePackCore::Structural(_) => (&JSON_PROFILE, &MARKDOWN_PROFILE),
             NativePackCore::Combined(core) => combined_renderer_profiles(core)?,
         };
         Ok(match self {
@@ -147,6 +154,7 @@ impl Input<'_, '_, '_, '_> {
                 crate::pack::SOURCE_RENDER_SCHEMA
             }
             NativePackCore::Primary(_) => SCHEMA,
+            NativePackCore::Structural(_) => SCHEMA,
             NativePackCore::Combined(_) => COMBINED_RENDER_SCHEMA,
         }
     }
@@ -359,10 +367,286 @@ impl<'p> Planner<'_, '_, 'p> {
 
 #[derive(Serialize)]
 struct Header<'p> {
-    schema: &'static str,
+    schema: &'p str,
     semantic_pack_id: &'p str,
     /// Framing cardinality also represents an explicitly empty item array.
     item_count: usize,
+}
+
+/// Borrowed metadata projections shared by sealed native packs and a
+/// success-only StructuralOnly wire view. Implementations expose serialization
+/// inputs only; they do not create or imply native custody.
+trait PrimaryMetadataView<'p> {
+    type Profile: Serialize;
+    type Binding: Serialize;
+    type Request: Serialize;
+    type Skeletons: Serialize;
+    type Item: Serialize;
+    type Trace: Serialize;
+    type Coverage: Serialize;
+    type Budget: Serialize;
+
+    fn schema(&'p self) -> &'p str;
+    fn item_count(&self) -> usize;
+    fn items_len(&self) -> usize;
+    fn profile(&'p self) -> &'p Self::Profile;
+    fn universe_binding(&'p self) -> (&'p str, &'p Self::Binding);
+    fn request(&'p self) -> &'p Self::Request;
+    fn boundary_notice(&'p self) -> &'p str;
+    fn skeletons(&'p self) -> &'p Self::Skeletons;
+    fn item(&'p self, index: usize) -> &'p Self::Item;
+    fn item_id(&'p self, index: usize) -> &'p str;
+    fn item_template_label(&self, index: usize) -> (&'static str, &'static str);
+    fn trace(&'p self) -> &'p Self::Trace;
+    fn coverage(&'p self) -> Self::Coverage;
+    fn budget(&'p self) -> &'p Self::Budget;
+}
+
+impl<'p, 'm: 'p, 'a: 'p> PrimaryMetadataView<'p> for PackCore<'m, 'a> {
+    type Profile = PackProfile;
+    type Binding = UniverseBinding<'a>;
+    type Request = PackRequest<'m>;
+    type Skeletons = PrimarySkeletons<'m, 'a>;
+    type Item = crate::pack::ContextItem<'m, 'a>;
+    type Trace = Vec<SelectionRecord<'m>>;
+    type Coverage = (&'p PackOmissions, &'p crate::ProjectMapState, bool);
+    type Budget = PackBudget;
+
+    fn schema(&'p self) -> &'p str {
+        self.schema
+    }
+    fn item_count(&self) -> usize {
+        self.items.len() + usize::from(self.source_excerpt.is_some())
+    }
+    fn items_len(&self) -> usize {
+        self.items.len()
+    }
+    fn profile(&'p self) -> &'p Self::Profile {
+        self.profile
+    }
+    fn universe_binding(&'p self) -> (&'p str, &'p Self::Binding) {
+        (self.universe_set_id, self.binding)
+    }
+    fn request(&'p self) -> &'p Self::Request {
+        &self.request
+    }
+    fn boundary_notice(&'p self) -> &'p str {
+        self.boundary_notice
+    }
+    fn skeletons(&'p self) -> &'p Self::Skeletons {
+        &self.skeletons
+    }
+    fn item(&'p self, index: usize) -> &'p Self::Item {
+        &self.items[index]
+    }
+    fn item_id(&'p self, index: usize) -> &'p str {
+        self.items[index].context_item_id()
+    }
+    fn item_template_label(&self, index: usize) -> (&'static str, &'static str) {
+        match self.items[index].core.payload.template() {
+            "native_entity_item" => ("native_entity_item", "ENTITY"),
+            "native_relation_item" => ("native_relation_item", "RELATION"),
+            _ => ("", ""),
+        }
+    }
+    fn trace(&'p self) -> &'p Self::Trace {
+        &self.selection_trace
+    }
+    fn coverage(&'p self) -> Self::Coverage {
+        (&self.omissions, &self.state, self.absence_authoritative)
+    }
+    fn budget(&'p self) -> &'p Self::Budget {
+        &self.budget
+    }
+}
+
+impl<'p> PrimaryMetadataView<'p> for ValidatedPrimaryL0Pack {
+    type Profile = PackProfileWire;
+    type Binding = UniverseBindingWire;
+    type Request = RequestWire;
+    type Skeletons = SkeletonsWire;
+    type Item = ContextItemWire;
+    type Trace = Vec<SelectionRecordWire>;
+    type Coverage = (&'p OmissionsWire, &'p ProjectMapStateWire, bool);
+    type Budget = PackBudgetWire;
+
+    fn schema(&'p self) -> &'p str {
+        &self.core().schema
+    }
+    fn item_count(&self) -> usize {
+        self.core().items.len()
+    }
+    fn items_len(&self) -> usize {
+        self.core().items.len()
+    }
+    fn profile(&'p self) -> &'p Self::Profile {
+        &self.core().profile
+    }
+    fn universe_binding(&'p self) -> (&'p str, &'p Self::Binding) {
+        (&self.core().universe_set_id, &self.core().binding)
+    }
+    fn request(&'p self) -> &'p Self::Request {
+        &self.core().request
+    }
+    fn boundary_notice(&'p self) -> &'p str {
+        &self.core().boundary_notice
+    }
+    fn skeletons(&'p self) -> &'p Self::Skeletons {
+        &self.core().skeletons
+    }
+    fn item(&'p self, index: usize) -> &'p Self::Item {
+        &self.core().items[index]
+    }
+    fn item_id(&'p self, index: usize) -> &'p str {
+        &self.core().items[index].context_item_id
+    }
+    fn item_template_label(&self, index: usize) -> (&'static str, &'static str) {
+        match &self.core().items[index].core.payload {
+            ItemPayloadWire::Entity { .. } => ("native_entity_item", "ENTITY"),
+            ItemPayloadWire::Relation { .. } => ("native_relation_item", "RELATION"),
+        }
+    }
+    fn trace(&'p self) -> &'p Self::Trace {
+        &self.core().selection_trace
+    }
+    fn coverage(&'p self) -> Self::Coverage {
+        (
+            &self.core().omissions,
+            &self.core().state,
+            self.core().absence_authoritative,
+        )
+    }
+    fn budget(&'p self) -> &'p Self::Budget {
+        &self.core().budget
+    }
+}
+
+fn prepare_primary_metadata_head<'p, V: PrimaryMetadataView<'p>>(
+    planner: &mut Planner<'_, '_, 'p>,
+    id: &'p str,
+    view: &'p V,
+) -> ContextResult<()> {
+    planner.add(
+        id,
+        "pack_header",
+        "PACK",
+        &["semantic_pack_id", "core.schema"],
+        None,
+        &Header {
+            schema: view.schema(),
+            semantic_pack_id: id,
+            item_count: view.item_count(),
+        },
+    )?;
+    planner.add(
+        id,
+        "pack_profile",
+        "PROFILE",
+        &["core.profile"],
+        None,
+        view.profile(),
+    )?;
+    let binding = view.universe_binding();
+    planner.add(
+        id,
+        "universe_binding",
+        "UNIVERSE",
+        &["core.universe_set_id", "core.binding"],
+        None,
+        &binding,
+    )?;
+    planner.add(
+        id,
+        "pack_request",
+        "REQUEST",
+        &["core.request"],
+        None,
+        view.request(),
+    )?;
+    planner.add(
+        id,
+        "boundary_notice",
+        "BOUNDARY",
+        &["core.boundary_notice"],
+        None,
+        view.boundary_notice(),
+    )?;
+    planner.add(
+        id,
+        "native_skeletons",
+        "SKELETONS",
+        &["core.skeletons"],
+        None,
+        view.skeletons(),
+    )?;
+    Ok(())
+}
+
+fn prepare_primary_metadata_items<'p, V: PrimaryMetadataView<'p>>(
+    planner: &mut Planner<'_, '_, 'p>,
+    view: &'p V,
+    stop: &AtomicBool,
+) -> ContextResult<()> {
+    for index in 0..view.items_len() {
+        checkpoint(stop)?;
+        let (template, label) = view.item_template_label(index);
+        if template.is_empty() {
+            return Err(encoding());
+        }
+        planner.add(
+            view.item_id(index),
+            template,
+            label,
+            &["core.items"],
+            Some(index),
+            view.item(index),
+        )?;
+    }
+    Ok(())
+}
+
+fn prepare_primary_metadata_tail<'p, V: PrimaryMetadataView<'p>>(
+    planner: &mut Planner<'_, '_, 'p>,
+    id: &'p str,
+    view: &'p V,
+) -> ContextResult<()> {
+    planner.add(
+        id,
+        "selection_trace",
+        "SELECTION_TRACE",
+        &["core.selection_trace"],
+        None,
+        view.trace(),
+    )?;
+    let coverage = view.coverage();
+    planner.add(
+        id,
+        "coverage_and_omissions",
+        "COVERAGE",
+        &["core.omissions", "core.state", "core.absence_authoritative"],
+        None,
+        &coverage,
+    )?;
+    planner.add(
+        id,
+        "pack_budget",
+        "BUDGET",
+        &["core.budget"],
+        None,
+        view.budget(),
+    )?;
+    Ok(())
+}
+
+fn prepare_primary_metadata<'p, V: PrimaryMetadataView<'p>>(
+    planner: &mut Planner<'_, '_, 'p>,
+    id: &'p str,
+    view: &'p V,
+    stop: &AtomicBool,
+) -> ContextResult<()> {
+    prepare_primary_metadata_head(planner, id, view)?;
+    prepare_primary_metadata_items(planner, view, stop)?;
+    prepare_primary_metadata_tail(planner, id, view)
 }
 
 fn prepare<'p>(
@@ -399,59 +683,7 @@ fn prepare<'p>(
     } else {
         match input.core {
             NativePackCore::Primary(core) => {
-                planner.add(
-                    input.id,
-                    "pack_header",
-                    "PACK",
-                    &["semantic_pack_id", "core.schema"],
-                    None,
-                    &Header {
-                        schema: core.schema,
-                        semantic_pack_id: input.id,
-                        item_count: core.items.len()
-                            + if core.source_excerpt.is_some() { 1 } else { 0 },
-                    },
-                )?;
-                planner.add(
-                    input.id,
-                    "pack_profile",
-                    "PROFILE",
-                    &["core.profile"],
-                    None,
-                    core.profile,
-                )?;
-                planner.add(
-                    input.id,
-                    "universe_binding",
-                    "UNIVERSE",
-                    &["core.universe_set_id", "core.binding"],
-                    None,
-                    &(core.universe_set_id, core.binding),
-                )?;
-                planner.add(
-                    input.id,
-                    "pack_request",
-                    "REQUEST",
-                    &["core.request"],
-                    None,
-                    &core.request,
-                )?;
-                planner.add(
-                    input.id,
-                    "boundary_notice",
-                    "BOUNDARY",
-                    &["core.boundary_notice"],
-                    None,
-                    core.boundary_notice,
-                )?;
-                planner.add(
-                    input.id,
-                    "native_skeletons",
-                    "SKELETONS",
-                    &["core.skeletons"],
-                    None,
-                    &core.skeletons,
-                )?;
+                prepare_primary_metadata_head(&mut planner, input.id, core)?;
                 if let Some(expansion) = &core.expansion {
                     planner.add(
                         expansion.expansion_id(),
@@ -462,22 +694,7 @@ fn prepare<'p>(
                         expansion,
                     )?;
                 }
-                for (index, item) in core.items.iter().enumerate() {
-                    checkpoint(stop)?;
-                    let (template, label) = match item.core.payload.template() {
-                        "native_entity_item" => ("native_entity_item", "ENTITY"),
-                        "native_relation_item" => ("native_relation_item", "RELATION"),
-                        _ => return Err(encoding()),
-                    };
-                    planner.add(
-                        item.context_item_id(),
-                        template,
-                        label,
-                        &["core.items"],
-                        Some(index),
-                        item,
-                    )?;
-                }
+                prepare_primary_metadata_items(&mut planner, core, stop)?;
                 if let Some(source) = &core.source_excerpt {
                     #[derive(Serialize)]
                     struct SourceMetadata<'a> {
@@ -516,30 +733,10 @@ fn prepare<'p>(
                         Payload::CanonicalPack("SOURCE_DATA_END\n"),
                     )?;
                 }
-                planner.add(
-                    input.id,
-                    "selection_trace",
-                    "SELECTION_TRACE",
-                    &["core.selection_trace"],
-                    None,
-                    &core.selection_trace,
-                )?;
-                planner.add(
-                    input.id,
-                    "coverage_and_omissions",
-                    "COVERAGE",
-                    &["core.omissions", "core.state", "core.absence_authoritative"],
-                    None,
-                    &(&core.omissions, core.state, core.absence_authoritative),
-                )?;
-                planner.add(
-                    input.id,
-                    "pack_budget",
-                    "BUDGET",
-                    &["core.budget"],
-                    None,
-                    &core.budget,
-                )?;
+                prepare_primary_metadata_tail(&mut planner, input.id, core)?;
+            }
+            NativePackCore::Structural(view) => {
+                prepare_primary_metadata(&mut planner, input.id, view, stop)?;
             }
             NativePackCore::Combined(core) => {
                 planner.add(
@@ -859,6 +1056,28 @@ fn render(
         limit,
         stop,
     )
+}
+
+pub(crate) fn render_validated_primary_l0_pack(
+    view: &ValidatedPrimaryL0Pack,
+    semantic_pack_id: &str,
+    canonical_bytes: &[u8],
+    format: PrimaryPackRenderFormat,
+    budget: &mut Budget,
+    metadata_limit: u64,
+    stop: &AtomicBool,
+) -> ContextResult<(RenderedContextArtifact, u64)> {
+    let format = match format {
+        PrimaryPackRenderFormat::Json => Format::Json,
+        PrimaryPackRenderFormat::Markdown => Format::Markdown,
+    };
+    let input = Input {
+        id: semantic_pack_id,
+        core: NativePackCore::Structural(view),
+        canonical_bytes,
+    };
+    let artifact = render_input(input, format, budget, metadata_limit, stop)?;
+    Ok((artifact, budget.work))
 }
 
 fn render_input(

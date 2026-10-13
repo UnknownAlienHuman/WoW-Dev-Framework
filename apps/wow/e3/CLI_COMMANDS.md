@@ -253,6 +253,36 @@ All five limits must be positive unsigned integers; `--max-input-bytes` is at mo
 
 ## `wow context render`
 
+The selected implementation is:
+
+```text
+wow context render
+  --input <PATH|->
+  --artifact-kind semantic-pack
+  --media-type application/json
+  --validation-profile-id wow-context/primary-structural-pack/1
+  --origin-closure structural
+  --renderer-profile-id wow-context/primary-pack-json/1|wow-context/primary-pack-markdown/1
+  --max-input-bytes <U64>
+  --max-metadata-bytes <U64>
+  --max-context-work <U64>
+  --max-depth <U32>
+  --max-tokens <U64>
+  [--output envelope-json]
+```
+
+Limits and explicit file/stdin admission use the same bounded reader as
+`context validate`. The CLI invokes one render Service operation and writes its
+canonical envelope plus one LF. Completed validation maps to Valid 0, Invalid 1
+or NotEvaluated 2; unsupported inputs have no rendered artifact. Failure,
+internal failure and cancellation retain 3, 4 and 130; pre-Service errors use 64.
+The selected route renders only default Primary L0 structural metadata. It
+accepts no aliases, host/store/source selectors, exact closure, text/artifact
+output or tokenizer claims. Structural validity never upgrades owner-generation,
+source/catalog or runtime authority.
+
+The broader planned transport remains unimplemented:
+
 ```text
 wow context render
   --input <PATH|->

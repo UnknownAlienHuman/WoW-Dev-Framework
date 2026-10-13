@@ -79,31 +79,55 @@ pub(crate) fn exhausted() -> ContextError {
 pub(crate) struct Budget {
     pub(crate) work: u64,
     pub(crate) retained_bytes: u64,
-    limits: PrimaryMapLimits,
+    metadata_limit: u64,
+    work_limit: u64,
 }
 impl Budget {
     pub(crate) fn new(limits: PrimaryMapLimits) -> Self {
         Self {
             work: 0,
             retained_bytes: 0,
-            limits,
+            metadata_limit: limits.max_metadata_bytes,
+            work_limit: limits.max_context_work,
         }
     }
+
+    /// Continue an already charged bounded operation, such as external pack
+    /// admission followed by rendering of its validated decoded view.
+    pub(crate) fn continue_external(
+        metadata_limit: u64,
+        work_limit: u64,
+        metadata_reserved: u64,
+        work_reserved: u64,
+    ) -> ContextResult<Self> {
+        if metadata_limit == 0 {
+            return Err(invalid());
+        }
+        if metadata_reserved > metadata_limit || work_reserved > work_limit {
+            return Err(exhausted());
+        }
+        Ok(Self {
+            work: work_reserved,
+            retained_bytes: metadata_reserved,
+            metadata_limit,
+            work_limit,
+        })
+    }
+
     pub(crate) fn remaining_metadata_bytes(&self) -> ContextResult<u64> {
-        self.limits
-            .max_metadata_bytes
+        self.metadata_limit
             .checked_sub(self.retained_bytes)
             .ok_or_else(exhausted)
     }
     pub(crate) fn remaining_context_work(&self) -> u64 {
-        self.limits.max_context_work - self.work
+        self.work_limit - self.work
     }
     pub(crate) fn work(&mut self, amount: usize, stop: &AtomicBool) -> ContextResult<()> {
         checkpoint(stop)?;
         self.work = self
             .work
             .checked_add(u64::try_from(amount).map_err(|_| exhausted())?)
-            .filter(|value| *value <= self.limits.max_context_work)
+            .filter(|value| *value <= self.work_limit)
             .ok_or_else(exhausted)?;
         Ok(())
     }

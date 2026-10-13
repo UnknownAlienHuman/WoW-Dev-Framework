@@ -10,14 +10,13 @@ use super::declaration_links::{
     DeclarationLinkState, DeclarationLinksError, check_declaration_links,
 };
 use super::declaration_wire::DeclarationWire;
-use super::l0_items_wire::{
-    ContextItemWire, ItemPayloadWire, L0ItemTraceError, L0ScopeWire, SelectionRecordWire,
-    validate_l0_item_trace,
-};
+pub(crate) use super::l0_items_wire::{ContextItemWire, ItemPayloadWire, SelectionRecordWire};
+use super::l0_items_wire::{L0ItemTraceError, L0ScopeWire, validate_l0_item_trace};
 use super::project_map_wire::{
-    MapNavigationWire, PrimaryMapLimitsWire, ProjectMapStateWire, ProjectMapWire,
-    ProjectMapWireCheckError, ProjectMapWireOutcome, UniverseBindingWire, check_project_map_links,
+    MapNavigationWire, PrimaryMapLimitsWire, ProjectMapWire, ProjectMapWireCheckError,
+    ProjectMapWireOutcome, check_project_map_links,
 };
+pub(crate) use super::project_map_wire::{ProjectMapStateWire, UniverseBindingWire};
 use super::{
     PrimaryPackAdmission, PrimaryPackDecoderCheck, PrimaryPackValidationCode as Code,
     PrimaryPackValidationState as State,
@@ -31,26 +30,44 @@ struct PackWire {
     semantic_pack_id: String,
     core: PackCoreWire,
 }
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PackCoreWire {
-    schema: String,
-    profile: PackProfileWire,
-    universe_set_id: String,
-    binding: UniverseBindingWire,
-    request: RequestWire,
-    boundary_notice: String,
-    skeletons: SkeletonsWire,
-    items: Vec<ContextItemWire>,
-    selection_trace: Vec<SelectionRecordWire>,
-    omissions: OmissionsWire,
-    budget: PackBudgetWire,
-    state: ProjectMapStateWire,
-    absence_authoritative: bool,
+
+/// The exact decoded value that passed canonical, profile, digest and join
+/// checks. This view contains structural wire data only; it carries no native
+/// owner custody or authority.
+pub(crate) struct ValidatedPrimaryL0Pack {
+    core: PackCoreWire,
+}
+
+impl ValidatedPrimaryL0Pack {
+    pub(crate) fn core(&self) -> &PackCoreWire {
+        &self.core
+    }
+}
+
+pub(crate) struct CheckedPrimaryPack {
+    pub(crate) check: PrimaryPackDecoderCheck,
+    pub(crate) validated: Option<ValidatedPrimaryL0Pack>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct PackProfileWire {
+pub(crate) struct PackCoreWire {
+    pub(crate) schema: String,
+    pub(crate) profile: PackProfileWire,
+    pub(crate) universe_set_id: String,
+    pub(crate) binding: UniverseBindingWire,
+    pub(crate) request: RequestWire,
+    pub(crate) boundary_notice: String,
+    pub(crate) skeletons: SkeletonsWire,
+    pub(crate) items: Vec<ContextItemWire>,
+    pub(crate) selection_trace: Vec<SelectionRecordWire>,
+    pub(crate) omissions: OmissionsWire,
+    pub(crate) budget: PackBudgetWire,
+    pub(crate) state: ProjectMapStateWire,
+    pub(crate) absence_authoritative: bool,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct PackProfileWire {
     authority: String,
     boundary: String,
     budgets: String,
@@ -68,7 +85,7 @@ struct PackProfileWire {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RequestWire {
+pub(crate) struct RequestWire {
     context_request_id: String,
     core: RequestCoreWire,
 }
@@ -89,7 +106,7 @@ enum LevelWire {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct SkeletonsWire {
+pub(crate) struct SkeletonsWire {
     schema: String,
     level: LevelWire,
     l0: L0Wire,
@@ -155,7 +172,7 @@ enum ScopeWire {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct OmissionsWire {
+pub(crate) struct OmissionsWire {
     upstream: Vec<OmissionRefWire>,
     interpretation: String,
     not_evaluated: Vec<String>,
@@ -169,7 +186,7 @@ struct OmissionRefWire {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct PackBudgetWire {
+pub(crate) struct PackBudgetWire {
     max_metadata_bytes: u64,
     max_context_work: u64,
     reservation_basis: String,
@@ -183,17 +200,20 @@ struct PackBudgetWire {
 pub(super) fn check(
     admission: &mut PrimaryPackAdmission<'_>,
     stop: &AtomicBool,
-) -> ContextResult<PrimaryPackDecoderCheck> {
+) -> ContextResult<CheckedPrimaryPack> {
     let Some(input) = admission.decoded_input() else {
-        return Ok(result(
-            admission,
-            None,
-            State::NotEvaluated,
-            State::NotEvaluated,
-            State::NotEvaluated,
-            State::NotEvaluated,
-            None,
-        ));
+        return Ok(CheckedPrimaryPack {
+            check: result(
+                admission,
+                None,
+                State::NotEvaluated,
+                State::NotEvaluated,
+                State::NotEvaluated,
+                State::NotEvaluated,
+                None,
+            ),
+            validated: None,
+        });
     };
     let (parsed, work_error) = {
         let mut reader = AdmissionReader {
@@ -219,7 +239,26 @@ pub(super) fn check(
         Ok(parsed) => parsed,
         Err(_) => {
             admission.checkpoint()?;
-            return Ok(result(
+            return Ok(CheckedPrimaryPack {
+                check: result(
+                    admission,
+                    None,
+                    State::Invalid,
+                    State::NotEvaluated,
+                    State::NotEvaluated,
+                    State::NotEvaluated,
+                    Some(Code::WireSchemaMismatch),
+                ),
+                validated: None,
+            });
+        }
+    };
+    admission.checkpoint()?;
+    let limit = admission.limits().max_metadata_bytes();
+    charge_encoded(admission, &parsed, stop)?;
+    if canonical(&parsed, limit, stop)? != input {
+        return Ok(CheckedPrimaryPack {
+            check: result(
                 admission,
                 None,
                 State::Invalid,
@@ -227,55 +266,56 @@ pub(super) fn check(
                 State::NotEvaluated,
                 State::NotEvaluated,
                 Some(Code::WireSchemaMismatch),
-            ));
-        }
-    };
-    admission.checkpoint()?;
-    let limit = admission.limits().max_metadata_bytes();
-    charge_encoded(admission, &parsed, stop)?;
-    if canonical(&parsed, limit, stop)? != input {
-        return Ok(result(
-            admission,
-            None,
-            State::Invalid,
-            State::NotEvaluated,
-            State::NotEvaluated,
-            State::NotEvaluated,
-            Some(Code::WireSchemaMismatch),
-        ));
+            ),
+            validated: None,
+        });
     }
     if !profiles(&parsed, admission, stop)? {
-        return Ok(result(
-            admission,
-            None,
-            State::Valid,
-            State::Invalid,
-            State::NotEvaluated,
-            State::NotEvaluated,
-            Some(Code::CompiledProfileMismatch),
-        ));
+        return Ok(CheckedPrimaryPack {
+            check: result(
+                admission,
+                None,
+                State::Valid,
+                State::Invalid,
+                State::NotEvaluated,
+                State::NotEvaluated,
+                Some(Code::CompiledProfileMismatch),
+            ),
+            validated: None,
+        });
     }
     if !digests(&parsed, admission, stop)? {
-        return Ok(result(
-            admission,
-            None,
-            State::Valid,
-            State::Valid,
-            State::Invalid,
-            State::NotEvaluated,
-            Some(Code::DigestIdentityMismatch),
-        ));
+        return Ok(CheckedPrimaryPack {
+            check: result(
+                admission,
+                None,
+                State::Valid,
+                State::Valid,
+                State::Invalid,
+                State::NotEvaluated,
+                Some(Code::DigestIdentityMismatch),
+            ),
+            validated: None,
+        });
     }
     let joined = references(&parsed, admission, stop)?;
-    Ok(result(
+    let renderable = joined.0 == State::Valid && joined.1.is_none();
+    let PackWire {
+        semantic_pack_id,
+        core,
+    } = parsed;
+    admission.charge_work(semantic_pack_id.len())?;
+    let check = result(
         admission,
-        Some(parsed.semantic_pack_id.into_boxed_str()),
+        Some(semantic_pack_id.into_boxed_str()),
         State::Valid,
         State::Valid,
         State::Valid,
         joined.0,
         joined.1,
-    ))
+    );
+    let validated = renderable.then(|| ValidatedPrimaryL0Pack { core });
+    Ok(CheckedPrimaryPack { check, validated })
 }
 
 /// Charge every buffered source refill to the admission ledger before copying

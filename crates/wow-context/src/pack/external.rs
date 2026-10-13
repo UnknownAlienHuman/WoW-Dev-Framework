@@ -19,6 +19,14 @@ mod project_map_wire;
 mod support_record_links;
 mod wire;
 
+pub(crate) use wire::{
+    ContextItemWire, ItemPayloadWire, OmissionsWire, ProjectMapStateWire, SelectionRecordWire,
+    UniverseBindingWire,
+};
+pub(crate) use wire::{
+    PackBudgetWire, PackProfileWire, RequestWire, SkeletonsWire, ValidatedPrimaryL0Pack,
+};
+
 const PACK_SCHEMA: &str = "wow-context/semantic-pack/primary/1";
 const PACK_PROFILE: &str = "wow-context/primary-structural-pack/1";
 const MAP_SCHEMA: &str = "wow-context/project-map/primary-direct-navigation/1";
@@ -362,6 +370,33 @@ impl PrimaryPackValidationBudgetUsage {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrimaryPackRenderFormat {
+    Json,
+    Markdown,
+}
+
+/// Validation report and optional artifact from one admitted external Primary L0 pack.
+#[derive(Serialize)]
+pub struct PrimaryPackRenderResult {
+    validation: PrimaryPackValidation,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    artifact: Option<crate::RenderedContextArtifact>,
+    total_work: u64,
+}
+impl PrimaryPackRenderResult {
+    pub const fn validation(&self) -> &PrimaryPackValidation {
+        &self.validation
+    }
+    pub fn artifact(&self) -> Option<&crate::RenderedContextArtifact> {
+        self.artifact.as_ref()
+    }
+    pub const fn total_work(&self) -> u64 {
+        self.total_work
+    }
+}
+
 #[derive(Default)]
 struct HeaderProbe {
     pack_schema: Option<String>,
@@ -668,11 +703,17 @@ pub(crate) struct PrimaryPackAdmission<'a> {
     limits: PrimaryPackValidationLimits,
     syntax_error: Option<PrimaryPackValidationCode>,
     decoder_eligible: bool,
+    decoded_view_bytes: u64,
 }
 
 impl<'a> PrimaryPackAdmission<'a> {
     pub(crate) fn decoded_input(&self) -> Option<&'a [u8]> {
         (self.syntax_error.is_none() && self.decoder_eligible).then_some(self.scanner.input)
+    }
+
+    /// Canonical-size metadata reserved for a decoder-eligible retained wire view.
+    pub(crate) const fn decoded_view_bytes(&self) -> u64 {
+        self.decoded_view_bytes
     }
 
     /// Return the raw selected route only after its finite preflight and raw
@@ -1227,7 +1268,60 @@ pub fn validate_primary_l0_pack(
     let mut admission = admit_primary_l0_pack(input, limits, stop)?;
     let checked = wire::check(&mut admission, stop)?;
     admission.checkpoint()?;
-    Ok(admission.finalize(checked))
+    Ok(admission.finalize(checked.check))
+}
+
+/// Validate and render one admitted Primary Structural L0 pack using the exact
+/// decoded view retained by the validator's single wire decode. No native pack
+/// or owner custody is constructed. Unsupported and invalid inputs return the
+/// validation report without a rendered artifact.
+pub fn validate_and_render_primary_l0_pack(
+    input: &[u8],
+    limits: PrimaryPackValidationLimits,
+    format: PrimaryPackRenderFormat,
+    stop: &AtomicBool,
+) -> ContextResult<PrimaryPackRenderResult> {
+    let mut admission = admit_primary_l0_pack(input, limits, stop)?;
+    let prior_metadata = admission.decoded_view_bytes();
+    let checked = wire::check(&mut admission, stop)?;
+    admission.checkpoint()?;
+    let validated = checked.validated;
+    let report = admission.finalize(checked.check);
+    if report.state() != PrimaryPackValidationState::Valid {
+        let total_work = report.budget_usage.scanner_work;
+        return Ok(PrimaryPackRenderResult {
+            validation: report,
+            artifact: None,
+            total_work,
+        });
+    }
+    let Some(validated) = validated else {
+        return Err(ContextError::new(ContextErrorCode::NativeOwnerRefused));
+    };
+    let Some(semantic_pack_id) = report.semantic_pack_id() else {
+        return Err(ContextError::new(ContextErrorCode::NativeOwnerRefused));
+    };
+    let prior_work = report.budget_usage.scanner_work;
+    let mut budget = crate::budget::Budget::continue_external(
+        limits.max_metadata_bytes(),
+        limits.max_context_work(),
+        prior_metadata,
+        prior_work,
+    )?;
+    let (artifact, total_work) = crate::render::render_validated_primary_l0_pack(
+        &validated,
+        semantic_pack_id,
+        input,
+        format,
+        &mut budget,
+        limits.max_metadata_bytes(),
+        stop,
+    )?;
+    Ok(PrimaryPackRenderResult {
+        validation: report,
+        artifact: Some(artifact),
+        total_work,
+    })
 }
 
 /// Perform bounded raw admission before the single typed pack decoder runs.
@@ -1281,6 +1375,9 @@ pub(crate) fn admit_primary_l0_pack<'a>(
     } else {
         false
     };
+    // Reserve the retained decoded view before serde allocates it. The typed
+    // decoder later proves its canonical serialization equals this exact size.
+    let decoded_view_bytes = if decoder_eligible { input_bytes } else { 0 };
     Ok(PrimaryPackAdmission {
         scanner,
         digest,
@@ -1288,6 +1385,7 @@ pub(crate) fn admit_primary_l0_pack<'a>(
         limits,
         syntax_error,
         decoder_eligible,
+        decoded_view_bytes,
     })
 }
 

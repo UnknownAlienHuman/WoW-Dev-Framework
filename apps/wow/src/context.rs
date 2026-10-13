@@ -6,6 +6,7 @@ mod combined_status;
 mod inspect;
 mod platform;
 mod platform_status;
+mod render;
 mod status;
 mod validate;
 
@@ -110,6 +111,13 @@ const HELP: &str = concat!(
     "  Combined uses explicit bounded service host/request documents. Native platform ",
     "request flags and Primary selectors cannot be mixed. Operation, inspection/build level ",
     "and Build pack/renderer profiles stay in the request. Text and artifact output are unavailable.\n",
+    "wow context render --input <PATH|-> --artifact-kind semantic-pack ",
+    "--media-type application/json --validation-profile-id wow-context/primary-structural-pack/1 ",
+    "--origin-closure structural ",
+    "--renderer-profile-id wow-context/primary-pack-json/1|wow-context/primary-pack-markdown/1 ",
+    "--max-input-bytes <U64> --max-metadata-bytes <U64> ",
+    "--max-context-work <U64> --max-depth <U32> --max-tokens <U64> ",
+    "[--output envelope-json]\n",
 );
 
 fn progressive_help() -> String {
@@ -162,7 +170,11 @@ pub fn run(values: Vec<OsString>) -> u8 {
         && (values.len() == 2
             || (values.len() == 3
                 && values.get(1).is_some_and(|value| {
-                    value == "status" || value == "map" || value == "inspect" || value == "build"
+                    value == "status"
+                        || value == "map"
+                        || value == "inspect"
+                        || value == "build"
+                        || value == "render"
                 })))
         && values
             .last()
@@ -188,6 +200,16 @@ pub fn run(values: Vec<OsString>) -> u8 {
             return 64;
         };
         return validate::run(&request, &stop);
+    }
+    let rendering = match render::parse(&values) {
+        Ok(rendering) => rendering,
+        Err(message) => return crate::usage(message),
+    };
+    if let Some(request) = rendering {
+        let Some(stop) = crate::cancellation_flag() else {
+            return 64;
+        };
+        return render::run(&request, &stop);
     }
     let arguments = match parse(values) {
         Ok(arguments) => arguments,

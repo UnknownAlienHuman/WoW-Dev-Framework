@@ -56,11 +56,11 @@ pub use pack::{
     validate_combined_context_semantic_pack, validate_context_semantic_pack,
 };
 pub use pack::{
-    PrimaryPackL0Profile, PrimaryPackLevel, PrimaryPackOriginClosure, PrimaryPackRootVariant,
-    PrimaryPackSelection, PrimaryPackValidation, PrimaryPackValidationBudgetUsage,
-    PrimaryPackValidationCheck, PrimaryPackValidationCode, PrimaryPackValidationLimits,
-    PrimaryPackValidationRecord, PrimaryPackValidationState, ValidationState,
-    validate_primary_l0_pack,
+    PrimaryPackL0Profile, PrimaryPackLevel, PrimaryPackOriginClosure, PrimaryPackRenderFormat,
+    PrimaryPackRenderResult, PrimaryPackRootVariant, PrimaryPackSelection, PrimaryPackValidation,
+    PrimaryPackValidationBudgetUsage, PrimaryPackValidationCheck, PrimaryPackValidationCode,
+    PrimaryPackValidationLimits, PrimaryPackValidationRecord, PrimaryPackValidationState,
+    ValidationState, validate_and_render_primary_l0_pack, validate_primary_l0_pack,
 };
 pub use platform::{
     PLATFORM_NATIVE_ONE_HOP_PROFILE, PLATFORM_NATIVE_ONE_HOP_PROFILE_BYTES, PlatformContextInspect,
