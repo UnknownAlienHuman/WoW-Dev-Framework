@@ -416,7 +416,12 @@ impl ReferenceConflict {
         &self.source_ids
     }
 
-    fn validate(&self) -> ReferenceViewResult<()> {
+    /// Re-admits a decoded conflict without normalizing its retained fields.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid identifiers, candidates or source ordering.
+    pub fn validate(&self) -> ReferenceViewResult<()> {
         validate_identifier("conflict.partition_id", self.partition_id())?;
         validate_identifier("conflict.key", self.key())?;
         validate_digest_slice(self.candidate_digests())?;
@@ -437,6 +442,15 @@ pub struct ReferencePartition {
 }
 
 impl ReferencePartition {
+    /// Checks a retained partition identifier using the Reference owner grammar.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the identifier is malformed or exceeds its bound.
+    pub fn validate_id(id: &str) -> ReferenceViewResult<()> {
+        validate_identifier("partition.id", id)
+    }
+
     /// Builds one canonical partition.
     ///
     /// # Errors
@@ -448,7 +462,7 @@ impl ReferencePartition {
         mut records: Vec<ReferenceRecord>,
     ) -> ReferenceViewResult<Self> {
         let id = id.into();
-        validate_identifier("partition.id", &id)?;
+        Self::validate_id(&id)?;
         records.sort_by(|left, right| left.key().cmp(right.key()));
         validate_records(&records)?;
         Ok(Self {

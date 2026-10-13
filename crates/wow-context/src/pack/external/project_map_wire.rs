@@ -566,6 +566,7 @@ pub(crate) fn check_project_map_links<E: From<ContextError>>(
     stop: &std::sync::atomic::AtomicBool,
 ) -> Result<ProjectMapWireOutcome, ProjectMapWireCheckError<E>> {
     reserve_work(1).map_err(ProjectMapWireCheckError::Work)?;
+    super::owner_records::check(map, &mut reserve_work)?;
     if !matches!(
         map.core.schema.as_str(),
         "wow-context/project-map/primary-direct-navigation/1"
@@ -708,6 +709,7 @@ pub(crate) fn check_project_map_links<E: From<ContextError>>(
         let mut coverage_not_evaluated = !view.missing_coverage.is_empty();
         for record in &view.coverage {
             reserve_work(1).map_err(ProjectMapWireCheckError::Work)?;
+            super::owner_records::check_graph_coverage(record, &mut reserve_work)?;
             observed_coverage.push(record.relation());
             coverage_partial |= matches!(
                 record.state(),

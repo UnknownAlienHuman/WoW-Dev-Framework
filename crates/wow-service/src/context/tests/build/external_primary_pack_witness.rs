@@ -185,32 +185,12 @@ fn domain_identity(core: &Value, prefix: &str) -> TestResult<String> {
     Ok(format!("{prefix}{hex}"))
 }
 
-fn remove_native_derivation_chain(bytes: &[u8], complete: bool) -> TestResult<Vec<u8>> {
-    let mut pack: Value = serde_json::from_slice(bytes)?;
-    let map = &mut pack["core"]["skeletons"]["l0"]["core"]["context"]["origins"];
-    let supports = map["core"]["supports"]
-        .as_array_mut()
-        .ok_or("native ProjectMap support receipts")?;
-    let mut removed_records = 0usize;
-    for support in supports {
-        let explanation = &mut support["explanation"];
-        removed_records = removed_records
-            .checked_add(
-                explanation["assertion_supports"]
-                    .as_array()
-                    .ok_or("native assertion support chain")?
-                    .len(),
-            )
-            .and_then(|count| count.checked_add(explanation["derivations"].as_array()?.len()))
-            .ok_or("removed assertion count overflow")?;
-        explanation["assertion_supports"] = json!([]);
-        explanation["derivations"] = json!([]);
-        explanation["derivation_complete"] = json!(complete);
-    }
-    if removed_records == 0 {
-        return Err("genuine L0 witness had no native local chain to remove".into());
-    }
+fn project_map_mut(pack: &mut Value) -> &mut Value {
+    &mut pack["core"]["skeletons"]["l0"]["core"]["context"]["origins"]
+}
 
+fn reseal_native_pack(pack: &mut Value) -> TestResult<()> {
+    let map = project_map_mut(pack);
     map["project_map_id"] = json!(domain_identity(&map["core"], "project-map:sha256:")?);
     let map_id = map["project_map_id"]
         .as_str()
@@ -271,6 +251,82 @@ fn remove_native_derivation_chain(bytes: &[u8], complete: bool) -> TestResult<Ve
         }
     }
     pack["semantic_pack_id"] = json!(domain_identity(&pack["core"], "context-pack:sha256:")?);
+    Ok(())
+}
+
+fn mutate_and_reseal_native_pack(
+    bytes: &[u8],
+    mutate: impl FnOnce(&mut Value) -> TestResult<()>,
+) -> TestResult<Vec<u8>> {
+    let mut pack: Value = serde_json::from_slice(bytes)?;
+    mutate(&mut pack)?;
+    reseal_native_pack(&mut pack)?;
+    Ok(wow_core::canonical_json_bytes(&pack)?)
+}
+
+fn assert_resealed_owner_mutation_is_rejected(
+    bytes: &[u8],
+    stop: &AtomicBool,
+    label: &str,
+    mutate: impl FnOnce(&mut Value) -> TestResult<()>,
+) -> TestResult<()> {
+    let mutated = mutate_and_reseal_native_pack(bytes, mutate)?;
+    let validation =
+        wow_context::validate_primary_l0_pack(&mutated, reader_limits(READER_MAX_BYTES)?, stop)?;
+    assert_eq!(
+        validation.digest_and_identity(),
+        wow_context::ValidationState::Valid,
+        "{label} must retain valid enclosing canonical identities: {validation:?}"
+    );
+    assert_ne!(
+        validation.overall_state(),
+        wow_context::ValidationState::Valid,
+        "{label} must fail owner-record admission: {validation:?}"
+    );
+    Ok(())
+}
+
+fn forge_digest_record_id(record: &mut Value, field: &str) -> TestResult<()> {
+    let current = record[field]
+        .as_str()
+        .ok_or("owner record identity string")?;
+    let (prefix, digest) = current
+        .rsplit_once(':')
+        .ok_or("owner record identity domain")?;
+    if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err("owner record identity must end in a 64-digit digest".into());
+    }
+    let replacement = if current.ends_with('0') { '1' } else { '0' };
+    record[field] = json!(format!("{prefix}:{}{replacement}", &digest[..63]));
+    Ok(())
+}
+
+fn remove_native_derivation_chain(bytes: &[u8], complete: bool) -> TestResult<Vec<u8>> {
+    let mut pack: Value = serde_json::from_slice(bytes)?;
+    let map = &mut pack["core"]["skeletons"]["l0"]["core"]["context"]["origins"];
+    let supports = map["core"]["supports"]
+        .as_array_mut()
+        .ok_or("native ProjectMap support receipts")?;
+    let mut removed_records = 0usize;
+    for support in supports {
+        let explanation = &mut support["explanation"];
+        removed_records = removed_records
+            .checked_add(
+                explanation["assertion_supports"]
+                    .as_array()
+                    .ok_or("native assertion support chain")?
+                    .len(),
+            )
+            .and_then(|count| count.checked_add(explanation["derivations"].as_array()?.len()))
+            .ok_or("removed assertion count overflow")?;
+        explanation["assertion_supports"] = json!([]);
+        explanation["derivations"] = json!([]);
+        explanation["derivation_complete"] = json!(complete);
+    }
+    if removed_records == 0 {
+        return Err("genuine L0 witness had no native local chain to remove".into());
+    }
+    reseal_native_pack(&mut pack)?;
     Ok(wow_core::canonical_json_bytes(&pack)?)
 }
 
@@ -355,6 +411,133 @@ fn external_primary_pack_reader_accepts_one_native_l0_and_keeps_limits_and_autho
         wow_context::ValidationState::Valid,
         "the missing-chain negative retains correctly recomputed enclosing identities"
     );
+
+    assert_resealed_owner_mutation_is_rejected(
+        &l0_bytes,
+        &stop,
+        "partial graph coverage with negative authority",
+        |pack| {
+            let coverage = project_map_mut(pack)["core"]["navigation"]["coverage"]
+                .as_array_mut()
+                .ok_or("native graph coverage rows")?;
+            let row = coverage
+                .first_mut()
+                .ok_or("native graph coverage row for mutation")?;
+            row["state"] = json!("partial");
+            row["negative_authority"] = json!(true);
+            Ok(())
+        },
+    )?;
+
+    assert_resealed_owner_mutation_is_rejected(
+        &l0_bytes,
+        &stop,
+        "forged project CoverageRecord ID",
+        |pack| {
+            let coverage = project_map_mut(pack)["core"]["project_coverage"]
+                .as_array_mut()
+                .ok_or("native project coverage rows")?;
+            let row = coverage
+                .first_mut()
+                .ok_or("native project CoverageRecord for mutation")?;
+            forge_digest_record_id(row, "coverage_id")
+        },
+    )?;
+
+    assert_resealed_owner_mutation_is_rejected(
+        &l0_bytes,
+        &stop,
+        "forged NotEvaluatedRecord ID",
+        |pack| {
+            let deferred = project_map_mut(pack)["core"]["deferred_project_capabilities"]
+                .as_array_mut()
+                .ok_or("native deferred project capabilities")?;
+            let row = deferred
+                .first_mut()
+                .ok_or("native NotEvaluatedRecord for mutation")?;
+            forge_digest_record_id(&mut row["record"], "not_evaluated_id")
+        },
+    )?;
+
+    assert_resealed_owner_mutation_is_rejected(
+        &l0_bytes,
+        &stop,
+        "duplicate NotEvaluatedRecord blocker",
+        |pack| {
+            let deferred = project_map_mut(pack)["core"]["deferred_project_capabilities"]
+                .as_array_mut()
+                .ok_or("native deferred project capabilities")?;
+            let row = deferred
+                .first_mut()
+                .ok_or("native NotEvaluatedRecord for blocker mutation")?;
+            let blockers = row["record"]["blocking_capability_ids"]
+                .as_array_mut()
+                .ok_or("NotEvaluatedRecord blocker IDs")?;
+            let blocker = blockers
+                .first()
+                .cloned()
+                .ok_or("NotEvaluatedRecord blocker for duplication")?;
+            blockers.push(blocker);
+            let record: wow_core::NotEvaluatedRecord =
+                serde_json::from_value(row["record"].clone())?;
+            row["record"]["not_evaluated_id"] =
+                serde_json::to_value(wow_core::derive_not_evaluated_id(&record)?)?;
+            Ok(())
+        },
+    )?;
+
+    assert_resealed_owner_mutation_is_rejected(
+        &l0_bytes,
+        &stop,
+        "duplicate Reference coverage partition",
+        |pack| {
+            let rows = project_map_mut(pack)["core"]["reference_coverage"]
+                .as_array_mut()
+                .ok_or("native Reference coverage rows")?;
+            let row = match rows.first() {
+                Some(row) => row.clone(),
+                None => {
+                    let row = json!({"partition_id": "witness-partition", "state": "partial"});
+                    rows.push(row.clone());
+                    row
+                }
+            };
+            rows.push(row);
+            Ok(())
+        },
+    )?;
+
+    assert_resealed_owner_mutation_is_rejected(
+        &l0_bytes,
+        &stop,
+        "malformed ReferenceConflict candidate population",
+        |pack| {
+            let map = project_map_mut(pack);
+            let coverage = map["core"]["reference_coverage"]
+                .as_array_mut()
+                .ok_or("native Reference coverage rows")?;
+            if coverage.is_empty() {
+                coverage.push(json!({"partition_id": "witness-partition", "state": "partial"}));
+            }
+            let partition_id = map["core"]["reference_coverage"]
+                .as_array()
+                .and_then(|rows| rows.first())
+                .and_then(|row| row["partition_id"].as_str())
+                .ok_or("native Reference partition for conflict mutation")?
+                .to_owned();
+            let conflicts = map["core"]["reference_conflicts"]
+                .as_array_mut()
+                .ok_or("native Reference conflict rows")?;
+            let candidate = format!("sha256:{}", "0".repeat(64));
+            conflicts.push(json!({
+                "partition_id": partition_id,
+                "key": "witness-conflict",
+                "candidate_digests": [candidate.clone(), candidate],
+                "source_ids": ["witness-source-a", "witness-source-b"]
+            }));
+            Ok(())
+        },
+    )?;
 
     let service_request = crate::context::ContextValidateRequest::primary_semantic_pack_structural(
         READER_MAX_BYTES,

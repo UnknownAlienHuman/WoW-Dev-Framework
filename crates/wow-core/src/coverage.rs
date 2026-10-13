@@ -616,6 +616,18 @@ impl NotEvaluatedRecord {
         self.not_evaluated_id
     }
 
+    /// The exact subject class retained by this explanation.
+    #[must_use]
+    pub fn subject_kind(&self) -> &str {
+        &self.subject_kind
+    }
+
+    /// The exact subject identity retained by this explanation.
+    #[must_use]
+    pub fn subject_id(&self) -> &str {
+        &self.subject_id
+    }
+
     #[must_use]
     pub const fn context_id(&self) -> GenerationContextId {
         self.context_id
