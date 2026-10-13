@@ -1,7 +1,7 @@
 //! Private E3-C external artifact validation transport adapter.
 //!
 //! All semantic parsing and validation belongs to wow-context's
-//! `validate_primary_l0_pack` owner function. This adapter only bounds the
+//! `validate_primary_pack` owner function. This adapter only bounds the
 //! request, computes exact input identity, wraps the typed report, and maps
 //! operation outcomes.
 
@@ -196,7 +196,7 @@ pub fn execute_context_validate(
     .map_err(crate::context::context_error)?;
 
     // One call to the owner parser; no report fields are converted or rebuilt.
-    let validation = match wow_context::validate_primary_l0_pack(artifact_bytes, limits, stop) {
+    let validation = match wow_context::validate_primary_pack(artifact_bytes, limits, stop) {
         Ok(validation) => validation,
         Err(owner_error) => {
             let code = crate::context::context_error(owner_error).code();

@@ -7,11 +7,12 @@
 //! serializing a decoded JSON value.
 
 use super::*;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 const READER_MAX_BYTES: u64 = 4 * 1024 * 1024;
 const READER_MAX_WORK: u64 = 8_000_000;
 const READER_MAX_TOKENS: u64 = 2_000_000;
+static SCRATCH_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 struct PackScratch {
     root: PathBuf,
@@ -25,12 +26,13 @@ impl PackScratch {
         let root = export.map_or_else(
             || {
                 std::env::temp_dir().join(format!(
-                    "wow-context-external-pack-{}-{}",
+                    "wow-context-external-pack-{}-{}-{}",
                     std::process::id(),
                     SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_nanos(),
+                    SCRATCH_SEQUENCE.fetch_add(1, Ordering::Relaxed),
                 ))
             },
             PathBuf::from,
@@ -87,7 +89,59 @@ fn rendered_native_pack_bytes(result: &ContextMapResult) -> TestResult<Vec<u8>> 
     Ok(content.as_bytes().to_vec())
 }
 
-fn native_l0_and_l1_bytes() -> TestResult<(PackScratch, Vec<u8>, Vec<u8>, ContextMapResult)> {
+const FIXTURE_CHUNK_FUNCTION_ID: &str =
+    "emmy-function:sha256:b9d021d75e91929793259da344337aa5c738ae551858598e825ba0459aa31bc7";
+
+struct FixtureCallableIdentity {
+    node_id: GraphNodeId,
+    metadata: Value,
+}
+
+fn unique_fixture_callable(
+    expected: &Value,
+    label: &str,
+    matches: impl Fn(&Value) -> bool,
+) -> TestResult<FixtureCallableIdentity> {
+    let callables = expected["callables"]
+        .as_object()
+        .ok_or("retained original callable metadata map")?;
+    let mut selected = None;
+    let mut match_count = 0usize;
+    for (node_id, metadata) in callables {
+        if matches(metadata) {
+            match_count = match_count
+                .checked_add(1)
+                .ok_or("fixture callable selection count overflow")?;
+            selected = Some(FixtureCallableIdentity {
+                node_id: serde_json::from_value(json!(node_id))?,
+                metadata: metadata.clone(),
+            });
+        }
+    }
+    if match_count != 1 {
+        return Err(format!(
+            "{label} must select exactly one original callable, found {match_count}"
+        )
+        .into());
+    }
+    selected.ok_or_else(|| format!("{label} original callable is missing").into())
+}
+
+struct NativePrimaryPackFixture {
+    _scratch: PackScratch,
+    l0_bytes: Vec<u8>,
+    l1_bytes: Vec<u8>,
+    callable_l1_bytes: Vec<u8>,
+    callable_root: GraphNodeId,
+    callable_function_id: String,
+    callable_ownership_proposal_id: String,
+    main_chunk_evidence_id: String,
+    closure_ownership_proposal_id: String,
+    foreign_chunk_function_id: String,
+    native_result: ContextMapResult,
+}
+
+fn native_primary_pack_fixture() -> TestResult<NativePrimaryPackFixture> {
     let stop = AtomicBool::new(false);
     let scratch = PackScratch::new()?;
     let store_root = scratch.root.join("registered-store");
@@ -116,7 +170,53 @@ fn native_l0_and_l1_bytes() -> TestResult<(PackScratch, Vec<u8>, Vec<u8>, Contex
         .iter()
         .find(|file| file["file"]["path"] == ADMITTED_PATH)
         .ok_or("selected native source file")?;
-    let root: GraphNodeId = serde_json::from_value(selected["node"]["node_id"].clone())?;
+    let source_file_root: GraphNodeId =
+        serde_json::from_value(selected["node"]["node_id"].clone())?;
+    let callable =
+        unique_fixture_callable(&expected, "the fixture-owned main-file Chunk", |metadata| {
+            metadata["function"]["function_id"] == FIXTURE_CHUNK_FUNCTION_ID
+                && metadata["function"]["path"] == ADMITTED_PATH
+                && metadata["function"]["kind"] == "chunk"
+        })?;
+    if callable.metadata["scope"] != "chunk"
+        || callable.metadata.get("parent_function_id").is_some()
+    {
+        return Err(
+            "fixture-owned Chunk must retain its original parentless callable metadata".into(),
+        );
+    }
+    let main_chunk_ownership_proposal_id = callable.metadata["function"]["ownership_proposal_id"]
+        .as_str()
+        .ok_or("original Chunk ownership proposal ID")?
+        .to_owned();
+    let main_chunk_evidence_id = callable.metadata["function"]["evidence_id"]
+        .as_str()
+        .ok_or("original Chunk evidence ID")?
+        .to_owned();
+    let closure = unique_fixture_callable(
+        &expected,
+        "the fixture-owned main-file Closure",
+        |metadata| {
+            metadata["function"]["path"] == ADMITTED_PATH
+                && metadata["function"]["kind"] == "closure"
+        },
+    )?;
+    let closure_ownership_proposal_id = closure.metadata["function"]["ownership_proposal_id"]
+        .as_str()
+        .ok_or("original Closure ownership proposal ID")?
+        .to_owned();
+    let foreign_chunk = unique_fixture_callable(
+        &expected,
+        "the fixture-owned other-file Chunk",
+        |metadata| {
+            metadata["function"]["path"] == "other.lua" && metadata["function"]["kind"] == "chunk"
+        },
+    )?;
+    let foreign_chunk_function_id = foreign_chunk.metadata["function"]["function_id"]
+        .as_str()
+        .ok_or("original other-file Chunk function ID")?
+        .to_owned();
+
     let mut host_value = host_value(&store_root, &profile, &reference);
     host_value["limits"]["max_context_work"] = json!(FIXTURE_WORK);
     host_value["limits"]["max_metadata_bytes"] = json!(FIXTURE_METADATA);
@@ -128,7 +228,7 @@ fn native_l0_and_l1_bytes() -> TestResult<(PackScratch, Vec<u8>, Vec<u8>, Contex
         STORE_ID,
         publication.clone(),
         ContextInspectLevel::L0,
-        ContextMapRoot::graph_entity(root.as_str())?,
+        ContextMapRoot::graph_entity(source_file_root.as_str())?,
         ContextRenderSelection::Both,
         None,
         guard.clone(),
@@ -136,19 +236,34 @@ fn native_l0_and_l1_bytes() -> TestResult<(PackScratch, Vec<u8>, Vec<u8>, Contex
     let l0_result = execute_context_build(&host, &l0_request, &stop)?;
     let l0_bytes = rendered_native_pack_bytes(&l0_result)?;
 
-    // Build a second genuine owner artifact for the explicit unsupported-level
-    // case; do not synthesize an L1 header around L0 bytes.
+    // The default EntityV1 L1 control keeps the source-file root so its Chunk
+    // and Closure declarations, ownership, evidence, and parent link are native.
     let l1_request = ContextBuildRequest::primary(
+        STORE_ID,
+        publication.clone(),
+        ContextInspectLevel::L1,
+        ContextMapRoot::graph_entity(source_file_root.as_str())?,
+        ContextRenderSelection::Json,
+        None,
+        guard.clone(),
+    )?;
+    let l1_result = execute_context_build(&host, &l1_request, &stop)?;
+    let l1_bytes = rendered_native_pack_bytes(&l1_result)?;
+
+    // Select the non-container root by its exact original Chunk function ID.
+    // The uniqueness check above rejects a first/nearest fallback.
+    let callable_l1_request = ContextBuildRequest::primary(
         STORE_ID,
         publication,
         ContextInspectLevel::L1,
-        ContextMapRoot::graph_entity(root.as_str())?,
+        ContextMapRoot::graph_entity(callable.node_id.as_str())?,
         ContextRenderSelection::Json,
         None,
         guard,
     )?;
-    let l1_result = execute_context_build(&host, &l1_request, &stop)?;
-    let l1_bytes = rendered_native_pack_bytes(&l1_result)?;
+    let callable_l1_result = execute_context_build(&host, &callable_l1_request, &stop)?;
+    let callable_l1_bytes = rendered_native_pack_bytes(&callable_l1_result)?;
+
     if scratch.preserve {
         for (name, bytes) in [
             ("host.json", wow_core::canonical_json_bytes(&host_value)?),
@@ -156,15 +271,35 @@ fn native_l0_and_l1_bytes() -> TestResult<(PackScratch, Vec<u8>, Vec<u8>, Contex
                 "build-request.json",
                 wow_core::canonical_json_bytes(&l0_request)?,
             ),
+            (
+                "callable-l1-build-request.json",
+                wow_core::canonical_json_bytes(&callable_l1_request)?,
+            ),
             ("native-l0.semantic-pack.json", l0_bytes.clone()),
             ("native-l1.semantic-pack.json", l1_bytes.clone()),
+            (
+                "native-l1-callable.semantic-pack.json",
+                callable_l1_bytes.clone(),
+            ),
         ] {
             std::fs::write(scratch.root.join(name), bytes)?;
         }
     }
-    Ok((scratch, l0_bytes, l1_bytes, l0_result))
-}
 
+    Ok(NativePrimaryPackFixture {
+        _scratch: scratch,
+        l0_bytes,
+        l1_bytes,
+        callable_l1_bytes,
+        callable_root: callable.node_id,
+        callable_function_id: FIXTURE_CHUNK_FUNCTION_ID.to_owned(),
+        callable_ownership_proposal_id: main_chunk_ownership_proposal_id,
+        main_chunk_evidence_id,
+        closure_ownership_proposal_id,
+        foreign_chunk_function_id,
+        native_result: l0_result,
+    })
+}
 fn tamper_pack_identity(bytes: &[u8]) -> TestResult<Vec<u8>> {
     const MARKER: &[u8] = b"\"semantic_pack_id\":\"context-pack:sha256:";
     let marker = bytes
@@ -191,25 +326,85 @@ fn domain_identity(core: &Value, prefix: &str) -> TestResult<String> {
     Ok(format!("{prefix}{hex}"))
 }
 
+#[derive(Clone, Copy)]
+enum NativePackLayer {
+    L0,
+    L1,
+}
+
+impl NativePackLayer {
+    const fn key(self) -> &'static str {
+        match self {
+            Self::L0 => "l0",
+            Self::L1 => "l1",
+        }
+    }
+
+    const fn skeleton_id_field(self) -> &'static str {
+        match self {
+            Self::L0 => "l0_skeleton_id",
+            Self::L1 => "l1_skeleton_id",
+        }
+    }
+
+    const fn skeleton_id_prefix(self) -> &'static str {
+        match self {
+            Self::L0 => "l0-skeleton:sha256:",
+            Self::L1 => "l1-skeleton:sha256:",
+        }
+    }
+
+    const fn omission_producer(self) -> &'static str {
+        match self {
+            Self::L0 => "l0_skeleton",
+            Self::L1 => "l1_skeleton",
+        }
+    }
+}
+
+fn project_map_for_layer_mut(pack: &mut Value, layer: NativePackLayer) -> &mut Value {
+    &mut pack["core"]["skeletons"][layer.key()]["core"]["context"]["origins"]
+}
+
 fn project_map_mut(pack: &mut Value) -> &mut Value {
-    &mut pack["core"]["skeletons"]["l0"]["core"]["context"]["origins"]
+    project_map_for_layer_mut(pack, NativePackLayer::L0)
+}
+
+fn project_map_l1_mut(pack: &mut Value) -> &mut Value {
+    project_map_for_layer_mut(pack, NativePackLayer::L1)
 }
 
 fn reseal_native_pack(pack: &mut Value) -> TestResult<()> {
-    let map = project_map_mut(pack);
-    map["project_map_id"] = json!(domain_identity(&map["core"], "project-map:sha256:")?);
-    let map_id = map["project_map_id"]
-        .as_str()
-        .ok_or("recomputed ProjectMap ID")?
-        .to_owned();
+    reseal_native_pack_for_layer(pack, NativePackLayer::L0)
+}
 
-    let l0 = &mut pack["core"]["skeletons"]["l0"];
-    l0["core"]["context"]["origin_map_id"] = json!(map_id);
-    l0["l0_skeleton_id"] = json!(domain_identity(&l0["core"], "l0-skeleton:sha256:")?);
-    let l0_id = l0["l0_skeleton_id"]
-        .as_str()
-        .ok_or("recomputed L0 skeleton ID")?
-        .to_owned();
+fn reseal_native_l1_pack(pack: &mut Value) -> TestResult<()> {
+    reseal_native_pack_for_layer(pack, NativePackLayer::L1)
+}
+
+fn reseal_native_pack_for_layer(pack: &mut Value, layer: NativePackLayer) -> TestResult<()> {
+    let map_id = {
+        let map = project_map_for_layer_mut(pack, layer);
+        map["project_map_id"] = json!(domain_identity(&map["core"], "project-map:sha256:")?);
+        map["project_map_id"]
+            .as_str()
+            .ok_or("recomputed ProjectMap ID")?
+            .to_owned()
+    };
+
+    let skeleton_id = {
+        let skeleton = &mut pack["core"]["skeletons"][layer.key()];
+        skeleton["core"]["context"]["origin_map_id"] = json!(map_id);
+        let id_field = layer.skeleton_id_field();
+        skeleton[id_field] = json!(domain_identity(
+            &skeleton["core"],
+            layer.skeleton_id_prefix()
+        )?);
+        skeleton[id_field]
+            .as_str()
+            .ok_or("recomputed native skeleton ID")?
+            .to_owned()
+    };
 
     let items = pack["core"]["items"]
         .as_array_mut()
@@ -252,14 +447,15 @@ fn reseal_native_pack(pack: &mut Value) -> TestResult<()> {
     for omission in upstream {
         match omission["producer"].as_str() {
             Some("project_map") => omission["artifact_id"] = json!(map_id),
-            Some("l0_skeleton") => omission["artifact_id"] = json!(l0_id),
+            Some(producer) if producer == layer.omission_producer() => {
+                omission["artifact_id"] = json!(skeleton_id);
+            }
             _ => {}
         }
     }
     pack["semantic_pack_id"] = json!(domain_identity(&pack["core"], "context-pack:sha256:")?);
     Ok(())
 }
-
 fn mutate_and_reseal_native_pack(
     bytes: &[u8],
     mutate: impl FnOnce(&mut Value) -> TestResult<()>,
@@ -267,6 +463,16 @@ fn mutate_and_reseal_native_pack(
     let mut pack: Value = serde_json::from_slice(bytes)?;
     mutate(&mut pack)?;
     reseal_native_pack(&mut pack)?;
+    Ok(wow_core::canonical_json_bytes(&pack)?)
+}
+
+fn mutate_and_reseal_native_l1_pack(
+    bytes: &[u8],
+    mutate: impl FnOnce(&mut Value) -> TestResult<()>,
+) -> TestResult<Vec<u8>> {
+    let mut pack: Value = serde_json::from_slice(bytes)?;
+    mutate(&mut pack)?;
+    reseal_native_l1_pack(&mut pack)?;
     Ok(wow_core::canonical_json_bytes(&pack)?)
 }
 
@@ -278,7 +484,7 @@ fn assert_resealed_owner_mutation_is_rejected(
 ) -> TestResult<()> {
     let mutated = mutate_and_reseal_native_pack(bytes, mutate)?;
     let validation =
-        wow_context::validate_primary_l0_pack(&mutated, reader_limits(READER_MAX_BYTES)?, stop)?;
+        wow_context::validate_primary_pack(&mutated, reader_limits(READER_MAX_BYTES)?, stop)?;
     assert_eq!(
         validation.digest_and_identity(),
         wow_context::ValidationState::Valid,
@@ -292,6 +498,93 @@ fn assert_resealed_owner_mutation_is_rejected(
     Ok(())
 }
 
+fn assert_resealed_l1_mutation_state(
+    bytes: &[u8],
+    stop: &AtomicBool,
+    label: &str,
+    expected_state: wow_context::ValidationState,
+    mutate: impl FnOnce(&mut Value) -> TestResult<()>,
+) -> TestResult<()> {
+    let mutated = mutate_and_reseal_native_l1_pack(bytes, mutate)?;
+    let validation =
+        wow_context::validate_primary_pack(&mutated, reader_limits(READER_MAX_BYTES)?, stop)?;
+    assert_eq!(
+        validation.digest_and_identity(),
+        wow_context::ValidationState::Valid,
+        "{label} must retain valid L1 map, skeleton, item, trace, omission, and pack identities: {validation:?}"
+    );
+    assert_eq!(
+        validation.overall_state(),
+        expected_state,
+        "{label}: {validation:?}"
+    );
+    assert_eq!(
+        validation.selection().map(|selection| selection.level()),
+        Some(wow_context::PrimaryPackLevel::L1)
+    );
+    Ok(())
+}
+
+fn producer_relation_support_location(
+    map: &Value,
+    proposal_id: &str,
+) -> TestResult<(usize, usize)> {
+    let receipts = map["core"]["supports"]
+        .as_array()
+        .ok_or("native ProjectMap support receipts")?;
+    let mut location = None;
+    let mut match_count = 0usize;
+    for (receipt_index, receipt) in receipts.iter().enumerate() {
+        let supports = receipt["explanation"]["supports"]
+            .as_array()
+            .ok_or("native explanation support rows")?;
+        for (support_index, support) in supports.iter().enumerate() {
+            if support["origin"] == "producer_relation"
+                && support["proposal"]["proposal_id"].as_str() == Some(proposal_id)
+            {
+                match_count = match_count
+                    .checked_add(1)
+                    .ok_or("native relation support match count overflow")?;
+                location = Some((receipt_index, support_index));
+            }
+        }
+    }
+    if match_count != 1 {
+        return Err(format!(
+            "exact native producer relation support must occur once, found {match_count}"
+        )
+        .into());
+    }
+    location.ok_or_else(|| "exact native producer relation support is missing".into())
+}
+
+fn remove_producer_relation_support(map: &mut Value, proposal_id: &str) -> TestResult<()> {
+    let (receipt_index, support_index) = producer_relation_support_location(map, proposal_id)?;
+    let receipts = map["core"]["supports"]
+        .as_array_mut()
+        .ok_or("mutable native ProjectMap support receipts")?;
+    let supports = receipts
+        .get_mut(receipt_index)
+        .and_then(|receipt| receipt["explanation"]["supports"].as_array_mut())
+        .ok_or("mutable native explanation support rows")?;
+    let _removed = supports.remove(support_index);
+    Ok(())
+}
+
+fn producer_relation_support_mut<'a>(
+    map: &'a mut Value,
+    proposal_id: &str,
+) -> TestResult<&'a mut Value> {
+    let (receipt_index, support_index) = producer_relation_support_location(map, proposal_id)?;
+    let receipts = map["core"]["supports"]
+        .as_array_mut()
+        .ok_or("mutable native ProjectMap support receipts")?;
+    receipts
+        .get_mut(receipt_index)
+        .and_then(|receipt| receipt["explanation"]["supports"].as_array_mut())
+        .and_then(|supports| supports.get_mut(support_index))
+        .ok_or_else(|| "mutable exact native producer relation support is missing".into())
+}
 fn forge_digest_record_id(record: &mut Value, field: &str) -> TestResult<()> {
     let current = record[field]
         .as_str()
@@ -337,13 +630,15 @@ fn remove_native_derivation_chain(bytes: &[u8], complete: bool) -> TestResult<Ve
 }
 
 #[test]
-fn external_primary_pack_reader_accepts_one_native_l0_and_keeps_limits_and_authority_typed()
--> TestResult {
-    let (_scratch, l0_bytes, l1_bytes, _native_result) = native_l0_and_l1_bytes()?;
+fn external_primary_pack_reader_accepts_native_l0_and_default_entity_l1() -> TestResult {
+    let fixture = native_primary_pack_fixture()?;
+    let l0_bytes = fixture.l0_bytes.clone();
+    let l1_bytes = fixture.l1_bytes.clone();
+    let callable_l1_bytes = fixture.callable_l1_bytes.clone();
     let stop = AtomicBool::new(false);
 
     let valid =
-        wow_context::validate_primary_l0_pack(&l0_bytes, reader_limits(READER_MAX_BYTES)?, &stop)?;
+        wow_context::validate_primary_pack(&l0_bytes, reader_limits(READER_MAX_BYTES)?, &stop)?;
     assert_eq!(
         valid.overall_state(),
         wow_context::ValidationState::Valid,
@@ -384,8 +679,118 @@ fn external_primary_pack_reader_accepts_one_native_l0_and_keeps_limits_and_autho
         Some(wow_context::PrimaryPackLevel::L0)
     );
 
+    let native_l1: Value = serde_json::from_slice(&l1_bytes)?;
+    let native_l1_core = &native_l1["core"]["skeletons"]["l1"]["core"];
+    assert_eq!(native_l1_core["profile"], wow_context::PRIMARY_L1_PROFILE);
+    assert_eq!(native_l1_core["root"]["kind"], "source_file");
+    assert_eq!(rows(&native_l1_core["local_entities"])?.len(), 3);
+    assert_eq!(rows(&native_l1_core["direct_relations"])?.len(), 2);
+    assert_eq!(rows(&native_l1_core["declarations"])?.len(), 2);
+    assert!(
+        rows(&native_l1_core["declarations"])?
+            .iter()
+            .any(|row| row["metadata"]["function"]["kind"] == "chunk")
+    );
+    assert!(
+        rows(&native_l1_core["declarations"])?
+            .iter()
+            .any(|row| row["metadata"]["function"]["kind"] == "closure")
+    );
+
+    let valid_l1 =
+        wow_context::validate_primary_pack(&l1_bytes, reader_limits(READER_MAX_BYTES)?, &stop)?;
+    assert_eq!(
+        valid_l1.overall_state(),
+        wow_context::ValidationState::Valid,
+        "{valid_l1:?}"
+    );
+    assert_eq!(
+        valid_l1.canonical_bytes(),
+        wow_context::ValidationState::Valid
+    );
+    assert_eq!(valid_l1.schema(), wow_context::ValidationState::Valid);
+    assert_eq!(
+        valid_l1.compiled_profile(),
+        wow_context::ValidationState::Valid
+    );
+    assert_eq!(
+        valid_l1.digest_and_identity(),
+        wow_context::ValidationState::Valid
+    );
+    assert_eq!(
+        valid_l1.internal_references(),
+        wow_context::ValidationState::Valid
+    );
+    assert_eq!(
+        valid_l1.owner_generation_closure(),
+        wow_context::ValidationState::NotEvaluated
+    );
+    assert_eq!(
+        valid_l1.source_or_runtime_authority(),
+        wow_context::ValidationState::NotEvaluated
+    );
+    assert_eq!(
+        valid_l1.origin_closure(),
+        wow_context::PrimaryPackOriginClosure::StructuralOnly
+    );
+    assert_eq!(
+        valid_l1.selection().map(|selection| selection.level()),
+        Some(wow_context::PrimaryPackLevel::L1)
+    );
+    assert!(valid_l1.semantic_pack_id().is_some());
+
+    assert_eq!(
+        fixture.callable_function_id, FIXTURE_CHUNK_FUNCTION_ID,
+        "the non-container root comes from the exact original Chunk row"
+    );
+    let callable_native: Value = serde_json::from_slice(&callable_l1_bytes)?;
+    let callable_core = &callable_native["core"]["skeletons"]["l1"]["core"];
+    assert_eq!(callable_core["profile"], wow_context::PRIMARY_L1_PROFILE);
+    assert_eq!(callable_core["root"]["kind"], "lua_source_function");
+    assert_eq!(
+        callable_core["root"]["node_id"],
+        fixture.callable_root.as_str()
+    );
+    let incoming_owns = rows(&callable_core["direct_relations"])?
+        .iter()
+        .filter(|edge| edge["to"] == fixture.callable_root.as_str() && edge["relation"] == "owns")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        incoming_owns.len(),
+        1,
+        "the selected Chunk has one original incoming Owns edge"
+    );
+    let source_file_id = incoming_owns[0]["from"]
+        .as_str()
+        .ok_or("incoming SourceFile owner ID")?;
+    assert!(
+        rows(&callable_core["local_entities"])?
+            .iter()
+            .any(|node| node["node_id"] == source_file_id && node["kind"] == "source_file")
+    );
+    let valid_callable_l1 = wow_context::validate_primary_pack(
+        &callable_l1_bytes,
+        reader_limits(READER_MAX_BYTES)?,
+        &stop,
+    )?;
+    assert_eq!(
+        valid_callable_l1.overall_state(),
+        wow_context::ValidationState::Valid,
+        "{valid_callable_l1:?}"
+    );
+    assert_eq!(
+        valid_callable_l1.digest_and_identity(),
+        wow_context::ValidationState::Valid
+    );
+    assert_eq!(
+        valid_callable_l1
+            .selection()
+            .map(|selection| selection.level()),
+        Some(wow_context::PrimaryPackLevel::L1)
+    );
+
     let incomplete_chain = remove_native_derivation_chain(&l0_bytes, false)?;
-    let incomplete = wow_context::validate_primary_l0_pack(
+    let incomplete = wow_context::validate_primary_pack(
         &incomplete_chain,
         reader_limits(READER_MAX_BYTES)?,
         &stop,
@@ -402,7 +807,7 @@ fn external_primary_pack_reader_accepts_one_native_l0_and_keeps_limits_and_autho
     );
 
     let missing_chain = remove_native_derivation_chain(&l0_bytes, true)?;
-    let missing = wow_context::validate_primary_l0_pack(
+    let missing = wow_context::validate_primary_pack(
         &missing_chain,
         reader_limits(READER_MAX_BYTES)?,
         &stop,
@@ -545,6 +950,184 @@ fn external_primary_pack_reader_accepts_one_native_l0_and_keeps_limits_and_autho
         },
     )?;
 
+    assert_resealed_l1_mutation_state(
+        &callable_l1_bytes,
+        &stop,
+        "missing required Chunk root declaration",
+        wow_context::ValidationState::NotEvaluated,
+        |pack| {
+            let core = &mut pack["core"]["skeletons"]["l1"]["core"];
+            let root_id = core["root"]["node_id"].clone();
+            let declarations = core["declarations"]
+                .as_array_mut()
+                .ok_or("native L1 root declarations")?;
+            let count = declarations.len();
+            declarations.retain(|row| row["node"]["node_id"] != root_id);
+            assert_eq!(declarations.len() + 1, count);
+            Ok(())
+        },
+    )?;
+
+    for field in ["local_entities", "direct_relations"] {
+        for mutation in ["remove", "duplicate", "reverse"] {
+            assert_resealed_l1_mutation_state(
+                &l1_bytes,
+                &stop,
+                &format!("{mutation} native L1 {field}"),
+                wow_context::ValidationState::Invalid,
+                |pack| {
+                    let population = pack["core"]["skeletons"]["l1"]["core"][field]
+                        .as_array_mut()
+                        .ok_or("native L1 population")?;
+                    assert!(population.len() >= 2);
+                    match mutation {
+                        "remove" => {
+                            population.pop();
+                        }
+                        "duplicate" => population.push(population[0].clone()),
+                        "reverse" => population.reverse(),
+                        _ => return Err("unknown population mutation".into()),
+                    }
+                    Ok(())
+                },
+            )?;
+        }
+    }
+    for mutation in ["duplicate", "reverse", "swap_node"] {
+        assert_resealed_l1_mutation_state(
+            &l1_bytes,
+            &stop,
+            &format!("{mutation} native L1 declaration"),
+            wow_context::ValidationState::Invalid,
+            |pack| {
+                let core = &mut pack["core"]["skeletons"]["l1"]["core"];
+                let root = core["root"].clone();
+                let declarations = core["declarations"]
+                    .as_array_mut()
+                    .ok_or("native L1 declarations")?;
+                assert!(declarations.len() >= 2);
+                match mutation {
+                    "duplicate" => declarations.push(declarations[0].clone()),
+                    "reverse" => declarations.reverse(),
+                    "swap_node" => declarations[0]["node"] = root,
+                    _ => return Err("unknown declaration mutation".into()),
+                }
+                Ok(())
+            },
+        )?;
+    }
+    for field in [
+        "reference_records",
+        "relation_interpretation",
+        "profile_descriptor",
+    ] {
+        let mutated = mutate_and_reseal_native_l1_pack(&l1_bytes, |pack| {
+            let core = &mut pack["core"]["skeletons"]["l1"]["core"];
+            match field {
+                "reference_records" => core[field] = json!([]),
+                "relation_interpretation" => core[field] = json!("inferred_transitive_edges"),
+                "profile_descriptor" => core[field]["depth"] = json!(2),
+                _ => return Err("unknown profile mutation".into()),
+            }
+            Ok(())
+        })?;
+        let validation =
+            wow_context::validate_primary_pack(&mutated, reader_limits(READER_MAX_BYTES)?, &stop)?;
+        assert_ne!(
+            validation.overall_state(),
+            wow_context::ValidationState::Valid,
+            "{field}: {validation:?}"
+        );
+    }
+
+    assert_resealed_l1_mutation_state(
+        &callable_l1_bytes,
+        &stop,
+        "missing selected Chunk source-owner support receipt",
+        wow_context::ValidationState::NotEvaluated,
+        |pack| {
+            remove_producer_relation_support(
+                project_map_l1_mut(pack),
+                &fixture.callable_ownership_proposal_id,
+            )
+        },
+    )?;
+
+    assert_resealed_l1_mutation_state(
+        &callable_l1_bytes,
+        &stop,
+        "incomplete support cannot conceal swapped explained endpoints",
+        wow_context::ValidationState::Invalid,
+        |pack| {
+            let map = project_map_l1_mut(pack);
+            let (receipt_index, _) =
+                producer_relation_support_location(map, &fixture.callable_ownership_proposal_id)?;
+            let explanation = &mut map["core"]["supports"][receipt_index]["explanation"];
+            explanation["support_complete"] = json!(false);
+            let source = explanation["record"]["source"].clone();
+            explanation["record"]["source"] = explanation["record"]["target"].clone();
+            explanation["record"]["target"] = source;
+            Ok(())
+        },
+    )?;
+
+    assert_resealed_l1_mutation_state(
+        &l1_bytes,
+        &stop,
+        "Closure parent outside the selected source-file declarations",
+        wow_context::ValidationState::NotEvaluated,
+        |pack| {
+            let declarations = pack["core"]["skeletons"]["l1"]["core"]["declarations"]
+                .as_array_mut()
+                .ok_or("native L1 callable declarations")?;
+            if declarations.iter().any(|row| {
+                row["metadata"]["function"]["function_id"] == fixture.foreign_chunk_function_id
+            }) {
+                return Err(
+                    "foreign fixture Chunk unexpectedly entered the selected declarations".into(),
+                );
+            }
+            let matches = declarations
+                .iter()
+                .enumerate()
+                .filter(|(_, row)| {
+                    row["kind"] == "callable"
+                        && row["metadata"]["function"]["path"] == ADMITTED_PATH
+                        && row["metadata"]["function"]["kind"] == "closure"
+                })
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>();
+            if matches.len() != 1 {
+                return Err(format!(
+                    "the selected main-file Closure must occur once, found {}",
+                    matches.len()
+                )
+                .into());
+            }
+            let closure = declarations
+                .get_mut(matches[0])
+                .ok_or("exact selected Closure declaration")?;
+            closure["metadata"]["parent_function_id"] = json!(fixture.foreign_chunk_function_id);
+            Ok(())
+        },
+    )?;
+
+    assert_resealed_l1_mutation_state(
+        &l1_bytes,
+        &stop,
+        "mixed sibling proposal and evidence in the Closure ownership receipt",
+        wow_context::ValidationState::Invalid,
+        |pack| {
+            let support = producer_relation_support_mut(
+                project_map_l1_mut(pack),
+                &fixture.closure_ownership_proposal_id,
+            )?;
+            support["proposal"]["proposal_id"] = json!(fixture.callable_ownership_proposal_id);
+            support["proposal"]["evidence_ids"] = json!([fixture.main_chunk_evidence_id]);
+            Ok(())
+        },
+    )?;
+
     let service_request = crate::context::ContextValidateRequest::primary_semantic_pack_structural(
         READER_MAX_BYTES,
         READER_MAX_BYTES,
@@ -582,8 +1165,29 @@ fn external_primary_pack_reader_accepts_one_native_l0_and_keeps_limits_and_autho
     );
     assert!(service.canonical_bytes().len() <= READER_MAX_BYTES as usize);
 
+    let l1_service = crate::context::execute_context_validate(&service_request, &l1_bytes, &stop)?;
+    assert_eq!(l1_service.operation_status(), ContextMapStatus::Complete);
+    assert_eq!(
+        l1_service.validation_state(),
+        Some(wow_context::ValidationState::Valid)
+    );
+    assert_eq!(l1_service.failure_code(), None);
+    let l1_envelope: Value = serde_json::from_slice(l1_service.canonical_bytes())?;
+    assert_eq!(
+        l1_envelope["payload"]["semantic_pack_id"].as_str(),
+        valid_l1.semantic_pack_id()
+    );
+    assert_eq!(
+        l1_envelope["payload"]["owner_generation_closure"],
+        "not_evaluated"
+    );
+    assert_eq!(
+        l1_envelope["payload"]["source_or_runtime_authority"],
+        "not_evaluated"
+    );
+
     let changed_identity = tamper_pack_identity(&l0_bytes)?;
-    let invalid = wow_context::validate_primary_l0_pack(
+    let invalid = wow_context::validate_primary_pack(
         &changed_identity,
         reader_limits(READER_MAX_BYTES)?,
         &stop,
@@ -598,34 +1202,15 @@ fn external_primary_pack_reader_accepts_one_native_l0_and_keeps_limits_and_autho
     );
     assert_eq!(invalid.semantic_pack_id(), None);
 
-    let unsupported =
-        wow_context::validate_primary_l0_pack(&l1_bytes, reader_limits(READER_MAX_BYTES)?, &stop)?;
-    assert_eq!(
-        unsupported.overall_state(),
-        wow_context::ValidationState::NotEvaluated
-    );
-    assert_eq!(unsupported.schema(), wow_context::ValidationState::Valid);
-    assert_eq!(
-        unsupported.digest_and_identity(),
-        wow_context::ValidationState::NotEvaluated
-    );
-    assert_eq!(
-        unsupported.selection().map(|selection| selection.level()),
-        Some(wow_context::PrimaryPackLevel::L1)
-    );
-
     let cancelled = AtomicBool::new(true);
-    let error = wow_context::validate_primary_l0_pack(
-        &l0_bytes,
-        reader_limits(READER_MAX_BYTES)?,
-        &cancelled,
-    )
-    .err()
-    .ok_or("pre-cancelled validation must stop before parsing")?;
+    let error =
+        wow_context::validate_primary_pack(&l0_bytes, reader_limits(READER_MAX_BYTES)?, &cancelled)
+            .err()
+            .ok_or("pre-cancelled validation must stop before parsing")?;
     assert_eq!(error.code(), wow_context::ContextErrorCode::Cancelled);
 
     let too_small = reader_limits((l0_bytes.len() as u64).saturating_sub(1))?;
-    let error = wow_context::validate_primary_l0_pack(&l0_bytes, too_small, &stop)
+    let error = wow_context::validate_primary_pack(&l0_bytes, too_small, &stop)
         .err()
         .ok_or("caller byte cap must refuse the complete native artifact")?;
     assert_eq!(
@@ -640,7 +1225,7 @@ fn external_primary_pack_reader_accepts_one_native_l0_and_keeps_limits_and_autho
         128,
         READER_MAX_TOKENS,
     )?;
-    let error = wow_context::validate_primary_l0_pack(&l0_bytes, metadata_too_small, &stop)
+    let error = wow_context::validate_primary_pack(&l0_bytes, metadata_too_small, &stop)
         .err()
         .ok_or("caller metadata cap must refuse the complete native artifact")?;
     assert_eq!(
@@ -655,7 +1240,7 @@ fn external_primary_pack_reader_accepts_one_native_l0_and_keeps_limits_and_autho
         128,
         READER_MAX_TOKENS,
     )?;
-    let error = wow_context::validate_primary_l0_pack(&l0_bytes, work_too_small, &stop)
+    let error = wow_context::validate_primary_pack(&l0_bytes, work_too_small, &stop)
         .err()
         .ok_or("raw hashing and scanning must consume the caller work allowance")?;
     assert_eq!(
@@ -666,12 +1251,15 @@ fn external_primary_pack_reader_accepts_one_native_l0_and_keeps_limits_and_autho
 }
 
 #[test]
-fn external_primary_l0_render_matches_native_and_service_artifacts_without_custody() -> TestResult {
+fn external_primary_l0_render_matches_native_and_keeps_l1_not_evaluated_without_artifact()
+-> TestResult {
     use crate::context::{ContextRenderFormat, ContextRenderRequest, execute_context_render};
     use wow_context::{PrimaryPackRenderFormat, validate_and_render_primary_l0_pack};
 
-    let (_scratch, l0_bytes, l1_bytes, native_result) = native_l0_and_l1_bytes()?;
-    let native: Value = serde_json::from_slice(native_result.canonical_bytes())?;
+    let fixture = native_primary_pack_fixture()?;
+    let l0_bytes = fixture.l0_bytes.clone();
+    let l1_bytes = fixture.l1_bytes.clone();
+    let native: Value = serde_json::from_slice(fixture.native_result.canonical_bytes())?;
     assert_eq!(rows(&native["payload"]["rendered_artifacts"])?.len(), 2);
     let stop = AtomicBool::new(false);
     let render_request = |format, work| {

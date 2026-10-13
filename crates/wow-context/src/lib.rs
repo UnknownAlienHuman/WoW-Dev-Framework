@@ -60,7 +60,7 @@ pub use pack::{
     PrimaryPackRenderResult, PrimaryPackRootVariant, PrimaryPackSelection, PrimaryPackValidation,
     PrimaryPackValidationBudgetUsage, PrimaryPackValidationCheck, PrimaryPackValidationCode,
     PrimaryPackValidationLimits, PrimaryPackValidationRecord, PrimaryPackValidationState,
-    ValidationState, validate_and_render_primary_l0_pack, validate_primary_l0_pack,
+    ValidationState, validate_and_render_primary_l0_pack, validate_primary_pack,
 };
 pub use platform::{
     PLATFORM_NATIVE_ONE_HOP_PROFILE, PLATFORM_NATIVE_ONE_HOP_PROFILE_BYTES, PlatformContextInspect,

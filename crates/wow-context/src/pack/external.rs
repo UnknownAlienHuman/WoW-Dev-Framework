@@ -1,4 +1,4 @@
-//! Bounded external validation of default Primary L0 metadata semantic packs.
+//! Bounded external validation of default Primary L0 and EntityV1 L1 semantic packs.
 //!
 //! Raw admission precedes one closed typed decode and structural identity/reference
 //! checks. Decoded records never recreate native owner custody or runtime authority.
@@ -140,6 +140,7 @@ pub enum PrimaryPackValidationCode {
     RecursiveWireClosurePending,
     SemanticPackIdentityMismatch,
     UnsupportedLoadCustody,
+    IncompleteDeclarationSupport,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -377,7 +378,7 @@ pub enum PrimaryPackRenderFormat {
     Markdown,
 }
 
-/// Validation report and optional artifact from one admitted external Primary L0 pack.
+/// Validation report and optional L0 artifact from one admitted external Primary pack.
 #[derive(Serialize)]
 pub struct PrimaryPackRenderResult {
     validation: PrimaryPackValidation,
@@ -408,6 +409,9 @@ struct HeaderProbe {
     skeleton_level: Option<String>,
     l0_schema: Option<String>,
     l0_profile: Option<String>,
+    l1_schema: Option<String>,
+    l1_profile: Option<String>,
+    map_platform: Option<String>,
     map_schema: Option<String>,
     map_profile: Option<String>,
     scope_node_kind: Option<String>,
@@ -483,6 +487,20 @@ impl HeaderProbe {
                     "context",
                     "origins",
                     "core",
+                    "profile",
+                    "platform",
+                ],
+            )
+            || matches_path(
+                path,
+                &[
+                    "core",
+                    "skeletons",
+                    "l0",
+                    "core",
+                    "context",
+                    "origins",
+                    "core",
                     "navigation",
                     "schema",
                 ],
@@ -493,6 +511,90 @@ impl HeaderProbe {
                     "core",
                     "skeletons",
                     "l0",
+                    "core",
+                    "context",
+                    "origins",
+                    "core",
+                    "navigation",
+                    "root",
+                    "kind",
+                ],
+            )
+            || matches_path(path, &["core", "skeletons", "l1", "core", "schema"])
+            || matches_path(path, &["core", "skeletons", "l1", "core", "profile"])
+            || matches_path(
+                path,
+                &[
+                    "core",
+                    "skeletons",
+                    "l1",
+                    "core",
+                    "profile_descriptor",
+                    "profile_id",
+                ],
+            )
+            || matches_path(path, &["core", "skeletons", "l1", "core", "root", "kind"])
+            || matches_path(
+                path,
+                &[
+                    "core",
+                    "skeletons",
+                    "l1",
+                    "core",
+                    "context",
+                    "origins",
+                    "core",
+                    "schema",
+                ],
+            )
+            || matches_path(
+                path,
+                &[
+                    "core",
+                    "skeletons",
+                    "l1",
+                    "core",
+                    "context",
+                    "origins",
+                    "core",
+                    "profile",
+                    "profile",
+                ],
+            )
+            || matches_path(
+                path,
+                &[
+                    "core",
+                    "skeletons",
+                    "l1",
+                    "core",
+                    "context",
+                    "origins",
+                    "core",
+                    "profile",
+                    "platform",
+                ],
+            )
+            || matches_path(
+                path,
+                &[
+                    "core",
+                    "skeletons",
+                    "l1",
+                    "core",
+                    "context",
+                    "origins",
+                    "core",
+                    "navigation",
+                    "schema",
+                ],
+            )
+            || matches_path(
+                path,
+                &[
+                    "core",
+                    "skeletons",
+                    "l1",
                     "core",
                     "context",
                     "origins",
@@ -552,9 +654,7 @@ impl HeaderProbe {
                 "core",
                 "schema",
             ],
-        ) {
-            &mut self.map_schema
-        } else if matches_path(
+        ) || matches_path(
             path,
             &[
                 "core",
@@ -564,17 +664,27 @@ impl HeaderProbe {
                 "context",
                 "origins",
                 "core",
-                "profile",
-                "profile",
+                "navigation",
+                "schema",
             ],
-        ) {
-            &mut self.map_profile
-        } else if matches_path(
+        ) || matches_path(
             path,
             &[
                 "core",
                 "skeletons",
-                "l0",
+                "l1",
+                "core",
+                "context",
+                "origins",
+                "core",
+                "schema",
+            ],
+        ) || matches_path(
+            path,
+            &[
+                "core",
+                "skeletons",
+                "l1",
                 "core",
                 "context",
                 "origins",
@@ -594,12 +704,98 @@ impl HeaderProbe {
                 "context",
                 "origins",
                 "core",
+                "profile",
+                "profile",
+            ],
+        ) || matches_path(
+            path,
+            &[
+                "core",
+                "skeletons",
+                "l1",
+                "core",
+                "context",
+                "origins",
+                "core",
+                "profile",
+                "profile",
+            ],
+        ) {
+            &mut self.map_profile
+        } else if matches_path(
+            path,
+            &[
+                "core",
+                "skeletons",
+                "l0",
+                "core",
+                "context",
+                "origins",
+                "core",
+                "profile",
+                "platform",
+            ],
+        ) || matches_path(
+            path,
+            &[
+                "core",
+                "skeletons",
+                "l1",
+                "core",
+                "context",
+                "origins",
+                "core",
+                "profile",
+                "platform",
+            ],
+        ) {
+            &mut self.map_platform
+        } else if matches_path(
+            path,
+            &[
+                "core",
+                "skeletons",
+                "l0",
+                "core",
+                "context",
+                "origins",
+                "core",
+                "navigation",
+                "root",
+                "kind",
+            ],
+        ) || matches_path(
+            path,
+            &[
+                "core",
+                "skeletons",
+                "l1",
+                "core",
+                "context",
+                "origins",
+                "core",
                 "navigation",
                 "root",
                 "kind",
             ],
         ) {
             &mut self.map_root_kind
+        } else if matches_path(path, &["core", "skeletons", "l1", "core", "schema"]) {
+            &mut self.l1_schema
+        } else if matches_path(path, &["core", "skeletons", "l1", "core", "profile"])
+            || matches_path(
+                path,
+                &[
+                    "core",
+                    "skeletons",
+                    "l1",
+                    "core",
+                    "profile_descriptor",
+                    "profile_id",
+                ],
+            )
+        {
+            &mut self.l1_profile
         } else {
             return;
         };
@@ -611,53 +807,33 @@ impl HeaderProbe {
             matches_path(path, &["core", "request", "core", "l0_profile_id"]);
         self.l1_profile_present |=
             matches_path(path, &["core", "request", "core", "l1_profile_id"]);
-        self.expansion_present |= matches_path(path, &["core", "expansion"])
+        self.expansion_present = matches_path(path, &["core", "expansion"])
             || matches_path(path, &["core", "request", "core", "expansion_id"]);
-        self.source_excerpt_present |= matches_path(path, &["core", "source_excerpt"])
+        self.source_excerpt_present = matches_path(path, &["core", "source_excerpt"])
             || matches_path(path, &["core", "request", "core", "source_excerpt"]);
-        self.unsupported_load_custody |= matches_path(
-            path,
-            &[
-                "core",
-                "skeletons",
-                "l0",
-                "core",
-                "context",
-                "origins",
-                "core",
-                "load_custody",
-                "selected_toc",
-            ],
-        ) || matches_path(
-            path,
-            &[
-                "core",
-                "skeletons",
-                "l0",
-                "core",
-                "context",
-                "origins",
-                "core",
-                "load_custody",
-                "package_load",
-            ],
-        ) || matches_path(
-            path,
-            &[
-                "core",
-                "skeletons",
-                "l0",
-                "core",
-                "context",
-                "origins",
-                "core",
-                "load_custody",
-                "package_main",
-            ],
-        );
+        let layers = ["l0", "l1"];
+        self.unsupported_load_custody |= layers.iter().any(|layer| {
+            ["selected_toc", "package_load", "package_main"]
+                .iter()
+                .any(|facet| {
+                    matches_path(
+                        path,
+                        &[
+                            "core",
+                            "skeletons",
+                            *layer,
+                            "core",
+                            "context",
+                            "origins",
+                            "core",
+                            "load_custody",
+                            *facet,
+                        ],
+                    )
+                })
+        });
     }
 }
-
 fn matches_path(actual: &[String], expected: &[&str]) -> bool {
     actual.len() == expected.len() && actual.iter().zip(expected).all(|(a, b)| a == b)
 }
@@ -1260,12 +1436,12 @@ fn invalid_json() -> ContextError {
     ContextError::new(ContextErrorCode::EncodingInvalid)
 }
 
-pub fn validate_primary_l0_pack(
+pub fn validate_primary_pack(
     input: &[u8],
     limits: PrimaryPackValidationLimits,
     stop: &AtomicBool,
 ) -> ContextResult<PrimaryPackValidation> {
-    let mut admission = admit_primary_l0_pack(input, limits, stop)?;
+    let mut admission = admit_primary_pack(input, limits, stop)?;
     let checked = wire::check(&mut admission, stop)?;
     admission.checkpoint()?;
     Ok(admission.finalize(checked.check))
@@ -1281,10 +1457,18 @@ pub fn validate_and_render_primary_l0_pack(
     format: PrimaryPackRenderFormat,
     stop: &AtomicBool,
 ) -> ContextResult<PrimaryPackRenderResult> {
-    let mut admission = admit_primary_l0_pack(input, limits, stop)?;
+    let mut admission = admit_primary_pack(input, limits, stop)?;
     let prior_metadata = admission.decoded_view_bytes();
-    let checked = wire::check(&mut admission, stop)?;
+    let mut checked = wire::check(&mut admission, stop)?;
     admission.checkpoint()?;
+    if admission
+        .selection()
+        .is_some_and(|selection| selection.level == PrimaryPackLevel::L1)
+        && checked.check.internal_references == PrimaryPackValidationState::Valid
+    {
+        checked.check.internal_references = PrimaryPackValidationState::NotEvaluated;
+        checked.check.code = Some(PrimaryPackValidationCode::UnsupportedLevel);
+    }
     let validated = checked.validated;
     let report = admission.finalize(checked.check);
     if report.state() != PrimaryPackValidationState::Valid {
@@ -1326,8 +1510,8 @@ pub fn validate_and_render_primary_l0_pack(
 
 /// Perform bounded raw admission before the single typed pack decoder runs.
 /// The returned input accessor is present only for the exact finite supported
-/// Primary L0 candidate whose PackCore identity subspan already matches.
-pub(crate) fn admit_primary_l0_pack<'a>(
+/// Primary L0 or default EntityV1 L1 candidate whose PackCore identity subspan matches.
+pub(crate) fn admit_primary_pack<'a>(
     input: &'a [u8],
     limits: PrimaryPackValidationLimits,
     stop: &'a AtomicBool,
@@ -1475,14 +1659,18 @@ fn classify(
             PrimaryPackValidationCode::UnsupportedProfile,
         );
     }
-    if header.level.as_deref() != Some("l0") || header.skeleton_level.as_deref() != Some("l0") {
-        return (
-            PrimaryPackValidationState::NotEvaluated,
-            PrimaryPackValidationState::Valid,
-            PrimaryPackValidationState::NotEvaluated,
-            PrimaryPackValidationCode::UnsupportedLevel,
-        );
-    }
+    let level = match (header.level.as_deref(), header.skeleton_level.as_deref()) {
+        (Some("l0"), Some("l0")) => PrimaryPackLevel::L0,
+        (Some("l1"), Some("l1")) => PrimaryPackLevel::L1,
+        _ => {
+            return (
+                PrimaryPackValidationState::NotEvaluated,
+                PrimaryPackValidationState::Valid,
+                PrimaryPackValidationState::NotEvaluated,
+                PrimaryPackValidationCode::UnsupportedLevel,
+            );
+        }
+    };
     if header.root_kind.as_deref() != Some("entity") {
         return (
             PrimaryPackValidationState::NotEvaluated,
@@ -1491,13 +1679,7 @@ fn classify(
             PrimaryPackValidationCode::UnsupportedRoot,
         );
     }
-    if header.l0_profile_present
-        || header.l1_profile_present
-        || header
-            .l0_profile
-            .as_deref()
-            .is_some_and(|profile| profile != L0_PROFILE)
-    {
+    if header.l0_profile_present || header.l1_profile_present {
         return (
             PrimaryPackValidationState::NotEvaluated,
             PrimaryPackValidationState::Valid,
@@ -1521,37 +1703,88 @@ fn classify(
             PrimaryPackValidationCode::UnsupportedSourceExcerpt,
         );
     }
-    if header.l0_schema.as_deref() != Some(L0_SCHEMA)
-        || header.l0_profile.as_deref() != Some(L0_PROFILE)
-    {
-        return (
-            PrimaryPackValidationState::NotEvaluated,
-            PrimaryPackValidationState::Valid,
-            PrimaryPackValidationState::NotEvaluated,
-            PrimaryPackValidationCode::UnsupportedProfile,
-        );
-    }
-    if header.map_schema.as_deref() != Some(MAP_SCHEMA)
-        || header.map_profile.as_deref() != Some(MAP_PROFILE)
-    {
-        return (
-            PrimaryPackValidationState::NotEvaluated,
-            PrimaryPackValidationState::Valid,
-            PrimaryPackValidationState::NotEvaluated,
-            PrimaryPackValidationCode::UnsupportedMapProfile,
-        );
-    }
-    if !matches!(
-        header.scope_node_kind.as_deref(),
-        Some("source_file" | "source_package")
-    ) || header.scope_node_kind != header.map_root_kind
-    {
-        return (
-            PrimaryPackValidationState::NotEvaluated,
-            PrimaryPackValidationState::Valid,
-            PrimaryPackValidationState::NotEvaluated,
-            PrimaryPackValidationCode::UnsupportedRootKind,
-        );
+
+    match level {
+        PrimaryPackLevel::L0 => {
+            if header.l0_schema.as_deref() != Some(L0_SCHEMA)
+                || header.l0_profile.as_deref() != Some(L0_PROFILE)
+            {
+                return (
+                    PrimaryPackValidationState::NotEvaluated,
+                    PrimaryPackValidationState::Valid,
+                    PrimaryPackValidationState::NotEvaluated,
+                    PrimaryPackValidationCode::UnsupportedProfile,
+                );
+            }
+            if header.map_schema.as_deref() != Some(MAP_SCHEMA)
+                || header.map_profile.as_deref() != Some(MAP_PROFILE)
+            {
+                return (
+                    PrimaryPackValidationState::NotEvaluated,
+                    PrimaryPackValidationState::Valid,
+                    PrimaryPackValidationState::NotEvaluated,
+                    PrimaryPackValidationCode::UnsupportedMapProfile,
+                );
+            }
+            if !matches!(
+                header.scope_node_kind.as_deref(),
+                Some("source_file" | "source_package")
+            ) || header.scope_node_kind != header.map_root_kind
+            {
+                return (
+                    PrimaryPackValidationState::NotEvaluated,
+                    PrimaryPackValidationState::Valid,
+                    PrimaryPackValidationState::NotEvaluated,
+                    PrimaryPackValidationCode::UnsupportedRootKind,
+                );
+            }
+        }
+        PrimaryPackLevel::L1 => {
+            if header
+                .l1_schema
+                .as_deref()
+                .is_some_and(|schema| schema != "wow-context/l1-skeleton/primary/1")
+                || header
+                    .l1_profile
+                    .as_deref()
+                    .is_some_and(|profile| profile != crate::PRIMARY_L1_PROFILE)
+            {
+                return (
+                    PrimaryPackValidationState::NotEvaluated,
+                    PrimaryPackValidationState::Valid,
+                    PrimaryPackValidationState::NotEvaluated,
+                    PrimaryPackValidationCode::UnsupportedProfile,
+                );
+            }
+            if header
+                .map_schema
+                .as_deref()
+                .is_some_and(|schema| schema != project_map_wire::PRIMARY_DETAIL_MAP_SCHEMA)
+                || header
+                    .map_profile
+                    .as_deref()
+                    .is_some_and(|profile| profile != project_map_wire::PRIMARY_DETAIL_MAP_PROFILE)
+                || header
+                    .map_platform
+                    .as_deref()
+                    .is_some_and(|platform| platform != "absent_profile_excluded")
+            {
+                return (
+                    PrimaryPackValidationState::NotEvaluated,
+                    PrimaryPackValidationState::Valid,
+                    PrimaryPackValidationState::NotEvaluated,
+                    PrimaryPackValidationCode::UnsupportedMapProfile,
+                );
+            }
+        }
+        PrimaryPackLevel::Both | PrimaryPackLevel::Other => {
+            return (
+                PrimaryPackValidationState::NotEvaluated,
+                PrimaryPackValidationState::Valid,
+                PrimaryPackValidationState::NotEvaluated,
+                PrimaryPackValidationCode::UnsupportedLevel,
+            );
+        }
     }
     if header.unsupported_load_custody {
         return (

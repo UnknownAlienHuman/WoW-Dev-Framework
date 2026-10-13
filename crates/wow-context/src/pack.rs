@@ -44,7 +44,7 @@ pub use external::{
     PrimaryPackRenderResult, PrimaryPackRootVariant, PrimaryPackSelection, PrimaryPackValidation,
     PrimaryPackValidationBudgetUsage, PrimaryPackValidationCheck, PrimaryPackValidationCode,
     PrimaryPackValidationLimits, PrimaryPackValidationRecord, PrimaryPackValidationState,
-    ValidationState, validate_and_render_primary_l0_pack, validate_primary_l0_pack,
+    ValidationState, validate_and_render_primary_l0_pack, validate_primary_pack,
 };
 pub(crate) use frontier::expansion_renderer_profiles;
 pub use frontier::{

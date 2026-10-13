@@ -1,8 +1,8 @@
-//! Bounded structural joins for default Primary L0 declaration rows.
+//! Bounded structural joins for selected default Primary L0/L1 declaration rows.
 //!
 //! Caller contract: invoke only after strict single-pass decode and after
-//! `check_project_map_links` has accepted `map`. Pass the exact checked L0 root
-//! and direct-member node slice, plus the caller's existing cumulative work
+//! the selected finite ProjectMap checker has accepted `map`. Pass its exact
+//! checked root and L0 members or L1 local entities, plus the caller's cumulative work
 //! reservation callback and cancellation flag. This module creates no native
 //! owner, custody, parser, or work allowance. A `Supported` result is only a
 //! structural join over decoded bytes; it does not restore native authority.
@@ -53,6 +53,13 @@ pub(crate) enum DeclarationLinksError<E> {
     Work(E),
     Cancelled,
     Invalid(&'static str),
+    Incomplete(&'static str),
+}
+
+#[derive(Clone, Copy)]
+enum DeclarationSelection<'a> {
+    L0Members(&'a [GraphNode]),
+    L1Entities(&'a [GraphNode]),
 }
 
 /// Validate one selected root's declaration rows against its checked map.
@@ -66,6 +73,44 @@ pub(crate) fn check_declaration_links<E>(
     map: &ProjectMapWire,
     root: &GraphNode,
     direct_members: &[GraphNode],
+    reserve_work: impl FnMut(usize) -> Result<(), E>,
+    stop: &AtomicBool,
+) -> Result<Vec<DeclarationLink>, DeclarationLinksError<E>> {
+    check_selected_declaration_links(
+        declarations,
+        map,
+        root,
+        DeclarationSelection::L0Members(direct_members),
+        reserve_work,
+        stop,
+    )
+}
+
+/// Re-admit declarations from the exact EntityV1 local entity set. Ownership
+/// is joined to its actual selected source node, not inferred from the L1 root.
+pub(crate) fn check_l1_declaration_links<E>(
+    declarations: &[DeclarationWire],
+    map: &ProjectMapWire,
+    root: &GraphNode,
+    selected_entities: &[GraphNode],
+    reserve_work: impl FnMut(usize) -> Result<(), E>,
+    stop: &AtomicBool,
+) -> Result<Vec<DeclarationLink>, DeclarationLinksError<E>> {
+    check_selected_declaration_links(
+        declarations,
+        map,
+        root,
+        DeclarationSelection::L1Entities(selected_entities),
+        reserve_work,
+        stop,
+    )
+}
+
+fn check_selected_declaration_links<E>(
+    declarations: &[DeclarationWire],
+    map: &ProjectMapWire,
+    root: &GraphNode,
+    selection: DeclarationSelection<'_>,
     mut reserve_work: impl FnMut(usize) -> Result<(), E>,
     stop: &AtomicBool,
 ) -> Result<Vec<DeclarationLink>, DeclarationLinksError<E>> {
@@ -96,7 +141,7 @@ pub(crate) fn check_declaration_links<E>(
                     map,
                     view,
                     root,
-                    direct_members,
+                    selection,
                     &mut reserve_work,
                     stop,
                 )?;
@@ -108,7 +153,28 @@ pub(crate) fn check_declaration_links<E>(
             }
         }
     }
-    validate_callable_parent_links(declarations, &mut reserve_work, stop)?;
+    validate_callable_parent_links(
+        declarations,
+        matches!(selection, DeclarationSelection::L1Entities(_)),
+        &mut reserve_work,
+        stop,
+    )?;
+    if matches!(selection, DeclarationSelection::L1Entities(_))
+        && matches!(
+            root.kind(),
+            "lua_source_function"
+                | "lua_source_declaration"
+                | "xml_source_declaration"
+                | "xml_source_handler"
+        )
+    {
+        reserve_work(output.len()).map_err(DeclarationLinksError::Work)?;
+        if !output.iter().any(|row| &row.node_id == root.node_id()) {
+            return Err(DeclarationLinksError::Incomplete(
+                "L1 root has no matching original declaration row",
+            ));
+        }
+    }
     Ok(output)
 }
 
@@ -191,7 +257,7 @@ fn check_supported_declaration<E>(
     map: &ProjectMapWire,
     view: &NeighborViewWire,
     root: &GraphNode,
-    direct_members: &[GraphNode],
+    selection: DeclarationSelection<'_>,
     reserve_work: &mut impl FnMut(usize) -> Result<(), E>,
     stop: &AtomicBool,
 ) -> Result<(), DeclarationLinksError<E>> {
@@ -315,9 +381,17 @@ fn check_supported_declaration<E>(
         ));
     }
     validate_graph_node(node, reserve_work, stop)?;
-    if !contains_equal_node(&view.adjacent_nodes, node, reserve_work, stop)?
-        || !contains_equal_node(direct_members, node, reserve_work, stop)?
-    {
+    let selected = match selection {
+        DeclarationSelection::L0Members(members) => {
+            contains_equal_node(&view.adjacent_nodes, node, reserve_work, stop)?
+                && contains_equal_node(members, node, reserve_work, stop)?
+        }
+        DeclarationSelection::L1Entities(entities) => {
+            (node == root || contains_equal_node(&view.adjacent_nodes, node, reserve_work, stop)?)
+                && contains_equal_node(entities, node, reserve_work, stop)?
+        }
+    };
+    if !selected {
         return Err(DeclarationLinksError::Invalid(
             "declaration node is not an exact checked direct member",
         ));
@@ -327,7 +401,8 @@ fn check_supported_declaration<E>(
     for edge in &view.edges {
         step(reserve_work, stop)?;
         if edge.relation() == wow_graph::GraphRelationKind::Owns
-            && edge.from() == root.node_id()
+            && (matches!(selection, DeclarationSelection::L1Entities(_))
+                || edge.from() == root.node_id())
             && edge.to() == node.node_id()
             && direct_ownership_edge.replace(edge).is_some()
         {
@@ -336,9 +411,30 @@ fn check_supported_declaration<E>(
             ));
         }
     }
-    let ownership_edge = direct_ownership_edge.ok_or(DeclarationLinksError::Invalid(
-        "declaration has no direct native Owns edge from the selected root",
-    ))?;
+    let ownership_edge = direct_ownership_edge.ok_or_else(|| match selection {
+        DeclarationSelection::L0Members(_) => DeclarationLinksError::Invalid(
+            "declaration has no direct native Owns edge from the selected root",
+        ),
+        DeclarationSelection::L1Entities(_) => DeclarationLinksError::Incomplete(
+            "L1 declaration ownership support lies outside the selected native neighborhood",
+        ),
+    })?;
+    let owner = if ownership_edge.from() == view.root.node_id() {
+        &view.root
+    } else {
+        let mut owner = None;
+        for candidate in &view.adjacent_nodes {
+            step(reserve_work, stop)?;
+            if candidate.node_id() == ownership_edge.from() && owner.replace(candidate).is_some() {
+                return Err(DeclarationLinksError::Invalid(
+                    "declaration owner is duplicated",
+                ));
+            }
+        }
+        owner.ok_or(DeclarationLinksError::Incomplete(
+            "L1 declaration source owner is not selected",
+        ))?
+    };
 
     check_entity_support(
         map,
@@ -352,8 +448,9 @@ fn check_supported_declaration<E>(
     check_ownership_support(
         map,
         (ownership_id, proposal_id),
-        (root, node, ownership_edge),
+        (owner, node, ownership_edge),
         (handle_id, evidence_id),
+        matches!(selection, DeclarationSelection::L1Entities(_)),
         reserve_work,
         stop,
     )?;
@@ -685,13 +782,15 @@ fn check_ownership_support<E>(
     proposal_ids: (&str, &str),
     direct_join: (&GraphNode, &GraphNode, &wow_graph::GraphEdge),
     support_ids: (StableHandleId, EvidenceId),
+    incomplete_support_allowed: bool,
     reserve_work: &mut impl FnMut(usize) -> Result<(), E>,
     stop: &AtomicBool,
 ) -> Result<(), DeclarationLinksError<E>> {
     let (ownership_id, entity_proposal_id) = proposal_ids;
     let (root, node, direct_edge) = direct_join;
     let (handle_id, evidence_id) = support_ids;
-    let root_proposal_id = root_entity_proposal_id(map, root, reserve_work, stop)?;
+    let root_proposal_id =
+        root_entity_proposal_id(map, root, incomplete_support_allowed, reserve_work, stop)?;
     let mut matches = 0usize;
     for receipt in &map.core.supports {
         step(reserve_work, stop)?;
@@ -737,6 +836,11 @@ fn check_ownership_support<E>(
             }
         }
     }
+    if matches == 0 && incomplete_support_allowed {
+        return Err(DeclarationLinksError::Incomplete(
+            "L1 declaration has no exact producer ownership support",
+        ));
+    }
     if matches != 1 {
         return Err(DeclarationLinksError::Invalid(
             "declaration does not resolve to exactly one producer ownership support",
@@ -778,6 +882,7 @@ fn published_edge_matches<E>(
 fn root_entity_proposal_id<E>(
     map: &ProjectMapWire,
     root: &GraphNode,
+    incomplete_support_allowed: bool,
     reserve_work: &mut impl FnMut(usize) -> Result<(), E>,
     stop: &AtomicBool,
 ) -> Result<Box<str>, DeclarationLinksError<E>> {
@@ -803,13 +908,20 @@ fn root_entity_proposal_id<E>(
             }
         }
     }
-    found.ok_or(DeclarationLinksError::Invalid(
-        "selected root has no exact producer entity support",
-    ))
+    found.ok_or_else(|| {
+        if incomplete_support_allowed {
+            DeclarationLinksError::Incomplete(
+                "L1 source owner has no exact producer entity support",
+            )
+        } else {
+            DeclarationLinksError::Invalid("selected root has no exact producer entity support")
+        }
+    })
 }
 
 fn validate_callable_parent_links<E>(
     declarations: &[DeclarationWire],
+    incomplete_parent_allowed: bool,
     reserve_work: &mut impl FnMut(usize) -> Result<(), E>,
     stop: &AtomicBool,
 ) -> Result<(), DeclarationLinksError<E>> {
@@ -822,8 +934,16 @@ fn validate_callable_parent_links<E>(
             continue;
         };
         let mut parent_found = false;
+        let mut parent_id_present = false;
         for candidate in declarations {
             step(reserve_work, stop)?;
+            if let DeclarationWire::Callable {
+                metadata: parent, ..
+            } = candidate
+            {
+                parent_id_present |= parent.function.function_id == parent_id
+                    && parent.function.path == metadata.function.path;
+            }
             if let DeclarationWire::Callable {
                 metadata: parent, ..
             } = candidate
@@ -852,6 +972,11 @@ fn validate_callable_parent_links<E>(
             }
         }
         if !parent_found {
+            if incomplete_parent_allowed && !parent_id_present {
+                return Err(DeclarationLinksError::Incomplete(
+                    "L1 callable parent support lies outside the selected declaration set",
+                ));
+            }
             return Err(DeclarationLinksError::Invalid(
                 "callable parent function ID is not present in the selected declaration set",
             ));

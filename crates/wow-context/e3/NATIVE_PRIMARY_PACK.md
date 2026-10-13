@@ -108,10 +108,23 @@ not outer artifact JSON, source spans or character offsets. Trace does not grant
 source inclusion permission. Requested renderers are required; refusal cannot
 clip output or return a different semantic selection.
 
+## External default Primary validation
+
+`validate_primary_pack` admits default ContainersV1 L0 on an exact source-file
+or package root, and default EntityV1 L1 on an exact native entity root. L1
+checks the original detail-map, ID-ordered local population, direct edges and
+declaration producer/accepted-record/ownership/source/evidence joins. A callable,
+Lua, XML declaration or handler root requires its original declaration row.
+Missing or out-of-neighborhood proof remains NotEvaluated; contradictory records
+are Invalid. Unsupported declaration families remain NotEvaluated. Both, explicit
+StateDetail/ReferenceFacts profiles, excerpts, expansions and platform/composed
+packs are outside this reader. Valid proves StructuralOnly closure; native owner,
+source and runtime authority remain NotEvaluated.
+
 ## External default Primary L0 rendering
 
 `validate_and_render_primary_l0_pack` admits the same finite StructuralOnly
-external JSON input as `validate_primary_l0_pack`, then renders JSON or Markdown
+external L0 JSON input admitted by `validate_primary_pack`, then renders JSON or Markdown
 through the existing native templates. `PrimaryPackRenderResult` exposes the
 validation report, optional artifact and cumulative `total_work()`. Invalid or
 NotEvaluated input has no artifact. A success-only private decoded view preserves

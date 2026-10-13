@@ -17,7 +17,12 @@ use wow_project::{ProjectFileId, ProjectId, graph::ProjectGraphFile};
 use wow_reference::{CoverageStatus, ReferenceConflict};
 
 use crate::ContextError;
+use crate::profile::{DETAIL_RELATIONS, RELATIONS};
 type EndpointProposalKey<'a> = (&'a str, &'a str, &'a str, &'a str, &'a str, &'a str);
+
+pub(super) const PRIMARY_DETAIL_MAP_SCHEMA: &str =
+    "wow-context/project-map/primary-entity-detail-origins/1";
+pub(super) const PRIMARY_DETAIL_MAP_PROFILE: &str = "wow-context/primary-entity-detail-origins/1";
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -545,33 +550,133 @@ pub(crate) enum ProjectMapWireOutcome {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProjectMapL1WireOutcome {
+    SupportedPrimaryEntityV1,
+    NotEvaluated {
+        selected_toc: bool,
+        package_load: bool,
+        package_main: bool,
+        explanation_extensions: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProjectMapPurpose {
+    PrimaryL0,
+    PrimaryEntityV1L1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProjectMapLinksOutcome {
+    Supported,
+    NotEvaluated {
+        project_navigation: bool,
+        selected_toc: bool,
+        package_load: bool,
+        package_main: bool,
+        explanation_extensions: bool,
+    },
+}
+
 /// A structural rejection is distinct from a caller budget/cancellation error.
 /// The driver supplies its existing `Budget::work(amount, stop)` hook, preserving
 /// the native context error instead of hiding it behind a parser-local limit.
 #[derive(Debug)]
 pub(crate) enum ProjectMapWireCheckError<E> {
     Invalid(&'static str),
+    Incomplete(&'static str),
     Work(E),
 }
 
-/// Structural checks only. The caller supplies both its continuing work hook
-/// and its stop-aware existing ProjectMap identity helper; no string-only ID or
-/// decoded receipt creates native custody. The caller must additionally resolve
-/// every reference against the one admitted ProjectMap wire graph and preserve
-/// `NotEvaluated` state.
+/// Structural checks for the existing Primary L0 map path. The caller supplies
+/// its continuing work hook; the exact ProjectMap identity is checked in the
+/// bounded digest phase before these joins. Decoded records never create native
+/// custody, and callers still resolve references against the admitted map.
 pub(crate) fn check_project_map_links<E: From<ContextError>>(
     map: &ProjectMapWire,
     requested_l0_root: &GraphNodeId,
-    mut reserve_work: impl FnMut(usize) -> Result<(), E>,
+    reserve_work: impl FnMut(usize) -> Result<(), E>,
     stop: &std::sync::atomic::AtomicBool,
 ) -> Result<ProjectMapWireOutcome, ProjectMapWireCheckError<E>> {
+    let outcome = check_project_map_links_for_purpose(
+        map,
+        requested_l0_root,
+        ProjectMapPurpose::PrimaryL0,
+        reserve_work,
+        stop,
+    )?;
+    Ok(match outcome {
+        ProjectMapLinksOutcome::Supported => ProjectMapWireOutcome::SupportedPrimaryL0,
+        ProjectMapLinksOutcome::NotEvaluated {
+            project_navigation,
+            selected_toc,
+            package_load,
+            package_main,
+            explanation_extensions,
+        } => ProjectMapWireOutcome::NotEvaluated {
+            project_navigation,
+            selected_toc,
+            package_load,
+            package_main,
+            explanation_extensions,
+        },
+    })
+}
+
+/// Admit only the default Primary EntityV1 detail map and its exact requested
+/// native entity root. Pack-level L1/profile selection remains the caller's
+/// responsibility; this path does not validate L0, project navigation, or a
+/// combined Both recipe.
+pub(crate) fn check_l1_project_map_links<E: From<ContextError>>(
+    map: &ProjectMapWire,
+    requested_l1_root: &GraphNodeId,
+    reserve_work: impl FnMut(usize) -> Result<(), E>,
+    stop: &std::sync::atomic::AtomicBool,
+) -> Result<ProjectMapL1WireOutcome, ProjectMapWireCheckError<E>> {
+    let outcome = check_project_map_links_for_purpose(
+        map,
+        requested_l1_root,
+        ProjectMapPurpose::PrimaryEntityV1L1,
+        reserve_work,
+        stop,
+    )?;
+    Ok(match outcome {
+        ProjectMapLinksOutcome::Supported => ProjectMapL1WireOutcome::SupportedPrimaryEntityV1,
+        ProjectMapLinksOutcome::NotEvaluated {
+            selected_toc,
+            package_load,
+            package_main,
+            explanation_extensions,
+            ..
+        } => ProjectMapL1WireOutcome::NotEvaluated {
+            selected_toc,
+            package_load,
+            package_main,
+            explanation_extensions,
+        },
+    })
+}
+
+fn check_project_map_links_for_purpose<E: From<ContextError>>(
+    map: &ProjectMapWire,
+    requested_root: &GraphNodeId,
+    purpose: ProjectMapPurpose,
+    mut reserve_work: impl FnMut(usize) -> Result<(), E>,
+    stop: &std::sync::atomic::AtomicBool,
+) -> Result<ProjectMapLinksOutcome, ProjectMapWireCheckError<E>> {
     reserve_work(1).map_err(ProjectMapWireCheckError::Work)?;
     super::owner_records::check(map, &mut reserve_work)?;
-    if !matches!(
-        map.core.schema.as_str(),
-        "wow-context/project-map/primary-direct-navigation/1"
-            | "wow-context/project-map/primary-project-navigation/1"
-    ) || map.core.project_container.project_id != map.core.binding.project_id
+    let schema_matches_purpose = match purpose {
+        ProjectMapPurpose::PrimaryL0 => matches!(
+            map.core.schema.as_str(),
+            "wow-context/project-map/primary-direct-navigation/1"
+                | "wow-context/project-map/primary-project-navigation/1"
+        ),
+        ProjectMapPurpose::PrimaryEntityV1L1 => map.core.schema == PRIMARY_DETAIL_MAP_SCHEMA,
+    };
+    if !schema_matches_purpose
+        || map.core.project_container.project_id != map.core.binding.project_id
         || map.core.project_container.project_generation != map.core.binding.project_generation
         || map.core.universe_set_id.is_empty()
         || map.core.absence_authoritative
@@ -600,10 +705,26 @@ pub(crate) fn check_project_map_links<E: From<ContextError>>(
     }
     let project_navigation =
         map.core.schema == "wow-context/project-map/primary-project-navigation/1";
-    let expected_profile = if project_navigation {
-        crate::PRIMARY_PROJECT_MAP_PROFILE
-    } else {
-        crate::PRIMARY_MAP_PROFILE
+    let (expected_profile, expected_nodes, expected_edges): (
+        &str,
+        &str,
+        &[wow_graph::GraphRelationKind],
+    ) = match purpose {
+        ProjectMapPurpose::PrimaryL0 if project_navigation => (
+            crate::PRIMARY_PROJECT_MAP_PROFILE,
+            "project_container_and_all_source_file_direct_endpoints",
+            &RELATIONS,
+        ),
+        ProjectMapPurpose::PrimaryL0 => (
+            crate::PRIMARY_MAP_PROFILE,
+            "exact_root_and_direct_endpoints",
+            &RELATIONS,
+        ),
+        ProjectMapPurpose::PrimaryEntityV1L1 => (
+            PRIMARY_DETAIL_MAP_PROFILE,
+            "exact_root_and_direct_endpoints",
+            &DETAIL_RELATIONS,
+        ),
     };
     if map.core.profile.profile != expected_profile {
         return Err(ProjectMapWireCheckError::Invalid(
@@ -611,23 +732,9 @@ pub(crate) fn check_project_map_links<E: From<ContextError>>(
         ));
     }
     let profile = &map.core.profile;
-    let expected_nodes = if project_navigation {
-        "project_container_and_all_source_file_direct_endpoints"
-    } else {
-        "exact_root_and_direct_endpoints"
-    };
-    let expected_edges = [
-        wow_graph::GraphRelationKind::Contains,
-        wow_graph::GraphRelationKind::Defines,
-        wow_graph::GraphRelationKind::DependsOn,
-        wow_graph::GraphRelationKind::OptionalDependsOn,
-        wow_graph::GraphRelationKind::Owns,
-        wow_graph::GraphRelationKind::Loads,
-        wow_graph::GraphRelationKind::LoadsBefore,
-    ];
     if profile.confidence != "include_candidate"
         || profile.direction != "both"
-        || profile.edges.as_slice() != expected_edges.as_slice()
+        || profile.edges.as_slice() != expected_edges
         || profile.nodes != expected_nodes
         || profile.ordering != "node_id_then_edge_id"
         || profile.platform != "absent_profile_excluded"
@@ -645,23 +752,37 @@ pub(crate) fn check_project_map_links<E: From<ContextError>>(
     let mut neighborhoods = Vec::<&NeighborViewWire>::new();
     match &map.core.navigation {
         MapNavigationWire::Direct(view) => {
-            if map.core.schema != "wow-context/project-map/primary-direct-navigation/1" {
-                return Err(ProjectMapWireCheckError::Invalid(
-                    "direct navigation/schema mismatch",
-                ));
-            }
-            if view.root.node_id() != requested_l0_root
-                || !matches!(view.root.kind(), "source_file" | "source_package")
-            {
-                return Err(ProjectMapWireCheckError::Invalid(
-                    "default Primary L0 requires its exact source_file/source_package map root",
-                ));
+            match purpose {
+                ProjectMapPurpose::PrimaryL0 => {
+                    if map.core.schema != "wow-context/project-map/primary-direct-navigation/1" {
+                        return Err(ProjectMapWireCheckError::Invalid(
+                            "direct navigation/schema mismatch",
+                        ));
+                    }
+                    if view.root.node_id() != requested_root
+                        || !matches!(view.root.kind(), "source_file" | "source_package")
+                    {
+                        return Err(ProjectMapWireCheckError::Invalid(
+                            "default Primary L0 requires its exact source_file/source_package map root",
+                        ));
+                    }
+                }
+                ProjectMapPurpose::PrimaryEntityV1L1 => {
+                    if map.core.schema != PRIMARY_DETAIL_MAP_SCHEMA
+                        || view.root.node_id() != requested_root
+                    {
+                        return Err(ProjectMapWireCheckError::Invalid(
+                            "default Primary EntityV1 L1 requires its exact native detail-map root",
+                        ));
+                    }
+                }
             }
             roots.push(&view.root);
             neighborhoods.push(view);
         }
         MapNavigationWire::Project(project) => {
-            if map.core.schema != "wow-context/project-map/primary-project-navigation/1"
+            if purpose != ProjectMapPurpose::PrimaryL0
+                || map.core.schema != "wow-context/project-map/primary-project-navigation/1"
                 || project.schema != "wow-context/project-navigation/1"
                 || project.root_enumeration != "complete_for_retained_primary_source_files"
                 || project.project_id != map.core.binding.project_id
@@ -693,7 +814,7 @@ pub(crate) fn check_project_map_links<E: From<ContextError>>(
     for (root, view) in roots.iter().zip(&neighborhoods) {
         reserve_work(1).map_err(ProjectMapWireCheckError::Work)?;
         let query = view.query.query();
-        let mut sorted_expected_edges = expected_edges;
+        let mut sorted_expected_edges = expected_edges.to_vec();
         sorted_expected_edges.sort();
         let query_digest = graph_query_digest(
             wow_graph::GRAPH_NEIGHBOR_READ_SCHEMA,
@@ -905,6 +1026,7 @@ pub(crate) fn check_project_map_links<E: From<ContextError>>(
     }
     let mut supported_nodes = std::collections::BTreeSet::new();
     let mut supported_edges = std::collections::BTreeSet::new();
+    let mut incomplete_support = false;
     let mut support_handles = std::collections::BTreeMap::new();
     let mut accepted_entity_proposals = std::collections::BTreeMap::new();
     // Native input_view unions evidence for assertions with one foundation
@@ -1025,15 +1147,9 @@ pub(crate) fn check_project_map_links<E: From<ContextError>>(
             || receipt.explanation.query_digest != explanation_digest
             || receipt.explanation.query.snapshot_id != map.core.binding.graph_snapshot_id
             || receipt.explanation.query.limits != map.core.budget.limits.explain
-            || !receipt.explanation.support_complete
-            || !receipt.explanation.truncations.is_empty()
-            || receipt.explanation.supports.is_empty()
-            || !receipt.evidence_resolution.closure_complete
-            || !receipt.evidence_resolution.truncations.is_empty()
-            || !receipt.evidence_resolution.unresolved.is_empty()
         {
             return Err(ProjectMapWireCheckError::Invalid(
-                "native support receipt is incomplete or has an unsupported schema",
+                "native support receipt identity or schema differs",
             ));
         }
         if receipt.explanation.query.snapshot_id != map.core.binding.graph_snapshot_id
@@ -1046,6 +1162,22 @@ pub(crate) fn check_project_map_links<E: From<ContextError>>(
             return Err(ProjectMapWireCheckError::Invalid(
                 "support receipt is bound to another graph or source context",
             ));
+        }
+        if !receipt.explanation.support_complete
+            || !receipt.explanation.truncations.is_empty()
+            || receipt.explanation.supports.is_empty()
+            || !receipt.evidence_resolution.closure_complete
+            || !receipt.evidence_resolution.truncations.is_empty()
+            || !receipt.evidence_resolution.unresolved.is_empty()
+        {
+            if purpose == ProjectMapPurpose::PrimaryL0 {
+                return Err(ProjectMapWireCheckError::Invalid(
+                    "native support receipt is incomplete",
+                ));
+            }
+            // Inspect retained records before classifying missing support.
+            // Incompleteness cannot conceal contradictory endpoint/proof data.
+            incomplete_support = true;
         }
         let mut receipt_evidence_ids = std::collections::BTreeSet::new();
         for evidence in &receipt.evidence_resolution.evidence_records {
@@ -1377,6 +1509,11 @@ pub(crate) fn check_project_map_links<E: From<ContextError>>(
         explanation_extensions |=
             !super::assertion_links::check_local_chain(receipt, map, &mut reserve_work, stop)?;
     }
+    if incomplete_support {
+        return Err(ProjectMapWireCheckError::Incomplete(
+            "L1 native support receipt is incomplete",
+        ));
+    }
     Ok(
         if project_navigation
             || selected_toc
@@ -1384,7 +1521,7 @@ pub(crate) fn check_project_map_links<E: From<ContextError>>(
             || package_main
             || explanation_extensions
         {
-            ProjectMapWireOutcome::NotEvaluated {
+            ProjectMapLinksOutcome::NotEvaluated {
                 project_navigation,
                 selected_toc,
                 package_load,
@@ -1392,7 +1529,7 @@ pub(crate) fn check_project_map_links<E: From<ContextError>>(
                 explanation_extensions,
             }
         } else {
-            ProjectMapWireOutcome::SupportedPrimaryL0
+            ProjectMapLinksOutcome::Supported
         },
     )
 }

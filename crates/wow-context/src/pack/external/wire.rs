@@ -1,6 +1,11 @@
-//! Complete decode-only model for the selected current writer. None of these
-//! records can construct a native owner, acquired view, or semantic pack.
+//! Decode-only model for default Primary L0 and EntityV1 L1 packs. These
+//! records construct no native owner, acquired view, or semantic pack.
 use std::io::{self, BufReader, Read};
+
+#[path = "l1_items_wire.rs"]
+mod l1_items_wire;
+#[path = "l1_wire.rs"]
+mod l1_wire;
 use std::sync::atomic::AtomicBool;
 
 use serde::{Deserialize, Serialize};
@@ -13,8 +18,9 @@ use super::declaration_wire::DeclarationWire;
 pub(crate) use super::l0_items_wire::{ContextItemWire, ItemPayloadWire, SelectionRecordWire};
 use super::l0_items_wire::{L0ItemTraceError, L0ScopeWire, validate_l0_item_trace};
 use super::project_map_wire::{
-    MapNavigationWire, PrimaryMapLimitsWire, ProjectMapWire, ProjectMapWireCheckError,
-    ProjectMapWireOutcome, check_project_map_links,
+    MapNavigationWire, PrimaryMapLimitsWire, ProjectMapL1WireOutcome, ProjectMapWire,
+    ProjectMapWireCheckError, ProjectMapWireOutcome, check_l1_project_map_links,
+    check_project_map_links,
 };
 pub(crate) use super::project_map_wire::{ProjectMapStateWire, UniverseBindingWire};
 use super::{
@@ -98,18 +104,26 @@ struct RequestCoreWire {
     level: LevelWire,
     profile_id: String,
     limits: PrimaryMapLimitsWire,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    l0_profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    l1_profile_id: Option<String>,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum LevelWire {
     L0,
+    L1,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SkeletonsWire {
     schema: String,
     level: LevelWire,
-    l0: L0Wire,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    l0: Option<L0Wire>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    l1: Option<l1_wire::L1SkeletonWire>,
     work_reserved: u64,
     bytes_reserved: u64,
 }
@@ -299,7 +313,9 @@ pub(super) fn check(
         });
     }
     let joined = references(&parsed, admission, stop)?;
-    let renderable = joined.0 == State::Valid && joined.1.is_none();
+    let renderable = joined.0 == State::Valid
+        && joined.1.is_none()
+        && matches!(parsed.core.skeletons.level, LevelWire::L0);
     let PackWire {
         semantic_pack_id,
         core,
@@ -406,42 +422,40 @@ fn profiles(
     stop: &AtomicBool,
 ) -> ContextResult<bool> {
     let core = &pack.core;
-    let l0 = &core.skeletons.l0.core;
-    let d = &l0.profile_descriptor;
     if core.schema != super::PACK_SCHEMA
         || !same(&core.profile, &super::super::PACK_PROFILE, admission, stop)?
         || core.request.core.schema != "wow-context/primary-pack-request/1"
         || core.request.core.profile_id != super::PACK_PROFILE
         || core.boundary_notice != super::super::BOUNDARY_NOTICE
         || core.skeletons.schema != "wow-context/primary-skeleton-inspection/1"
-        || l0.schema != "wow-context/l0-skeleton/primary/1"
-        || l0.profile != crate::PRIMARY_L0_PROFILE
-        || d.profile_id != crate::PRIMARY_L0_PROFILE
-        || d.scope_kinds != ["project", "source_file", "source_package"]
-        || d.relations != crate::profile::RELATIONS
-        || d.direction != "both"
-        || d.depth != 1
-        || d.declarations != "selected_native_callable_and_lua_xml_occurrence_metadata"
-        || d.types != "original_selected_native_signature_state_only"
-        || d.ordering != "native_node_id_then_native_edge_id"
-        || d.privacy != "local_metadata_only"
-        || d.source_bodies != "excluded"
-        || d.tokens != "unavailable"
-        || d.continuation != "not_evaluated"
-        || l0.member_enumeration != "selected_outgoing_native_owns_or_contains"
-        || l0.not_evaluated
-            != [
-                "unselected_native_declaration_or_type_recipes",
-                "reference_fact_enrichment",
-                "control_effect_projection",
-                "source_excerpts_and_exact_tokens",
-                "deeper_paths_and_retained_continuation",
-                "complete_corpus_or_runtime_behavior",
-            ]
+        || core.skeletons.level != core.request.core.level
+        || core.request.core.l0_profile_id.is_some()
+        || core.request.core.l1_profile_id.is_some()
     {
         return Ok(false);
     }
-    let ctx = &l0.context;
+
+    let context = match core.skeletons.level {
+        LevelWire::L0 => {
+            let Some(l0) = core.skeletons.l0.as_ref() else {
+                return Ok(false);
+            };
+            if core.skeletons.l1.is_some() || !primary_l0_profile_matches(l0) {
+                return Ok(false);
+            }
+            &l0.core.context
+        }
+        LevelWire::L1 => {
+            let Some(l1) = core.skeletons.l1.as_ref() else {
+                return Ok(false);
+            };
+            if core.skeletons.l0.is_some() || !l1_wire::entity_v1_profile_matches(l1) {
+                return Ok(false);
+            }
+            &l1.core.context
+        }
+    };
+
     let binding = &core.binding;
     if binding.target_profile.validate().is_err() {
         return Ok(false);
@@ -449,13 +463,41 @@ fn profiles(
     Ok(binding.schema == "wow-context/primary-universe-binding/1"
         && binding.compatibility_basis == "exact_configured_generation_and_explicit_caller_profile"
         && binding.platform_absence == "profile_excluded_optional_platform_context"
-        && ctx.privacy == "local_metadata_only"
-        && ctx.source_bodies == "excluded"
-        && ctx.tokens == "unavailable"
-        && !ctx.absence_authoritative
+        && context.privacy == "local_metadata_only"
+        && context.source_bodies == "excluded"
+        && context.tokens == "unavailable"
+        && !context.absence_authoritative
         && !core.absence_authoritative)
 }
 
+fn primary_l0_profile_matches(l0: &L0Wire) -> bool {
+    let l0 = &l0.core;
+    let descriptor = &l0.profile_descriptor;
+    l0.schema == "wow-context/l0-skeleton/primary/1"
+        && l0.profile == crate::PRIMARY_L0_PROFILE
+        && descriptor.profile_id == crate::PRIMARY_L0_PROFILE
+        && descriptor.scope_kinds == ["project", "source_file", "source_package"]
+        && descriptor.relations == crate::profile::RELATIONS
+        && descriptor.direction == "both"
+        && descriptor.depth == 1
+        && descriptor.declarations == "selected_native_callable_and_lua_xml_occurrence_metadata"
+        && descriptor.types == "original_selected_native_signature_state_only"
+        && descriptor.ordering == "native_node_id_then_native_edge_id"
+        && descriptor.privacy == "local_metadata_only"
+        && descriptor.source_bodies == "excluded"
+        && descriptor.tokens == "unavailable"
+        && descriptor.continuation == "not_evaluated"
+        && l0.member_enumeration == "selected_outgoing_native_owns_or_contains"
+        && l0.not_evaluated
+            == [
+                "unselected_native_declaration_or_type_recipes",
+                "reference_fact_enrichment",
+                "control_effect_projection",
+                "source_excerpts_and_exact_tokens",
+                "deeper_paths_and_retained_continuation",
+                "complete_corpus_or_runtime_behavior",
+            ]
+}
 fn matches_id<T: Serialize + ?Sized>(
     supplied: &str,
     domain: &'static str,
@@ -482,8 +524,6 @@ fn digests(
     stop: &AtomicBool,
 ) -> ContextResult<bool> {
     let core = &pack.core;
-    let l0 = &core.skeletons.l0;
-    let map = &l0.core.context.origins;
     if !matches_id(
         &core.universe_set_id,
         "wow-context/primary-universe-binding/1",
@@ -498,28 +538,72 @@ fn digests(
         &core.request.core,
         admission,
         stop,
-    )? || !matches_id(
-        &l0.l0_skeleton_id,
-        "wow-context/l0-skeleton/primary/1",
-        "l0-skeleton:sha256:",
-        &l0.core,
-        admission,
-        stop,
-    )? || !matches_id(
-        &map.project_map_id,
-        "wow-context/project-map/primary-direct-navigation/1",
-        "project-map:sha256:",
-        &map.core,
-        admission,
-        stop,
-    )? || !matches_id(
-        &pack.semantic_pack_id,
-        super::PACK_SCHEMA,
-        "context-pack:sha256:",
-        core,
-        admission,
-        stop,
     )? {
+        return Ok(false);
+    }
+
+    let (map, skeleton_matches) = match core.skeletons.level {
+        LevelWire::L0 => {
+            let Some(l0) = core.skeletons.l0.as_ref() else {
+                return Ok(false);
+            };
+            if core.skeletons.l1.is_some() {
+                return Ok(false);
+            }
+            (
+                &l0.core.context.origins,
+                matches_id(
+                    &l0.l0_skeleton_id,
+                    "wow-context/l0-skeleton/primary/1",
+                    "l0-skeleton:sha256:",
+                    &l0.core,
+                    admission,
+                    stop,
+                )?,
+            )
+        }
+        LevelWire::L1 => {
+            let Some(l1) = core.skeletons.l1.as_ref() else {
+                return Ok(false);
+            };
+            if core.skeletons.l0.is_some() {
+                return Ok(false);
+            }
+            (
+                &l1.core.context.origins,
+                matches_id(
+                    &l1.l1_skeleton_id,
+                    "wow-context/l1-skeleton/primary/1",
+                    "l1-skeleton:sha256:",
+                    &l1.core,
+                    admission,
+                    stop,
+                )?,
+            )
+        }
+    };
+    let map_domain = match core.skeletons.level {
+        LevelWire::L0 => super::MAP_SCHEMA,
+        LevelWire::L1 => super::project_map_wire::PRIMARY_DETAIL_MAP_SCHEMA,
+    };
+    if !skeleton_matches
+        || !matches_id(
+            &map.project_map_id,
+            map_domain,
+            "project-map:sha256:",
+            &map.core,
+            admission,
+            stop,
+        )?
+        || !matches_id(
+            &pack.semantic_pack_id,
+            super::PACK_SCHEMA,
+            "context-pack:sha256:",
+            core,
+            admission,
+            stop,
+        )?
+    {
         return Ok(false);
     }
     for item in &core.items {
@@ -550,9 +634,74 @@ fn references(
     admission: &mut PrimaryPackAdmission<'_>,
     stop: &AtomicBool,
 ) -> ContextResult<(State, Option<Code>)> {
+    let core = &pack.core;
+    match (
+        core.skeletons.level,
+        core.skeletons.l0.is_some(),
+        core.skeletons.l1.is_some(),
+    ) {
+        (LevelWire::L0, true, false) => references_l0(pack, admission, stop),
+        (LevelWire::L1, false, true) => references_l1(pack, admission, stop),
+        _ => Ok((State::Invalid, Some(Code::InternalReferenceMismatch))),
+    }
+}
+
+fn references_l1(
+    pack: &PackWire,
+    admission: &mut PrimaryPackAdmission<'_>,
+    stop: &AtomicBool,
+) -> ContextResult<(State, Option<Code>)> {
     let invalid = (State::Invalid, Some(Code::InternalReferenceMismatch));
     let core = &pack.core;
-    let l0 = &core.skeletons.l0.core;
+    let Some(skeleton) = core.skeletons.l1.as_ref() else {
+        return Ok(invalid);
+    };
+    let L0ScopeWire::Entity(root_id) = &core.request.core.root else {
+        return Ok(invalid);
+    };
+    let map = &skeleton.core.context.origins;
+    match check_l1_project_map_links(map, root_id, |amount| admission.charge_work(amount), stop) {
+        Ok(ProjectMapL1WireOutcome::SupportedPrimaryEntityV1) => {}
+        Ok(ProjectMapL1WireOutcome::NotEvaluated { .. }) => {
+            return Ok((State::NotEvaluated, Some(Code::UnsupportedLoadCustody)));
+        }
+        Err(ProjectMapWireCheckError::Invalid(_)) => {
+            return Ok(invalid);
+        }
+        Err(ProjectMapWireCheckError::Incomplete(reason)) => {
+            let _ = reason;
+            return Ok((
+                State::NotEvaluated,
+                Some(Code::IncompleteDeclarationSupport),
+            ));
+        }
+        Err(ProjectMapWireCheckError::Work(error)) => return Err(error),
+    }
+    Ok(match l1_wire::check_l1_pack_joins(pack, admission, stop)? {
+        l1_wire::L1PackCheck::Valid => (State::Valid, None),
+        l1_wire::L1PackCheck::Invalid => invalid,
+        l1_wire::L1PackCheck::UnsupportedDeclarationFamily => (
+            State::NotEvaluated,
+            Some(Code::UnsupportedDeclarationFamily),
+        ),
+        l1_wire::L1PackCheck::IncompleteDeclarationSupport => (
+            State::NotEvaluated,
+            Some(Code::IncompleteDeclarationSupport),
+        ),
+    })
+}
+
+fn references_l0(
+    pack: &PackWire,
+    admission: &mut PrimaryPackAdmission<'_>,
+    stop: &AtomicBool,
+) -> ContextResult<(State, Option<Code>)> {
+    let invalid = (State::Invalid, Some(Code::InternalReferenceMismatch));
+    let core = &pack.core;
+    let Some(l0_wire) = core.skeletons.l0.as_ref() else {
+        return Ok(invalid);
+    };
+    let l0 = &l0_wire.core;
     let ctx = &l0.context;
     let map = &ctx.origins;
     let ScopeWire::Entity { node: root } = &l0.scope;
@@ -611,6 +760,10 @@ fn references(
             return Ok((State::NotEvaluated, Some(Code::UnsupportedLoadCustody)));
         }
         Err(ProjectMapWireCheckError::Invalid(reason)) => {
+            let _ = reason;
+            return Ok(invalid);
+        }
+        Err(ProjectMapWireCheckError::Incomplete(reason)) => {
             let _ = reason;
             return Ok(invalid);
         }
@@ -720,6 +873,12 @@ fn references(
         }
         Ok(_) => {}
         Err(DeclarationLinksError::Invalid(_)) => return Ok(invalid),
+        Err(DeclarationLinksError::Incomplete(_)) => {
+            return Ok((
+                State::NotEvaluated,
+                Some(Code::IncompleteDeclarationSupport),
+            ));
+        }
         Err(DeclarationLinksError::Work(error)) => return Err(error),
         Err(DeclarationLinksError::Cancelled) => {
             return Err(ContextError::new(ContextErrorCode::Cancelled));
@@ -730,7 +889,7 @@ fn references(
         || omissions.upstream[0].producer != "project_map"
         || omissions.upstream[0].artifact_id != map.project_map_id
         || omissions.upstream[1].producer != "l0_skeleton"
-        || omissions.upstream[1].artifact_id != core.skeletons.l0.l0_skeleton_id
+        || omissions.upstream[1].artifact_id != l0_wire.l0_skeleton_id
         || omissions.interpretation != "producer_local_omissions_retained_in_original_artifacts"
         || omissions.continuation != "not_evaluated"
         || omissions.not_evaluated
