@@ -255,6 +255,89 @@ fn source_normalized_callable_signature_retains_owner_custody() {
         );
     }
 }
+
+#[test]
+fn selected_callable_type_overlay_resolves_only_exact_atomic_names() {
+    use wow_core::ReferenceGenerationId;
+    use wow_reference::LookupResult;
+    use wow_reference::native_view::{
+        NATIVE_API_PARTITION, NativeCallableCorpus, project_callables,
+        project_callables_with_type_resolution,
+    };
+
+    let stop = AtomicBool::new(false);
+    let source = r#"local api={Name="Typed",Type="System",Namespace="C_Typed",
+      Functions={{Name="Read",Type="Function",
+        Arguments={{Name="mode",Type="Mode"},{Name="dynamic",Type="any"},
+          {Name="container",Type="Mode",InnerType="string"}},
+        Returns={{Name="next",Type="Mode|Other"},{Name="record",Type="FixtureRecord"},
+          {Name="hidden",Type="HiddenOnlyInOtherEnvironment"}}}},
+      Tables={{Name="Mode",Type="Enumeration",Fields={{Name="One",EnumValue=1}}},
+        {Name="FixtureRecord",Type="Structure",Fields={{Name="id",Type="number"}}}}}
+      APIDocumentation:AddDocumentationTable(api)
+      APIDocumentation:AddDocumentationTable({Name="Other",Type="System",Environment="Other",
+        Tables={{Name="HiddenOnlyInOtherEnvironment",Type="Structure",Fields={}}}})"#;
+    let document = read(source);
+    let selection = ReferenceGenerationId::derive(&"typed-overlay-witness").unwrap();
+    let mut selected = project_callables_with_type_resolution(
+        std::slice::from_ref(&document),
+        "All",
+        selection,
+        NativeCallableCorpus::explicit_partial(),
+        None,
+        &stop,
+    )
+    .unwrap();
+    let record = match selected
+        .view
+        .lookup(NATIVE_API_PARTITION, "function:C_Typed.Read")
+    {
+        LookupResult::Found(record) => record.clone(),
+        other => panic!("expected callable, got {other:?}"),
+    };
+    let signature = selected.callable_signature(&record, &stop).unwrap();
+    assert_eq!(
+        selected.type_resolution_profile(),
+        Some("wow-reference/native-callable-type-resolution/1")
+    );
+    assert!(signature.type_resolution_encoded_len().unwrap() > 0);
+    let encoded = serde_json::to_value(signature).unwrap();
+    assert_eq!(encoded["signature"]["arguments"][0]["type_name"], "Mode");
+    assert_eq!(encoded["signature"]["arguments"][1]["type_name"], "any");
+    let resolution = &encoded["type_resolution"]["fields"];
+    assert_eq!(resolution[0]["status"], "resolved");
+    assert_eq!(resolution[0]["candidates"][0]["kind"], "enum");
+    assert_eq!(resolution[1]["status"], "unsupported");
+    assert_eq!(resolution[2]["status"], "unsupported");
+    assert_eq!(resolution[3]["status"], "unsupported");
+    assert_eq!(resolution[2]["inner_type"], "string");
+    assert_eq!(encoded["signature"]["arguments"][2]["type_name"], "Mode");
+    assert_eq!(encoded["signature"]["arguments"][2]["inner_type"], "string");
+    assert_eq!(resolution[4]["status"], "resolved");
+    assert_eq!(resolution[4]["candidates"][0]["kind"], "structure");
+    assert_eq!(resolution[5]["status"], "unresolved");
+
+    let legacy = project_callables(
+        &[document],
+        "All",
+        selection,
+        NativeCallableCorpus::explicit_partial(),
+        &stop,
+    )
+    .unwrap();
+    assert_eq!(legacy.type_resolution_profile(), None);
+    assert_ne!(
+        selected.view.generation_id(),
+        legacy.view.generation_id(),
+        "the selected overlay is bound into its Reference generation"
+    );
+    selected.view = legacy.view.clone();
+    assert_eq!(
+        selected.type_resolution_profile(),
+        Some("wow-reference/native-callable-type-resolution/1"),
+        "the selection profile is sealed independently of the mutable report view"
+    );
+}
 #[test]
 fn script_objects_do_not_become_globals() {
     let doc = read(

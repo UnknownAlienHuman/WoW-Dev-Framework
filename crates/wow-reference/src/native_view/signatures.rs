@@ -1,5 +1,6 @@
 //! Source-normalized callable data captured during the original native projection.
 //! No payload decoding, type resolution, annotation lowering or runtime authority.
+use super::type_resolution::NativeCallableTypeResolution;
 use super::*;
 use crate::native::RawValue;
 
@@ -35,6 +36,7 @@ pub(super) struct SignatureRow {
     record_digest: String,
     source_id: String,
     data: NativeCallableSignatureData,
+    type_resolution: Option<NativeCallableTypeResolution>,
 }
 
 /// Genuine native owner data. No public constructor or deserialization path.
@@ -47,6 +49,8 @@ pub struct NativeCallableSignature<'a> {
     record_digest: &'a str,
     source_id: &'a str,
     signature: &'a NativeCallableSignatureData,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    type_resolution: Option<&'a NativeCallableTypeResolution>,
 }
 impl NativeCallableSignature<'_> {
     pub const fn reference_generation(&self) -> &str {
@@ -64,6 +68,16 @@ impl NativeCallableSignature<'_> {
     pub const fn source_id(&self) -> &str {
         self.source_id
     }
+    pub const fn type_resolution(&self) -> Option<&NativeCallableTypeResolution> {
+        self.type_resolution
+    }
+    /// Exact canonical JSON size of the selected overlay; absent on legacy reads.
+    pub const fn type_resolution_encoded_len(&self) -> Option<usize> {
+        match self.type_resolution {
+            Some(resolution) => Some(resolution.encoded_len()),
+            None => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,6 +92,7 @@ impl SignatureRow {
         record: &ReferenceRecord,
         namespace: Option<&str>,
         function: &CallableFact<'_>,
+        type_resolution: Option<NativeCallableTypeResolution>,
         stop: &AtomicBool,
     ) -> Result<Self, NativeError> {
         checkpoint(stop)?;
@@ -122,6 +137,7 @@ impl SignatureRow {
                 returns: fields(&function.returns)?,
                 type_qualification: "original_source_type_identities_unresolved",
             },
+            type_resolution,
         })
     }
 }
@@ -192,6 +208,7 @@ impl SignatureCatalog {
             record_digest: &row.record_digest,
             source_id: &row.source_id,
             signature: &row.data,
+            type_resolution: row.type_resolution.as_ref(),
         })
     }
 }

@@ -91,9 +91,14 @@ source-normalized callable captured during `project_callables`. The sealed view
 binds its original Reference generation/view digest, record key/digest and source
 ID. It retains ordered parameters/returns, unresolved source type identities,
 tri-state nilability and raw default/stride values with original member spans.
-No payload parser, correction overlay or annotation lowering runs in this reader;
+No payload parser, correction application or annotation lowering runs in this reader;
 unknown fields remain in the original record. Conflicting candidates cannot mint
 this view. The private catalog is skipped by serialization, preserving existing
 Reference and projection bytes. Consumers must validate the complete binding
 against their held universe; replacing a public report does not relabel it.
 See the selected [context consumer](../wow-context/e3/NATIVE_PRIMARY_REFERENCE_FACTS.md).
+
+The explicit `project_callables_with_type_resolution` producer also attaches a
+Reference-owned exact-name/correction overlay, described in
+[native callable type resolution](NATIVE_CALLABLE_TYPE_RESOLUTION.md). The
+original `project_callables` path keeps its original bytes and identities.

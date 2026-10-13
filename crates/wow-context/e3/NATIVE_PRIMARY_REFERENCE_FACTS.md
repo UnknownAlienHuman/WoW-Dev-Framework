@@ -71,10 +71,13 @@ values retain their original kind/value/span; context does not evaluate them or
 turn a default/stride observation into runtime values or inferred optionality.
 An empty projected return list does not assert runtime no-return behavior.
 
-These types are qualified as `original_source_type_identities_unresolved`.
-Source type resolution, corrected-overlay application, annotation display
-lowering, broader restriction interpretation and runtime qualification remain
-unevaluated. Context does not import annotations/emmy, parse the record payload,
+The original types remain qualified as `original_source_type_identities_unresolved`.
+An explicitly selected native corrections producer can additionally supply the
+Reference-owned [exact-name type overlay](../../wow-reference/NATIVE_CALLABLE_TYPE_RESOLUTION.md).
+Context retains that typed sibling unchanged under the same signature binding;
+it does not resolve names or apply corrections. Annotation display lowering,
+broader restriction interpretation and runtime qualification remain unevaluated.
+Context does not import annotations/emmy, parse the record payload,
 interpret restriction prose, widen unknown types, add restrictions or infer API
 legality. JSON and Markdown retain the original record and typed observations
 under their existing canonical/escaping and trace rules; rendering cannot
@@ -109,10 +112,13 @@ mandatory checked read/store closure precedes payload delivery.
 The selected nested L1 profile/schema and optional l1_profile_id bind the explicit
 recipe. Omission/default preserves EntityV1 requests/artifacts, old profile and
 schema bytes and NotEvaluated omissions; state selections retain their own bytes.
-The retained typed catalog is skipped by serialization: persisted Project and
-Reference records, identities and replay/storage recipes remain unchanged.
+The retained typed catalog is skipped by serialization. The legacy producer
+preserves persisted records and identities. The explicit Reference type overlay
+binds a distinct native Reference generation and uses Library producer-input/2
+for exact retained reconstruction; producer-input/1 keeps its legacy route.
+Project/store/replay layouts and default EntityV1 selections stay unchanged.
 This selection has one closed ReferenceFactsV1 recipe and no transient alias.
-This projection adds no native input selection, producer rewrite,
-project configuration, registry, replay, storage or renderer-family migration.
+The type overlay uses the existing explicit native corrections selection;
+this consumer adds no resolver, registry, replay/storage or renderer-family migration.
 Gate outcomes and remaining broad Reference/type, privacy/excerpt/token,
 progressive/platform and Tier A/X qualification stay in #122.

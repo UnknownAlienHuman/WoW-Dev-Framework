@@ -6,7 +6,6 @@ use std::sync::atomic::AtomicBool;
 use serde::{Deserialize, Deserializer, Serialize};
 use wow_annotations::aliases::{MAX_CATALOG_ALIASES, MAX_CATALOG_BYTES, MAX_CATALOG_FILES};
 use wow_annotations::native::NativeLibrary;
-use wow_core::{ContentDigest, CorrectionSet};
 use wow_project::disk::{ProjectDiskFile, ProjectInputDirectory};
 use wow_reference::native::{NativeError, NativeErrorCode, source_digest};
 use wow_reference::native_aliases::{
@@ -213,17 +212,6 @@ impl NativeAnnotationInputs {
 }
 
 impl NativeAnnotationResources {
-    pub(super) fn correction_digest(&self) -> ServiceResult<Option<ContentDigest<CorrectionSet>>> {
-        self.corrections
-            .as_ref()
-            .map(|set| {
-                set.id()
-                    .parse()
-                    .map_err(|_| invalid("native correction identity rejected"))
-            })
-            .transpose()
-    }
-
     pub(super) fn receipt(&self, library: &NativeLibrary<'_>) -> NativeAnnotationInputsReceipt {
         let mut receipt = NativeAnnotationInputsReceipt {
             selection: self.selection.clone(),

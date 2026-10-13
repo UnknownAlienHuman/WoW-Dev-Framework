@@ -25,11 +25,15 @@ use super::input::invalid;
 use super::native_input::{NativeFileIdentity, report_bytes_with_limit};
 use super::native_reference::{
     InputFailure, NativeProfile, NativeReferenceBuild, project_native_reference,
+    project_native_reference_with_type_resolution,
 };
 use super::native_resources::{NativeAnnotationResources, present};
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 
 const INPUT_SCHEMA: &str = "wow-service/native-library-producer-input/1";
+// Selected Reference type overlays change producer identities and interpretation.
+// Legacy inputs continue to reconstruct their original Reference projection.
+const TYPE_RESOLUTION_INPUT_SCHEMA: &str = "wow-service/native-library-producer-input/2";
 // Existing native report/join ceilings; the raw input has its separate Project bound.
 const METADATA_MAX_BYTES: usize = 64 * 1024 * 1024;
 const BINDING_MAX_WORK: usize = 1_000_000;
@@ -158,7 +162,11 @@ pub(super) fn capture(
     // reconsider each original input rather than reconstructing successful rows.
     let bytes = canonical_bytes(
         &CapturedInput {
-            schema: INPUT_SCHEMA,
+            schema: if original.reference.type_resolution_profile().is_some() {
+                TYPE_RESOLUTION_INPUT_SCHEMA
+            } else {
+                INPUT_SCHEMA
+            },
             profile: original.profile,
             sources,
             source_manifest: original
@@ -292,13 +300,25 @@ pub(crate) fn rebuild_for_project(
         documents,
         failures,
         source_files,
-    } = project_native_reference(
-        &decoded.profile,
-        &captured,
-        manifest.as_ref(),
-        correction_digest,
-        stop,
-    )?;
+    } = if decoded.schema == TYPE_RESOLUTION_INPUT_SCHEMA {
+        project_native_reference_with_type_resolution(
+            &decoded.profile,
+            &captured,
+            manifest.as_ref(),
+            corrections
+                .as_ref()
+                .ok_or_else(|| invalid("retained type overlay requires corrections"))?,
+            stop,
+        )
+    } else {
+        project_native_reference(
+            &decoded.profile,
+            &captured,
+            manifest.as_ref(),
+            correction_digest,
+            stop,
+        )
+    }?;
     cancelled(stop)?;
     if &profile != configuration.selected_profile()
         || reference.view.generation_id() != configuration.reference_generation().to_string()
@@ -535,8 +555,19 @@ fn from_bytes(bytes: &[u8], stop: &AtomicBool) -> ServiceResult<ProducerInput> {
     let input: ProducerInput = serde_json::from_slice(bytes)
         .map_err(|_| invalid("invalid or ambiguous native Library input"))?;
     cancelled(stop)?;
-    if input.schema != INPUT_SCHEMA {
+    if input.schema != INPUT_SCHEMA && input.schema != TYPE_RESOLUTION_INPUT_SCHEMA {
         return Err(invalid("unsupported native Library producer-input schema"));
+    }
+    if input.schema == TYPE_RESOLUTION_INPUT_SCHEMA
+        && !matches!(
+            &input.annotation_inputs,
+            AnnotationInputs::Selected {
+                correction_json: Some(_),
+                ..
+            }
+        )
+    {
+        return Err(invalid("retained type overlay requires corrections"));
     }
     input.profile.validate_selector()?;
     if canonical_bytes(&input, stop)? != bytes {

@@ -14,6 +14,7 @@ use wow_core::{
 use wow_project::disk::{PinnedLuaSource, ProjectInputDirectory, SourceManifestReceipt};
 use wow_reference::{
     native::{DocumentationDocument, NativeError, NativeErrorCode, ingest_document},
+    native_corrections::ValidatedCorrections,
     native_view::NativeViewProjection,
 };
 
@@ -154,6 +155,47 @@ pub(super) fn project_native_reference(
     correction_digest: Option<ContentDigest<CorrectionSet>>,
     stop: &AtomicBool,
 ) -> ServiceResult<NativeReferenceBuild> {
+    build_native_reference(
+        requested,
+        captured,
+        source_manifest,
+        correction_digest,
+        None,
+        stop,
+    )
+}
+
+/// Explicitly selected corrections also select the Reference-owned type overlay.
+/// The legacy entry above remains the retained v1 producer's exact reconstruction.
+pub(super) fn project_native_reference_with_type_resolution(
+    requested: &NativeProfile,
+    captured: &[PinnedLuaSource],
+    source_manifest: Option<&SourceManifestReceipt>,
+    corrections: &ValidatedCorrections,
+    stop: &AtomicBool,
+) -> ServiceResult<NativeReferenceBuild> {
+    let digest = corrections
+        .id()
+        .parse()
+        .map_err(|_| invalid("native correction identity rejected"))?;
+    build_native_reference(
+        requested,
+        captured,
+        source_manifest,
+        Some(digest),
+        Some(corrections),
+        stop,
+    )
+}
+
+fn build_native_reference(
+    requested: &NativeProfile,
+    captured: &[PinnedLuaSource],
+    source_manifest: Option<&SourceManifestReceipt>,
+    correction_digest: Option<ContentDigest<CorrectionSet>>,
+    corrections: Option<&ValidatedCorrections>,
+    stop: &AtomicBool,
+) -> ServiceResult<NativeReferenceBuild> {
     cancelled(stop)?;
     let source_files = captured
         .iter()
@@ -228,13 +270,24 @@ pub(super) fn project_native_reference(
     if documents.is_empty() {
         return Err(invalid("no native documentation was admitted"));
     }
-    let reference = wow_reference::native_view::project_callables(
-        &documents,
-        &requested.environment,
-        generation,
-        callable_corpus,
-        stop,
-    )
+    let reference = if let Some(corrections) = corrections {
+        wow_reference::native_view::project_callables_with_type_resolution(
+            &documents,
+            &requested.environment,
+            generation,
+            callable_corpus,
+            Some(corrections),
+            stop,
+        )
+    } else {
+        wow_reference::native_view::project_callables(
+            &documents,
+            &requested.environment,
+            generation,
+            callable_corpus,
+            stop,
+        )
+    }
     .map_err(native_error)?;
     cancelled(stop)?;
     Ok(NativeReferenceBuild {

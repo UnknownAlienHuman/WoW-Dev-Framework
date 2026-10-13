@@ -25,6 +25,7 @@ use super::native_compatibility::{NativeCompatibilityInputs, NativeCompatibility
 use super::native_distribution::{NativeDistributionInputs, NativeDistributionSelection};
 use super::native_reference::{
     InputFailure, NativeProfile, NativeReferenceBuild, project_native_reference,
+    project_native_reference_with_type_resolution,
 };
 use super::native_resources::{NativeAnnotationInputs, NativeAnnotationInputsReceipt, present};
 use super::native_source::NativeSourceInput;
@@ -294,11 +295,9 @@ impl LocalProjectInput {
             .as_ref()
             .map(|inputs| inputs.read(directory, stop))
             .transpose()?;
-        let correction_digest = annotation_inputs
+        let corrections = annotation_inputs
             .as_ref()
-            .map(|inputs| inputs.correction_digest())
-            .transpose()?
-            .flatten();
+            .and_then(|inputs| inputs.corrections.as_ref());
         let NativeReferenceBuild {
             profile,
             source_files,
@@ -306,20 +305,27 @@ impl LocalProjectInput {
             failures,
             reference,
             ..
-        } = project_native_reference(
-            &input.profile,
-            &captured,
-            source_manifest.as_ref(),
-            correction_digest,
-            stop,
-        )?;
+        } = if let Some(corrections) = corrections {
+            project_native_reference_with_type_resolution(
+                &input.profile,
+                &captured,
+                source_manifest.as_ref(),
+                corrections,
+                stop,
+            )
+        } else {
+            project_native_reference(
+                &input.profile,
+                &captured,
+                source_manifest.as_ref(),
+                None,
+                stop,
+            )
+        }?;
         let aliases = annotation_inputs
             .as_ref()
             .map(|inputs| inputs.aliases.iter().collect::<Vec<_>>())
             .unwrap_or_default();
-        let corrections = annotation_inputs
-            .as_ref()
-            .and_then(|inputs| inputs.corrections.as_ref());
         let library = wow_annotations::native::project_with_alias_catalogs(
             &documents,
             &input.profile.environment,

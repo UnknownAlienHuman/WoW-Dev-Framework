@@ -19,12 +19,20 @@ use crate::{
 };
 
 mod signatures;
+mod type_resolution;
 pub use signatures::{NativeCallableField, NativeCallableSignature, NativeCallableSignatureData};
+pub use type_resolution::{
+    CorrectionOutcome as NativeCallableCorrectionOutcome,
+    FieldResolution as NativeCallableFieldResolution, NativeCallableTypeResolution,
+    ResolutionStatus as NativeCallableTypeResolutionStatus, TypeTarget as NativeCallableTypeTarget,
+};
 
 pub const NATIVE_API_PARTITION: &str = "reference.native.apidoc.api";
 pub const NATIVE_RESTRICTION_PARTITION: &str = "reference.native.apidoc.restriction";
 pub const NATIVE_VIEW_PROFILE: &str = "wow-reference/native-callable-view/1";
 pub const NATIVE_VIEW_AUTHORITY_PROFILE: &str = "wow-reference/native-callable-view/3";
+const MAX_TYPE_OVERLAY_BYTES: usize = 32 * 1024 * 1024;
+const MAX_CORRECTED_SYSTEM_INDEX_BYTES: usize = 32 * 1024 * 1024;
 pub const NATIVE_SECRET_RETURN_PAYLOAD: &str =
     "return_position:1;applicability:unconditional_source";
 pub const NATIVE_ACCESS_PREDICATE_ENTITY: &str = "function:canaccessvalue";
@@ -123,6 +131,8 @@ pub struct NativeViewProjection {
     /// Negative authority applies only to the native API callable partition.
     pub negative_authority: bool,
     #[serde(skip)]
+    type_resolution_profile: Option<&'static str>,
+    #[serde(skip)]
     signatures: signatures::SignatureCatalog,
 }
 
@@ -136,6 +146,12 @@ impl NativeViewProjection {
         stop: &AtomicBool,
     ) -> Result<NativeCallableSignature<'_>, NativeError> {
         self.signatures.read(record, stop)
+    }
+
+    /// The selected callable type overlay profile, sealed with this projection.
+    /// Legacy projections return `None` and retain their original generation bytes.
+    pub const fn type_resolution_profile(&self) -> Option<&'static str> {
+        self.type_resolution_profile
     }
 }
 
@@ -162,6 +178,49 @@ pub fn project_callables(
     environment: &str,
     selection: ReferenceGenerationId,
     corpus: NativeCallableCorpus,
+    stop: &AtomicBool,
+) -> Result<NativeViewProjection, NativeError> {
+    project_callables_inner(
+        documents,
+        environment,
+        selection,
+        corpus,
+        TypeResolutionSelection::Original,
+        stop,
+    )
+}
+
+/// Project callables with the selected exact-name type lookup overlay. Passing
+/// `None` for corrections still selects resolution; it never discovers a pack.
+pub fn project_callables_with_type_resolution(
+    documents: &[DocumentationDocument],
+    environment: &str,
+    selection: ReferenceGenerationId,
+    corpus: NativeCallableCorpus,
+    corrections: Option<&crate::native_corrections::ValidatedCorrections>,
+    stop: &AtomicBool,
+) -> Result<NativeViewProjection, NativeError> {
+    project_callables_inner(
+        documents,
+        environment,
+        selection,
+        corpus,
+        TypeResolutionSelection::ExactNames(corrections),
+        stop,
+    )
+}
+
+enum TypeResolutionSelection<'a> {
+    Original,
+    ExactNames(Option<&'a crate::native_corrections::ValidatedCorrections>),
+}
+
+fn project_callables_inner(
+    documents: &[DocumentationDocument],
+    environment: &str,
+    selection: ReferenceGenerationId,
+    corpus: NativeCallableCorpus,
+    type_resolution_selection: TypeResolutionSelection<'_>,
     stop: &AtomicBool,
 ) -> Result<NativeViewProjection, NativeError> {
     checkpoint(stop)?;
@@ -198,12 +257,60 @@ pub fn project_callables(
         return Err(error(NativeErrorCode::InvalidIdentity));
     }
 
+    let (type_catalog, corrected_corpus) =
+        if let TypeResolutionSelection::ExactNames(corrections) = type_resolution_selection {
+            let (catalog, corrected) =
+                type_resolution::TypeCatalog::build(documents, environment, corrections, stop)?;
+            (Some(catalog), corrected)
+        } else {
+            (None, None)
+        };
+    let mut corrected_system_index_bytes = 0usize;
+    if let Some(corrected) = corrected_corpus.as_ref() {
+        for (document, system) in corrected.systems() {
+            checkpoint(stop)?;
+            if system
+                .environment
+                .is_none_or(|selected| selected == "All" || selected == environment)
+            {
+                let path_cost = document
+                    .path()
+                    .len()
+                    .checked_mul(6)
+                    .and_then(|bytes| bytes.checked_add(256))
+                    .ok_or_else(|| error(NativeErrorCode::Limit))?;
+                corrected_system_index_bytes = corrected_system_index_bytes
+                    .checked_add(path_cost)
+                    .ok_or_else(|| error(NativeErrorCode::Limit))?;
+                if corrected_system_index_bytes > MAX_CORRECTED_SYSTEM_INDEX_BYTES {
+                    return Err(error(NativeErrorCode::Limit));
+                }
+            }
+        }
+    }
+    let mut corrected_system_index = BTreeMap::new();
+    if let Some(corrected) = corrected_corpus.as_ref() {
+        for (index, (document, system)) in corrected.systems().iter().enumerate() {
+            checkpoint(stop)?;
+            if system
+                .environment
+                .is_none_or(|selected| selected == "All" || selected == environment)
+                && corrected_system_index
+                    .insert((document.path(), system.registration_ordinal), index)
+                    .is_some()
+            {
+                return Err(error(NativeErrorCode::InvalidIdentity));
+            }
+        }
+    }
+
     let mut api_grouped: BTreeMap<String, Vec<ReferenceRecord>> = BTreeMap::new();
     let mut restriction_grouped: BTreeMap<String, Vec<ReferenceRecord>> = BTreeMap::new();
     let mut signatures: BTreeMap<String, Vec<signatures::SignatureRow>> = BTreeMap::new();
     let mut sources = Vec::new();
     let mut issues = Vec::new();
     let mut candidate_bytes = 0usize;
+    let mut retained_overlay_bytes = 0usize;
     let mut examined_functions = 0usize;
     for doc in ordered {
         checkpoint(stop)?;
@@ -228,6 +335,10 @@ pub fn project_callables(
                 ));
                 continue;
             }
+            let corrected_system = corrected_system_index
+                .get(&(doc.path(), registration.ordinal))
+                .and_then(|index| corrected_corpus.as_ref()?.systems().get(*index))
+                .map(|(_, system)| system);
             let namespace = match system.owner {
                 SystemOwner::Global => None,
                 SystemOwner::Namespace(namespace) => Some(namespace),
@@ -282,11 +393,35 @@ pub fn project_callables(
                     sha256: doc.sha256().to_owned(),
                     span: function.raw.span,
                 });
+                let type_resolution = if let Some(catalog) = &type_catalog {
+                    Some(catalog.resolve_callable(
+                        doc,
+                        registration.ordinal,
+                        function.name,
+                        function,
+                        corrected_system,
+                        stop,
+                    )?)
+                } else {
+                    None
+                };
+                if let Some(resolution) = &type_resolution {
+                    retained_overlay_bytes = retained_overlay_bytes
+                        .checked_add(resolution.encoded_len())
+                        .ok_or_else(|| error(NativeErrorCode::Limit))?;
+                    if retained_overlay_bytes > MAX_TYPE_OVERLAY_BYTES {
+                        return Err(error(NativeErrorCode::Limit));
+                    }
+                }
                 signatures
                     .entry(key.clone())
                     .or_default()
                     .push(signatures::SignatureRow::capture(
-                        &record, namespace, function, stop,
+                        &record,
+                        namespace,
+                        function,
+                        type_resolution,
+                        stop,
                     )?);
                 api_grouped.entry(key.clone()).or_default().push(record);
 
@@ -336,18 +471,36 @@ pub fn project_callables(
         );
     }
 
-    let generation = ReferenceGenerationId::derive(&(
-        projection_profile,
-        selection,
-        environment,
-        corpus,
-        &partitions,
-        &conflicts,
-        &issues,
-    ))
+    let generation_input = type_catalog.as_ref().map(|catalog| {
+        (
+            projection_profile,
+            selection,
+            environment,
+            corpus,
+            catalog.profile(),
+            catalog.id(),
+            &partitions,
+            &conflicts,
+            &issues,
+        )
+    });
+    let generation = if let Some(input) = generation_input {
+        ReferenceGenerationId::derive(&input)
+    } else {
+        ReferenceGenerationId::derive(&(
+            projection_profile,
+            selection,
+            environment,
+            corpus,
+            &partitions,
+            &conflicts,
+            &issues,
+        ))
+    }
     .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
     let view = ReferenceView::new(generation.to_string(), partitions, conflicts)
         .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
+    let type_resolution_profile = type_catalog.as_ref().map(|catalog| catalog.profile());
     let signatures = signatures::SignatureCatalog::finish(&view, signatures, stop)?;
     checkpoint(stop)?;
     Ok(NativeViewProjection {
@@ -357,6 +510,7 @@ pub fn project_callables(
         sources,
         issues,
         negative_authority,
+        type_resolution_profile,
         signatures,
     })
 }
