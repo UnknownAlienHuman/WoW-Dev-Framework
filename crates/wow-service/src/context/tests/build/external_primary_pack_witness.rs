@@ -138,7 +138,9 @@ struct NativePrimaryPackFixture {
     main_chunk_evidence_id: String,
     closure_ownership_proposal_id: String,
     foreign_chunk_function_id: String,
-    native_result: ContextMapResult,
+    native_l0_result: ContextMapResult,
+    native_l1_result: ContextMapResult,
+    native_callable_l1_result: ContextMapResult,
 }
 
 fn native_primary_pack_fixture() -> TestResult<NativePrimaryPackFixture> {
@@ -243,7 +245,7 @@ fn native_primary_pack_fixture() -> TestResult<NativePrimaryPackFixture> {
         publication.clone(),
         ContextInspectLevel::L1,
         ContextMapRoot::graph_entity(source_file_root.as_str())?,
-        ContextRenderSelection::Json,
+        ContextRenderSelection::Both,
         None,
         guard.clone(),
     )?;
@@ -257,7 +259,7 @@ fn native_primary_pack_fixture() -> TestResult<NativePrimaryPackFixture> {
         publication,
         ContextInspectLevel::L1,
         ContextMapRoot::graph_entity(callable.node_id.as_str())?,
-        ContextRenderSelection::Json,
+        ContextRenderSelection::Both,
         None,
         guard,
     )?;
@@ -297,7 +299,9 @@ fn native_primary_pack_fixture() -> TestResult<NativePrimaryPackFixture> {
         main_chunk_evidence_id,
         closure_ownership_proposal_id,
         foreign_chunk_function_id,
-        native_result: l0_result,
+        native_l0_result: l0_result,
+        native_l1_result: l1_result,
+        native_callable_l1_result: callable_l1_result,
     })
 }
 fn tamper_pack_identity(bytes: &[u8]) -> TestResult<Vec<u8>> {
@@ -1251,16 +1255,11 @@ fn external_primary_pack_reader_accepts_native_l0_and_default_entity_l1() -> Tes
 }
 
 #[test]
-fn external_primary_l0_render_matches_native_and_keeps_l1_not_evaluated_without_artifact()
--> TestResult {
+fn external_primary_default_l0_l1_render_matches_native_without_authority_upgrade() -> TestResult {
     use crate::context::{ContextRenderFormat, ContextRenderRequest, execute_context_render};
-    use wow_context::{PrimaryPackRenderFormat, validate_and_render_primary_l0_pack};
+    use wow_context::{PrimaryPackRenderFormat, validate_and_render_primary_pack};
 
     let fixture = native_primary_pack_fixture()?;
-    let l0_bytes = fixture.l0_bytes.clone();
-    let l1_bytes = fixture.l1_bytes.clone();
-    let native: Value = serde_json::from_slice(fixture.native_result.canonical_bytes())?;
-    assert_eq!(rows(&native["payload"]["rendered_artifacts"])?.len(), 2);
     let stop = AtomicBool::new(false);
     let render_request = |format, work| {
         ContextRenderRequest::primary_semantic_pack_structural(
@@ -1274,124 +1273,188 @@ fn external_primary_l0_render_matches_native_and_keeps_l1_not_evaluated_without_
     };
     let mut markdown_work = 0;
 
-    for (format, service_format, profile_id) in [
+    for (label, pack_bytes, build_result) in [
+        ("L0", &fixture.l0_bytes, &fixture.native_l0_result),
         (
-            PrimaryPackRenderFormat::Json,
-            ContextRenderFormat::Json,
-            PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+            "source-file L1",
+            &fixture.l1_bytes,
+            &fixture.native_l1_result,
         ),
         (
-            PrimaryPackRenderFormat::Markdown,
-            ContextRenderFormat::Markdown,
-            PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+            "Chunk L1",
+            &fixture.callable_l1_bytes,
+            &fixture.native_callable_l1_result,
         ),
     ] {
-        // Expected artifacts are borrowed from the one real native build. No
-        // decoded input is reconstructed as a native pack or source custody.
-        let expected = native_rendered_artifact(&native, profile_id)?;
-        let expected_bytes = wow_core::canonical_json_bytes(expected)?;
-        let rendered = validate_and_render_primary_l0_pack(
-            &l0_bytes,
-            reader_limits(READER_MAX_BYTES)?,
-            format,
-            &stop,
-        )?;
-        let validation = rendered.validation();
+        // Compare against artifacts retained from each real native build.
+        let native: Value = serde_json::from_slice(build_result.canonical_bytes())?;
         assert_eq!(
-            validation.overall_state(),
-            wow_context::ValidationState::Valid
+            rows(&native["payload"]["rendered_artifacts"])?.len(),
+            2,
+            "{label} native build must retain both renderer outputs"
         );
-        assert_eq!(
-            validation.digest_and_identity(),
-            wow_context::ValidationState::Valid
-        );
-        assert_eq!(
-            validation.origin_closure(),
-            wow_context::PrimaryPackOriginClosure::StructuralOnly
-        );
-        assert_eq!(
-            validation.owner_generation_closure(),
-            wow_context::ValidationState::NotEvaluated
-        );
-        assert_eq!(
-            validation.source_or_runtime_authority(),
-            wow_context::ValidationState::NotEvaluated
-        );
-        let artifact = rendered
-            .artifact()
-            .ok_or("valid external render artifact")?;
-        assert_eq!(wow_core::canonical_json_bytes(artifact)?, expected_bytes);
-        assert_eq!(
-            artifact.content().as_bytes(),
-            expected["core"]["content"]
-                .as_str()
-                .ok_or("native rendered content")?
-                .as_bytes()
-        );
-        assert_eq!(
-            artifact.content_digest().to_string(),
-            expected["core"]["content_digest"]
-                .as_str()
-                .ok_or("native rendered digest")?
-        );
-        assert_eq!(
-            serde_json::to_value(artifact.trace())?,
-            expected["core"]["trace"]
-        );
-        if format == PrimaryPackRenderFormat::Markdown {
-            markdown_work = rendered.total_work();
-        }
 
-        let service = execute_context_render(
-            &render_request(service_format, READER_MAX_WORK)?,
-            &l0_bytes,
-            &stop,
-        )?;
-        assert_eq!(service.operation_status(), ContextMapStatus::Complete);
-        assert_eq!(
-            service.validation_state(),
-            Some(wow_context::ValidationState::Valid)
-        );
-        assert_eq!(service.failure_code(), None);
-        let envelope: Value = serde_json::from_slice(service.canonical_bytes())?;
-        assert_eq!(
-            envelope["schema"],
-            crate::context::CONTEXT_RENDER_RESULT_SCHEMA
-        );
-        let payload = envelope.get("payload").ok_or("Service render payload")?;
-        let work_usage = &payload["work_usage"];
-        let input_hash_work = l0_bytes.len().div_ceil(8192) as u64;
-        assert_eq!(
-            work_usage["service_input_hash_work"].as_u64(),
-            Some(input_hash_work)
-        );
-        assert_eq!(
-            work_usage["owner_validation_and_render_work"].as_u64(),
-            Some(rendered.total_work())
-        );
-        assert_eq!(
-            work_usage["total_context_work"].as_u64(),
-            Some(input_hash_work + rendered.total_work())
-        );
-        assert!(input_hash_work + rendered.total_work() <= READER_MAX_WORK);
-        let service_artifact = payload
-            .get("rendered_artifact")
-            .ok_or("Service borrowed render artifact")?;
-        assert_eq!(
-            wow_core::canonical_json_bytes(service_artifact)?,
-            expected_bytes
-        );
-        assert_eq!(
-            payload["validation"]["owner_generation_closure"],
-            "not_evaluated"
-        );
-        assert_eq!(
-            payload["validation"]["source_or_runtime_authority"],
-            "not_evaluated"
-        );
+        for (format, service_format, profile_id) in [
+            (
+                PrimaryPackRenderFormat::Json,
+                ContextRenderFormat::Json,
+                PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
+            ),
+            (
+                PrimaryPackRenderFormat::Markdown,
+                ContextRenderFormat::Markdown,
+                PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+            ),
+        ] {
+            let expected = native_rendered_artifact(&native, profile_id)?;
+            let expected_bytes = wow_core::canonical_json_bytes(expected)?;
+            let rendered = validate_and_render_primary_pack(
+                pack_bytes,
+                reader_limits(READER_MAX_BYTES)?,
+                format,
+                &stop,
+            )?;
+            let validation = rendered.validation();
+            assert_eq!(
+                validation.overall_state(),
+                wow_context::ValidationState::Valid,
+                "{label} {format:?} validation"
+            );
+            assert_eq!(
+                validation.digest_and_identity(),
+                wow_context::ValidationState::Valid
+            );
+            assert_eq!(
+                validation.origin_closure(),
+                wow_context::PrimaryPackOriginClosure::StructuralOnly
+            );
+            assert_eq!(
+                validation.owner_generation_closure(),
+                wow_context::ValidationState::NotEvaluated
+            );
+            assert_eq!(
+                validation.source_or_runtime_authority(),
+                wow_context::ValidationState::NotEvaluated
+            );
+            let artifact = rendered
+                .artifact()
+                .ok_or("valid external render artifact")?;
+            assert_eq!(wow_core::canonical_json_bytes(artifact)?, expected_bytes);
+            assert_eq!(
+                artifact.rendered_context_artifact_id(),
+                expected["rendered_context_artifact_id"]
+                    .as_str()
+                    .ok_or("native rendered artifact ID")?
+            );
+            assert_eq!(
+                artifact.semantic_pack_id(),
+                expected["core"]["semantic_pack_id"]
+                    .as_str()
+                    .ok_or("native semantic pack ID")?
+            );
+            assert_eq!(
+                artifact.content().as_bytes(),
+                expected["core"]["content"]
+                    .as_str()
+                    .ok_or("native rendered content")?
+                    .as_bytes()
+            );
+            assert_eq!(
+                artifact.content_digest().to_string(),
+                expected["core"]["content_digest"]
+                    .as_str()
+                    .ok_or("native rendered digest")?
+            );
+            assert_eq!(
+                serde_json::to_value(artifact.trace())?,
+                expected["core"]["trace"]
+            );
+            if label == "L0" && format == PrimaryPackRenderFormat::Markdown {
+                markdown_work = rendered.total_work();
+            }
+
+            let service = execute_context_render(
+                &render_request(service_format, READER_MAX_WORK)?,
+                pack_bytes,
+                &stop,
+            )?;
+            assert_eq!(service.operation_status(), ContextMapStatus::Complete);
+            assert_eq!(
+                service.validation_state(),
+                Some(wow_context::ValidationState::Valid)
+            );
+            assert_eq!(service.failure_code(), None);
+            let envelope: Value = serde_json::from_slice(service.canonical_bytes())?;
+            assert_eq!(
+                envelope["schema"],
+                crate::context::CONTEXT_RENDER_RESULT_SCHEMA
+            );
+            let payload = envelope.get("payload").ok_or("Service render payload")?;
+            let work_usage = &payload["work_usage"];
+            let input_hash_work = pack_bytes.len().div_ceil(8192) as u64;
+            assert_eq!(
+                work_usage["service_input_hash_work"].as_u64(),
+                Some(input_hash_work)
+            );
+            assert_eq!(
+                work_usage["owner_validation_and_render_work"].as_u64(),
+                Some(rendered.total_work())
+            );
+            assert_eq!(
+                work_usage["total_context_work"].as_u64(),
+                Some(input_hash_work + rendered.total_work())
+            );
+            assert!(input_hash_work + rendered.total_work() <= READER_MAX_WORK);
+            let service_artifact = payload
+                .get("rendered_artifact")
+                .ok_or("Service borrowed render artifact")?;
+            assert_eq!(
+                wow_core::canonical_json_bytes(service_artifact)?,
+                expected_bytes
+            );
+            assert_eq!(
+                payload["validation"]["owner_generation_closure"],
+                "not_evaluated"
+            );
+            assert_eq!(
+                payload["validation"]["source_or_runtime_authority"],
+                "not_evaluated"
+            );
+        }
     }
 
-    let invalid_coverage = mutate_and_reseal_native_pack(&l0_bytes, |pack| {
+    let unsupported_both = mutate_and_reseal_native_l1_pack(&fixture.l1_bytes, |pack| {
+        pack["core"]["skeletons"]["level"] = json!("both");
+        let request_id = {
+            let request = &mut pack["core"]["request"];
+            request["core"]["level"] = json!("both");
+            domain_identity(&request["core"], "context-pack-request:sha256:")?
+        };
+        pack["core"]["request"]["context_request_id"] = json!(request_id);
+        Ok(())
+    })?;
+    // Unsupported levels stop at preflight, before the owner evaluates these
+    // identities. Prove the mutation's equations independently of that report.
+    let both: Value = serde_json::from_slice(&unsupported_both)?;
+    let l1 = &both["core"]["skeletons"]["l1"];
+    let map = &l1["core"]["context"]["origins"];
+    for (id, core, prefix) in [
+        (
+            &both["semantic_pack_id"],
+            &both["core"],
+            "context-pack:sha256:",
+        ),
+        (
+            &both["core"]["request"]["context_request_id"],
+            &both["core"]["request"]["core"],
+            "context-pack-request:sha256:",
+        ),
+        (&l1["l1_skeleton_id"], &l1["core"], "l1-skeleton:sha256:"),
+        (&map["project_map_id"], &map["core"], "project-map:sha256:"),
+    ] {
+        assert_eq!(id, &json!(domain_identity(core, prefix)?));
+    }
+    let invalid_coverage = mutate_and_reseal_native_pack(&fixture.l0_bytes, |pack| {
         let coverage = project_map_mut(pack)["core"]["navigation"]["coverage"]
             .as_array_mut()
             .ok_or("native graph coverage rows")?;
@@ -1409,11 +1472,11 @@ fn external_primary_l0_render_matches_native_and_keeps_l1_not_evaluated_without_
             wow_context::ValidationState::Invalid,
         ),
         (
-            l1_bytes.as_slice(),
+            unsupported_both.as_slice(),
             wow_context::ValidationState::NotEvaluated,
         ),
     ] {
-        let rendered = validate_and_render_primary_l0_pack(
+        let rendered = validate_and_render_primary_pack(
             bytes,
             reader_limits(READER_MAX_BYTES)?,
             PrimaryPackRenderFormat::Json,
@@ -1426,6 +1489,12 @@ fn external_primary_l0_render_matches_native_and_keeps_l1_not_evaluated_without_
                 rendered.validation().digest_and_identity(),
                 wow_context::ValidationState::Valid,
                 "#132 coverage mutation keeps its enclosing identities valid"
+            );
+        } else {
+            assert_eq!(
+                rendered.validation().digest_and_identity(),
+                wow_context::ValidationState::NotEvaluated,
+                "unsupported Both is refused before recursive identity checks"
             );
         }
         let service = execute_context_render(&json_request, bytes, &stop)?;
@@ -1444,8 +1513,8 @@ fn external_primary_l0_render_matches_native_and_keeps_l1_not_evaluated_without_
     }
 
     let cancelled = AtomicBool::new(true);
-    let error = validate_and_render_primary_l0_pack(
-        &l0_bytes,
+    let error = validate_and_render_primary_pack(
+        &fixture.l0_bytes,
         reader_limits(READER_MAX_BYTES)?,
         PrimaryPackRenderFormat::Markdown,
         &cancelled,
@@ -1453,7 +1522,7 @@ fn external_primary_l0_render_matches_native_and_keeps_l1_not_evaluated_without_
     .err()
     .ok_or("cancelled owner render must refuse an artifact")?;
     assert_eq!(error.code(), wow_context::ContextErrorCode::Cancelled);
-    let error = execute_context_render(&json_request, &l0_bytes, &cancelled)
+    let error = execute_context_render(&json_request, &fixture.l0_bytes, &cancelled)
         .err()
         .ok_or("cancelled Service render must refuse an artifact")?;
     assert_eq!(error.code(), crate::ServiceErrorCode::Cancelled);
@@ -1471,8 +1540,8 @@ fn external_primary_l0_render_matches_native_and_keeps_l1_not_evaluated_without_
         128,
         READER_MAX_TOKENS,
     )?;
-    let error = validate_and_render_primary_l0_pack(
-        &l0_bytes,
+    let error = validate_and_render_primary_pack(
+        &fixture.l0_bytes,
         limits,
         PrimaryPackRenderFormat::Markdown,
         &stop,
@@ -1485,7 +1554,7 @@ fn external_primary_l0_render_matches_native_and_keeps_l1_not_evaluated_without_
     );
     let error = execute_context_render(
         &render_request(ContextRenderFormat::Markdown, 1)?,
-        &l0_bytes,
+        &fixture.l0_bytes,
         &stop,
     )
     .err()

@@ -40,11 +40,11 @@ struct PackWire {
 /// The exact decoded value that passed canonical, profile, digest and join
 /// checks. This view contains structural wire data only; it carries no native
 /// owner custody or authority.
-pub(crate) struct ValidatedPrimaryL0Pack {
+pub(crate) struct ValidatedPrimaryPack {
     core: PackCoreWire,
 }
 
-impl ValidatedPrimaryL0Pack {
+impl ValidatedPrimaryPack {
     pub(crate) fn core(&self) -> &PackCoreWire {
         &self.core
     }
@@ -52,7 +52,7 @@ impl ValidatedPrimaryL0Pack {
 
 pub(crate) struct CheckedPrimaryPack {
     pub(crate) check: PrimaryPackDecoderCheck,
-    pub(crate) validated: Option<ValidatedPrimaryL0Pack>,
+    pub(crate) validated: Option<ValidatedPrimaryPack>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -313,9 +313,8 @@ pub(super) fn check(
         });
     }
     let joined = references(&parsed, admission, stop)?;
-    let renderable = joined.0 == State::Valid
-        && joined.1.is_none()
-        && matches!(parsed.core.skeletons.level, LevelWire::L0);
+    // Profile and join checks above admit only default L0 or default EntityV1 L1.
+    let renderable = joined.0 == State::Valid && joined.1.is_none();
     let PackWire {
         semantic_pack_id,
         core,
@@ -330,7 +329,7 @@ pub(super) fn check(
         joined.0,
         joined.1,
     );
-    let validated = renderable.then(|| ValidatedPrimaryL0Pack { core });
+    let validated = renderable.then(|| ValidatedPrimaryPack { core });
     Ok(CheckedPrimaryPack { check, validated })
 }
 

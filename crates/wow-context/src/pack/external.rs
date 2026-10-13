@@ -24,7 +24,7 @@ pub(crate) use wire::{
     UniverseBindingWire,
 };
 pub(crate) use wire::{
-    PackBudgetWire, PackProfileWire, RequestWire, SkeletonsWire, ValidatedPrimaryL0Pack,
+    PackBudgetWire, PackProfileWire, RequestWire, SkeletonsWire, ValidatedPrimaryPack,
 };
 
 const PACK_SCHEMA: &str = "wow-context/semantic-pack/primary/1";
@@ -378,7 +378,7 @@ pub enum PrimaryPackRenderFormat {
     Markdown,
 }
 
-/// Validation report and optional L0 artifact from one admitted external Primary pack.
+/// Validation report and optional artifact from one admitted external Primary pack.
 #[derive(Serialize)]
 pub struct PrimaryPackRenderResult {
     validation: PrimaryPackValidation,
@@ -1447,11 +1447,11 @@ pub fn validate_primary_pack(
     Ok(admission.finalize(checked.check))
 }
 
-/// Validate and render one admitted Primary Structural L0 pack using the exact
-/// decoded view retained by the validator's single wire decode. No native pack
+/// Validate and render one admitted default Primary L0 or EntityV1 L1 pack using
+/// the exact view retained by the validator's single wire decode. No native pack
 /// or owner custody is constructed. Unsupported and invalid inputs return the
 /// validation report without a rendered artifact.
-pub fn validate_and_render_primary_l0_pack(
+pub fn validate_and_render_primary_pack(
     input: &[u8],
     limits: PrimaryPackValidationLimits,
     format: PrimaryPackRenderFormat,
@@ -1459,16 +1459,9 @@ pub fn validate_and_render_primary_l0_pack(
 ) -> ContextResult<PrimaryPackRenderResult> {
     let mut admission = admit_primary_pack(input, limits, stop)?;
     let prior_metadata = admission.decoded_view_bytes();
-    let mut checked = wire::check(&mut admission, stop)?;
+    let checked = wire::check(&mut admission, stop)?;
     admission.checkpoint()?;
-    if admission
-        .selection()
-        .is_some_and(|selection| selection.level == PrimaryPackLevel::L1)
-        && checked.check.internal_references == PrimaryPackValidationState::Valid
-    {
-        checked.check.internal_references = PrimaryPackValidationState::NotEvaluated;
-        checked.check.code = Some(PrimaryPackValidationCode::UnsupportedLevel);
-    }
+
     let validated = checked.validated;
     let report = admission.finalize(checked.check);
     if report.state() != PrimaryPackValidationState::Valid {
@@ -1492,7 +1485,7 @@ pub fn validate_and_render_primary_l0_pack(
         prior_metadata,
         prior_work,
     )?;
-    let (artifact, total_work) = crate::render::render_validated_primary_l0_pack(
+    let (artifact, total_work) = crate::render::render_validated_primary_pack(
         &validated,
         semantic_pack_id,
         input,

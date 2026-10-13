@@ -1,10 +1,11 @@
-//! Structural rendering transport for caller-supplied Primary L0 semantic packs.
+//! Structural rendering transport for the supported default Primary L0 and
+//! default EntityV1 L1 semantic packs.
 //!
 //! Bounded byte admission and rendering belong to wow-context's single
-//! `validate_and_render_primary_l0_pack` owner invocation. This adapter hashes
-//! the exact input, debits that work from the owner allowance, and transports
-//! the unchanged typed report and optional rendered artifact. It opens no
-//! project host, store, or native custody.
+//! `validate_and_render_primary_pack` owner invocation. This adapter hashes the
+//! exact input, debits that work from the owner allowance, and transports the
+//! unchanged typed report and optional rendered artifact. It opens no project
+//! host, store, or native custody.
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -227,20 +228,16 @@ pub fn execute_context_render(
         ContextRenderFormat::Markdown => PrimaryPackRenderFormat::Markdown,
     };
 
-    // Exactly one owner call: validation and rendering share its admitted
-    // typed decode and preserve its report/artifact without reconstruction.
-    let rendered = match wow_context::validate_and_render_primary_l0_pack(
-        artifact_bytes,
-        limits,
-        format,
-        stop,
-    ) {
-        Ok(rendered) => rendered,
-        Err(owner_error) => {
-            let code = crate::context::context_error(owner_error).code();
-            return failed(&identity, &request_id, code, envelope_limit);
-        }
-    };
+    // Exactly one owner call admits the supported default L0 or EntityV1 L1
+    // selection; its report and artifact pass through without reconstruction.
+    let rendered =
+        match wow_context::validate_and_render_primary_pack(artifact_bytes, limits, format, stop) {
+            Ok(rendered) => rendered,
+            Err(owner_error) => {
+                let code = crate::context::context_error(owner_error).code();
+                return failed(&identity, &request_id, code, envelope_limit);
+            }
+        };
     if stop.load(Ordering::Acquire) {
         return failed(
             &identity,

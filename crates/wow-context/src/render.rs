@@ -14,7 +14,7 @@ use crate::pack::{
     ContextSemanticPack, ItemPayloadWire, JSON_PROFILE, MARKDOWN_PROFILE, OmissionsWire,
     PackBudget, PackBudgetWire, PackCore, PackOmissions, PackProfile, PackProfileWire, PackRequest,
     PrimaryPackRenderFormat, ProjectMapStateWire, RendererProfile, RequestWire, SelectionRecord,
-    SelectionRecordWire, SkeletonsWire, UniverseBindingWire, ValidatedPrimaryL0Pack,
+    SelectionRecordWire, SkeletonsWire, UniverseBindingWire, ValidatedPrimaryPack,
     combined_renderer_profiles, expansion_renderer_profiles,
 };
 use crate::skeleton::PrimarySkeletons;
@@ -115,7 +115,7 @@ enum Format {
 #[derive(Clone, Copy)]
 enum NativePackCore<'r, 'm, 'p, 'f> {
     Primary(&'r PackCore<'m, 'p>),
-    Structural(&'r ValidatedPrimaryL0Pack),
+    Structural(&'r ValidatedPrimaryPack),
     Combined(&'r CombinedPackCore<'m, 'p, 'f>),
 }
 impl Format {
@@ -460,7 +460,7 @@ impl<'p, 'm: 'p, 'a: 'p> PrimaryMetadataView<'p> for PackCore<'m, 'a> {
     }
 }
 
-impl<'p> PrimaryMetadataView<'p> for ValidatedPrimaryL0Pack {
+impl<'p> PrimaryMetadataView<'p> for ValidatedPrimaryPack {
     type Profile = PackProfileWire;
     type Binding = UniverseBindingWire;
     type Request = RequestWire;
@@ -1058,8 +1058,8 @@ fn render(
     )
 }
 
-pub(crate) fn render_validated_primary_l0_pack(
-    view: &ValidatedPrimaryL0Pack,
+pub(crate) fn render_validated_primary_pack(
+    view: &ValidatedPrimaryPack,
     semantic_pack_id: &str,
     canonical_bytes: &[u8],
     format: PrimaryPackRenderFormat,

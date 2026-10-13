@@ -146,6 +146,10 @@ The composed owner wire checks cover canonical input and schema, the selected pr
 
 Validation is nonrepairing and bounded by input bytes, metadata bytes, cumulative context work, JSON depth, syntactic JSON tokens, and cancellation. `max_tokens` counts JSON syntax tokens in the scanner; it is not a model-token estimate. The report retains scanner token/work usage and the supplied limits. Before publication, require a genuine positive StructuralOnly witness and affected-owner Tier S. The independent Quick gate runs on the published exact head; this document claims no Quick result. Broader E3-B acceptance remains pending its separate required gates.
 
+## External default Primary L0 and L1 rendering
+
+The public validate_and_render_primary_pack operation renders the same admitted default L0 or default EntityV1 L1 selections through the native JSON and Markdown templates from one successful decode. Invalid and NotEvaluated selections return no artifact. The admission metadata reservation and validation work continue through rendering. Both, explicit StateDetail/ReferenceFacts profiles, expansions, excerpts, and platform or combined selections remain outside this route.
+
 ## Deferred
 
 - natural-language/fuzzy/ranked roots;

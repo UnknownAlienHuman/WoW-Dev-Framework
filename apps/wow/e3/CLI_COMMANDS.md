@@ -276,10 +276,16 @@ Limits and explicit file/stdin admission use the same bounded reader as
 canonical envelope plus one LF. Completed validation maps to Valid 0, Invalid 1
 or NotEvaluated 2; unsupported inputs have no rendered artifact. Failure,
 internal failure and cancellation retain 3, 4 and 130; pre-Service errors use 64.
-The selected route renders only default Primary L0 structural metadata. It
-accepts no aliases, host/store/source selectors, exact closure, text/artifact
-output or tokenizer claims. Structural validity never upgrades owner-generation,
-source/catalog or runtime authority.
+The input pack may select default ContainersV1 L0 on an exact source_file or
+source_package GraphEntity root, or default EntityV1 L1 on an exact native
+GraphEntity root. The existing command grammar and fixed profile options are
+unchanged; no selection flag or alias is added. Both, explicit
+StateDetail/ReferenceFacts selections, source excerpts, expansions,
+platform/combined families and ExactOwnerClosure return NotEvaluated with no
+rendered artifact. The same cumulative work, envelope and cancellation limits
+apply. The command accepts no aliases, host/store/source selectors, exact
+closure, text/artifact output or tokenizer claims. Structural validity never
+upgrades owner-generation, source/catalog or runtime authority.
 
 The broader planned transport remains unimplemented:
 

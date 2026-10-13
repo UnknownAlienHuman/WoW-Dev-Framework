@@ -37,14 +37,14 @@ mod frontier;
 pub(crate) use external::{
     ContextItemWire, ItemPayloadWire, OmissionsWire, PackBudgetWire, PackProfileWire,
     ProjectMapStateWire, RequestWire, SelectionRecordWire, SkeletonsWire, UniverseBindingWire,
-    ValidatedPrimaryL0Pack,
+    ValidatedPrimaryPack,
 };
 pub use external::{
     PrimaryPackL0Profile, PrimaryPackLevel, PrimaryPackOriginClosure, PrimaryPackRenderFormat,
     PrimaryPackRenderResult, PrimaryPackRootVariant, PrimaryPackSelection, PrimaryPackValidation,
     PrimaryPackValidationBudgetUsage, PrimaryPackValidationCheck, PrimaryPackValidationCode,
     PrimaryPackValidationLimits, PrimaryPackValidationRecord, PrimaryPackValidationState,
-    ValidationState, validate_and_render_primary_l0_pack, validate_primary_pack,
+    ValidationState, validate_and_render_primary_pack, validate_primary_pack,
 };
 pub(crate) use frontier::expansion_renderer_profiles;
 pub use frontier::{

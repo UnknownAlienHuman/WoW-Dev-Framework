@@ -121,21 +121,23 @@ StateDetail/ReferenceFacts profiles, excerpts, expansions and platform/composed
 packs are outside this reader. Valid proves StructuralOnly closure; native owner,
 source and runtime authority remain NotEvaluated.
 
-## External default Primary L0 rendering
+## External default Primary L0 and EntityV1 L1 rendering
 
-`validate_and_render_primary_l0_pack` admits the same finite StructuralOnly
-external L0 JSON input admitted by `validate_primary_pack`, then renders JSON or Markdown
-through the existing native templates. `PrimaryPackRenderResult` exposes the
-validation report, optional artifact and cumulative `total_work()`. Invalid or
-NotEvaluated input has no artifact. A success-only private decoded view preserves
-the original pack without creating native owner custody.
+validate_and_render_primary_pack admits the same finite StructuralOnly default
+L0 or default EntityV1 L1 input admitted by validate_primary_pack, then renders
+JSON or Markdown through the existing native templates. The L1 route uses an
+omitted l1_profile_id, which selects EntityV1. PrimaryPackRenderResult exposes
+the validation report, optional artifact and cumulative total_work(). Invalid or
+NotEvaluated input has no artifact. Both, explicit StateRoot/StateDetail/
+ReferenceFacts profiles, expansions, source excerpts, and platform or combined
+packs remain unsupported.
 
-The decoder's canonical-byte metadata reservation is made before decoding and
-carried into the render budget with the already-consumed validation work.
-Rendering cannot reset either allowance. Native and external artifacts retain
-identical content, digest, trace and artifact ID for the same supported pack.
-This route covers default L0 source_file/source_package GraphEntity metadata;
-broader levels, recipes, excerpts and exact owner/runtime closure stay deferred.
+The successful decoded structural view is passed directly to the renderer; it
+does not construct native pack custody or claim owner, source, or runtime
+authority. JSON content matches the canonical native pack bytes. Markdown
+content, artifact ID, digest, and trace use the same native renderer for equal
+input. The decoder's metadata reservation and validation work continue into
+rendering; neither allowance resets.
 
 ## Cumulative limits and honest coverage
 
