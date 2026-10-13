@@ -518,12 +518,32 @@ pub fn derive_evidence_id(record: &EvidenceRecord) -> CoreResult<EvidenceId> {
 /// ancestry into a platform contract. Local shape and graph errors precede ID
 /// verification; every record ID is nevertheless verified before success.
 ///
-/// The caller supplies the complete registry as a finite iterator of borrowed
-/// records. Iteration order does not affect deterministic ID-sorted validation.
-pub fn validate_evidence_derivation_graph<'a>(
-    records: impl IntoIterator<Item = &'a EvidenceRecord>,
-) -> CoreResult<()> {
-    derivation::validate(records)
+/// The complete registry is a finite borrowed slice. Input order does not
+/// affect deterministic ID-sorted validation.
+///
+/// Lazy record producers cannot cross this admission boundary:
+/// ```compile_fail
+/// use wow_core::{EvidenceRecord, validate_evidence_derivation_graph};
+/// fn lazy(record: &EvidenceRecord) {
+///     let _ = validate_evidence_derivation_graph(std::iter::repeat(record));
+/// }
+/// ```
+pub fn validate_evidence_derivation_graph(records: &[EvidenceRecord]) -> CoreResult<()> {
+    derivation::validate(records.iter().collect())
+}
+
+/// Validate the same complete registry through a finite slice of borrowed
+/// records, without cloning record bodies. The original slice is not reordered.
+/// Callers bound the retained population before constructing the reference slice.
+///
+/// ```compile_fail
+/// use wow_core::{EvidenceRecord, validate_evidence_derivation_graph_refs};
+/// fn lazy(record: &EvidenceRecord) {
+///     let _ = validate_evidence_derivation_graph_refs(std::iter::repeat(record));
+/// }
+/// ```
+pub fn validate_evidence_derivation_graph_refs(records: &[&EvidenceRecord]) -> CoreResult<()> {
+    derivation::validate(records.to_vec())
 }
 
 /// Constructs one immutable conflict relation.

@@ -1,13 +1,33 @@
 use serde_json::json;
 use wow_core::{
-    ClaimScope, CoreErrorCode, E0CheckResultEnvelope, EvidenceConfidence as Confidence,
+    ClaimScope, CoreError, CoreErrorCode, E0CheckResultEnvelope, EvidenceConfidence as Confidence,
     EvidenceRecord, GenerationContextId, ProvenanceClass as Provenance, canonical_json_bytes,
-    validate_evidence_derivation_graph,
+    validate_evidence_derivation_graph, validate_evidence_derivation_graph_refs,
 };
 
 use super::support::*;
 
 const INPUTS: &str = "evidence_records.derivation_input_ids";
+
+fn validate_both_finite_apis(records: &[EvidenceRecord]) -> Result<(), CoreError> {
+    let bytes_before = canonical_json_bytes(records)?;
+    let result = validate_evidence_derivation_graph(records);
+    let references: Vec<_> = records.iter().rev().collect();
+    let order_before: Vec<_> = references
+        .iter()
+        .map(|record| record.evidence_id())
+        .collect();
+    assert_eq!(result, validate_evidence_derivation_graph_refs(&references));
+    assert_eq!(
+        order_before,
+        references
+            .iter()
+            .map(|record| record.evidence_id())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(bytes_before, canonical_json_bytes(records)?);
+    result
+}
 
 #[test]
 fn evidence_graph_001_002_accept_empty_leaf_and_diamond_without_mutation() -> TestResult {
@@ -18,7 +38,7 @@ fn evidence_graph_001_002_accept_empty_leaf_and_diamond_without_mutation() -> Te
     let join = derived("join", &[&left, &right])?;
     let records = vec![join, right, root, left];
     let before = canonical_json_bytes(&records)?;
-    validate_evidence_derivation_graph(&records)?;
+    validate_both_finite_apis(&records)?;
     assert_eq!(canonical_json_bytes(&records)?, before);
     envelope(records)??.validate()?;
     Ok(())
@@ -39,7 +59,7 @@ fn evidence_graph_003_rejects_mixed_contexts_in_connected_and_disconnected_recor
     for mut records in [vec![root, foreign.clone()], vec![foreign, linked]] {
         for _ in 0..2 {
             assert_error(
-                validate_evidence_derivation_graph(&records),
+                validate_both_finite_apis(&records),
                 CoreErrorCode::EvidenceContextMismatch,
                 "evidence_records.context_id",
             )?;
@@ -198,12 +218,12 @@ fn evidence_graph_008_reports_missing_inputs_and_duplicate_ids() -> TestResult {
     let root = leaf("root")?;
     let child = derived("child", &[&root])?;
     assert_error(
-        validate_evidence_derivation_graph(&[child]),
+        validate_both_finite_apis(&[child]),
         CoreErrorCode::MissingEvidenceReference,
         INPUTS,
     )?;
     assert_error(
-        validate_evidence_derivation_graph(&[root.clone(), root.clone()]),
+        validate_both_finite_apis(&[root.clone(), root.clone()]),
         CoreErrorCode::DuplicateEvidenceReference,
         "evidence_records.evidence_id",
     )?;
@@ -211,7 +231,7 @@ fn evidence_graph_008_reports_missing_inputs_and_duplicate_ids() -> TestResult {
     changed["producer_version"] = "0.2.0".into();
     let changed: EvidenceRecord = serde_json::from_value(changed)?;
     assert_error(
-        validate_evidence_derivation_graph(&[root, changed]),
+        validate_both_finite_apis(&[root, changed]),
         CoreErrorCode::DuplicateEvidenceReference,
         "evidence_records.evidence_id",
     )
@@ -237,7 +257,7 @@ fn evidence_graph_009_010_reports_direct_and_multirecord_cycles_before_hashes() 
         }
         for _ in 0..2 {
             assert_error(
-                validate_evidence_derivation_graph(&records),
+                validate_both_finite_apis(&records),
                 CoreErrorCode::EvidenceDerivationCycle,
                 INPUTS,
             )?;

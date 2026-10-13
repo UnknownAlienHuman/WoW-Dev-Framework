@@ -256,7 +256,10 @@ impl GraphEvidenceCatalog {
         }
         // Reuse the core validator for IDs, sorted references, confidence ceilings,
         // cycles and runtime-ancestry restrictions instead of a second DAG policy.
-        wow_core::validate_evidence_derivation_graph(evidence.values()).map_err(|_| invalid())?;
+        // MAX_RECORDS has already admitted this complete finite map. Collect
+        // pointers only; raw record bodies remain owned by this catalog.
+        let records: Vec<_> = evidence.values().collect();
+        wow_core::validate_evidence_derivation_graph_refs(&records).map_err(|_| invalid())?;
         checkpoint(stop)?;
         let digest = match observations {
             Some(support) => {
@@ -384,4 +387,41 @@ pub(super) fn encoded_len(value: &impl Serialize, limit: usize) -> GraphResult<u
     let mut count = Counter { bytes: 0, limit };
     serde_json::to_writer(&mut count, value).map_err(|_| budget())?;
     Ok(count.bytes)
+}
+
+#[cfg(test)]
+mod population_tests {
+    use super::*;
+
+    #[test]
+    fn evidence_catalog_exact_count_and_count_plus_one_refuse_boundedly()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../wow-core/examples/e0-findings-result.json"
+        ))?;
+        let context: GenerationContext = serde_json::from_value(fixture["context"].clone())?;
+        let record: EvidenceRecord =
+            serde_json::from_value(fixture["evidence_records"][0].clone())?;
+        let stop = AtomicBool::new(false);
+        for count in [MAX_RECORDS, MAX_RECORDS + 1] {
+            // Distinct registry keys retain a finite hostile input population.
+            // Exact count exceeds the independent encoded-byte ceiling; +1 is
+            // refused by count before byte/record admission or pointer staging.
+            let mut records = BTreeMap::new();
+            for ordinal in 0..count {
+                let mut hash = [0; 32];
+                hash[24..].copy_from_slice(&u64::try_from(ordinal)?.to_be_bytes());
+                let id = EvidenceId::from_hash(hash);
+                records.insert(id, record.clone());
+            }
+            assert_eq!(records.len(), count);
+            let result =
+                GraphEvidenceCatalog::new(context.clone(), records, BTreeMap::new(), &stop);
+            match result {
+                Err(failure) => assert_eq!(failure.code(), GraphErrorCode::BudgetExceeded),
+                Ok(_) => return Err("oversized hostile catalog was admitted".into()),
+            }
+        }
+        Ok(())
+    }
 }

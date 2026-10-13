@@ -15,10 +15,9 @@ enum VisitState {
     Complete,
 }
 
-pub(super) fn validate<'a>(input: impl IntoIterator<Item = &'a EvidenceRecord>) -> CoreResult<()> {
+pub(super) fn validate(mut records: Vec<&EvidenceRecord>) -> CoreResult<()> {
     // Sorting references, not records, keeps caller bytes unchanged and makes
     // traversal/error selection independent of producer or insertion order.
-    let mut records: Vec<_> = input.into_iter().collect();
     records.sort_unstable_by_key(|record| record.evidence_id());
     if records
         .windows(2)

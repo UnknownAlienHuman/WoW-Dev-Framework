@@ -878,7 +878,8 @@
     {
       "id": "validate_evidence_derivation_graph",
       "status": "required",
-      "input": "complete one-context registry as a finite iterator of borrowed EvidenceRecord values; order is not significant",
+      "input": "complete one-context registry as &[EvidenceRecord]; finite borrowed-reference companion accepts &[&EvidenceRecord] without record-body clones",
+      "borrowed_reference_slice_api": "validate_evidence_derivation_graph_refs",
       "doc": "OPERATIONS.md#validate_evidence_derivation_graph",
       "errors": [
         "evidence_context_mismatch",

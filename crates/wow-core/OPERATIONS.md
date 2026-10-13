@@ -514,8 +514,8 @@ Required tests: `EVIDENCE-ID-001..008`.
 
 ```text
 input:
-  complete evidence registry for one context, supplied as a finite iterator
-  of borrowed EvidenceRecord values; iteration order is not significant
+  complete evidence registry for one context as &[EvidenceRecord], or
+  &[&EvidenceRecord] through validate_evidence_derivation_graph_refs
 
 success:
   acyclic derivation graph
@@ -528,6 +528,12 @@ errors:
   evidence_derivation_cycle
   local evidence shape/identity errors
 ```
+
+Both public inputs are finite slices; neither accepts a lazy record producer.
+The reference-slice form lets a bounded owner retain records in its existing map
+without cloning their bodies. Both forms call the same private validator and
+preserve input order, deterministic diagnostics and record bytes. Hosts still
+bound total population/encoded sizes before constructing either slice.
 
 Every input must resolve once in a single context, including disconnected records.
 For each edge, output confidence cannot exceed input confidence in the order

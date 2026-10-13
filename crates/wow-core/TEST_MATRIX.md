@@ -686,6 +686,7 @@ with a nonempty `truncation_refs` field; see `validate_coverage_record`.
 | ID | Case | Expected |
 |---|---|---|
 | `EVIDENCE-GRAPH-001/002` | Empty registry, leaf and diamond | Acyclic, unchanged input; empty is not absence |
+| Finite API regression | Existing diamond, mixed-context, duplicate/missing-parent and cycle fixtures through record slices and reversed reference slices | Identical complete success/error values and unchanged caller bytes/order; both public lazy-input doctests fail to compile |
 | `EVIDENCE-GRAPH-003` | Connected or disconnected mixed contexts | `evidence_context_mismatch` |
 | `EVIDENCE-GRAPH-004` | All parent/child confidence combinations | No strengthening, including Possible→Derived and Candidate→Possible |
 | `EVIDENCE-GRAPH-005` | Runtime→project→project→platform, direct graph and envelope | `evidence_authority_violation` |

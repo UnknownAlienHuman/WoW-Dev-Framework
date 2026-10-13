@@ -368,9 +368,12 @@ construction is not equivalent to validated admission.
 Use `validate_evidence_derivation_graph` on the complete retained evidence registry
 before consuming derivation authority. It validates one context, every input link,
 confidence ceilings, transitive scenario restrictions, acyclicity and all record
-IDs. Pass any finite iterator of borrowed records, such as a slice or
-`BTreeMap::values()`; validation sorts by exact evidence ID, independent of
-iteration order. The check-result envelope uses the same operation. Single-record
+IDs. The existing API accepts `&[EvidenceRecord]`. An owner with an already
+bounded map may collect pointers and pass `&[&EvidenceRecord]` to
+`validate_evidence_derivation_graph_refs`; it does not clone record bodies.
+Both inputs are finite slices and use the same validator, sorting private
+references without changing caller order. Arbitrary/lazy iterators are not
+accepted. The check-result envelope uses the same operation. Single-record
 validation cannot resolve missing source, coverage or evidence records on its own.
 
 Possible/Candidate parents cannot support a stronger child; runtime ancestry cannot

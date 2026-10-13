@@ -57,7 +57,8 @@ pub use evidence::{
     ClaimScope, ConflictAffectedRef, ConflictRecord, CoverageReference, EvidenceConfidence,
     EvidenceCoverageRef, EvidenceLevel, EvidenceRecord, ProvenanceClass, derive_conflict_id,
     derive_evidence, derive_evidence_id, relate_evidence_conflict, validate_conflict_record,
-    validate_evidence_derivation_graph, validate_evidence_record,
+    validate_evidence_derivation_graph, validate_evidence_derivation_graph_refs,
+    validate_evidence_record,
 };
 pub use finding::{
     Finding, FindingDraft, MessageArgument, MessageArgumentKind, Remediation, RemediationClass,
