@@ -36,8 +36,8 @@ pub(super) const CAPABILITIES: &[Capability] = &[
     },
     Capability {
         operation: "context_validate",
-        availability: "not_implemented",
-        scope: "external_artifact_admission",
+        availability: "partial_functional",
+        scope: "primary_structural_pack_validation",
     },
     Capability {
         operation: "context_render",

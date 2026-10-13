@@ -1,6 +1,9 @@
 //! Explicit graph-artifact transport. All graph semantics belong to the service.
+#[cfg(unix)]
+use cap_fs_ext::OpenOptionsSyncExt;
+use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
+use cap_std::fs::{Dir, OpenOptions};
 use std::ffi::OsString;
-use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -245,11 +248,24 @@ pub(super) fn read_file(
         }
     };
     checkpoint()?;
-    let metadata = std::fs::symlink_metadata(path).map_err(|_| "cannot inspect graph input")?;
-    if !metadata.file_type().is_file() {
-        return Err("graph input must be a regular non-symlink file");
-    }
-    let mut file = File::open(path).map_err(|_| "cannot open graph input")?;
+    let name = path.file_name().ok_or("graph input must name one file")?;
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    // Hold the selected parent and reject a final-component link at open. A
+    // separate pathname inspection would race a replacement before File::open.
+    let directory = Dir::open_ambient_dir(parent, cap_std::ambient_authority())
+        .map_err(|_| "cannot open graph input parent")?;
+    let mut options = OpenOptions::new();
+    options.read(true).follow(FollowSymlinks::No);
+    // A raced FIFO must fail the opened-handle regular-file check without
+    // blocking the open before cancellation can be observed.
+    #[cfg(unix)]
+    options.nonblock(true);
+    let mut file = directory
+        .open_with(name, &options)
+        .map_err(|_| "cannot open regular graph input")?;
     let metadata = file
         .metadata()
         .map_err(|_| "cannot inspect opened graph input")?;
@@ -331,4 +347,109 @@ fn render(result: &GraphReadResult, format: Format) -> Result<Vec<u8>, ()> {
     serde_json::to_writer_pretty(&mut output, result).map_err(|_| ())?;
     output.write_all(b"\n").map_err(|_| ())?;
     Ok(output.0)
+}
+
+#[cfg(test)]
+mod read_file_tests {
+    use super::read_file;
+    use std::{
+        fs, io,
+        path::PathBuf,
+        sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    };
+
+    const CONTENT: &[u8] = b"bounded graph input\n";
+    static NEXT_TEMP_ID: AtomicU64 = AtomicU64::new(0);
+
+    enum CaseOutcome {
+        EvaluatedPass,
+        #[cfg(not(unix))]
+        NotEvaluated(String),
+    }
+
+    struct TempTree(PathBuf);
+
+    impl TempTree {
+        fn create() -> io::Result<Self> {
+            let base = std::env::temp_dir();
+            let id = NEXT_TEMP_ID.fetch_add(1, Ordering::Relaxed);
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+            let path = base.join(format!(
+                "wow-cli-graph-read-file-nofollow-{}-{timestamp}-{id}",
+                std::process::id(),
+            ));
+            fs::create_dir(&path)?;
+            Ok(Self(path))
+        }
+    }
+
+    impl Drop for TempTree {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn run_regular_and_leaf_symlink_case() -> Result<CaseOutcome, String> {
+        let tree = TempTree::create().map_err(|error| format!("create temp tree: {error}"))?;
+        let sentinel = tree.0.join("sentinel.bin");
+        fs::write(&sentinel, CONTENT).map_err(|error| format!("write sentinel: {error}"))?;
+
+        let selected_parent = tree.0.join("selected");
+        fs::create_dir(&selected_parent)
+            .map_err(|error| format!("create selected parent: {error}"))?;
+        let link = selected_parent.join("input.bin");
+
+        let stop = AtomicBool::new(false);
+        let actual = read_file(&sentinel, CONTENT.len(), &stop)
+            .map_err(|error| format!("regular-file read refused: {error}"))?;
+        if actual != CONTENT {
+            return Err("regular-file read returned different bytes".into());
+        }
+
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&sentinel, &link)
+                .map_err(|error| format!("create file symlink: {error:?}"))?;
+        }
+        #[cfg(windows)]
+        {
+            if let Err(error) = std::os::windows::fs::symlink_file(&sentinel, &link) {
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::PermissionDenied | io::ErrorKind::Unsupported
+                ) {
+                    return Ok(CaseOutcome::NotEvaluated(format!(
+                        "Windows could not create the file symlink ({error:?})"
+                    )));
+                }
+                return Err(format!("create file symlink: {error:?}"));
+            }
+        }
+        #[cfg(not(any(unix, windows)))]
+        return Ok(CaseOutcome::NotEvaluated(
+            "this platform has no configured file-symlink API".into(),
+        ));
+
+        if read_file(&link, CONTENT.len(), &stop).is_ok() {
+            return Err("read_file followed a final-component symlink".into());
+        }
+
+        Ok(CaseOutcome::EvaluatedPass)
+    }
+
+    #[test]
+    fn read_file_reads_regular_files_and_refuses_leaf_symlinks() -> Result<(), String> {
+        match run_regular_and_leaf_symlink_case() {
+            Ok(CaseOutcome::EvaluatedPass) => Ok(()),
+            #[cfg(not(unix))]
+            Ok(CaseOutcome::NotEvaluated(reason)) => {
+                eprintln!("NOT_EVALUATED: {reason}");
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
+    }
 }

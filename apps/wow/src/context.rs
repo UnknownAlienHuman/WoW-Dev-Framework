@@ -7,6 +7,7 @@ mod inspect;
 mod platform;
 mod platform_status;
 mod status;
+mod validate;
 
 use std::{
     ffi::{OsStr, OsString},
@@ -178,6 +179,16 @@ pub fn run(values: Vec<OsString>) -> u8 {
             4
         };
     }
+    let validation = match validate::parse(&values) {
+        Ok(validation) => validation,
+        Err(message) => return crate::usage(message),
+    };
+    if let Some(request) = validation {
+        let Some(stop) = crate::cancellation_flag() else {
+            return 64;
+        };
+        return validate::run(&request, &stop);
+    }
     let arguments = match parse(values) {
         Ok(arguments) => arguments,
         Err(message) => return crate::usage(message),
@@ -261,6 +272,7 @@ fn emit_json_result(result: &ContextMapResult, stop: &AtomicBool) -> u8 {
         return 4;
     }
     let exit = match result.status() {
+        ContextMapStatus::Complete => 0,
         ContextMapStatus::Partial | ContextMapStatus::Truncated => 2,
         ContextMapStatus::Cancelled => 130,
         ContextMapStatus::Failed => match result.failure_code() {
@@ -637,6 +649,55 @@ fn decode_root_id(encoded: &str) -> Result<String, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn context_validate_artifact_grammar_precedes_native_host_dispatch() -> Result<(), &'static str>
+    {
+        let valid: Vec<OsString> = [
+            "context",
+            "validate",
+            "--input",
+            "artifact.json",
+            "--artifact-kind",
+            "semantic-pack",
+            "--media-type",
+            "application/json",
+            "--validation-profile-id",
+            "wow-context/primary-structural-pack/1",
+            "--origin-closure",
+            "structural",
+            "--output",
+            "envelope-json",
+            "--max-input-bytes",
+            "1048576",
+            "--max-metadata-bytes",
+            "1048576",
+            "--max-context-work",
+            "100000",
+            "--max-depth",
+            "16",
+            "--max-tokens",
+            "100000",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect();
+        assert!(validate::parse(&valid)?.is_some());
+
+        let mut fake_host = valid;
+        fake_host.extend([
+            OsString::from("--native-host-config"),
+            OsString::from("host.json"),
+        ]);
+        assert!(matches!(
+            validate::parse(&fake_host),
+            Err("unknown context validate option")
+        ));
+
+        let primary = parse(arguments())?;
+        assert!(matches!(primary.request, Request::Map(_)));
+        Ok(())
+    }
 
     const PROJECT_ROOT: &str = "project@Y29udGV4dC1jbGk";
     const GRAPH_ROOT: &str = "graph-entity@Z3JhcGgtbm9kZTpzaGEyNTY6YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYQ";

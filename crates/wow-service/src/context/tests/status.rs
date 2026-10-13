@@ -384,7 +384,9 @@ fn retained_context_status_reports_exact_generations_details_and_closes_without_
                 row["operation"] == "context_continue" && row["availability"] == "not_implemented"
             }));
             assert!(capabilities.iter().any(|row| {
-                row["operation"] == "context_validate" && row["availability"] == "not_implemented"
+                row["operation"] == "context_validate"
+                    && row["availability"] == "partial_functional"
+                    && row["scope"] == "primary_structural_pack_validation"
             }));
             assert!(capabilities.iter().any(|row| {
                 row["operation"] == "context_render" && row["availability"] == "not_implemented"

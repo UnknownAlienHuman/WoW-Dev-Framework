@@ -20,6 +20,8 @@ broader acceptance remains open.
 The complete E3-B contract below remains the target; broader operations and
 acceptance are pending under Issue #122.
 
+The private external validator is integrated for the bounded Primary Structural semantic-pack selection described below. Its result establishes only the selected structural checks; exact owner-generation closure and source/runtime authority remain `NotEvaluated`. E3-B acceptance remains pending its required gates.
+
 **Contract ID:** `wow-context/e3-b/project-map-l0-l1-context-pack`
 
 ## Mission
@@ -135,6 +137,14 @@ build_context_cache_key
 ```
 
 Historical plural and `bundle` names are migration terminology only and must not become duplicate APIs.
+
+## External Primary pack validation
+
+`validate_primary_l0_pack` validates one bounded semantic-pack JSON artifact under `wow-context/primary-structural-pack/1` with `StructuralOnly` closure. The supported selection is the default Primary L0 `ContainersV1` pack rooted at a typed `GraphEntity` of kind `source_file` or `source_package`. The typed graph identity is validated; this operation does not resolve or receive a host filesystem path.
+
+The composed owner wire checks cover canonical input and schema, the selected profile, pack digest/identity, internal references, ProjectMap/L0 links, supported declaration links, and exact local assertion/derivation chains. The owner recomputes derivation record IDs from the record plus its partition ID/digest and closes local assertion references within that same partition; the selected chain must be complete, conflict-free, bounded, and closed over its witnesses. Missing records/references, conflicts, cycles, incomplete chains, and cross-partition references remain `NotEvaluated`. Declaration links join the original producer assertion to its accepted graph record, then rebind original node IDs to the published graph generation; ownership edges retain original relation, confidence, and evidence while using published endpoints. The overall owner state is `Valid`, `Invalid`, or `NotEvaluated`. Owner-generation closure, native producer/catalog authority, and source/runtime authority remain `NotEvaluated`; producer/catalog authority is not required for a StructuralOnly `Valid`. `Valid` makes no producer-authenticity, source-truth, or runtime claim. Unsupported selections remain `NotEvaluated`.
+
+Validation is nonrepairing and bounded by input bytes, metadata bytes, cumulative context work, JSON depth, syntactic JSON tokens, and cancellation. `max_tokens` counts JSON syntax tokens in the scanner; it is not a model-token estimate. The report retains scanner token/work usage and the supplied limits. Before publication, require a genuine positive StructuralOnly witness and affected-owner Tier S. The independent Quick gate runs on the published exact head; this document claims no Quick result. Broader E3-B acceptance remains pending its separate required gates.
 
 ## Deferred
 

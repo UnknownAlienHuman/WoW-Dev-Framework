@@ -55,6 +55,13 @@ pub use pack::{
     build_context_semantic_pack_with_reference_facts, prepare_primary_source_excerpt,
     validate_combined_context_semantic_pack, validate_context_semantic_pack,
 };
+pub use pack::{
+    PrimaryPackL0Profile, PrimaryPackLevel, PrimaryPackOriginClosure, PrimaryPackRootVariant,
+    PrimaryPackSelection, PrimaryPackValidation, PrimaryPackValidationBudgetUsage,
+    PrimaryPackValidationCheck, PrimaryPackValidationCode, PrimaryPackValidationLimits,
+    PrimaryPackValidationRecord, PrimaryPackValidationState, ValidationState,
+    validate_primary_l0_pack,
+};
 pub use platform::{
     PLATFORM_NATIVE_ONE_HOP_PROFILE, PLATFORM_NATIVE_ONE_HOP_PROFILE_BYTES, PlatformContextInspect,
     PlatformContextInspectView, PlatformContextMap, PlatformContextUniverse, PlatformRootFacet,

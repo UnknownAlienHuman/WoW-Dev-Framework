@@ -157,8 +157,10 @@ Truncated when either graph-support or evidence limits are reached.
 
 Owners: `wow-project::graph::RetainedProjectGraphEvidence`,
 `wow-graph::GraphEvidenceCatalog`, `GraphExplainQuery::execute_with_evidence`,
-and `wow-service::graph::execute_graph_bundle_read`. No new dependencies or
-acceptance/fixture claims are introduced.
+and `wow-service::graph::execute_graph_bundle_read`. Explicit file transport
+uses `cap-std`/`cap-fs-ext` to hold the selected parent directory and refuse a
+leaf symlink; opened-handle metadata and bounded reads enforce the file limit.
+Intermediate parent components are not covered by this leaf no-follow guarantee.
 
 
 ## Explicit source verification and excerpts

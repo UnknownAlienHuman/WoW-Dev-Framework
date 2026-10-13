@@ -42,6 +42,23 @@
       "complete fixtures, Tier A and required Tier X"
     ]
   },
+  "external_primary_pack_validation": {
+    "status": "implemented",
+    "artifact": "wow-context/semantic-pack/primary/1",
+    "profile": "wow-context/primary-structural-pack/1",
+    "supported_selection": "L0, wow-context/primary-l0/1, default ContainersV1, Entity(GraphNodeId) rooted at source_file or source_package",
+    "source_identity": "typed GraphEntity identity only; no host filesystem path is passed to Service or resolved by this operation",
+    "unsupported_families": ["L1", "Both", "project root", "StateRoot/Reference root", "expansion", "source excerpts", "platform/combined", "rendered artifacts"],
+    "origin_closure": {"selected": "structural_only", "exact_owner_closure": "NotEvaluated"},
+    "authority": {"native_owner_generation": "NotEvaluated", "native_producer_catalog": "NotEvaluated", "source": "NotEvaluated", "runtime": "NotEvaluated"},
+    "local_assertion_derivation_chains": "recompute derivation record IDs from each record plus its partition ID/digest and close local assertion references within that partition; require complete bounded conflict-free witness closure; missing records/references, conflicts, cycles, incomplete chains, and cross-partition references remain NotEvaluated",
+    "declaration_identity_rebinding": "join declaration origins to original producer assertions and accepted graph records, then deterministically rebind original node IDs to the published graph generation; ownership edges preserve original relation, confidence, and evidence while using published endpoints",
+    "valid_means": "the selected artifact passes the composed structural wire, profile, identity, internal-reference, and supported exact local chain checks; it does not establish native owner closure, producer/catalog authority, source authority, or runtime behavior",
+    "completed_result": "Service operation status complete carries the owner report unchanged; owner state is Valid, Invalid, or NotEvaluated",
+    "limits": "input bytes, complete result-envelope metadata bytes, cumulative context work including Service input hashing, JSON depth, syntactic JSON tokens, and cancellation",
+    "token_budget": "max_tokens counts syntactic JSON scanner tokens, not model tokens",
+    "acceptance": "require a genuine positive StructuralOnly witness and affected-owner Tier S before publication; independent exact-head Quick runs on the published SHA afterward; no PASS asserted; native producer/catalog authority remains NotEvaluated and is not a StructuralOnly positive prerequisite"
+  },
   "selected_source_excerpt": {
     "status": "functional_selected_native_and_cli",
     "profile_ids": [

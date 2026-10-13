@@ -1,6 +1,6 @@
 # E3-C context CLI commands
 
-**Status:** normative command grammar. Concrete parser library is not selected yet.
+**Status:** normative command grammar. The implemented `context validate` parser uses the exact private grammar below.
 
 ## Common selectors
 
@@ -232,19 +232,24 @@ Artifact mode requires exactly one eligible returned artifact from the original 
 
 ## `wow context validate`
 
+This route validates one explicit semantic-pack JSON input through the Primary StructuralOnly owner profile. All flags except `--output` are required; singleton duplicates and unknown flags are rejected. Numeric limits are unsigned decimal values greater than zero. `--output`, if present, accepts only `envelope-json`.
+
 ```text
 wow context validate
   --input <PATH|->
-  --artifact-kind semantic-pack|rendered-artifact
-  --media-type application/json|text/markdown
-  (--validation-profile-id <ID> | --validation-profile-alias <ALIAS>)
-  --origin-closure structural|exact
-  [exact publication/reference guards required by exact closure]
-  [operation/budget profiles]
-  [--output envelope-json|text]
+  --artifact-kind semantic-pack
+  --media-type application/json
+  --validation-profile-id wow-context/primary-structural-pack/1
+  --origin-closure structural
+  --max-input-bytes <U64>
+  --max-metadata-bytes <U64>
+  --max-context-work <U64>
+  --max-depth <U32>
+  --max-tokens <U64>
+  [--output envelope-json]
 ```
 
-The app reads bounded bytes and sends no host path. Artifact output is invalid.
+All five limits must be positive unsigned integers; `--max-input-bytes` is at most 64 MiB, `--max-metadata-bytes` is at most the context result-envelope ceiling, and `--max-depth` is at most 128. The parser rejects profile aliases, exact-closure guards, text output, and artifact output. It reads one explicit file or stdin and sends only bytes to Service, never the path. CLI arguments are capped at 4096 entries and 1 MiB total; each option value is capped at 32 KiB. The only supported artifact selection is Primary Structural L0 `ContainersV1` with a typed `GraphEntity` `source_file` or `source_package` root. Within that selection, exact local assertion/derivation chains are admitted only when recomputed record IDs and internal assertion references close within one partition. The chain must be complete, bounded, conflict-free, and closed over its witnesses; missing records/references, conflicts, cycles, incomplete chains, and cross-partition references return `not_evaluated`. Declaration links join original producer assertions to accepted graph records and rebind original node IDs to the published graph generation; ownership edges preserve original relation, confidence, and evidence while using published endpoints. Other levels, roots, profiles, expansions, excerpts, platform/combined families, and rendered artifacts return owner state `not_evaluated`. A completed Service envelope has operation status `complete` and carries owner state `valid`, `invalid`, or `not_evaluated`. `valid` is structural validation only; native producer/catalog authority, owner-generation closure, and source/runtime authority remain `not_evaluated`, and producer/catalog authority is not a StructuralOnly positive prerequisite. `--max-tokens` limits syntactic JSON scanner tokens, not model tokens. A genuine positive StructuralOnly witness and affected-owner Tier S are required before publication. The independent Quick gate runs on the published exact head; no Quick result is claimed here.
 
 ## `wow context render`
 

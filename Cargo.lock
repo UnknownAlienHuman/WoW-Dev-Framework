@@ -2537,6 +2537,8 @@ dependencies = [
 name = "wow-cli"
 version = "0.1.0"
 dependencies = [
+ "cap-fs-ext",
+ "cap-std",
  "ctrlc",
  "serde_json",
  "wow-service",

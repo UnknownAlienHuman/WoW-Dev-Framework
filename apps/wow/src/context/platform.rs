@@ -178,6 +178,7 @@ pub(super) fn run(host_path: &Path, arguments: &Request, stop: &AtomicBool) -> u
         return 4;
     }
     let exit = match result.status() {
+        ContextMapStatus::Complete => 0,
         ContextMapStatus::Partial | ContextMapStatus::Truncated => 2,
         ContextMapStatus::Cancelled => 130,
         ContextMapStatus::Failed => match result.failure_code() {

@@ -65,6 +65,7 @@ pub enum ContextMapStatus {
     Truncated,
     Failed,
     Cancelled,
+    Complete,
 }
 
 /// Final inert envelope bytes; executable owner/read/lease handles never escape.

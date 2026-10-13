@@ -10,7 +10,7 @@ Rust implementations must be written again.
 
 ## Active workspace and unaccepted scope
 
-The root Cargo workspace has **16 members**: `apps/wow`,
+The root Cargo workspace has **17 members**: `apps/wow`,
 `apps/wow-reference-builder`, `wow-core`, `wow-store`, `wow-reference`,
 `wow-annotations`, `wow-emmy`, `wow-project`, `wow-rules`, `wow-service`,
 `wow-graph`, `wow-recognizers`, `xtask`, `wow-render-contract`,

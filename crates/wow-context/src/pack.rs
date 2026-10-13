@@ -32,7 +32,15 @@ pub use combined::{
 };
 pub(crate) use combined::{COMBINED_RENDER_SCHEMA, CombinedPackCore, combined_renderer_profiles};
 
+mod external;
 mod frontier;
+pub use external::{
+    PrimaryPackL0Profile, PrimaryPackLevel, PrimaryPackOriginClosure, PrimaryPackRootVariant,
+    PrimaryPackSelection, PrimaryPackValidation, PrimaryPackValidationBudgetUsage,
+    PrimaryPackValidationCheck, PrimaryPackValidationCode, PrimaryPackValidationLimits,
+    PrimaryPackValidationRecord, PrimaryPackValidationState, ValidationState,
+    validate_primary_l0_pack,
+};
 pub(crate) use frontier::expansion_renderer_profiles;
 pub use frontier::{
     PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE,

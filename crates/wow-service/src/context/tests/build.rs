@@ -2,6 +2,7 @@
 use super::*;
 use crate::context::build::CONTEXT_BUILD_RESULT_SCHEMA;
 use std::collections::BTreeMap;
+mod external_primary_pack_witness;
 
 const ADMITTED_PATH: &str = "main [note](x)#&`tick.lua";
 const FIXTURE_WORK: u64 = 8_000_000;

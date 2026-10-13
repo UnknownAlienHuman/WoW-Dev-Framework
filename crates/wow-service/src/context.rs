@@ -11,6 +11,7 @@ mod request;
 mod status;
 #[cfg(test)]
 mod tests;
+mod validate;
 
 pub use build::{
     ContextBuildRequest, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
@@ -49,6 +50,11 @@ pub use platform_status::{
     ContextPlatformStatusRequest, execute_context_platform_status,
 };
 pub use status::{ContextStatusDetail, ContextStatusRequest, execute_context_status};
+pub use validate::{
+    CONTEXT_VALIDATE_REQUEST_SCHEMA, CONTEXT_VALIDATE_RESULT_SCHEMA, ContextValidateArtifactKind,
+    ContextValidateMediaType, ContextValidateOriginClosure, ContextValidateRequest,
+    ContextValidateResult, ValidationState, execute_context_validate,
+};
 pub use wow_context::PrimaryL0Profile as ContextL0Profile;
 pub use wow_context::PrimaryL1Profile as ContextL1Profile;
 pub use wow_context::PrimarySourceExcerptPolicy as ContextSourceExcerptPolicy;

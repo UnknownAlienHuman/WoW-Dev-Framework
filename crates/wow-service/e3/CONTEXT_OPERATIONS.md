@@ -307,28 +307,26 @@ If a generation or receipt is unavailable, fail. No automatic restart against cu
 
 ## `context_validate`
 
-Purpose: nonrepairing validation of one bounded canonical context semantic pack or rendered artifact supplied as transport data.
+Purpose: nonrepairing validation of bounded artifact bytes. The first private route is limited to one semantic-pack JSON artifact under `wow-context/primary-structural-pack/1`.
 
-Request:
+Selected request contract:
 
 ```text
-artifact kind/media/schema
-bounded artifact bytes or typed value
-validation profile
-origin-closure level = StructuralOnly | ExactOwnerClosure
-optional exact publication guards
-budget/cancellation
+artifact_kind = semantic_pack
+media_type = application_json
+validation_profile_id = wow-context/primary-structural-pack/1
+origin_closure_level = StructuralOnly
+bounded input, metadata, work, depth, and token limits
+cancellation
 ```
 
-Behavior:
+For this route, the only supported selection is L0 `wow-context/primary-l0/1`, default `ContainersV1`, rooted at an exact `GraphEntity` whose node kind is `source_file` or `source_package`. L1/Both, project roots, StateRoot/Reference roots, expansion, excerpts, platform/combined profiles, rendered artifacts, and `ExactOwnerClosure` remain `NotEvaluated`. The owner parser does not acquire project/graph/reference generations for this StructuralOnly operation.
 
-- service receives bytes/value, not the input path/stdin identity;
-- call the owning `wow-context` parser/validator contract;
-- for `ExactOwnerClosure`, acquire the exact generations encoded in the artifact and validate origins; never current;
-- return `ContextValidationPayload` with `Valid`, `Invalid`, or `NotEvaluated` plus all validation records;
-- never rewrite/regenerate the artifact.
+The Service receives bytes, never the CLI path or stdin identity. It invokes `wow_context::validate_primary_l0_pack` once and carries the owner report unchanged in the result envelope. For explanation chains, the owner recomputes derivation record IDs from each record plus its partition ID/digest and closes local assertion references within the same partition. It admits only complete, bounded, conflict-free chains closed over their witnesses; missing records/references, conflicts, cycles, incomplete chains, and cross-partition references remain `NotEvaluated`. Declaration links join original producer assertions to accepted graph records, then rebind original node IDs to the published graph generation; ownership edges retain original relation, confidence, and evidence while using published endpoints. `Valid` means the selected structural schema/profile, pack identity, internal references, and supported local chains passed; it does not establish native owner-generation closure, native producer/catalog authority, source authority, or runtime behavior. Native producer/catalog authority, exact owner-generation closure, source authority, and runtime authority stay `NotEvaluated`; producer/catalog authority is not a StructuralOnly positive prerequisite. Unsupported selections remain `NotEvaluated`.
 
-An invalid artifact is a successfully completed validation operation with an `Invalid` payload, not an internal service failure. Parser/owner/invariant failures use typed failure.
+The public Service operation status is `complete` when the owner returns any of `Valid`, `Invalid`, or `NotEvaluated`; the owner report is carried unchanged as the payload. `Valid` is limited to the selected StructuralOnly checks. `owner_generation_closure` and `source_or_runtime_authority` remain `NotEvaluated`. The typed root is a `source_file` or `source_package` GraphEntity; Service receives artifact bytes and typed identity data, never the CLI filesystem path.
+
+`max_metadata_bytes` is the caller-provided cap for the complete serialized result envelope, subject to the shared context result ceiling; the owner also applies it to input/metadata admission. Service hashes the input in 8 KiB chunks and subtracts `ceil(input_bytes / 8192)` from `max_context_work` before passing the remaining cumulative allowance to the owner. The owner charges its own input hash, scanner, typed decode, and wire traversal against that remaining shared budget. Its `max_tokens` counts syntactic JSON scanner tokens, not model tokens. Limit exhaustion and owner/invariant errors produce typed failed operation outcomes; cancellation produces a typed cancelled outcome. A genuine positive StructuralOnly witness and affected-owner Tier S are required before publication. The independent Quick gate runs on the published exact head; no Quick result is claimed here. Full E3-C acceptance remains pending.
 
 ## `context_render`
 

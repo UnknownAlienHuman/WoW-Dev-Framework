@@ -81,16 +81,16 @@ Existing E0 commands retain their frozen mapping.
 ### `context validate`
 
 ```text
-0   validation operation complete and artifact Valid
-1   validation operation complete and artifact Invalid
-2   validation result Partial or NotEvaluated
-3   structured request/exact-owner-generation/unavailable/deferred failure
+0   Service operation is complete and owner validation state is Valid for selected Primary Structural L0 checks only
+1   Service operation is complete and owner validation state is Invalid
+2   Service operation is complete and owner validation state is NotEvaluated, or Service result is partial/truncated
+3   structured request or capability failure
 4   internal parser/owner/context/service/closure/serialization/output failure
 64  CLI/config/artifact-input transport error before service invocation
 130 cancelled
 ```
 
-Exit 1 is not a service internal failure. It represents a successfully executed negative validation result.
+Exit 1 is not a Service internal failure. It represents a completed negative owner validation result. Exit 0 may include supported exact local assertion/derivation chains whose record IDs and internal graph references close within one partition, and declaration links whose original node IDs are rebound to published graph IDs. Missing records/references, conflicts, cycles, incomplete chains, and cross-partition references remain NotEvaluated. It does not establish native owner-generation closure, native producer/catalog authority, source authority, or runtime behavior: those checks remain NotEvaluated under StructuralOnly, and producer/catalog authority is not required for a StructuralOnly positive. The route supports only Primary Structural L0 `ContainersV1` on a typed `source_file`/`source_package` GraphEntity; exact owner closure and unsupported families remain NotEvaluated. A genuine positive StructuralOnly witness and affected-owner Tier S are required before publication. The independent Quick gate runs on the published exact head; no Quick result is claimed here. Broader acceptance gates remain pending.
 
 ## Failure-class mapping
 
