@@ -1236,3 +1236,14 @@ normalize collection order, recompute input identities or repair a digest.
 Policy/shape errors use safe fixed paths and `budget_invalid`, `budget_exceeded`,
 `duplicate_field`, `canonicalization_failure` or `contract_violation`; semantic
 errors propagate. Full rules and nonclaims: [`JSON_ADMISSION.md`](JSON_ADMISSION.md).
+
+## Callable emission observation admission
+
+`CallableFieldLowering::admit` validates bounded token text, source/member/token
+ranges and optional-marker geometry. `CallableLoweringObservation::admit`
+validates bounded borrowed identity/path/digest spelling, declaration containment
+and consecutive parameter/return order before returning immutable data. Invalid
+identifiers, digests, paths or spans fail with their typed Core codes; ordering
+and member-shape violations use `ContractViolation`; limits and overflow refuse.
+No owner lookup, IO, rendering, lowering or provenance decision occurs here.
+Concrete consumers and required byte verification are in `CONSUMER_GUIDE.md`.

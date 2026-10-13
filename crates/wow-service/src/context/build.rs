@@ -588,6 +588,22 @@ fn build(
             stop,
             |map, graph| {
                 if let Some(api) = reference_api {
+                    if api.annotation_lowering_selected() {
+                        let mut preparation = wow_context::prepare_primary_reference_facts(
+                            &universe, map, graph, stop,
+                        )
+                        .map_err(context_error)?;
+                        let origins =
+                            api.prepared_reference_origins(&mut preparation, graph, stop)?;
+                        let pack = wow_context::build_prepared_primary_reference_pack(
+                            preparation,
+                            &scope,
+                            &origins,
+                            stop,
+                        )
+                        .map_err(context_error)?;
+                        return deliver(pack);
+                    }
                     let origins = api.reference_origins(map, graph, stop)?;
                     let pack = wow_context::build_context_semantic_pack_with_reference_facts(
                         &universe, map, graph, &scope, &origins, stop,

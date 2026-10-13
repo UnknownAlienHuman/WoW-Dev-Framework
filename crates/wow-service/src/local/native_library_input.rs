@@ -17,6 +17,7 @@ use wow_project::disk::{
 };
 use wow_project::{
     NATIVE_LIBRARY_INPUT_MAX_BYTES, NativeLibraryInput, ProjectError, ProjectErrorCode,
+    ProjectLibraryBinding,
 };
 use wow_reference::native_view::NativeViewProjection;
 
@@ -199,6 +200,7 @@ pub struct RequalifiedNativeLibrary {
     pub(super) sidecars: NativeProjectionSidecars,
     pub(super) callable_bindings: NativeCallableBindings,
     pub(super) annotation_files: Vec<AnnotationFile>,
+    pub(super) library_binding: ProjectLibraryBinding,
     pub(super) navigation_sources: NavigationSourceInventory,
 }
 
@@ -210,6 +212,10 @@ impl RequalifiedNativeLibrary {
     #[must_use]
     pub fn annotation_files(&self) -> &[AnnotationFile] {
         &self.annotation_files
+    }
+
+    pub(crate) const fn library_binding(&self) -> &ProjectLibraryBinding {
+        &self.library_binding
     }
     #[must_use]
     pub fn navigation_sources(&self) -> &NavigationSourceInventory {
@@ -344,7 +350,6 @@ pub(crate) fn rebuild_for_project(
         _ => invalid("native Library reconstruction rejected"),
     })?;
     cancelled(stop)?;
-    verify_library_files(project, &library.files, stop)?;
     // Bound the actual reconstructed producer material before canonical artifact
     // allocation, then reserve maps and the join on the same remaining allowance.
     #[derive(Serialize)]
@@ -375,7 +380,7 @@ pub(crate) fn rebuild_for_project(
     )
     .map_err(|_| invalid("reconstructed annotation artifact rejected"))?;
     cancelled(stop)?;
-    let sidecars = NativeProjectionSidecars::from_library(&artifact, &library)
+    let sidecars = NativeProjectionSidecars::from_library_cancellable(&artifact, &library, stop)
         .map_err(|_| invalid("reconstructed annotation sidecars rejected"))?;
     cancelled(stop)?;
     if artifact.artifact_id() != decoded.expected.annotation_artifact_id
@@ -388,10 +393,20 @@ pub(crate) fn rebuild_for_project(
         NavigationSourceInventory::from_library(&library, stop).map_err(navigation_error)?;
     let remaining = METADATA_MAX_BYTES
         .checked_sub(producer_bytes)
+        .and_then(|bytes| bytes.checked_sub(sidecars.metadata_bytes()))
         .and_then(|bytes| bytes.checked_sub(sidecars.source_map_bytes().len()))
         .and_then(|bytes| bytes.checked_sub(sidecars.loss_report_bytes().len()))
         .and_then(|bytes| bytes.checked_sub(navigation_sources.metadata_bytes()))
         .and_then(|bytes| bytes.checked_sub(project.snapshot_id().len()))
+        .ok_or_else(budget_error)?;
+    let library_binding = verify_library_files(
+        project,
+        &library.files,
+        remaining.min(DISK_INVENTORY_MAX_BYTES),
+        stop,
+    )?;
+    let remaining = remaining
+        .checked_sub(library_binding.metadata_bytes())
         .ok_or_else(budget_error)?;
     let callable_bindings =
         NativeCallableBindings::build(&sidecars, &reference, remaining, BINDING_MAX_WORK, stop)
@@ -414,6 +429,7 @@ pub(crate) fn rebuild_for_project(
         sidecars,
         callable_bindings,
         annotation_files: library.files,
+        library_binding,
         navigation_sources,
     })
 }
@@ -620,8 +636,9 @@ fn validate_sources(files: &[PinnedLuaSource], stop: &AtomicBool) -> ServiceResu
 fn verify_library_files(
     project: &wow_project::ProjectView,
     generated: &[AnnotationFile],
+    max_metadata_bytes: usize,
     stop: &AtomicBool,
-) -> ServiceResult<()> {
+) -> ServiceResult<ProjectLibraryBinding> {
     cancelled(stop)?;
     if generated.is_empty() || generated.len() > DISK_INVENTORY_MAX_FILES {
         return Err(identity_error());
@@ -667,7 +684,19 @@ fn verify_library_files(
     {
         return Err(identity_error());
     }
-    cancelled(stop)
+    cancelled(stop)?;
+    ProjectLibraryBinding::qualify(project, &rebuilt, max_metadata_bytes, stop).map_err(|error| {
+        match error.code() {
+            ProjectErrorCode::SourceReadCancelled | ProjectErrorCode::AnalysisCancelled => {
+                ServiceError::new(
+                    ServiceErrorCode::Cancelled,
+                    "Library qualification cancelled",
+                )
+            }
+            ProjectErrorCode::SourceBudgetExceeded => budget_error(),
+            _ => identity_error(),
+        }
+    })
 }
 
 fn sources<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<SourceInput>, D::Error> {

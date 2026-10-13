@@ -5,7 +5,10 @@
 //! No IO, source execution, automatic correction, or provider lookup occurs here.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use serde::Serialize;
 use wow_reference::native::{DocumentationDocument, RawKind, RawValue, Span, source_digest};
@@ -27,8 +30,10 @@ use crate::selected_literals::{LiteralExecution, SelectedLiterals};
 use wow_render_contract::LiteralBridge;
 
 mod fields;
+mod lowering;
 mod maps;
 mod numbers;
+pub(crate) use lowering::CapturedCallable;
 
 const MAX_FILES: usize = 4096;
 const MAX_UNITS: usize = 65_536;
@@ -114,6 +119,24 @@ pub struct NativeLibrary<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub literal_execution: Option<LiteralExecution>,
     pub limitations: Vec<&'static str>,
+    /// Sealed final-emission observations; absent from every existing wire identity.
+    #[serde(skip)]
+    pub(crate) lowering_catalog: Arc<[CapturedCallable]>,
+    #[serde(skip)]
+    lowering_metadata_bytes: usize,
+}
+
+impl NativeLibrary<'_> {
+    /// Conservative retained catalog reservation, including capacity/conversion slack.
+    /// Skipped from the legacy wire bytes; charge this when retaining a Library.
+    pub const fn callable_lowering_metadata_bytes(&self) -> usize {
+        self.lowering_metadata_bytes
+    }
+
+    /// Retained bytes omitted from the legacy NativeLibrary serialization.
+    pub const fn metadata_bytes(&self) -> usize {
+        self.lowering_metadata_bytes
+    }
 }
 
 fn link(document: &DocumentationDocument, raw: &RawValue) -> SourceLink {
@@ -383,6 +406,14 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
     let mut files = Vec::new();
     let mut total_bytes = 0usize;
     let mut member_mapping_budget = maps::MAX_MEMBERS;
+    let mut lowering_catalog = Vec::new();
+    let mut lowering_budget = lowering::CaptureBudget::new();
+    lowering_budget.reserve(
+        0,
+        0,
+        std::mem::size_of::<Arc<[CapturedCallable]>>() + 64,
+        cancelled,
+    )?;
     let mut all_enums = Vec::new();
     let mut all_constants = Vec::new();
     let mut all_events = Vec::new();
@@ -674,7 +705,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
                 renderer.render_mapped(&input)
             };
             match rendered {
-                Ok(rendered) => {
+                Ok(mut rendered) => {
                     let mut mappings: Vec<SourceMapping> = rendered
                         .declarations
                         .iter()
@@ -692,12 +723,16 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
                         })
                         .collect();
                     maps::append_members(
-                        &rendered,
+                        &mut rendered,
                         document,
                         &function_facts,
                         &table_facts,
                         &mut mappings,
                         &mut member_mapping_budget,
+                        files.len(),
+                        &mut lowering_catalog,
+                        &mut lowering_budget,
+                        cancelled,
                     )?;
                     if let Some(receiver) = rendered.receiver {
                         mappings.insert(
@@ -824,6 +859,8 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
         corrections: corrected.map(|c| c.report),
         aliases: alias_report,
         literal_execution,
+        lowering_catalog: lowering_catalog.into(),
+        lowering_metadata_bytes: lowering_budget.metadata_bytes(),
         limitations: vec![
             "raw restriction and unknown metadata are retained, not interpreted as runtime safety",
             "ScriptObject classes are analysis-only local bindings; inheritance is not inferred",

@@ -842,3 +842,13 @@ example consumers and exact hash vectors.
 
 This checkpoint does not assert full error-category/retry-policy conformance,
 caller Text secrecy, source provenance, all remaining E0-A cases or R0 completion.
+
+## Concrete callable emission seam
+
+Core admission verifies bounded immutable identifiers/digests/paths, consecutive
+lanes/ordinals and nested type/optional-marker ranges. The selected Service
+`selected_corrections_reopen_into_primary_reference_facts` witness consumes the
+genuine annotation owner after source-absent reopen, checks exact token/marker
+bytes, file corruption/cancellation refusal and owner JSON preservation through
+Inspect/Build/Markdown. This is one functional witness, not Tier A/X or consumer
+semantic parity; direct Core shape mutations remain part of the focused gate.

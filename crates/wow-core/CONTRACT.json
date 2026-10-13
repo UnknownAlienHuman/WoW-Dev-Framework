@@ -5,6 +5,15 @@
   "state": "partial-executable-acceptance-incomplete",
   "current_milestone": "E0",
   "canonicalization_version": "wow-core-json/e0-1",
+  "callable_emission_data": {
+    "schema": "wow-core/callable-lowering-observation/1",
+    "types": ["CallableLoweringLane", "CallableFieldLowering", "CallableLoweringObservation"],
+    "consumers": ["wow-annotations", "wow-service", "wow-context"],
+    "admission": "private fields; bounded exact borrowed owner IDs, paths/digests and ordered nested source/member/token/optional-marker ranges",
+    "authority": "inert syntax data only; consumer must bind genuine Reference and Project Library views and verify exact emitted bytes",
+    "compatibility": "no existing E0 wire, canonical hash or persistence input changes",
+    "nonclaims": ["lowering implementation", "producer authority", "consumer semantic or runtime qualification"]
+  },
   "digest_algorithm": "sha256",
   "normative_documents": [
     "README.md",

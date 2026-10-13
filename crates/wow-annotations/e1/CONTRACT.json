@@ -4,6 +4,13 @@
   "state": "implementation-ready-documentation-no-rust-code",
   "work_package": "E1-C",
   "crate": "wow-annotations",
+  "native_callable_emission_capture": {
+    "operation": "NativeCallableBindings::callable_lowering",
+    "capture": "already-computed mapped renderer type and optional-marker ranges; private bounded catalog skipped by serialization",
+    "handoff": "one inert wow-core callable observation bound to exact native Reference/source/artifact/map descriptors",
+    "compatibility": "existing renderer text, NativeLibrary, artifact, map, loss and retained producer identities unchanged",
+    "nonclaims": ["AnnotationSemanticModel acceptance", "complete type closure", "consumer semantic parity", "current-source or runtime qualification"]
+  },
   "direct_framework_dependencies": [
     "wow-core",
     "wow-reference"

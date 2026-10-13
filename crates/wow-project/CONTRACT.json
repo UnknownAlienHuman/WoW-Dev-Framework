@@ -4,6 +4,14 @@
   "state": "implementation-ready-documentation-no-rust-code",
   "work_package": "E0-D",
   "crate": "wow-project",
+  "native_library_byte_view": {
+    "types": ["ProjectLibraryBinding", "ProjectLibraryFileView"],
+    "operations": ["qualify", "file_view", "slice"],
+    "consumers": ["wow-service native Library reconstruction", "wow-context ReferenceFacts emitted-token verification"],
+    "binding": "sole exact admitted analyzer Library snapshot, configured backend/profile universe and immutable Project snapshot/generation",
+    "bounds": "existing native inventory limits; descriptors preflighted before allocation; caller charges metadata_bytes and whole-file verification work",
+    "nonclaims": ["Main source registration", "Reference or annotation producer authority", "runtime execution", "extra source-body retention"]
+  },
   "direct_framework_dependencies": [
     "wow-core",
     "wow-emmy"

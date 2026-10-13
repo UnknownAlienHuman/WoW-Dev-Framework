@@ -298,3 +298,13 @@ A fixture capability boundary must be nonblank bounded text; revision text is
 bounded independently of the raw JSON importer. Apply these checks to decoded
 profiles as well as builders. They do not attest source facts, change accepted
 identity material or allow fixture-to-release promotion.
+
+### CORE-001 clarification — one inert callable emission primitive
+
+The native annotation owner and Context ReferenceFacts share a validated data
+shape for exact emitted callable tokens and their source/artifact/map descriptors.
+This is a real current consumer seam, not a future generic metadata interface.
+Core validates its immutable shape but owns no lowering, producer proof or byte
+verification. Context separately binds genuine Reference and Project Library
+views; consumer semantics/runtime remain unevaluated. No dependency edge or
+existing canonical/persistence identity changes.

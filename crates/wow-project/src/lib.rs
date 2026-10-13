@@ -17,6 +17,7 @@ pub mod graph;
 mod identity;
 mod ids;
 mod inventory;
+mod library_view;
 pub mod load;
 mod native_library_input;
 pub mod platform_source;
@@ -47,6 +48,7 @@ pub use inventory::{
     ProjectFileManifestEntry, ProjectFileRole, ProjectInputBundle, ProjectInputFile,
     ProjectInputInventory, ProjectLanguageKind,
 };
+pub use library_view::{ProjectLibraryBinding, ProjectLibraryFileView};
 pub use native_library_input::{NATIVE_LIBRARY_INPUT_MAX_BYTES, NativeLibraryInput};
 pub use publication::ProjectPublisher;
 pub use registry::{

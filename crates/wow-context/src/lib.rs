@@ -36,6 +36,7 @@ pub use map::{
     prepare_primary_project_map, prepare_project_map, primary_detail_query,
     primary_navigation_query, primary_project_navigation_queries,
 };
+pub use pack::build_prepared_primary_reference_pack;
 pub use pack::{
     COMBINED_CONTEXT_JSON_RENDERER_PROFILE, COMBINED_CONTEXT_MARKDOWN_RENDERER_PROFILE,
     COMBINED_CONTEXT_PACK_PROFILE, COMBINED_CONTEXT_PROFILES_BYTES, CombinedContextSemanticPack,
@@ -78,5 +79,9 @@ pub use skeleton::{
     build_l0_skeleton_with_profile, build_l1_skeleton, build_primary_l1_skeletons_with_profile,
     build_primary_reference_root_l0_skeleton, build_primary_reference_skeletons,
     build_primary_skeletons, build_primary_skeletons_with_profile,
+};
+pub use skeleton::{
+    PrimaryReferencePreparation, build_prepared_primary_reference_skeletons,
+    prepare_primary_reference_facts,
 };
 pub use universe::{ContextUniverseSet, bind_context_universe_set};

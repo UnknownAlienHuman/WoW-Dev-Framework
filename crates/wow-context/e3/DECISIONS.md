@@ -141,3 +141,13 @@ The inherited control/effect model consumes published typed facts only. It canno
 ## CTX-035 — Metrics and evaluation are later DAG layers
 
 Metrics and evaluation can assess an exact semantic pack and rendering but cannot influence the semantic pack identity or canonical selection in the correctness path.
+
+## Callable emission handoff
+
+The selected ReferenceFacts corrections route retains one existing emitter
+observation through inert Core data and exact Reference plus Project Library
+admission. Context verifies source/member/token/optional-marker geometry and bytes;
+it neither parses nor lowers source. A prepared Primary construction carries the
+original Budget through acquisition and Build; combined uses its existing port.
+No resolver, dependency edge, renderer algorithm or persistence/profile ladder is
+added. Consumer semantics, broad type inventory and Tier A/X remain open in #122.

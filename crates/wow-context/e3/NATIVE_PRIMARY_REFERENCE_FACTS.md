@@ -75,8 +75,25 @@ The original types remain qualified as `original_source_type_identities_unresolv
 An explicitly selected native corrections producer can additionally supply the
 Reference-owned [exact-name type overlay](../../wow-reference/NATIVE_CALLABLE_TYPE_RESOLUTION.md).
 Context retains that typed sibling unchanged under the same signature binding;
-it does not resolve names or apply corrections. Annotation display lowering,
-broader restriction interpretation and runtime qualification remain unevaluated.
+it does not resolve names or apply corrections. The same explicit corrections
+selection can additionally retain the existing annotation emitter's callable
+type-token and optional-marker observations. A private bounded catalog captures
+the already-computed renderer result at emission; it does not lower again or
+parse generated text. `NativeCallableBindings::callable_lowering` supplies one
+inert validated Core observation with exact native source/Reference/artifact/map
+descriptors, ordered lanes/ordinals and original/generated ranges.
+
+Context admits that data only with a genuine `ProjectLibraryFileView` qualified
+against the sole Library snapshot already admitted by this Project. It checks
+Reference/source/Project/Library binding, original signature member spans and
+exact emitted token and `?` bytes, including final UTF-8 range geometry. A supplied
+mismatch refuses; genuine missing emission remains absent/NotEvaluated. The file
+view does not serialize source bodies or become an annotation producer receipt.
+The facet labels `annotation_producer_custody=NotEvaluated`: artifact/map IDs
+remain supplied descriptors, and exact Library token agreement does not validate
+those IDs or prove that the supplied lowering came from that producer.
+This is emitted analysis syntax, not complete type resolution or consumer semantic
+proof. Broader restriction interpretation and runtime qualification remain unevaluated.
 Context does not import annotations/emmy, parse the record payload,
 interpret restriction prose, widen unknown types, add restrictions or infer API
 legality. JSON and Markdown retain the original record and typed observations
@@ -101,6 +118,12 @@ protected/Secret legality, combat safety, taint safety or complete-corpus parity
 
 ## Continuing bounds and compatibility
 
+`PrimaryReferencePreparation` starts the existing skeleton construction Budget
+before Service acquisition and is consumed by the prepared Inspect/Build path.
+Combined acquisition uses its existing preparation port. Generated file views
+are cached only for the current operation, reserved before allocation and hashed
+once per selected file; their bodies remain borrowed. Native requalification
+charges skipped catalogs and Project descriptors against its existing allowance.
 One existing native Budget covers selected joins, record digest work, retained
 facets/support, identity and immutable output with cancellation. Inspect delivery
 must fit the actual remaining metadata allowance. Build continues that same
@@ -120,5 +143,13 @@ Project/store/replay layouts and default EntityV1 selections stay unchanged.
 This selection has one closed ReferenceFactsV1 recipe and no transient alias.
 The type overlay uses the existing explicit native corrections selection;
 this consumer adds no resolver, registry, replay/storage or renderer-family migration.
+The unreleased ReferenceFacts profile admits optional typed sibling observations
+under their own explicit schemas. Original signature interpretation, profile
+descriptor and unselected fields remain unchanged; omitted siblings are absent.
+Service, CLI and the pack/render owners consume this typed variant and bind the
+complete serialized payload into artifact identities. This additive data seam
+does not create a new aggregate profile for each owner observation. It grants no
+compatibility promise to an external strict-field decoder; that consumer is
+unevaluated until its named acceptance gate.
 Gate outcomes and remaining broad Reference/type, privacy/excerpt/token,
 progressive/platform and Tier A/X qualification stay in #122.

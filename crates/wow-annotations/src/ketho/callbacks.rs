@@ -1,7 +1,7 @@
 //! Native callback signatures beyond the donor's argument-only byte profile.
 use super::{
-    Field, MemberPosition, Output, RenderError, RenderedMember, Renderer, safe_text,
-    validate_fields,
+    Field, MemberPosition, Output, RenderError, RenderedMember, RenderedTypeToken, Renderer,
+    safe_text, validate_fields,
 };
 
 impl Renderer {
@@ -56,19 +56,38 @@ impl Renderer {
             } else {
                 &argument.name
             })?;
-            if !argument.variadic && (argument.nilable || argument.default_text.is_some()) {
-                out.push("?")?;
-            }
+            let optional_marker =
+                if !argument.variadic && (argument.nilable || argument.default_text.is_some()) {
+                    let marker_start = out.bytes.len();
+                    out.push("?")?;
+                    Some((marker_start, out.bytes.len()))
+                } else {
+                    None
+                };
             out.push(": ")?;
-            out.push(&self.field_type(argument)?)?;
-            if argument.variadic && argument.nilable {
+            let lowered_type = self.field_type(argument)?;
+            let type_start = out.bytes.len();
+            out.push(&lowered_type)?;
+            let type_end = out.bytes.len();
+            let optional_marker = if argument.variadic && argument.nilable {
+                let marker_start = out.bytes.len();
                 out.push("?")?;
-            }
+                Some((marker_start, out.bytes.len()))
+            } else {
+                optional_marker
+            };
             members.push(RenderedMember {
                 position: MemberPosition::Parameter,
                 index,
                 start,
                 end: out.bytes.len(),
+                lowering: RenderedTypeToken {
+                    start: type_start,
+                    end: type_end,
+                    optional_marker,
+                    lowered_type,
+                    optional: argument.nilable || argument.default_text.is_some(),
+                },
             });
         }
         out.push(")")?;
@@ -80,15 +99,29 @@ impl Renderer {
                 out.push(", ")?;
             }
             let start = out.bytes.len();
-            out.push(&self.field_type(result)?)?;
-            if result.nilable || result.default_text.is_some() {
+            let lowered_type = self.field_type(result)?;
+            let type_start = out.bytes.len();
+            out.push(&lowered_type)?;
+            let type_end = out.bytes.len();
+            let optional_marker = if result.nilable || result.default_text.is_some() {
+                let marker_start = out.bytes.len();
                 out.push("?")?;
-            }
+                Some((marker_start, out.bytes.len()))
+            } else {
+                None
+            };
             members.push(RenderedMember {
                 position: MemberPosition::Return,
                 index,
                 start,
                 end: out.bytes.len(),
+                lowering: RenderedTypeToken {
+                    start: type_start,
+                    end: type_end,
+                    optional_marker,
+                    lowered_type,
+                    optional: result.nilable || result.default_text.is_some(),
+                },
             });
         }
         if !returns.is_empty() {

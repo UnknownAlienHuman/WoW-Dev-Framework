@@ -19,6 +19,16 @@ pub struct RenderedMember {
     pub index: usize,
     pub start: usize,
     pub end: usize,
+    pub(crate) lowering: RenderedTypeToken,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RenderedTypeToken {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) optional_marker: Option<(usize, usize)>,
+    pub(crate) lowered_type: String,
+    pub(crate) optional: bool,
 }
 
 impl Renderer {
@@ -36,12 +46,13 @@ impl Renderer {
             MemberPosition::Return => Position::Return,
             MemberPosition::Field => Position::Field,
         };
-        self.field(out, label, field)?;
+        let lowering = self.field(out, label, field)?;
         members.push(RenderedMember {
             position,
             index,
             start,
             end: out.bytes.len(),
+            lowering,
         });
         Ok(())
     }

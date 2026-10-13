@@ -4,7 +4,8 @@ use std::sync::atomic::AtomicBool;
 
 use serde::Serialize;
 use wow_core::{
-    ClaimScope, EvidenceConfidence, EvidenceRecord, ProvenanceClass, SourceHandle, SourceOriginKind,
+    CallableLoweringObservation, ClaimScope, EvidenceConfidence, EvidenceRecord, ProvenanceClass,
+    SourceHandle, SourceOriginKind,
 };
 use wow_graph::{
     GraphAssertionKind, GraphAssertionRef, GraphConfidence, GraphEntityProposal, GraphNode,
@@ -16,6 +17,9 @@ use wow_reference::{CoverageStatus, LookupResult, ReferenceRecord, ReferenceReco
 use crate::budget::{Budget, checkpoint, encoded_len, exhausted};
 use crate::{ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, ProjectMapView};
 
+mod lowering;
+use lowering::{AnnotationLoweringFacet, AnnotationLoweringInput};
+
 /// An inert request for one original producer association. These references
 /// cannot attest source or graph authority; construction validates every field.
 #[derive(Serialize)]
@@ -25,6 +29,8 @@ pub struct ReferenceOriginInput<'a> {
     evidence: &'a EvidenceRecord,
     #[serde(skip_serializing_if = "Option::is_none")]
     signature: Option<NativeCallableSignature<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    annotation_lowering: Option<AnnotationLoweringInput<'a>>,
 }
 
 impl<'a> ReferenceOriginInput<'a> {
@@ -38,12 +44,24 @@ impl<'a> ReferenceOriginInput<'a> {
             source,
             evidence,
             signature: None,
+            annotation_lowering: None,
         }
     }
 
     /// Attach a genuine native owner view; admission remains in reference_facets.
     pub const fn with_signature(mut self, signature: NativeCallableSignature<'a>) -> Self {
         self.signature = Some(signature);
+        self
+    }
+
+    /// Attach inert emitted syntax and a genuine verified Library byte view.
+    /// Context admits the complete binding and exact token bytes independently.
+    pub const fn with_annotation_lowering(
+        mut self,
+        observation: CallableLoweringObservation<'a>,
+        file: wow_project::ProjectLibraryFileView<'a>,
+    ) -> Self {
+        self.annotation_lowering = Some(AnnotationLoweringInput { observation, file });
         self
     }
 }
@@ -162,6 +180,39 @@ impl ReferenceOriginPreparation<'_> {
             .work(amount.checked_mul(4).ok_or_else(exhausted)?, stop)?;
         self.bytes(amount, stop)
     }
+
+    /// Reserve borrowed verified-file slots before allocation. This is the same
+    /// construction ledger, not a second allowance for annotation acquisition.
+    pub fn reserve_library_views(
+        &mut self,
+        capacity: usize,
+        stop: &AtomicBool,
+    ) -> ContextResult<()> {
+        self.budget
+            .work(capacity.checked_add(1).ok_or_else(exhausted)?, stop)?;
+        self.bytes(
+            capacity
+                .checked_mul(std::mem::size_of::<wow_project::ProjectLibraryFileView<'_>>())
+                .ok_or_else(exhausted)?,
+            stop,
+        )
+    }
+
+    /// Charge hashing/comparison of the exact complete generated file before use.
+    pub fn reserve_library_verification(
+        &mut self,
+        bytes: usize,
+        lookups: usize,
+        stop: &AtomicBool,
+    ) -> ContextResult<()> {
+        self.budget.work(
+            bytes
+                .checked_add(lookups)
+                .and_then(|work| work.checked_add(72))
+                .ok_or_else(exhausted)?,
+            stop,
+        )
+    }
 }
 
 /// Borrowed original owner records, not reconstructed payload semantics.
@@ -174,6 +225,8 @@ pub(crate) struct ReferenceRecordFacet<'a> {
     record: &'a ReferenceRecord,
     record_digest: &'a str,
     signature: NativeCallableSignature<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    annotation_lowering: Option<AnnotationLoweringFacet<'a>>,
     source: &'a SourceHandle,
     evidence: &'a EvidenceRecord,
     source_association: &'static str,
@@ -411,6 +464,10 @@ pub(crate) fn reference_facets<'a>(
                 return Err(mismatch());
             }
         }
+        let annotation_lowering = origin
+            .annotation_lowering
+            .map(|input| lowering::admit(input, signature, origin.source, universe, budget, stop))
+            .transpose()?;
         let row = ReferenceRecordFacet {
             node,
             assertion: origin.assertion,
@@ -419,6 +476,7 @@ pub(crate) fn reference_facets<'a>(
             record,
             record_digest,
             signature,
+            annotation_lowering,
             source: origin.source,
             evidence: origin.evidence,
             source_association: "exact_record_source_id_and_accepted_original_support",

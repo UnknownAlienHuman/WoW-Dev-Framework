@@ -389,9 +389,12 @@ impl LocalProjectInput {
             &library,
         )
         .map_err(|_| invalid("native annotation artifact identity rejected"))?;
-        let annotation_sidecars =
-            NativeProjectionSidecars::from_library(&annotation_artifact, &library)
-                .map_err(|_| invalid("native annotation sidecar projection rejected"))?;
+        let annotation_sidecars = NativeProjectionSidecars::from_library_cancellable(
+            &annotation_artifact,
+            &library,
+            stop,
+        )
+        .map_err(|_| invalid("native annotation sidecar projection rejected"))?;
         let annotation_compatibility = input
             .compatibility_evidence
             .as_ref()
@@ -557,7 +560,15 @@ impl LocalProjectInput {
             distribution_evidence: Option<&'a NativeDistributionSelection>,
             semantic_consumer_acceptance: &'static str,
         }
-        let report = report_bytes(
+        let report_limit = NATIVE_REPORT_LIMIT
+            .checked_sub(annotation_sidecars.metadata_bytes())
+            .ok_or_else(|| {
+                ServiceError::new(
+                    ServiceErrorCode::BudgetExceeded,
+                    "native lowering catalog exceeds metadata allowance",
+                )
+            })?;
+        let report = report_bytes_with_limit(
             &Report {
                 schema: if distribution_selection.is_some() {
                     "wow-service/native-input-report/7"
@@ -591,6 +602,7 @@ impl LocalProjectInput {
                 distribution_evidence: distribution_selection.as_ref(),
                 semantic_consumer_acceptance,
             },
+            report_limit,
             stop,
         )?;
         let receipt = NativeInputReceipt {
@@ -639,7 +651,7 @@ impl LocalProjectInput {
         let annotation_callable_bindings = NativeCallableBindings::build(
             &annotation_sidecars,
             &reference,
-            NATIVE_REPORT_LIMIT.saturating_sub(report.len()),
+            report_limit.saturating_sub(report.len()),
             1_000_000,
             stop,
         )
@@ -729,10 +741,6 @@ impl LocalProjectInput {
         cancelled(stop)?;
         Ok(assembled)
     }
-}
-
-fn report_bytes(value: &impl Serialize, stop: &AtomicBool) -> ServiceResult<Vec<u8>> {
-    report_bytes_with_limit(value, NATIVE_REPORT_LIMIT, stop)
 }
 
 pub(super) fn report_bytes_with_limit(

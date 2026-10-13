@@ -84,3 +84,9 @@ CI/workflows: root workspace CI; full package acceptance is separate
 ```
 
 Implementation still begins from E0 dependency order; the E6-B seam cannot activate before E2/E3 project publication, exact mapping profiles/fixtures, E6-A, and E6-B service gates are implemented and frozen.
+
+## Selected annotation Library byte handoff
+
+`ProjectLibraryBinding::qualify` admits only the exact analyzer Library snapshot already bound to a Project snapshot and selected profile. It retains bounded file descriptors, not source bodies. `file_view(path, text, stop)` checks exact path membership, UTF-8 byte length and SHA-256 before returning a borrowed `ProjectLibraryFileView`; `slice` exposes exact UTF-8 byte ranges. This proves the supplied bytes match the admitted Library descriptor, not producer custody or Reference authority.
+
+The annotation owner can pass its bounded final-emission callable observation to the existing Context ReferenceFacts route. Context matches the observation to the Reference signature and Project-qualified file, checks emitted type tokens and optional markers against those bytes, and carries the result through the existing Service/CLI output. Producer custody and downstream consumer/runtime semantics remain `NotEvaluated`; this is a selected handoff, not complete type closure or package acceptance.

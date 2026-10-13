@@ -181,3 +181,11 @@
 **Decision:** TOC/XML/load/project graph work cannot be added as incidental E0-D enhancements.
 
 **Consequence:** activating E2 updates manifest/workstreams/contracts/dependencies/tests explicitly.
+
+## Exact Library bytes remain a separate origin
+
+The existing native Library reconstruction can qualify its sole exact analyzer
+snapshot and expose a bounded borrowed full-file-verified byte view. Retained
+metadata contains no extra source bodies. This adds no filesystem resolver,
+Main registry entry, persistence layout, parser or platform authority; Context
+uses the view only to verify supplied emitted ranges and tokens.

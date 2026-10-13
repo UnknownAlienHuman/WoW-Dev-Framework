@@ -477,3 +477,23 @@ coordinates rather than host paths. A subject kind can be retained without an ID
 when no trustworthy ID is available. Reject invalid metadata; do not repair it
 or retry finalization with the rejected value disguised as Text.
 `ToolVersion` wire decoding enforces the same no-build-metadata policy as parsing.
+
+## Callable emission data
+
+`CallableFieldLowering::admit` and `CallableLoweringObservation::admit` admit one
+concrete immutable syntax observation used by `wow-annotations`, `wow-service`
+and `wow-context`. Private fields and bounded identifiers, digests, logical paths,
+ordered lanes/ordinals and nested byte ranges prevent unchecked construction.
+Fields retain the original member range, emitted type token and optional marker.
+The borrowed observation retains the exact native Reference/artifact/map binding.
+Core neither emits nor lowers syntax, performs owner lookups, reads bytes, nor
+attests producer custody. Native catalog IDs retain their owner grammar; they are
+not reminted as Core identity families. Serialization exposes data only.
+
+Profile and generation values are admitted through the existing `ProfileId` and `ReferenceGenerationId` family parsers. Reference-view and record digests use `ContentDigest<CanonicalResult>`; source and generated-file hashes use `ContentDigest<SourceContent>`. These checks validate typed identity and canonical spelling, while leaving producer custody unevaluated.
+
+Context must bind the observation to a genuine Reference signature and a
+Project-qualified exact Library file, verify emitted tokens/markers against its
+bytes, and charge the continuing operation budget. Missing emission is absent,
+never authoritative absence; supplied mismatch refuses. Emitted syntax leaves
+consumer semantics and runtime behavior `NotEvaluated`.

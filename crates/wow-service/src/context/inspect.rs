@@ -345,6 +345,22 @@ fn build(
             stop,
             |map, graph| {
                 if let Some(api) = reference_api {
+                    if api.annotation_lowering_selected() {
+                        let mut preparation = wow_context::prepare_primary_reference_facts(
+                            &universe, map, graph, stop,
+                        )
+                        .map_err(context_error)?;
+                        let origins =
+                            api.prepared_reference_origins(&mut preparation, graph, stop)?;
+                        let skeletons = wow_context::build_prepared_primary_reference_skeletons(
+                            preparation,
+                            &scope,
+                            &origins,
+                            stop,
+                        )
+                        .map_err(context_error)?;
+                        return deliver(&skeletons, None);
+                    }
                     let origins = api.reference_origins(map, graph, stop)?;
                     let skeletons = wow_context::build_primary_reference_skeletons(
                         &universe, map, graph, &scope, &origins, stop,

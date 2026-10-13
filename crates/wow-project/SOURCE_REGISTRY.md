@@ -292,3 +292,21 @@ It excludes analyzer object IDs unless required only in published snapshot bindi
 - no content without digest/generation;
 - no source handle accepted across generations by path alone;
 - no project source evidence upgraded to platform authority.
+
+## 18. Exact analyzer Library byte view
+
+`ProjectLibraryBinding::qualify(project, snapshot, max_metadata_bytes, stop)` admits the sole Library
+snapshot already named by the immutable Project analyzer binding. It checks the
+configured backend and profile-selected universe, exact snapshot identity and
+existing finite native inventory limits before copying only path/digest/length
+descriptors. `metadata_bytes` exposes their reservation; no source body is kept.
+`file_view(path, text, stop)` verifies exact full-file length and SHA-256 and returns
+a borrowed immutable `ProjectLibraryFileView`; `slice` checks range and UTF-8
+boundaries without parsing or execution. It retains exact Library/Project IDs and
+Project generation and cannot deserialize or use a public field constructor.
+
+The native Service requalifier and Context emitted-token validator use this seam.
+Library membership grants no Main handle, Reference/source provenance, annotation
+producer proof or runtime authority. Missing/mismatched file, cancellation and
+budget exhaustion return typed failure. Existing registry/persistence bytes and
+Main read behavior are unchanged.

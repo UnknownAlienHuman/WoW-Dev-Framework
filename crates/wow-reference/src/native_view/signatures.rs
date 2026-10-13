@@ -19,6 +19,13 @@ pub struct NativeCallableField {
     source_span: Span,
 }
 
+impl NativeCallableField {
+    /// Original raw member range; it may refer to an explicitly reused local table.
+    pub const fn source_span(&self) -> Span {
+        self.source_span
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct NativeCallableSignatureData {
     name: String,
@@ -67,6 +74,13 @@ impl NativeCallableSignature<'_> {
     }
     pub const fn source_id(&self) -> &str {
         self.source_id
+    }
+    /// Ordered original source fields, borrowed from the sealed signature catalog.
+    pub fn arguments(&self) -> &[NativeCallableField] {
+        &self.signature.arguments
+    }
+    pub fn returns(&self) -> &[NativeCallableField] {
+        &self.signature.returns
     }
     pub const fn type_resolution(&self) -> Option<&NativeCallableTypeResolution> {
         self.type_resolution

@@ -5,6 +5,7 @@
 //! verifiable artifacts. It does not infer runtime truth or repair omitted semantics.
 
 use std::fmt;
+use std::sync::{Arc, atomic::AtomicBool};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -12,7 +13,8 @@ use wow_core::canonical_json_bytes;
 use wow_reference::native_constants::ScalarError;
 
 use crate::artifact::AnnotationArtifact;
-use crate::native::{NativeLibrary, SourceLink};
+use crate::native::{CapturedCallable, NativeLibrary, SourceLink};
+mod lowering;
 
 pub const NATIVE_SOURCE_MAP_SCHEMA: &str = "wow-annotations/native-source-map/1";
 pub const NATIVE_PROJECTION_LOSS_SCHEMA: &str = "wow-annotations/native-projection-loss/1";
@@ -23,6 +25,7 @@ const MAX_RECORDS: usize = 262_144;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeSidecarErrorCode {
+    Cancelled,
     InvalidArtifact,
     InvalidIdentity,
     InvalidSourceMap,
@@ -931,6 +934,9 @@ pub struct NativeProjectionSidecars {
     source_map_bytes: Box<[u8]>,
     loss_report: NativeProjectionLossReport,
     loss_report_bytes: Box<[u8]>,
+    lowering_catalog: Arc<[CapturedCallable]>,
+    lowering_files: Box<[usize]>,
+    lowering_metadata_bytes: usize,
 }
 
 impl NativeProjectionSidecars {
@@ -938,6 +944,16 @@ impl NativeProjectionSidecars {
         artifact: &AnnotationArtifact,
         library: &NativeLibrary<'_>,
     ) -> NativeSidecarResult<Self> {
+        Self::from_library_cancellable(artifact, library, &AtomicBool::new(false))
+    }
+
+    /// Preserve existing sidecar bytes while validating private final-emission custody.
+    pub fn from_library_cancellable(
+        artifact: &AnnotationArtifact,
+        library: &NativeLibrary<'_>,
+        stop: &AtomicBool,
+    ) -> NativeSidecarResult<Self> {
+        lowering::preflight(library, stop)?;
         artifact.validate().map_err(|_| {
             NativeSidecarError::new(
                 NativeSidecarErrorCode::InvalidArtifact,
@@ -957,15 +973,53 @@ impl NativeProjectionSidecars {
             ));
         }
         let source_map = NativeSourceMap::build(artifact, library)?;
+        let (lowering_catalog, lowering_files) = lowering::validate(library, &source_map, stop)?;
+        let lowering_metadata_bytes = lowering_files
+            .len()
+            .checked_mul(2 * std::mem::size_of::<usize>())
+            .and_then(|bytes| bytes.checked_add(library.callable_lowering_metadata_bytes()))
+            .and_then(|bytes| {
+                bytes.checked_add(std::mem::size_of::<Arc<[CapturedCallable]>>() + 64)
+            })
+            .ok_or_else(|| {
+                NativeSidecarError::new(
+                    NativeSidecarErrorCode::InputLimit,
+                    "lowering reservation overflow",
+                )
+            })?;
         let source_map_bytes = source_map.canonical_bytes()?;
         let loss_report = NativeProjectionLossReport::build(artifact, library)?;
         let loss_report_bytes = loss_report.canonical_bytes()?;
+        lowering::checkpoint(stop)?;
         Ok(Self {
             source_map,
             source_map_bytes,
             loss_report,
             loss_report_bytes,
+            lowering_catalog,
+            lowering_files,
+            lowering_metadata_bytes,
         })
+    }
+
+    pub(crate) fn callable_lowerings(
+        &self,
+    ) -> impl Iterator<Item = (&CapturedCallable, &NativeSourceMapFile)> {
+        self.lowering_catalog
+            .iter()
+            .zip(self.lowering_files.iter())
+            .map(|(row, index)| (row, &self.source_map.files()[*index]))
+    }
+
+    /// Charge skipped catalog custody and index/clone slack in addition to sidecar wire bytes.
+    /// Token/source/file text is not copied by sidecar retention or Clone.
+    pub const fn callable_lowering_metadata_bytes(&self) -> usize {
+        self.lowering_metadata_bytes
+    }
+
+    /// Retained lowering bytes omitted from source-map and loss-report serialization.
+    pub const fn metadata_bytes(&self) -> usize {
+        self.lowering_metadata_bytes
     }
 
     #[must_use]

@@ -12,6 +12,7 @@ use std::fmt;
 
 mod callbacks;
 mod mappings;
+pub(crate) use mappings::RenderedTypeToken;
 pub use mappings::{MemberPosition, RenderedMember};
 
 const MAX_NAME_BYTES: usize = 1024;
@@ -415,11 +416,19 @@ impl Renderer {
                         }
                         let start = output.bytes.len();
                         output.push(&argument.name)?;
-                        if argument.nilable || argument.default_text.is_some() {
+                        let optional_marker = if argument.nilable || argument.default_text.is_some()
+                        {
+                            let marker_start = output.bytes.len();
                             output.push("?")?;
-                        }
+                            Some((marker_start, output.bytes.len()))
+                        } else {
+                            None
+                        };
                         output.push(": ")?;
-                        output.push(&self.lower_type(&argument.type_name)?)?;
+                        let lowered_type = self.lower_type(&argument.type_name)?;
+                        let type_start = output.bytes.len();
+                        output.push(&lowered_type)?;
+                        let type_end = output.bytes.len();
                         if let Some(default) = &argument.default_text {
                             safe_text(default)?;
                         }
@@ -428,6 +437,13 @@ impl Renderer {
                             index,
                             start,
                             end: output.bytes.len(),
+                            lowering: RenderedTypeToken {
+                                start: type_start,
+                                end: type_end,
+                                optional_marker,
+                                lowered_type,
+                                optional: argument.nilable || argument.default_text.is_some(),
+                            },
                         });
                     }
                     output.push(")")?;
@@ -516,34 +532,55 @@ impl Renderer {
         out: &mut Output,
         position: Position,
         field: &Field,
-    ) -> Result<(), RenderError> {
+    ) -> Result<RenderedTypeToken, RenderError> {
         let type_name = self.field_type(field)?;
         let optional = field.nilable || field.default_text.is_some();
         let name = if field.variadic { "..." } else { &field.name };
+        let type_start;
+        let type_end;
+        let optional_marker;
         match position {
             Position::Param => {
                 out.push("---@param ")?;
                 out.push(name)?;
                 if optional {
+                    let marker_start = out.bytes.len();
                     out.push("?")?;
+                    optional_marker = Some((marker_start, out.bytes.len()));
+                } else {
+                    optional_marker = None;
                 }
                 out.push(" ")?;
+                type_start = out.bytes.len();
                 out.push(&type_name)?;
+                type_end = out.bytes.len();
             }
             Position::Field => {
                 out.push("---@field ")?;
                 out.push(name)?;
                 out.push(" ")?;
+                type_start = out.bytes.len();
                 out.push(&type_name)?;
+                type_end = out.bytes.len();
                 if optional {
+                    let marker_start = out.bytes.len();
                     out.push("?")?;
+                    optional_marker = Some((marker_start, out.bytes.len()));
+                } else {
+                    optional_marker = None;
                 }
             }
             Position::Return => {
                 out.push("---@return ")?;
+                type_start = out.bytes.len();
                 out.push(&type_name)?;
+                type_end = out.bytes.len();
                 if optional {
+                    let marker_start = out.bytes.len();
                     out.push("?")?;
+                    optional_marker = Some((marker_start, out.bytes.len()));
+                } else {
+                    optional_marker = None;
                 }
                 out.push(" ")?;
                 out.push(name)?;
@@ -558,7 +595,13 @@ impl Renderer {
             out.push(" Default = ")?;
             out.push(default)?;
         }
-        Ok(())
+        Ok(RenderedTypeToken {
+            start: type_start,
+            end: type_end,
+            optional_marker,
+            lowered_type: type_name,
+            optional,
+        })
     }
 }
 

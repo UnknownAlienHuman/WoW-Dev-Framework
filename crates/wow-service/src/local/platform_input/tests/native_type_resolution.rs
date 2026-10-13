@@ -168,6 +168,7 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
         graph::GraphBuildRequest,
         live_project::{LiveProjectPublishRequest, LiveProjectStore, publish_local_project},
     };
+    use wow_core::CallableLoweringLane;
     use wow_project::disk::ProjectDiskFile;
 
     let export = PathBuf::from(
@@ -251,6 +252,110 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
     };
     let original_signature =
         serde_json::to_value(rebuilt.reference().callable_signature(record, &stop)?)?;
+    let lowering = rebuilt
+        .callable_bindings()
+        .callable_lowering(record, &stop)
+        .map_err(|error| format!("owner lowering acquisition failed: {error:?}"))?
+        .ok_or("retained native callable lowering missing")?;
+    let owner_lowering: Value = serde_json::to_value(lowering)?;
+    assert_eq!(
+        owner_lowering["schema"],
+        "wow-core/callable-lowering-observation/1"
+    );
+    assert_eq!(
+        lowering.profile_id(),
+        rebuilt.profile().profile_id().as_str()
+    );
+    assert_eq!(lowering.reference_generation(), reference.generation_id());
+    assert_eq!(lowering.reference_view_digest(), reference.self_digest());
+    assert_eq!(lowering.record_key(), record.key());
+    assert_eq!(
+        lowering.record_digest(),
+        original_signature["record_digest"]
+    );
+    assert_eq!(lowering.lowering_syntax(), "emitted_analysis_only");
+    assert_eq!(lowering.consumer_semantics(), "NotEvaluated");
+    let annotation_file = rebuilt
+        .annotation_files()
+        .iter()
+        .find(|file| file.path == lowering.generated_path())
+        .ok_or("lowering generated annotation file")?;
+    assert_eq!(annotation_file.sha256, lowering.generated_sha256());
+    let binding = rebuilt.library_binding();
+    let verified_file = binding.file_view(&annotation_file.path, &annotation_file.text, &stop)?;
+    assert_eq!(verified_file.path(), lowering.generated_path());
+    assert_eq!(verified_file.sha256(), lowering.generated_sha256());
+    assert_eq!(lowering.fields().len(), 2);
+    let byte_range = |span: wow_core::SourceSpan| -> TestResult<std::ops::Range<usize>> {
+        Ok(
+            usize::try_from(span.byte_start().ok_or("missing byte start")?)?
+                ..usize::try_from(span.byte_end().ok_or("missing byte end")?)?,
+        )
+    };
+    let parameter = &lowering.fields()[0];
+    assert_eq!(parameter.lane(), CallableLoweringLane::Parameter);
+    assert_eq!(parameter.ordinal(), 0);
+    assert_eq!(parameter.lowered_type(), "boolean");
+    assert!(parameter.optional());
+    let parameter_optional_marker = byte_range(
+        parameter
+            .optional_marker_span()
+            .ok_or("parameter optional marker span")?,
+    )?;
+    assert_eq!(
+        verified_file.slice(
+            parameter_optional_marker.start,
+            parameter_optional_marker.end,
+            &stop,
+        )?,
+        "?"
+    );
+    let parameter_token = byte_range(parameter.type_token_span())?;
+    assert_eq!(
+        verified_file.slice(parameter_token.start, parameter_token.end, &stop)?,
+        "boolean"
+    );
+    let returned_lowering = &lowering.fields()[1];
+    assert_eq!(returned_lowering.lane(), CallableLoweringLane::Return);
+    assert_eq!(returned_lowering.ordinal(), 0);
+    // The fixture explicitly corrects number -> FixtureRecord before emission;
+    // the original Reference source signature intentionally keeps number.
+    assert_eq!(returned_lowering.lowered_type(), "FixtureRecord");
+    assert!(returned_lowering.optional());
+    let return_optional_marker = byte_range(
+        returned_lowering
+            .optional_marker_span()
+            .ok_or("return optional marker span")?,
+    )?;
+    assert_eq!(
+        verified_file.slice(
+            return_optional_marker.start,
+            return_optional_marker.end,
+            &stop,
+        )?,
+        "?"
+    );
+    let return_token = byte_range(returned_lowering.type_token_span())?;
+    assert_eq!(
+        verified_file.slice(return_token.start, return_token.end, &stop)?,
+        "FixtureRecord"
+    );
+    let mut corrupted_annotation = annotation_file.text.clone();
+    corrupted_annotation.replace_range(parameter_token.clone(), &"x".repeat(parameter_token.len()));
+    assert!(matches!(
+        binding.file_view(&annotation_file.path, &corrupted_annotation, &stop),
+        Err(error) if error.code() == wow_project::ProjectErrorCode::FileDigestMismatch
+    ));
+    assert!(matches!(
+        binding.file_view(&annotation_file.path, &annotation_file.text, &AtomicBool::new(true)),
+        Err(error) if error.code() == wow_project::ProjectErrorCode::AnalysisCancelled
+    ));
+    assert!(matches!(
+        rebuilt
+            .callable_bindings()
+            .callable_lowering(record, &AtomicBool::new(true)),
+        Err(wow_annotations::reference_links::NativeCallableBindingError::Cancelled)
+    ));
     assert_eq!(
         assert_transport_signature(rebuilt.reference().callable_signature(record, &stop)?)?,
         original_signature
@@ -352,6 +457,11 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
             require_one_profile(envelope, TYPE_PROFILE)?,
             &type_signature
         );
+        assert_eq!(
+            require_one_profile(envelope, "wow-core/callable-lowering-observation/1")?,
+            &owner_lowering,
+            "Primary ReferenceFacts preserves the exact owner lowering observation"
+        );
         assert!(
             contains_value(envelope, &original_signature["signature"]),
             "original source signature remains unchanged"
@@ -407,6 +517,11 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
     assert_eq!(
         skeletons, pack["core"]["skeletons"],
         "Markdown preserves the full typed ReferenceFacts data"
+    );
+    assert_eq!(
+        require_one_profile(&skeletons, "wow-core/callable-lowering-observation/1")?,
+        &owner_lowering,
+        "Markdown preserves the exact owner lowering observation"
     );
 
     let work = build_json["payload"]["operation_budget_usage"]["work_reserved"]
@@ -464,6 +579,10 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
         (
             "owner-type-signature.json",
             wow_core::canonical_json_bytes(&type_signature)?,
+        ),
+        (
+            "owner-callable-lowering.json",
+            wow_core::canonical_json_bytes(&owner_lowering)?,
         ),
         (
             "owner-reference-observation.json",

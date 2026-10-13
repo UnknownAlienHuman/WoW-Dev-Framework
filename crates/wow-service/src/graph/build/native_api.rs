@@ -11,6 +11,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 use std::sync::atomic::AtomicBool;
+use wow_annotations::reference_links::NativeCallableBindingError;
 use wow_core::{
     CanonicalResult, ClaimScope, ContentDigest, EvidenceConfidence, EvidenceId, EvidenceRecord,
     GenerationContext, ProducerId, ProvenanceClass, SourceContent, SourceHandle,
@@ -171,6 +172,20 @@ impl NativeApiProvenance {
         self.reference_origins_prepared(map, graph, None, stop)
     }
 
+    pub(crate) fn annotation_lowering_selected(&self) -> bool {
+        self.library.reference().type_resolution_profile().is_some()
+    }
+
+    pub(crate) fn prepared_reference_origins<'a>(
+        &'a self,
+        primary: &mut wow_context::PrimaryReferencePreparation<'_, 'a>,
+        graph: &wow_graph::GraphPartitionRead<'a>,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Vec<wow_context::ReferenceOriginInput<'a>>> {
+        let (map, mut preparation) = primary.reference_origin_preparation();
+        self.reference_origins_prepared(map, graph, Some(&mut preparation), stop)
+    }
+
     pub(crate) fn combined_reference_origins<'a>(
         &'a self,
         map: &mut wow_context::CombinedContextMap<'a, '_>,
@@ -219,6 +234,19 @@ impl NativeApiProvenance {
             view.nodes().len()
         };
         let mut origins = Vec::with_capacity(capacity);
+        let selected_lowering = self.annotation_lowering_selected();
+        let file_capacity = if selected_lowering {
+            self.library.annotation_files().len().min(capacity)
+        } else {
+            0
+        };
+        if let Some(preparation) = preparation.as_mut() {
+            preparation
+                .reserve_library_views(file_capacity, stop)
+                .map_err(crate::context::context_error)?;
+        }
+        let mut files: Vec<wow_project::ProjectLibraryFileView<'a>> =
+            Vec::with_capacity(file_capacity);
         for endpoint in self.endpoints.values() {
             checkpoint(stop)?;
             if let Some(preparation) = preparation.as_mut() {
@@ -288,18 +316,94 @@ impl NativeApiProvenance {
                         NativeErrorCode::Limit => exhausted(),
                         _ => incompatible(),
                     })?;
-                origins.push(
-                    wow_context::ReferenceOriginInput::new(
-                        &endpoint.assertion,
-                        self.source_handles
-                            .get(&endpoint.source_handle_id)
-                            .ok_or_else(incompatible)?,
-                        self.evidence
-                            .get(&endpoint.evidence_id)
-                            .ok_or_else(incompatible)?,
-                    )
-                    .with_signature(signature),
-                );
+                let mut origin = wow_context::ReferenceOriginInput::new(
+                    &endpoint.assertion,
+                    self.source_handles
+                        .get(&endpoint.source_handle_id)
+                        .ok_or_else(incompatible)?,
+                    self.evidence
+                        .get(&endpoint.evidence_id)
+                        .ok_or_else(incompatible)?,
+                )
+                .with_signature(signature);
+                if selected_lowering {
+                    if let Some(preparation) = preparation.as_mut() {
+                        preparation
+                            .reserve_signature_read(record, stop)
+                            .map_err(crate::context::context_error)?;
+                    }
+                    let observation = self
+                        .library
+                        .callable_bindings()
+                        .callable_lowering(record, stop)
+                        .map_err(|error| match error {
+                            NativeCallableBindingError::Cancelled => ServiceError::new(
+                                ServiceErrorCode::Cancelled,
+                                "annotation lowering acquisition cancelled",
+                            ),
+                            NativeCallableBindingError::Limit => exhausted(),
+                            NativeCallableBindingError::IncompatibleInput => incompatible(),
+                        })?;
+                    if let Some(observation) = observation {
+                        if let Some(preparation) = preparation.as_mut() {
+                            preparation
+                                .reserve_library_verification(0, files.len(), stop)
+                                .map_err(crate::context::context_error)?;
+                        }
+                        let file = if let Some(file) = files
+                            .iter()
+                            .copied()
+                            .find(|file| file.path() == observation.generated_path())
+                        {
+                            file
+                        } else {
+                            if let Some(preparation) = preparation.as_mut() {
+                                preparation
+                                    .reserve_library_verification(
+                                        0,
+                                        self.library.annotation_files().len(),
+                                        stop,
+                                    )
+                                    .map_err(crate::context::context_error)?;
+                            }
+                            let source = self
+                                .library
+                                .annotation_files()
+                                .iter()
+                                .find(|file| file.path == observation.generated_path())
+                                .ok_or_else(incompatible)?;
+                            if let Some(preparation) = preparation.as_mut() {
+                                preparation
+                                    .reserve_library_verification(
+                                        source.text.len(),
+                                        self.library.annotation_files().len(),
+                                        stop,
+                                    )
+                                    .map_err(crate::context::context_error)?;
+                            }
+                            let verified = self
+                                .library
+                                .library_binding()
+                                .file_view(&source.path, &source.text, stop)
+                                .map_err(|error| match error.code() {
+                                    wow_project::ProjectErrorCode::AnalysisCancelled => {
+                                        ServiceError::new(
+                                            ServiceErrorCode::Cancelled,
+                                            "Library byte verification cancelled",
+                                        )
+                                    }
+                                    _ => incompatible(),
+                                })?;
+                            if files.len() == file_capacity {
+                                return Err(exhausted());
+                            }
+                            files.push(verified);
+                            verified
+                        };
+                        origin = origin.with_annotation_lowering(observation, file);
+                    }
+                }
+                origins.push(origin);
             }
         }
         Ok(origins)

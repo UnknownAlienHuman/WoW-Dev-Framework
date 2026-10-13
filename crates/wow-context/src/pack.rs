@@ -491,6 +491,45 @@ fn build_context_semantic_pack_with_selection<'m, 'a>(
     origins: Option<&[ReferenceOriginInput<'a>]>,
     stop: &AtomicBool,
 ) -> ContextResult<ContextSemanticPack<'m, 'a>> {
+    build_pack_with_reference_preparation(
+        universe, map, graph, root, selection, origins, None, stop,
+    )
+}
+
+/// Continue selected ReferenceFacts acquisition through pack construction and rendering.
+pub fn build_prepared_primary_reference_pack<'m, 'a>(
+    preparation: crate::PrimaryReferencePreparation<'m, 'a>,
+    root: &'m L0Scope,
+    origins: &[ReferenceOriginInput<'a>],
+    stop: &AtomicBool,
+) -> ContextResult<ContextSemanticPack<'m, 'a>> {
+    build_pack_with_reference_preparation(
+        preparation.universe,
+        preparation.map,
+        preparation.graph,
+        root,
+        (
+            SkeletonLevel::L1,
+            PrimaryL0Profile::ContainersV1,
+            PrimaryL1Profile::ReferenceFactsV1,
+        ),
+        Some(origins),
+        Some(preparation),
+        stop,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_pack_with_reference_preparation<'m, 'a>(
+    universe: &'m ContextUniverseSet<'a>,
+    map: &'m ProjectMap<'a>,
+    graph: &GraphPartitionRead<'a>,
+    root: &'m L0Scope,
+    selection: (SkeletonLevel, PrimaryL0Profile, PrimaryL1Profile),
+    origins: Option<&[ReferenceOriginInput<'a>]>,
+    preparation: Option<crate::PrimaryReferencePreparation<'m, 'a>>,
+    stop: &AtomicBool,
+) -> ContextResult<ContextSemanticPack<'m, 'a>> {
     let (level, profile, l1_profile) = selection;
     checkpoint(stop)?;
     validate_profiles(universe.limits.max_metadata_bytes, stop)?;
@@ -510,9 +549,13 @@ fn build_context_semantic_pack_with_selection<'m, 'a>(
             }
             let origins = origins
                 .ok_or_else(|| ContextError::new(ContextErrorCode::MissingRequiredCustody))?;
-            build_primary_reference_skeletons_with_budget(
-                universe, map, graph, root, origins, stop,
-            )?
+            if let Some(preparation) = preparation {
+                crate::skeleton::build_prepared_with_budget(preparation, root, origins, stop)?
+            } else {
+                build_primary_reference_skeletons_with_budget(
+                    universe, map, graph, root, origins, stop,
+                )?
+            }
         }
     };
     let request_core = PackRequestCore {

@@ -6,6 +6,7 @@
 //! database, parser, graph, search, editor, or WoW-client behavior.
 
 pub mod budget;
+pub mod callable_lowering;
 pub mod canonical;
 pub mod contract;
 pub mod coverage;
@@ -24,6 +25,9 @@ pub mod source;
 pub use budget::{
     Budget, BudgetLimits, BudgetUsage, TruncationEntry, TruncationState, accumulate_budget_usage,
     classify_truncation, validate_budget,
+};
+pub use callable_lowering::{
+    CallableFieldLowering, CallableLoweringLane, CallableLoweringObservation,
 };
 pub use canonical::{
     CANONICALIZATION_VERSION, canonical_json_bytes, canonical_json_string, domain_separated_digest,

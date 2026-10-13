@@ -365,3 +365,8 @@ or otherwise valid IDs contain no confidential data. Callers must supply safe
 structured metadata, not source excerpts, credentials or host information. The
 focused cases in `tests/e0_error_conformance.rs` do not certify generic secrecy,
 source-owner provenance, code/category policy or the entire E0-A/R0 gate.
+
+Callable emission admission uses fixed safe `identity`, `digest`, `path`, `span`
+and member-shape coordinates. It does not echo source or emitted tokens into
+errors. Shape failure cannot attest owner custody; downstream identity/token
+mismatch remains a Context support failure rather than a missing observation.

@@ -23,7 +23,9 @@ configured Reference binding, original support and load/source custody:
   retaining literal state keys, plural TOC declarations, scope and ambiguity.
 - [Selected native Reference-facts L1 inspect/build](e3/NATIVE_PRIMARY_REFERENCE_FACTS.md),
   retaining original records, normalized ordered source signatures and exact support;
-  source type resolution and annotation display lowering remain unevaluated.
+  explicit corrections additionally retain the Reference-owned exact-name overlay
+  and verified emitted callable type/optional-marker observations from the existing
+  annotation owner; broader type closure and consumer semantics remain unevaluated.
 - [Exact Reference-root L0 navigation](e3/NATIVE_REFERENCE_ROOT_L0.md), followed
   by original ReferenceFacts L1 in combined Both Inspect/Build on one map/root/Budget.
 - [Native platform universe/map/inspect through service and CLI](e3/NATIVE_PLATFORM_MAP.md),

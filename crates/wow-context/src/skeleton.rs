@@ -14,9 +14,16 @@ use wow_project::{
 };
 
 use crate::budget::{Budget, canonical, checkpoint, exhausted, identity};
+
+mod reference_preparation;
 use crate::{
     ContextError, ContextErrorCode, ContextResult, ContextUniverseSet, ProjectMap, ProjectMapState,
     ProjectMapView, open_project_map_view,
+};
+pub(crate) use reference_preparation::build_prepared_with_budget;
+pub use reference_preparation::{
+    PrimaryReferencePreparation, build_prepared_primary_reference_skeletons,
+    prepare_primary_reference_facts,
 };
 
 pub const PRIMARY_L0_PROFILE: &str = "wow-context/primary-l0/1";

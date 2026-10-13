@@ -848,3 +848,15 @@ Its private fields bound total raw bytes, simultaneously nested containers,
 tokens and raw string-interior bytes. It has no default or deserializer. Exact
 counting rules, implementation ceilings and admission order are defined in
 [`JSON_ADMISSION.md`](JSON_ADMISSION.md#limits). No E0 wire field is added.
+
+## 15. Callable emission observation
+
+`CallableLoweringLane`, `CallableFieldLowering` and borrowed
+`CallableLoweringObservation` are one concrete cross-owner data primitive.
+The schema `wow-core/callable-lowering-observation/1` records original and
+generated ranges, ordered parameter/return ordinals, emitted type/optional marker,
+and bounded exact native Reference, source, artifact and map descriptors.
+It has no deserializer or unchecked public identity fields. Admission checks
+shape and range nesting, not owner authority, original or generated source bytes,
+lowering correctness, consumer semantics or runtime. Its addition changes no E0
+envelope, canonical hash input or existing owner persistence layout.

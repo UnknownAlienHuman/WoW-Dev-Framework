@@ -1,13 +1,16 @@
 //! Native declaration-origin bindings retained before the producer views move.
 //! These are source observations, not accepted graph receipts or runtime facts.
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use wow_core::{CallableFieldLowering, CallableLoweringObservation, SourceSpan};
 
 use wow_reference::native_view::{
     NATIVE_API_PARTITION, NATIVE_VIEW_AUTHORITY_PROFILE, NATIVE_VIEW_PROFILE, NativeViewProjection,
     callable_origin_id,
 };
-use wow_reference::{ReferenceRecordKind, ReferenceViewError};
+use wow_reference::{ReferenceRecord, ReferenceRecordKind, ReferenceViewError};
+mod lowering;
 
 use crate::sidecars::{
     NativeProjectionSidecars, NativeSidecarSource, NativeSidecarSpan, NativeSourceMapEntry,
@@ -48,6 +51,10 @@ pub struct NativeCallableBinding {
     record_digest: Box<str>,
     status: NativeCallableReferenceStatus,
     ambiguous_origin: bool,
+    lowering: Option<Arc<[CallableFieldLowering]>>,
+    record_digest_bytes: [u8; 32],
+    record_bytes: usize,
+    record_steps: usize,
 }
 
 impl NativeCallableBinding {
@@ -107,6 +114,8 @@ pub struct NativeCallableBindings {
     reference_digest: Box<str>,
     revision: Box<str>,
     bindings: Box<[NativeCallableBinding]>,
+    lowering_index: Box<[usize]>,
+    lowering_metadata_bytes: usize,
     metadata_bytes: usize,
     work: usize,
 }
@@ -284,7 +293,23 @@ impl NativeCallableBindings {
             origins
                 .entry(key)
                 .or_insert_with(Vec::new)
-                .push((record, digest, status));
+                .push((record, digest, status, bytes, steps));
+        }
+        let mut captured = BTreeMap::new();
+        let mut lowering_metadata_bytes = 0usize;
+        for (row, file) in sidecars.callable_lowerings() {
+            budget.consume(
+                256,
+                row.fields
+                    .len()
+                    .checked_add(1)
+                    .ok_or(NativeCallableBindingError::Limit)?,
+            )?;
+            let start = row.declaration_span.byte_start().ok_or(invalid)?;
+            let end = row.declaration_span.byte_end().ok_or(invalid)?;
+            if captured.insert((file.path(), start, end), row).is_some() {
+                return Err(invalid);
+            }
         }
         let mut bindings = Vec::new();
         for file in map.files() {
@@ -304,7 +329,7 @@ impl NativeCallableBindings {
                 let Some(candidates) = origins.get(&key) else {
                     continue;
                 };
-                for (record, digest, status) in candidates {
+                for (record, digest, status, record_bytes, record_steps) in candidates {
                     let id = &record.source_ids()[0];
                     budget.charge(
                         2 * std::mem::size_of::<NativeCallableBinding>()
@@ -317,6 +342,70 @@ impl NativeCallableBindings {
                             + record.key().len()
                             + digest.len(),
                     )?;
+                    let lowering = if *status == NativeCallableReferenceStatus::Found
+                        && candidates.len() == 1
+                    {
+                        captured
+                            .get(&(
+                                file.path(),
+                                mapping.generated().start(),
+                                mapping.generated().end(),
+                            ))
+                            .map(|row| {
+                                if row.source_path.as_ref() != source.path()
+                                    || row.source_sha256.as_ref() != source.sha256()
+                                    || row.source_span.byte_start() != Some(source.span().start())
+                                    || row.source_span.byte_end() != Some(source.span().end())
+                                {
+                                    return Err(invalid);
+                                }
+                                // The native report has public fields; qualify this new lookup
+                                // against the Reference owner's sealed original signature catalog.
+                                let scratch = record_bytes
+                                    .checked_mul(4)
+                                    .ok_or(NativeCallableBindingError::Limit)?;
+                                budget.consume(
+                                    scratch,
+                                    scratch
+                                        .checked_add(*record_steps)
+                                        .ok_or(NativeCallableBindingError::Limit)?,
+                                )?;
+                                let signature = reference
+                                    .callable_signature(record, stop)
+                                    .map_err(|error| match error.code {
+                                        wow_reference::native::NativeErrorCode::Cancelled => {
+                                            NativeCallableBindingError::Cancelled
+                                        }
+                                        wow_reference::native::NativeErrorCode::Limit => {
+                                            NativeCallableBindingError::Limit
+                                        }
+                                        _ => invalid,
+                                    })?;
+                                if signature.reference_generation()
+                                    != reference.view.generation_id()
+                                    || signature.reference_view_digest()
+                                        != reference.view.self_digest()
+                                    || signature.record_key() != record.key()
+                                    || signature.record_digest() != digest
+                                    || signature.source_id() != id.as_ref()
+                                {
+                                    return Err(invalid);
+                                }
+                                // This Arc shares the field allocation owned and charged by
+                                // the source library/sidecar path. Count only this retained
+                                // handle as a subset of the already reserved binding record;
+                                // do not charge field tokens or spans twice.
+                                let retained_handle =
+                                    std::mem::size_of::<Arc<[CallableFieldLowering]>>();
+                                lowering_metadata_bytes = lowering_metadata_bytes
+                                    .checked_add(retained_handle)
+                                    .ok_or(NativeCallableBindingError::Limit)?;
+                                Ok(Arc::clone(&row.fields))
+                            })
+                            .transpose()?
+                    } else {
+                        None
+                    };
                     bindings.push(NativeCallableBinding {
                         generated_path: file.path().into(),
                         generated_sha256: file.sha256().into(),
@@ -328,10 +417,37 @@ impl NativeCallableBindings {
                         record_digest: digest.clone().into_boxed_str(),
                         status: *status,
                         ambiguous_origin: candidates.len() > 1,
+                        lowering,
+                        record_digest_bytes: lowering::digest_bytes(digest)?,
+                        record_bytes: *record_bytes,
+                        record_steps: *record_steps,
                     });
                 }
             }
         }
+        let count = bindings
+            .iter()
+            .filter(|binding| binding.lowering.is_some())
+            .count();
+        let bytes = count
+            .checked_mul(2 * std::mem::size_of::<usize>())
+            .ok_or(NativeCallableBindingError::Limit)?;
+        let steps = count
+            .checked_mul(count.max(1).ilog2() as usize + 2)
+            .and_then(|steps| steps.checked_add(bindings.len()))
+            .ok_or(NativeCallableBindingError::Limit)?;
+        budget.consume(bytes, steps)?;
+        lowering_metadata_bytes = lowering_metadata_bytes
+            .checked_add(bytes)
+            .ok_or(NativeCallableBindingError::Limit)?;
+        let mut lowering_index = Vec::with_capacity(count);
+        for (index, binding) in bindings.iter().enumerate() {
+            budget.charge(0)?;
+            if binding.lowering.is_some() {
+                lowering_index.push(index);
+            }
+        }
+        lowering_index.sort_by(|left, right| bindings[*left].key().cmp(bindings[*right].key()));
         budget.charge(
             std::mem::size_of::<Self>()
                 + map.source_map_id().len()
@@ -349,6 +465,8 @@ impl NativeCallableBindings {
             reference_digest: reference.view.self_digest().into(),
             revision: map.revision().into(),
             bindings: bindings.into_boxed_slice(),
+            lowering_index: lowering_index.into_boxed_slice(),
+            lowering_metadata_bytes,
             metadata_bytes: budget.bytes,
             work: budget.work,
         })
@@ -381,6 +499,85 @@ impl NativeCallableBindings {
     #[must_use]
     pub fn bindings(&self) -> &[NativeCallableBinding] {
         &self.bindings
+    }
+
+    /// Retained lowering subset; already included in metadata_bytes(), do not add it twice.
+    pub const fn callable_lowering_metadata_bytes(&self) -> usize {
+        self.lowering_metadata_bytes
+    }
+
+    /// Unique Found/nonambiguous original record only. Tokens and source remain borrowed;
+    /// Core family admission may use bounded identity scratch on a successful read.
+    /// Missing custody is None; a same-key mismatch or duplicate generated binding is an error.
+    pub fn callable_lowering(
+        &self,
+        record: &ReferenceRecord,
+        stop: &AtomicBool,
+    ) -> Result<Option<CallableLoweringObservation<'_>>, NativeCallableBindingError> {
+        if stop.load(Ordering::Acquire) {
+            return Err(NativeCallableBindingError::Cancelled);
+        }
+        let invalid = NativeCallableBindingError::IncompatibleInput;
+        if record.kind() != ReferenceRecordKind::Api
+            || record.key().len() > 1024
+            || record.payload().len() > 65_536
+        {
+            return Err(invalid);
+        }
+        let index = self
+            .lowering_index
+            .partition_point(|index| self.bindings[*index].key() < record.key());
+        let Some(&binding_index) = self.lowering_index.get(index) else {
+            return Ok(None);
+        };
+        let binding = &self.bindings[binding_index];
+        if binding.key() != record.key() {
+            return Ok(None);
+        }
+        if self
+            .lowering_index
+            .get(index + 1)
+            .is_some_and(|index| self.bindings[*index].key() == record.key())
+            || binding.status != NativeCallableReferenceStatus::Found
+            || binding.ambiguous_origin
+            || record.payload().len() > binding.record_bytes
+            || record.source_ids().len() != 1
+            || record.source_ids()[0].as_ref() != binding.source_id()
+        {
+            return Err(invalid);
+        }
+        lowering::verify_record(
+            record,
+            &binding.record_digest_bytes,
+            binding.record_bytes,
+            binding.record_steps,
+            stop,
+        )?;
+        let fields = binding.lowering.as_deref().ok_or(invalid)?;
+        let declaration =
+            SourceSpan::byte_range(binding.generated.start(), binding.generated.end())
+                .map_err(|_| invalid)?;
+        let result = CallableLoweringObservation::admit(
+            &self.profile_id,
+            &self.reference_generation,
+            &self.reference_digest,
+            binding.key(),
+            binding.record_digest(),
+            binding.source_id(),
+            binding.source.path(),
+            binding.source.sha256(),
+            &self.annotation_artifact_id,
+            &self.source_map_id,
+            binding.generated_path(),
+            binding.generated_sha256(),
+            declaration,
+            fields,
+        )
+        .map_err(|_| invalid)?;
+        if stop.load(Ordering::Acquire) {
+            return Err(NativeCallableBindingError::Cancelled);
+        }
+        Ok(Some(result))
     }
 
     /// Resolve an already selected declaration mapping into its unique native binding.
