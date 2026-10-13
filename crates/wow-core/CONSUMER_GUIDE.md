@@ -368,8 +368,10 @@ construction is not equivalent to validated admission.
 Use `validate_evidence_derivation_graph` on the complete retained evidence registry
 before consuming derivation authority. It validates one context, every input link,
 confidence ceilings, transitive scenario restrictions, acyclicity and all record
-IDs. The check-result envelope uses the same operation. Single-record validation
-cannot resolve missing source, coverage or evidence records on its own.
+IDs. Pass any finite iterator of borrowed records, such as a slice or
+`BTreeMap::values()`; validation sorts by exact evidence ID, independent of
+iteration order. The check-result envelope uses the same operation. Single-record
+validation cannot resolve missing source, coverage or evidence records on its own.
 
 Possible/Candidate parents cannot support a stronger child; runtime ancestry cannot
 be relabeled into a platform contract. Independent components retain their own

@@ -256,8 +256,7 @@ impl GraphEvidenceCatalog {
         }
         // Reuse the core validator for IDs, sorted references, confidence ceilings,
         // cycles and runtime-ancestry restrictions instead of a second DAG policy.
-        let records: Vec<_> = evidence.values().cloned().collect();
-        wow_core::validate_evidence_derivation_graph(&records).map_err(|_| invalid())?;
+        wow_core::validate_evidence_derivation_graph(evidence.values()).map_err(|_| invalid())?;
         checkpoint(stop)?;
         let digest = match observations {
             Some(support) => {

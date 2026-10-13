@@ -878,6 +878,7 @@
     {
       "id": "validate_evidence_derivation_graph",
       "status": "required",
+      "input": "complete one-context registry as a finite iterator of borrowed EvidenceRecord values; order is not significant",
       "doc": "OPERATIONS.md#validate_evidence_derivation_graph",
       "errors": [
         "evidence_context_mismatch",

@@ -514,7 +514,8 @@ Required tests: `EVIDENCE-ID-001..008`.
 
 ```text
 input:
-  complete evidence registry for one context
+  complete evidence registry for one context, supplied as a finite iterator
+  of borrowed EvidenceRecord values; iteration order is not significant
 
 success:
   acyclic derivation graph

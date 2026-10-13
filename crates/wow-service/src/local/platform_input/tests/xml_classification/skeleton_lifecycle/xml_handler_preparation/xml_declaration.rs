@@ -4,6 +4,7 @@ use super::*;
 const WORK: &str = ".codex/work/platform-xml-declaration-native-20261012";
 const MAX_DECLARATIONS: usize = 4096;
 
+mod common_path;
 mod consumer;
 
 #[test]

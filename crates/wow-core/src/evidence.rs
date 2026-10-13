@@ -517,7 +517,12 @@ pub fn derive_evidence_id(record: &EvidenceRecord) -> CoreResult<EvidenceId> {
 /// No output may strengthen an input's confidence or turn runtime-scenario
 /// ancestry into a platform contract. Local shape and graph errors precede ID
 /// verification; every record ID is nevertheless verified before success.
-pub fn validate_evidence_derivation_graph(records: &[EvidenceRecord]) -> CoreResult<()> {
+///
+/// The caller supplies the complete registry as a finite iterator of borrowed
+/// records. Iteration order does not affect deterministic ID-sorted validation.
+pub fn validate_evidence_derivation_graph<'a>(
+    records: impl IntoIterator<Item = &'a EvidenceRecord>,
+) -> CoreResult<()> {
     derivation::validate(records)
 }
 
