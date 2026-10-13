@@ -9,6 +9,9 @@ use crate::{
     SourceContent, SourceSpan,
 };
 
+mod declarations;
+pub use declarations::{CallableTypeDeclaration, CallableTypeDeclarationKind};
+
 const OPERATION: &str = "admit_callable_lowering";
 const MAX_FIELDS: usize = 65_536;
 const MAX_TYPE_BYTES: usize = 64 * 1024;
@@ -129,44 +132,7 @@ impl CallableFieldLowering {
     /// Attach exact qualified-name associations within this already-emitted token.
     /// This validates data geometry only; it neither parses nor lowers type syntax.
     pub fn with_type_atoms(mut self, atoms: Box<[CallableTypeAtom]>) -> CoreResult<Self> {
-        if atoms.len() > MAX_ALIAS_ATOMS {
-            return Err(validation_error(
-                OPERATION,
-                CoreErrorCode::BudgetExceeded,
-                "type_atoms",
-            ));
-        }
-        let (token_start, token_end) = range(self.type_token_span)?;
-        let mut previous_end = token_start;
-        for atom in atoms.iter() {
-            let (start, end) = range(atom.generated_span)?;
-            if start < token_start || end > token_end || start < previous_end {
-                return Err(validation_error(
-                    OPERATION,
-                    CoreErrorCode::ContractViolation,
-                    "type_atom_range",
-                ));
-            }
-            let expected_len = usize::try_from(end - start).map_err(|_| {
-                validation_error(OPERATION, CoreErrorCode::UsageOverflow, "type_atom")
-            })?;
-            let relative_start = usize::try_from(start - token_start).map_err(|_| {
-                validation_error(OPERATION, CoreErrorCode::UsageOverflow, "type_atom")
-            })?;
-            let relative_end = usize::try_from(end - token_start).map_err(|_| {
-                validation_error(OPERATION, CoreErrorCode::UsageOverflow, "type_atom")
-            })?;
-            if expected_len != atom.rendered_name.len()
-                || self.lowered_type.get(relative_start..relative_end) != Some(atom.rendered_name())
-            {
-                return Err(validation_error(
-                    OPERATION,
-                    CoreErrorCode::ContractViolation,
-                    "type_atom_range",
-                ));
-            }
-            previous_end = end;
-        }
+        validate_type_atoms(self.type_token_span, &self.lowered_type, &atoms)?;
         self.type_atoms = atoms;
         Ok(self)
     }
@@ -235,6 +201,8 @@ pub struct CallableAliasDefinition {
     type_token_span: SourceSpan,
     lowered_definition: Box<str>,
     dependency_names: Box<[Box<str>]>,
+    #[serde(skip_serializing_if = "slice_is_empty")]
+    type_atoms: Box<[CallableTypeAtom]>,
 }
 
 impl CallableAliasDefinition {
@@ -346,6 +314,7 @@ impl CallableAliasDefinition {
             type_token_span,
             lowered_definition,
             dependency_names: dependencies.into_boxed_slice(),
+            type_atoms: Box::new([]),
         })
     }
     pub const fn schema(&self) -> &'static str {
@@ -393,6 +362,16 @@ impl CallableAliasDefinition {
     pub fn dependency_names(&self) -> &[Box<str>] {
         &self.dependency_names
     }
+
+    pub fn with_type_atoms(mut self, atoms: Box<[CallableTypeAtom]>) -> CoreResult<Self> {
+        validate_type_atoms(self.type_token_span, &self.lowered_definition, &atoms)?;
+        self.type_atoms = atoms;
+        Ok(self)
+    }
+
+    pub fn type_atoms(&self) -> &[CallableTypeAtom] {
+        &self.type_atoms
+    }
 }
 
 /// Borrowed data only. Exact Library membership/bytes must be verified by its consumer.
@@ -418,6 +397,8 @@ pub struct CallableLoweringObservation<'a> {
     consumer_semantics: &'static str,
     #[serde(skip_serializing_if = "slice_is_empty")]
     alias_definitions: &'a [CallableAliasDefinition],
+    #[serde(skip_serializing_if = "slice_is_empty")]
+    type_declarations: &'a [CallableTypeDeclaration],
 }
 
 impl<'a> CallableLoweringObservation<'a> {
@@ -570,6 +551,7 @@ impl<'a> CallableLoweringObservation<'a> {
             lowering_syntax: "emitted_analysis_only",
             consumer_semantics: "NotEvaluated",
             alias_definitions: &[],
+            type_declarations: &[],
         })
     }
 
@@ -622,6 +604,11 @@ impl<'a> CallableLoweringObservation<'a> {
             }
         }
         for definition in definitions {
+            for atom in definition.type_atoms() {
+                add_alias_bytes(&mut bytes, std::mem::size_of::<CallableTypeAtom>())?;
+                add_alias_bytes(&mut bytes, atom.source_name().len())?;
+                add_alias_bytes(&mut bytes, atom.rendered_name().len())?;
+            }
             for dependency in definition.dependency_names.iter() {
                 if !names.contains(dependency.as_ref()) {
                     return Err(validation_error(
@@ -654,6 +641,35 @@ impl<'a> CallableLoweringObservation<'a> {
 
     pub const fn alias_definitions(&self) -> &'a [CallableAliasDefinition] {
         self.alias_definitions
+    }
+
+    /// Attach owner-selected emitted names. This validates bounded data only;
+    /// target selection and verified Library membership remain owner responsibilities.
+    pub fn with_type_declarations(
+        mut self,
+        declarations: &'a [CallableTypeDeclaration],
+    ) -> CoreResult<Self> {
+        if declarations.len() > MAX_ALIAS_DEFINITIONS
+            || declarations
+                .windows(2)
+                .any(|pair| pair[0].rendered_name() >= pair[1].rendered_name())
+        {
+            return Err(validation_error(
+                OPERATION,
+                CoreErrorCode::ContractViolation,
+                "type_declaration_order",
+            ));
+        }
+        let mut bytes = 0usize;
+        for declaration in declarations {
+            add_alias_bytes(&mut bytes, declaration.metadata_bytes())?;
+        }
+        self.type_declarations = declarations;
+        Ok(self)
+    }
+
+    pub const fn type_declarations(&self) -> &'a [CallableTypeDeclaration] {
+        self.type_declarations
     }
 
     pub const fn schema(&self) -> &'static str {
@@ -711,6 +727,45 @@ impl<'a> CallableLoweringObservation<'a> {
 
 fn slice_is_empty<T>(value: &[T]) -> bool {
     value.is_empty()
+}
+
+fn validate_type_atoms(
+    token: SourceSpan,
+    text: &str,
+    atoms: &[CallableTypeAtom],
+) -> CoreResult<()> {
+    if atoms.len() > MAX_ALIAS_ATOMS {
+        return Err(validation_error(
+            OPERATION,
+            CoreErrorCode::BudgetExceeded,
+            "type_atoms",
+        ));
+    }
+    let (token_start, token_end) = range(token)?;
+    let mut previous_end = token_start;
+    for atom in atoms {
+        let (start, end) = range(atom.generated_span)?;
+        if start < token_start || end > token_end || start < previous_end {
+            return Err(validation_error(
+                OPERATION,
+                CoreErrorCode::ContractViolation,
+                "type_atom_range",
+            ));
+        }
+        let relative_start = usize::try_from(start - token_start)
+            .map_err(|_| validation_error(OPERATION, CoreErrorCode::UsageOverflow, "type_atom"))?;
+        let relative_end = usize::try_from(end - token_start)
+            .map_err(|_| validation_error(OPERATION, CoreErrorCode::UsageOverflow, "type_atom"))?;
+        if text.get(relative_start..relative_end) != Some(atom.rendered_name()) {
+            return Err(validation_error(
+                OPERATION,
+                CoreErrorCode::ContractViolation,
+                "type_atom_range",
+            ));
+        }
+        previous_end = end;
+    }
+    Ok(())
 }
 
 fn validate_qualified_name(value: &str, field: &'static str) -> CoreResult<()> {

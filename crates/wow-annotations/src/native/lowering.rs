@@ -4,7 +4,9 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-use wow_core::{CallableAliasDefinition, CallableFieldLowering, SourceSpan};
+use wow_core::{
+    CallableAliasDefinition, CallableFieldLowering, CallableTypeDeclaration, SourceSpan,
+};
 
 pub(crate) const MAX_CAPTURE_BYTES: usize = 64 * 1024 * 1024;
 
@@ -18,6 +20,8 @@ pub(crate) struct CapturedCallable {
     pub(crate) fields: Arc<[CallableFieldLowering]>,
     /// One name-ordered, shared used-alias closure for this callable.
     pub(crate) alias_definitions: Arc<[CallableAliasDefinition]>,
+    /// Exact emitted native declarations for names used by these atoms/aliases.
+    pub(crate) type_declarations: Arc<[CallableTypeDeclaration]>,
 }
 
 pub(crate) struct CaptureBudget {
@@ -68,6 +72,45 @@ impl CaptureBudget {
         }
         Ok(())
     }
+}
+
+/// Charge retained capacity and a conservative old/new allocation peak before growth.
+pub(crate) fn reserve_vec<T>(
+    values: &mut Vec<T>,
+    additional: usize,
+    budget: &mut CaptureBudget,
+    stop: &AtomicBool,
+) -> Result<(), RenderError> {
+    if stop.load(Ordering::Acquire) {
+        return Err(RenderError::Cancelled);
+    }
+    let needed = values
+        .len()
+        .checked_add(additional)
+        .ok_or(RenderError::OutputLimit)?;
+    if needed > values.capacity() {
+        let size = std::mem::size_of::<T>();
+        let old_peak = values
+            .capacity()
+            .checked_mul(size)
+            .ok_or(RenderError::OutputLimit)?;
+        let new_peak = needed
+            .checked_mul(size)
+            .and_then(|bytes| bytes.checked_mul(2))
+            .ok_or(RenderError::OutputLimit)?;
+        budget.reserve(
+            0,
+            0,
+            old_peak
+                .checked_add(new_peak)
+                .ok_or(RenderError::OutputLimit)?,
+            stop,
+        )?;
+        values
+            .try_reserve_exact(additional)
+            .map_err(|_| RenderError::OutputLimit)?;
+    }
+    Ok(())
 }
 
 pub(super) fn span(start: usize, end: usize) -> Result<SourceSpan, RenderError> {

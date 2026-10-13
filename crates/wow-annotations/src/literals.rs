@@ -3,7 +3,7 @@
 use crate::ketho::RenderError;
 pub use wow_ketho_literals::{
     ConstantGroup, EnumDeclaration, EventLiteral, IntegerFormat, LiteralMember, LiteralValue,
-    MemberOrder,
+    MemberOrder, RenderedEnumDeclaration, RenderedEnums,
 };
 use wow_ketho_literals::{LiteralError, LiteralRenderer as NativeRenderer};
 #[derive(Clone, Debug)]
@@ -24,6 +24,14 @@ impl LiteralRenderer {
         constants: &[ConstantGroup],
     ) -> Result<String, RenderError> {
         self.0.render_enums(enums, constants).map_err(error)
+    }
+
+    pub fn render_enums_mapped(
+        &self,
+        enums: &[EnumDeclaration],
+        constants: &[ConstantGroup],
+    ) -> Result<RenderedEnums, RenderError> {
+        self.0.render_enums_mapped(enums, constants).map_err(error)
     }
 }
 pub(crate) fn error(error: LiteralError) -> RenderError {

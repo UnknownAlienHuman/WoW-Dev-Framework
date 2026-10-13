@@ -236,10 +236,9 @@ impl NativeApiProvenance {
         let mut origins = Vec::with_capacity(capacity);
         let selected_lowering = self.annotation_lowering_selected();
         let file_capacity = if selected_lowering {
-            self.library
-                .annotation_files()
-                .len()
-                .min(capacity.checked_add(1).ok_or_else(exhausted)?)
+            // One selected callable may reference declarations from any admitted
+            // native Library file. Reserve the finite original inventory once.
+            self.library.annotation_files().len()
         } else {
             0
         };
@@ -366,6 +365,49 @@ impl NativeApiProvenance {
                             )?;
                             origin = origin
                                 .with_annotation_alias_file(alias_file)
+                                .map_err(crate::context::context_error)?;
+                        }
+                        let declarations = observation.type_declarations();
+                        if !declarations.is_empty() {
+                            let count = declarations.len();
+                            if let Some(preparation) = preparation.as_mut() {
+                                // The vector and its final boxed slice can coexist
+                                // during shrink; neither contains source-body copies.
+                                preparation
+                                    .reserve_library_views(
+                                        count.checked_mul(2).ok_or_else(exhausted)?,
+                                        stop,
+                                    )
+                                    .map_err(crate::context::context_error)?;
+                                let max_path = declarations
+                                    .iter()
+                                    .map(|row| row.generated_path().len())
+                                    .max()
+                                    .unwrap_or(0);
+                                let sort_work = count
+                                    .checked_mul(count.max(1).ilog2() as usize + 1)
+                                    .and_then(|work| work.checked_mul(max_path))
+                                    .ok_or_else(exhausted)?;
+                                preparation
+                                    .reserve_library_verification(sort_work, count, stop)
+                                    .map_err(crate::context::context_error)?;
+                            }
+                            let mut type_files = Vec::with_capacity(count);
+                            for declaration in declarations {
+                                checkpoint(stop)?;
+                                type_files.push(self.verified_annotation_file(
+                                    declaration.generated_path(),
+                                    &mut files,
+                                    file_capacity,
+                                    preparation.as_deref_mut(),
+                                    stop,
+                                )?);
+                            }
+                            type_files
+                                .sort_unstable_by(|left, right| left.path().cmp(right.path()));
+                            type_files.dedup_by(|left, right| left.path() == right.path());
+                            origin = origin
+                                .with_annotation_type_files(type_files.into_boxed_slice())
                                 .map_err(crate::context::context_error)?;
                         }
                     }

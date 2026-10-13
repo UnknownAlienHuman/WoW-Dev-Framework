@@ -56,7 +56,7 @@ impl<'a> ReferenceOriginInput<'a> {
 
     /// Attach inert emitted syntax and a genuine verified Library byte view.
     /// Context admits the complete binding and exact token bytes independently.
-    pub const fn with_annotation_lowering(
+    pub fn with_annotation_lowering(
         mut self,
         observation: CallableLoweringObservation<'a>,
         file: wow_project::ProjectLibraryFileView<'a>,
@@ -65,6 +65,7 @@ impl<'a> ReferenceOriginInput<'a> {
             observation,
             file,
             alias_file: None,
+            type_files: Box::new([]),
         });
         self
     }
@@ -79,6 +80,19 @@ impl<'a> ReferenceOriginInput<'a> {
             .as_mut()
             .ok_or_else(mismatch)?
             .alias_file = Some(file);
+        Ok(self)
+    }
+
+    /// Borrow verified Library bytes for the owner-selected emitted type links.
+    /// The supplied array must be unique and ordered by exact generated path.
+    pub fn with_annotation_type_files(
+        mut self,
+        files: Box<[wow_project::ProjectLibraryFileView<'a>]>,
+    ) -> ContextResult<Self> {
+        self.annotation_lowering
+            .as_mut()
+            .ok_or_else(mismatch)?
+            .type_files = files;
         Ok(self)
     }
 }
@@ -483,6 +497,7 @@ pub(crate) fn reference_facets<'a>(
         }
         let annotation_lowering = origin
             .annotation_lowering
+            .as_ref()
             .map(|input| lowering::admit(input, signature, origin.source, universe, budget, stop))
             .transpose()?;
         let row = ReferenceRecordFacet {

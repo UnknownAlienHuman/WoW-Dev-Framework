@@ -852,3 +852,9 @@ genuine annotation owner after source-absent reopen, checks exact token/marker
 bytes, file corruption/cancellation refusal and owner JSON preservation through
 Inspect/Build/Markdown. This is one functional witness, not Tier A/X or consumer
 semantic parity; direct Core shape mutations remain part of the focused gate.
+
+That witness also consumes unique used Structure, Callback, ScriptObject and
+Enum declaration/name links, including a ScriptObject reached only through a
+used alias atom. It checks source and generated identities/ranges and refuses
+same-length corruption of a distinct enum file. This finite source-absent
+Service/CLI witness does not qualify complete type closure or runtime behavior.

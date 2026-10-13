@@ -4,7 +4,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use wow_core::{
-    CallableAliasDefinition, CallableFieldLowering, CallableLoweringObservation, SourceSpan,
+    CallableAliasDefinition, CallableFieldLowering, CallableLoweringObservation,
+    CallableTypeDeclaration, SourceSpan,
 };
 
 use wow_reference::native_view::{
@@ -55,6 +56,7 @@ pub struct NativeCallableBinding {
     ambiguous_origin: bool,
     lowering: Option<Arc<[CallableFieldLowering]>>,
     alias_definitions: Option<Arc<[CallableAliasDefinition]>>,
+    type_declarations: Option<Arc<[CallableTypeDeclaration]>>,
     record_digest_bytes: [u8; 32],
     record_bytes: usize,
     record_steps: usize,
@@ -400,19 +402,24 @@ impl NativeCallableBindings {
                                 // do not charge field tokens or spans twice.
                                 let retained_handle =
                                     std::mem::size_of::<Arc<[CallableFieldLowering]>>()
-                                        + std::mem::size_of::<Arc<[CallableAliasDefinition]>>();
+                                        + std::mem::size_of::<Arc<[CallableAliasDefinition]>>()
+                                        + std::mem::size_of::<Arc<[CallableTypeDeclaration]>>();
                                 lowering_metadata_bytes = lowering_metadata_bytes
                                     .checked_add(retained_handle)
                                     .ok_or(NativeCallableBindingError::Limit)?;
-                                Ok((Arc::clone(&row.fields), Arc::clone(&row.alias_definitions)))
+                                Ok((
+                                    Arc::clone(&row.fields),
+                                    Arc::clone(&row.alias_definitions),
+                                    Arc::clone(&row.type_declarations),
+                                ))
                             })
                             .transpose()?
                     } else {
                         None
                     };
-                    let (lowering, alias_definitions) = lowering
-                        .map_or((None, None), |(fields, aliases)| {
-                            (Some(fields), Some(aliases))
+                    let (lowering, alias_definitions, type_declarations) =
+                        lowering.map_or((None, None, None), |(fields, aliases, declarations)| {
+                            (Some(fields), Some(aliases), Some(declarations))
                         });
                     bindings.push(NativeCallableBinding {
                         generated_path: file.path().into(),
@@ -427,6 +434,7 @@ impl NativeCallableBindings {
                         ambiguous_origin: candidates.len() > 1,
                         lowering,
                         alias_definitions,
+                        type_declarations,
                         record_digest_bytes: lowering::digest_bytes(digest)?,
                         record_bytes: *record_bytes,
                         record_steps: *record_steps,
@@ -586,6 +594,10 @@ impl NativeCallableBindings {
         let alias_definitions = binding.alias_definitions.as_deref().unwrap_or(&[]);
         let result = result
             .with_alias_definitions(alias_definitions)
+            .map_err(|_| invalid)?;
+        let type_declarations = binding.type_declarations.as_deref().unwrap_or(&[]);
+        let result = result
+            .with_type_declarations(type_declarations)
             .map_err(|_| invalid)?;
         if stop.load(Ordering::Acquire) {
             return Err(NativeCallableBindingError::Cancelled);

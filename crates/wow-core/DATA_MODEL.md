@@ -860,3 +860,13 @@ It has no deserializer or unchecked public identity fields. Admission checks
 shape and range nesting, not owner authority, original or generated source bytes,
 lowering correctness, consumer semantics or runtime. Its addition changes no E0
 envelope, canonical hash input or existing owner persistence layout.
+
+### 15.1 Callable type declaration links
+
+`CallableTypeDeclaration` (`wow-core/callable-type-declaration/1`) is optional emitted-name metadata attached to the existing callable-lowering observation. Annotation selects only declarations whose rendered names occur in that callable's existing parameter/return type atoms or selected alias atoms. This is a finite name lookup, not a transitive type closure. Selected names are unique and ordered by rendered name; duplicate rendered names are ambiguous and do not produce an exact link.
+
+The current native emitter captures `Structure`, `Callback`, `ScriptObject` (including an emitted reviewed rename alias), and `Enum` declarations. Each descriptor separates original source revision/path/digest/span from generated Library path/digest and exact declaration/name byte ranges. Core validates bounded descriptor shape and range containment; it does not verify file bytes or owner authority.
+
+At most 4096 declarations and 16 MiB of selected descriptor metadata are retained per callable. Native capture remains under its existing 64 MiB bound; name selection is cancellable and capped at 16 Mi steps. Empty optional declaration lists are omitted. This metadata does not change emitted Library, artifact, map, loss, or retained producer-input/1 and producer-input/2 bytes or identities. The selected Wasm path has no native enum declaration mapping, so it supplies no native enum links and must not fall back to the native emitter.
+
+Producer custody, consumer semantics and runtime behavior remain `NotEvaluated`.

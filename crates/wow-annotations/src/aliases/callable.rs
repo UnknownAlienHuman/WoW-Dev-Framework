@@ -6,7 +6,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-use wow_core::CallableAliasDefinition;
+use wow_core::{CallableAliasDefinition, CallableTypeAtom, SourceSpan};
 use wow_reference::native::Span;
 use wow_reference::native_aliases::AliasDocument;
 
@@ -21,6 +21,15 @@ pub(crate) struct PendingDefinition<'a> {
     pub(super) type_token_span: Span,
     pub(super) lowered_definition: Box<str>,
     pub(super) dependency_names: Box<[Box<str>]>,
+    /// Lowerer-owned atom positions relative to `lowered_definition`.
+    pub(super) atoms: Box<[PendingAtom]>,
+}
+
+pub(crate) struct PendingAtom {
+    pub(crate) source_name: Box<str>,
+    pub(crate) rendered_name: Box<str>,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
 }
 
 /// Bind only exact alias atoms observed by the existing emitter. Equal closures
@@ -125,6 +134,12 @@ pub(crate) fn attach(
         for &index in &key {
             step(&mut link_steps, budget, stop)?;
             let definition = &pending[index];
+            let atom_peak = definition
+                .atoms
+                .len()
+                .checked_mul(2 * std::mem::size_of::<CallableTypeAtom>())
+                .and_then(|n| n.checked_add(std::mem::size_of::<Vec<CallableTypeAtom>>()))
+                .ok_or(RenderError::OutputLimit)?;
             let strings = definition
                 .name
                 .len()
@@ -132,6 +147,14 @@ pub(crate) fn attach(
                 .and_then(|n| n.checked_add(definition.source.path().len()))
                 .and_then(|n| n.checked_add(generated_path.len()))
                 .and_then(|n| n.checked_add(definition.lowered_definition.len()))
+                .and_then(|n| {
+                    definition.atoms.iter().try_fold(n, |total, atom| {
+                        total
+                            .checked_add(std::mem::size_of::<CallableTypeAtom>())
+                            .and_then(|n| n.checked_add(atom.source_name.len()))
+                            .and_then(|n| n.checked_add(atom.rendered_name.len()))
+                    })
+                })
                 .ok_or(RenderError::OutputLimit)?;
             let dependency_bytes = definition
                 .dependency_names
@@ -147,6 +170,7 @@ pub(crate) fn attach(
                 .ok_or(RenderError::OutputLimit)?;
             estimate = estimate
                 .checked_add(strings)
+                .and_then(|n| n.checked_add(atom_peak))
                 .and_then(|n| n.checked_add(dependency_bytes))
                 .and_then(|n| {
                     n.checked_add(
@@ -171,6 +195,33 @@ pub(crate) fn attach(
                 .iter()
                 .map(|name| name.to_string())
                 .collect::<Vec<_>>();
+            let mut type_atoms = Vec::new();
+            type_atoms
+                .try_reserve_exact(pending.atoms.len())
+                .map_err(|_| RenderError::OutputLimit)?;
+            for atom in pending.atoms.iter() {
+                checkpoint(stop)?;
+                let atom_start = u64::try_from(atom.start).map_err(|_| RenderError::OutputLimit)?;
+                let atom_end = u64::try_from(atom.end).map_err(|_| RenderError::OutputLimit)?;
+                let start = type_token_span
+                    .byte_start()
+                    .and_then(|base| base.checked_add(atom_start))
+                    .ok_or(RenderError::OutputLimit)?;
+                let end = type_token_span
+                    .byte_start()
+                    .and_then(|base| base.checked_add(atom_end))
+                    .ok_or(RenderError::OutputLimit)?;
+                let generated =
+                    SourceSpan::byte_range(start, end).map_err(|_| RenderError::InvalidSource)?;
+                type_atoms.push(
+                    CallableTypeAtom::admit(
+                        atom.source_name.clone(),
+                        atom.rendered_name.clone(),
+                        generated,
+                    )
+                    .map_err(|_| RenderError::InvalidSource)?,
+                );
+            }
             let definition = CallableAliasDefinition::admit(
                 pending.name.clone(),
                 pending.source.revision(),
@@ -184,6 +235,8 @@ pub(crate) fn attach(
                 pending.lowered_definition.clone(),
                 dependencies,
             )
+            .map_err(|_| RenderError::InvalidSource)?
+            .with_type_atoms(type_atoms.into_boxed_slice())
             .map_err(|_| RenderError::InvalidSource)?;
             definitions.push(definition);
         }

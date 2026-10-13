@@ -7,13 +7,21 @@
   "canonicalization_version": "wow-core-json/e0-1",
   "callable_emission_data": {
     "schema": "wow-core/callable-lowering-observation/1",
-    "types": ["CallableLoweringLane", "CallableFieldLowering", "CallableTypeAtom", "CallableAliasDefinition", "CallableLoweringObservation"],
+    "types": ["CallableLoweringLane", "CallableFieldLowering", "CallableTypeAtom", "CallableAliasDefinition", "CallableTypeDeclarationKind", "CallableTypeDeclaration", "CallableLoweringObservation"],
     "additional_schema": "wow-core/callable-alias-definition/1",
     "consumers": ["wow-annotations", "wow-service", "wow-context"],
     "admission": "private Serialize-only data; bounded exact owner identities and relative paths; typed SourceContent digests; nested byte ranges; at most 16 atoms and dependencies per item; at most 4096 definitions from one generated alias file and 16 MiB combined retained text",
     "authority": "inert emitted syntax and annotation alias descriptors only; Context must bind genuine Reference and Project Library views and verify exact emitted bytes; actual annotation producer custody remains NotEvaluated",
     "compatibility": "optional fields are omitted when unselected, preserving existing E0 serialized bytes",
     "nonclaims": ["parsing or lowering", "dependency evaluation or cycle proof", "producer custody proof", "consumer semantic or runtime qualification"]
+  },
+  "callable_type_declarations": {
+    "schema": "wow-core/callable-type-declaration/1",
+    "kinds": ["structure", "callback", "script_object", "enum"],
+    "selection": "only unique emitted rendered names used by the selected callable type atoms and selected alias atoms; canonical name order; duplicates are ambiguous and omitted",
+    "bounds": "at most 4096 descriptors and 16 MiB selected descriptor metadata per callable; 16 Mi cancellable selection steps; existing 64 MiB native capture bound",
+    "authority": "exact inert emitted ranges; producer custody, consumer semantics and runtime remain NotEvaluated",
+    "compatibility": "empty optional lists omitted; NativeLibrary, artifact, map, loss and retained producer-input/1 and /2 bytes and identities unchanged; selected Wasm has no native enum mapping and no native fallback"
   },
   "digest_algorithm": "sha256",
   "normative_documents": [

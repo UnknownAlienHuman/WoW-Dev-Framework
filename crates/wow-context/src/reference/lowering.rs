@@ -15,13 +15,15 @@ use super::mismatch;
 use crate::budget::{Budget, checkpoint, exhausted};
 use crate::{ContextError, ContextErrorCode, ContextResult, ContextUniverseSet};
 
-#[derive(Clone, Copy, Serialize)]
+#[derive(Serialize)]
 pub(super) struct AnnotationLoweringInput<'a> {
     pub(super) observation: CallableLoweringObservation<'a>,
     #[serde(skip)]
     pub(super) file: ProjectLibraryFileView<'a>,
     #[serde(skip)]
     pub(super) alias_file: Option<ProjectLibraryFileView<'a>>,
+    #[serde(skip)]
+    pub(super) type_files: Box<[ProjectLibraryFileView<'a>]>,
 }
 
 #[derive(Serialize)]
@@ -35,7 +37,7 @@ pub(super) struct AnnotationLoweringFacet<'a> {
 }
 
 pub(super) fn admit<'a>(
-    input: AnnotationLoweringInput<'a>,
+    input: &AnnotationLoweringInput<'a>,
     signature: NativeCallableSignature<'a>,
     source: &SourceHandle,
     universe: &ContextUniverseSet<'a>,
@@ -212,8 +214,20 @@ pub(super) fn admit<'a>(
                 return Err(mismatch());
             }
             verified_slice(alias_file, declaration_start, declaration_end, stop)?;
+            for atom in definition.type_atoms() {
+                let (atom_start, atom_end) = range(atom.generated_span())?;
+                budget.work(atom.rendered_name().len(), stop)?;
+                if atom_start < token_start
+                    || atom_end > token_end
+                    || verified_slice(alias_file, atom_start, atom_end, stop)?
+                        != atom.rendered_name()
+                {
+                    return Err(mismatch());
+                }
+            }
         }
     }
+    admit_type_declarations(input, budget, stop)?;
     Ok(AnnotationLoweringFacet {
         observation,
         library_snapshot_id: file.library_snapshot_id(),
@@ -222,6 +236,140 @@ pub(super) fn admit<'a>(
         byte_verification: "exact_admitted_library_file_and_emitted_token_ranges",
         annotation_producer_custody: "NotEvaluated",
     })
+}
+
+fn admit_type_declarations(
+    input: &AnnotationLoweringInput<'_>,
+    budget: &mut Budget,
+    stop: &AtomicBool,
+) -> ContextResult<()> {
+    let declarations = input.observation.type_declarations();
+    let files = &input.type_files;
+    if files.len() > declarations.len() || declarations.is_empty() != files.is_empty() {
+        return Err(mismatch());
+    }
+    if declarations.is_empty() {
+        return Ok(());
+    }
+    budget.work(files.len(), stop)?;
+    for pair in files.windows(2) {
+        budget.work(
+            pair[0]
+                .path()
+                .len()
+                .checked_add(pair[1].path().len())
+                .ok_or_else(exhausted)?,
+            stop,
+        )?;
+        if pair[0].path() >= pair[1].path() {
+            return Err(mismatch());
+        }
+    }
+    let matching_bytes = declarations
+        .len()
+        .checked_add(files.len())
+        .and_then(|bytes| bytes.checked_add(2 * std::mem::size_of::<Vec<bool>>()))
+        .ok_or_else(exhausted)?;
+    let matching_bytes = u64::try_from(matching_bytes).map_err(|_| exhausted())?;
+    if matching_bytes > budget.remaining_metadata_bytes()? {
+        return Err(exhausted());
+    }
+    budget.retained_bytes = budget
+        .retained_bytes
+        .checked_add(matching_bytes)
+        .ok_or_else(exhausted)?;
+    budget.work(declarations.len(), stop)?;
+    let mut matched = vec![false; declarations.len()];
+    let mut matched_files = vec![false; files.len()];
+    let max_path_bytes = files
+        .iter()
+        .map(|file| file.path().len())
+        .max()
+        .unwrap_or(0);
+    let file_depth = files.len().max(1).ilog2() as usize + 1;
+    let max_name_bytes = declarations
+        .iter()
+        .map(|declaration| declaration.rendered_name().len())
+        .max()
+        .unwrap_or(0);
+    let lookup_depth = declarations.len().max(1).ilog2() as usize + 1;
+    for atom in input
+        .observation
+        .fields()
+        .iter()
+        .flat_map(|field| field.type_atoms())
+        .chain(
+            input
+                .observation
+                .alias_definitions()
+                .iter()
+                .flat_map(|alias| alias.type_atoms()),
+        )
+    {
+        budget.work(
+            atom.rendered_name()
+                .len()
+                .checked_add(max_name_bytes)
+                .and_then(|bytes| bytes.checked_mul(lookup_depth))
+                .ok_or_else(exhausted)?,
+            stop,
+        )?;
+        if let Ok(index) = declarations
+            .binary_search_by(|declaration| declaration.rendered_name().cmp(atom.rendered_name()))
+        {
+            matched[index] = true;
+        }
+    }
+    for (declaration, matched) in declarations.iter().zip(matched) {
+        checkpoint(stop)?;
+        budget.work(
+            declaration
+                .metadata_bytes()
+                .checked_add(144)
+                .ok_or_else(exhausted)?,
+            stop,
+        )?;
+        if !matched {
+            return Err(mismatch());
+        }
+        budget.work(
+            declaration
+                .generated_path()
+                .len()
+                .checked_add(max_path_bytes)
+                .and_then(|bytes| bytes.checked_mul(file_depth))
+                .ok_or_else(exhausted)?,
+            stop,
+        )?;
+        let index = files
+            .binary_search_by(|file| file.path().cmp(declaration.generated_path()))
+            .map_err(|_| mismatch())?;
+        let file = files[index];
+        matched_files[index] = true;
+        if file.project_snapshot_id() != input.file.project_snapshot_id()
+            || file.project_generation() != input.file.project_generation()
+            || file.library_snapshot_id() != input.file.library_snapshot_id()
+            || ContentDigest::<SourceContent>::parse(file.sha256())
+                .map_err(|_| mismatch())?
+                .into_value()
+                != *declaration.generated_sha256()
+        {
+            return Err(mismatch());
+        }
+        let (start, end) = range(declaration.declaration_span())?;
+        let (name_start, name_end) = range(declaration.name_span())?;
+        if name_start < start
+            || name_end > end
+            || verified_slice(file, name_start, name_end, stop)? != declaration.rendered_name()
+        {
+            return Err(mismatch());
+        }
+        verified_slice(file, start, end, stop)?;
+    }
+    if matched_files.iter().any(|matched| !matched) {
+        return Err(mismatch());
+    }
+    Ok(())
 }
 
 fn verified_slice<'a>(

@@ -31,6 +31,14 @@
     "compatibility": "existing retained native producer input/1 and input/2, Reference identities and source signatures unchanged",
     "nonclaims": ["service alias resolver", "annotation producer custody", "complete alias/type inventory", "consumer semantic parity", "runtime acceptance"]
   },
+  "selected_annotation_type_declarations": {
+    "route": "existing selected corrections Primary ReferenceFacts Inspect/Build",
+    "selection": "only unique emitted rendered names used by the callable type atoms and selected alias atoms",
+    "acquisition": "reuse the operation-local verified Project Library file-view cache; cache capacity is bounded by the retained annotation-file inventory; charge path lookup, full-file verification and retained view metadata to the continuing cancellable preparation/construction Budget",
+    "limits": "4096 descriptors and 16 MiB descriptor metadata per callable; 16 Mi selection steps; no source-body mirror",
+    "compatibility": "emitted Library, artifact, map, loss and retained producer-input/1 and /2 bytes/identities unchanged; empty optional data omitted",
+    "nonclaims": ["service resolver", "annotation producer custody", "complete type inventory", "consumer semantics", "runtime qualification", "Wasm native fallback"]
+  },
   "crate": "wow-service",
   "context_path_direct_dependencies": [
     "wow-core",

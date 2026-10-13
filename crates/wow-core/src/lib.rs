@@ -28,7 +28,8 @@ pub use budget::{
 };
 pub use callable_lowering::{
     CALLABLE_ALIAS_DEFINITION_SCHEMA, CallableAliasDefinition, CallableFieldLowering,
-    CallableLoweringLane, CallableLoweringObservation, CallableTypeAtom,
+    CallableLoweringLane, CallableLoweringObservation, CallableTypeAtom, CallableTypeDeclaration,
+    CallableTypeDeclarationKind,
 };
 pub use canonical::{
     CANONICALIZATION_VERSION, canonical_json_bytes, canonical_json_string, domain_separated_digest,

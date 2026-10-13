@@ -1,6 +1,8 @@
 //! One retained literal implementation per source operation. No VM dependency.
 use crate::ketho::RenderError;
-use crate::literals::{ConstantGroup, EnumDeclaration, EventLiteral, LiteralRenderer};
+use crate::literals::{
+    ConstantGroup, EnumDeclaration, EventLiteral, LiteralRenderer, RenderedEnums,
+};
 use serde::Serialize;
 use std::cell::{Cell, RefCell};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -151,6 +153,28 @@ impl<'a> SelectedLiterals<'a> {
             })
         } else {
             self.native.render_enums(enums, constants)
+        }
+    }
+
+    /// Preserve the selected producer. The native renderer supplies exact ranges;
+    /// a selected bridge supplies only its exact text and therefore no native links.
+    pub(crate) fn render_enums_mapped(
+        &self,
+        enums: &[EnumDeclaration],
+        constants: &[ConstantGroup],
+    ) -> Result<RenderedEnums, RenderError> {
+        self.check()?;
+        if self.bridge.is_some() {
+            let text = self.invoke(LiteralInput::Enums {
+                enums: enums.to_vec(),
+                constants: constants.to_vec(),
+            })?;
+            Ok(RenderedEnums {
+                text,
+                declarations: Vec::new(),
+            })
+        } else {
+            self.native.render_enums_mapped(enums, constants)
         }
     }
     pub(crate) fn finish(

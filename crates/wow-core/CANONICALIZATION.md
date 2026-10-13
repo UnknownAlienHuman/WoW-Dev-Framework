@@ -579,3 +579,12 @@ reject `null` and lexical `-0` even when direct Serde decoding would discard or
 normalize them. Whitespace and key-order variations remain valid input and
 produce unchanged canonical output. This does not alter the serializer or
 retroactively protect callers of raw Serde APIs. See `JSON_ADMISSION.md`.
+
+## Optional callable emission metadata
+
+Alias `type_atoms` and observation `type_declarations` serialize only when
+nonempty. Declaration descriptors use `wow-core/callable-type-declaration/1`
+and canonical unique rendered-name order. Existing empty selections retain
+their bytes. Selected Context Inspect/pack identities bind the added data;
+the native Library/artifact/map/loss and retained producer-input/1 and /2 do
+not serialize this private capture. No E0 canonicalization version changes.

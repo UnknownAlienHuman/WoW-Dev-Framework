@@ -140,6 +140,8 @@ pub struct RenderedDeclaration {
     pub index: usize,
     pub start: usize,
     pub end: usize,
+    /// Exact rendered identifier for table declarations; functions have none.
+    pub name_span: Option<(usize, usize)>,
     /// Nested field fragments in emission order, indexed against this declaration.
     pub members: Vec<RenderedMember>,
 }
@@ -158,6 +160,10 @@ pub struct RenderedSystem {
 pub struct RenderedReceiver {
     pub start: usize,
     pub end: usize,
+    /// Class name emitted by the receiver declaration.
+    pub name_span: (usize, usize),
+    /// Source-name alias emitted when the reviewed receiver names differ.
+    pub alias_name_span: Option<(usize, usize)>,
 }
 
 /// A pure, bounded Ketho-compatible rendering profile. It has no runtime or IO
@@ -339,7 +345,9 @@ impl Renderer {
             }
             let start = output.bytes.len();
             output.push("---@class ")?;
+            let name_start = output.bytes.len();
             output.push(name)?;
+            let name_span = (name_start, output.bytes.len());
             if let Some(base) = base {
                 output.push(" : ")?;
                 output.push(base)?;
@@ -347,18 +355,25 @@ impl Renderer {
             output.push("\nlocal ")?;
             output.push(name)?;
             output.push(" = {}")?;
-            if system_name != name {
+            let alias_name_span = if system_name != name {
                 // This alias represents the exact reviewed receiver rename,
                 // not an inference from prefixes or a static widget catalog.
                 output.push("\n---@alias ")?;
+                let alias_start = output.bytes.len();
                 output.push(system_name)?;
+                let alias_span = (alias_start, output.bytes.len());
                 output.push(" ")?;
                 output.push(name)?;
-            }
+                Some(alias_span)
+            } else {
+                None
+            };
             separated = true;
             Some(RenderedReceiver {
                 start,
                 end: output.bytes.len(),
+                name_span,
+                alias_name_span,
             })
         } else {
             None
@@ -384,6 +399,7 @@ impl Renderer {
                 index,
                 start,
                 end: output.bytes.len(),
+                name_span: None,
                 members,
             });
         }
@@ -397,11 +413,14 @@ impl Renderer {
             output.separate(&mut separated)?;
             let start = output.bytes.len();
             let mut members = Vec::new();
+            let name_span;
             match table {
                 Table::Structure { name, fields } => {
                     validate_fields(fields, false)?;
                     output.push("---@class ")?;
+                    let name_start = output.bytes.len();
                     output.push(name)?;
+                    name_span = (name_start, output.bytes.len());
                     for (index, field) in fields.iter().enumerate() {
                         output.push("\n")?;
                         self.field_mapped(
@@ -418,12 +437,20 @@ impl Renderer {
                     arguments,
                     returns,
                 } => {
-                    self.callback_signature(&mut output, name, arguments, returns, &mut members)?
+                    name_span = self.callback_signature(
+                        &mut output,
+                        name,
+                        arguments,
+                        returns,
+                        &mut members,
+                    )?;
                 }
                 Table::Callback { name, arguments } => {
                     validate_fields(arguments, false)?;
                     output.push("---@alias ")?;
+                    let name_start = output.bytes.len();
                     output.push(name)?;
+                    name_span = (name_start, output.bytes.len());
                     output.push(" FunctionContainer|fun(")?;
                     for (index, argument) in arguments.iter().enumerate() {
                         // This is precisely the donor's callback branch. Arrays are
@@ -475,6 +502,7 @@ impl Renderer {
                 index,
                 start,
                 end: output.bytes.len(),
+                name_span: Some(name_span),
                 members,
             });
         }

@@ -33,6 +33,7 @@ mod fields;
 pub(crate) mod lowering;
 mod maps;
 mod numbers;
+mod type_declarations;
 pub(crate) use lowering::{CaptureBudget, CapturedCallable};
 
 const MAX_FILES: usize = 4096;
@@ -146,6 +147,20 @@ fn link(document: &DocumentationDocument, raw: &RawValue) -> SourceLink {
         sha256: document.sha256().to_owned(),
         span: raw.span,
     }
+}
+
+fn capture_link(
+    document: &DocumentationDocument,
+    raw: &RawValue,
+    budget: &mut CaptureBudget,
+    cancelled: &AtomicBool,
+) -> Result<SourceLink, RenderError> {
+    let bytes = std::mem::size_of::<SourceLink>()
+        .checked_add(document.path().len())
+        .and_then(|n| n.checked_add(document.sha256().len()))
+        .ok_or(RenderError::OutputLimit)?;
+    budget.reserve(0, 0, bytes, cancelled)?;
+    Ok(link(document, raw))
 }
 fn issue(
     document: &DocumentationDocument,
@@ -408,6 +423,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
     let mut member_mapping_budget = maps::MAX_MEMBERS;
     let mut lowering_catalog = Vec::new();
     let mut lowering_budget = lowering::CaptureBudget::new();
+    let mut type_catalog = type_declarations::Catalog::default();
     lowering_budget.reserve(
         0,
         0,
@@ -415,6 +431,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
         cancelled,
     )?;
     let mut all_enums = Vec::new();
+    let mut all_enum_sources = Vec::new();
     let mut all_constants = Vec::new();
     let mut all_events = Vec::new();
     let mut all_literal_sources = Vec::new();
@@ -530,6 +547,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
         let mut function_facts = Vec::new();
         let mut table_facts = Vec::new();
         let mut enums = Vec::new();
+        let mut enum_sources = Vec::new();
         let mut constants = Vec::new();
         let mut literal_sources = Vec::new();
         let mut events = Vec::new();
@@ -626,7 +644,30 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
                         match literals.render_enums(std::slice::from_ref(&declaration), &[]) {
                             Ok(_) => {
                                 enums.push(declaration);
-                                literal_sources.push(link(document, raw));
+                                lowering::reserve_vec(
+                                    &mut enum_sources,
+                                    1,
+                                    &mut lowering_budget,
+                                    cancelled,
+                                )?;
+                                enum_sources.push(capture_link(
+                                    document,
+                                    raw,
+                                    &mut lowering_budget,
+                                    cancelled,
+                                )?);
+                                lowering::reserve_vec(
+                                    &mut literal_sources,
+                                    1,
+                                    &mut lowering_budget,
+                                    cancelled,
+                                )?;
+                                literal_sources.push(capture_link(
+                                    document,
+                                    raw,
+                                    &mut lowering_budget,
+                                    cancelled,
+                                )?);
                             }
                             Err(error) => {
                                 issues.push(issue(document, raw, format!("renderer_{error:?}")))
@@ -734,7 +775,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
                         &mut lowering_budget,
                         cancelled,
                     )?;
-                    if let Some(receiver) = rendered.receiver {
+                    if let Some(receiver) = &rendered.receiver {
                         mappings.insert(
                             0,
                             SourceMapping {
@@ -757,6 +798,89 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
                         defined_alias_targets.insert(table.name().to_owned());
                     }
                     push_file(&mut files, &mut total_bytes, "api", rendered.text, mappings)?;
+                    let generated = files.last().ok_or(RenderError::InvalidSource)?;
+                    let generated_path = generated.path.as_str();
+                    let generated_sha256 = generated.sha256.as_str();
+                    if let Some(receiver) = &rendered.receiver {
+                        let SystemOwner::ScriptObject(owner_name) = system.owner else {
+                            return Err(RenderError::InvalidSource);
+                        };
+                        let source_name = system.name.unwrap_or(owner_name);
+                        let source_span =
+                            lowering::span(system.raw.span.start, system.raw.span.end)?;
+                        let declaration_span = lowering::span(receiver.start, receiver.end)?;
+                        type_catalog.push(
+                            wow_core::CallableTypeDeclarationKind::ScriptObject,
+                            source_name,
+                            owner_name,
+                            revision,
+                            document.path(),
+                            document.sha256(),
+                            source_span,
+                            generated_path,
+                            generated_sha256,
+                            declaration_span,
+                            lowering::span(receiver.name_span.0, receiver.name_span.1)?,
+                            &mut lowering_budget,
+                            cancelled,
+                        )?;
+                        if let Some((start, end)) = receiver.alias_name_span {
+                            type_catalog.push(
+                                wow_core::CallableTypeDeclarationKind::ScriptObject,
+                                source_name,
+                                source_name,
+                                revision,
+                                document.path(),
+                                document.sha256(),
+                                source_span,
+                                generated_path,
+                                generated_sha256,
+                                declaration_span,
+                                lowering::span(start, end)?,
+                                &mut lowering_budget,
+                                cancelled,
+                            )?;
+                        }
+                    }
+                    for declaration in &rendered.declarations {
+                        if !declaration.table {
+                            continue;
+                        }
+                        let table = input
+                            .tables
+                            .get(declaration.index)
+                            .ok_or(RenderError::InvalidSource)?;
+                        let (kind, source_name, source_span) =
+                            match table_facts.get(declaration.index) {
+                                Some(TableFact::Structure { name, raw, .. }) => (
+                                    wow_core::CallableTypeDeclarationKind::Structure,
+                                    *name,
+                                    lowering::span(raw.span.start, raw.span.end)?,
+                                ),
+                                Some(TableFact::Callback { name, raw, .. }) => (
+                                    wow_core::CallableTypeDeclarationKind::Callback,
+                                    *name,
+                                    lowering::span(raw.span.start, raw.span.end)?,
+                                ),
+                                _ => return Err(RenderError::InvalidSource),
+                            };
+                        let name_span = declaration.name_span.ok_or(RenderError::InvalidSource)?;
+                        type_catalog.push(
+                            kind,
+                            source_name,
+                            table.name(),
+                            revision,
+                            document.path(),
+                            document.sha256(),
+                            source_span,
+                            generated_path,
+                            generated_sha256,
+                            lowering::span(declaration.start, declaration.end)?,
+                            lowering::span(name_span.0, name_span.1)?,
+                            &mut lowering_budget,
+                            cancelled,
+                        )?;
+                    }
                 }
                 Err(error) => {
                     issues.push(issue(document, system.raw, format!("renderer_{error:?}")))
@@ -768,6 +892,13 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
                 Ok(text) => {
                     let _ = text; // validate this registration before aggregation
                     all_enums.extend(enums);
+                    lowering::reserve_vec(
+                        &mut all_enum_sources,
+                        enum_sources.len(),
+                        &mut lowering_budget,
+                        cancelled,
+                    )?;
+                    all_enum_sources.extend(enum_sources);
                     all_constants.extend(constants);
                     all_literal_sources.extend(literal_sources);
                 }
@@ -791,10 +922,35 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
         return Err(RenderError::OutputLimit);
     }
     if !all_enums.is_empty() || !all_constants.is_empty() {
-        let text = literals.render_enums(&all_enums, &all_constants)?;
+        let rendered = literals.render_enums_mapped(&all_enums, &all_constants)?;
+        let text = rendered.text;
         defined_alias_targets.extend(all_enums.iter().map(|e| format!("Enum.{}", e.name)));
         let maps = whole_file_maps(&text, all_literal_sources);
         push_file(&mut files, &mut total_bytes, "values", text, maps)?;
+        let generated = files.last().ok_or(RenderError::InvalidSource)?;
+        for declaration in rendered.declarations {
+            let enum_declaration = all_enums
+                .get(declaration.index)
+                .ok_or(RenderError::InvalidSource)?;
+            let source = all_enum_sources
+                .get(declaration.index)
+                .ok_or(RenderError::InvalidSource)?;
+            type_catalog.push(
+                wow_core::CallableTypeDeclarationKind::Enum,
+                &enum_declaration.name,
+                &format!("Enum.{}", enum_declaration.name),
+                revision,
+                &source.path,
+                &source.sha256,
+                lowering::span(source.span.start, source.span.end)?,
+                &generated.path,
+                &generated.sha256,
+                lowering::span(declaration.start, declaration.end)?,
+                lowering::span(declaration.name_span.0, declaration.name_span.1)?,
+                &mut lowering_budget,
+                cancelled,
+            )?;
+        }
     }
     if !all_events.is_empty() {
         let text = literals.render_events(&all_events)?;
@@ -836,6 +992,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
         }
         Some(projected.report)
     };
+    type_catalog.attach(&mut lowering_catalog, &mut lowering_budget, cancelled)?;
     if cancelled.load(Ordering::Relaxed) {
         return Err(RenderError::Cancelled);
     }

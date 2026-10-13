@@ -36,7 +36,7 @@ impl Renderer {
         arguments: &[Field],
         returns: &[Field],
         members: &mut Vec<RenderedMember>,
-    ) -> Result<(), RenderError> {
+    ) -> Result<(usize, usize), RenderError> {
         validate_fields(arguments, true)?;
         // Variadic return packs are a distinct consumer contract, not a tuple.
         validate_fields(returns, false)?;
@@ -46,7 +46,9 @@ impl Renderer {
             }
         }
         out.push("---@alias ")?;
+        let name_start = out.bytes.len();
         out.push(name)?;
+        let name_span = (name_start, out.bytes.len());
         out.push(" FunctionContainer|fun(")?;
         for (index, argument) in arguments.iter().enumerate() {
             if argument.variadic && argument.default_text.is_some() {
@@ -134,6 +136,6 @@ impl Renderer {
         if !returns.is_empty() {
             out.push(")")?;
         }
-        Ok(())
+        Ok(name_span)
     }
 }

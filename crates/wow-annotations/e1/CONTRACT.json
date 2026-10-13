@@ -40,9 +40,10 @@
     "operation": "NativeCallableBindings::callable_lowering",
     "capture": "already-computed mapped renderer type, optional-marker and input-atom ranges plus projected aliases and their existing dependency graph; private bounded shared catalog skipped by serialization",
     "handoff": "one inert wow-core callable observation bound to exact native Reference/source/artifact/map descriptors",
-    "compatibility": "existing renderer text, NativeLibrary, artifact, map, loss and retained producer identities unchanged",
+    "type_declarations": "exact native Structure, Callback, ScriptObject including emitted reviewed rename alias, and Enum ranges; only unique rendered names used by selected callable atoms/alias atoms; max 4096 descriptors and 16 MiB metadata per callable; selection traversal capped at 16 Mi steps",
+    "compatibility": "existing renderer text, NativeLibrary, artifact, map, loss and retained producer-input/1 and /2 bytes and identities unchanged",
     "aliases": "only unique emitted aliases used by effective callable atoms and their bounded transitive dependency subgraph; one composed alias file, exact independent external resource revision/path/digest/spans, no Reference type-catalog widening",
-    "nonclaims": ["AnnotationSemanticModel acceptance", "complete type closure", "consumer semantic parity", "current-source or runtime qualification"]
+    "nonclaims": ["AnnotationSemanticModel acceptance", "complete type closure", "producer custody", "consumer type semantics", "current-source or runtime qualification"]
   },
   "direct_framework_dependencies": [
     "wow-core",

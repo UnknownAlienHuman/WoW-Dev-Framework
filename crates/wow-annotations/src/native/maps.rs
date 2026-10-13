@@ -216,6 +216,7 @@ pub(super) fn append_members(
                 source_span: span(function.raw.span.start, function.raw.span.end)?,
                 fields: captured_fields.into(),
                 alias_definitions: Arc::from([]),
+                type_declarations: Arc::from([]),
             });
         }
     }

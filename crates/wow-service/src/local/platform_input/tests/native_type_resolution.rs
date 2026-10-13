@@ -9,13 +9,14 @@ const TYPE_PROFILE: &str = "wow-reference/native-callable-type-resolution/1";
 const CONTEXT_STORE_ID: &str = "project-store:fixture-native-type-resolution";
 const CORRECTION_ID: &str = "fixture-correct-return-type";
 const ALIAS_REVISION: &str = "2222222222222222222222222222222222222222";
-const ALIAS_SOURCE: &str =
-    "---@alias LeafId number|string\n---@alias OuterId LeafId\n---@alias RejectedId MissingType\n";
+const ALIAS_SOURCE: &str = "---@alias LeafId number|string\n---@alias OuterId LeafId\n---@alias RecordAlias FixtureRecord\n---@alias ObjectAlias FixtureObject\n---@alias RejectedId MissingType\n";
+const NATIVE_API_SOURCE: &str = r#"APIDocumentation:AddDocumentationTable({Name="Transport",Type="System",Namespace="C_Transport",Environment="All",Functions={{Name="Read",Type="Function",Arguments={{Name="flag",Type="bool",Nilable=false,Default=false},{Name="ids",Type="table",InnerType="OuterId",Nilable=false},{Name="records",Type="table",InnerType="RecordAlias",Nilable=false},{Name="objects",Type="table",InnerType="ObjectAlias",Nilable=false},{Name="callback",Type="FixtureCallback",Nilable=false},{Name="mode",Type="FixtureMode",Nilable=false}},Returns={{Name="value",Type="number",Nilable=true}}}},Tables={{Name="FixtureRecord",Type="Structure",Fields={{Name="label",Type="string",Nilable=false}}},{Name="FixtureCallback",Type="CallbackType",Arguments={{Name="record",Type="FixtureRecord"}}},{Name="FixtureMode",Type="Enumeration",Fields={{Name="Off",EnumValue=0},{Name="On",EnumValue=1}}}}})
+APIDocumentation:AddDocumentationTable({Name="FixtureObject",Type="ScriptObject",Environment="All",Functions={{Name="Observe"}}})"#;
 
 fn add_main_and_manifest(root: &FixtureRoot, config: &mut Value) -> TestResult {
     let main = "function FixtureFunction() return C_Transport.Read() end\n";
     std::fs::write(root.0.join("UI/main.lua"), main)?;
-    let api = r#"APIDocumentation:AddDocumentationTable({Name="Transport",Type="System",Namespace="C_Transport",Environment="All",Functions={{Name="Read",Type="Function",Arguments={{Name="flag",Type="bool",Nilable=false,Default=false},{Name="ids",Type="table",InnerType="OuterId",Nilable=false}},Returns={{Name="value",Type="number",Nilable=true}}}},Tables={{Name="FixtureRecord",Type="Structure",Fields={{Name="label",Type="string",Nilable=false}}}}})"#;
+    let api = NATIVE_API_SOURCE;
     let api_path = "Blizzard_APIDocumentationGenerated/API.lua";
     std::fs::write(root.0.join(api_path), api)?;
     let mut manifest: Value =
@@ -306,7 +307,7 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
     let verified_file = binding.file_view(&annotation_file.path, &annotation_file.text, &stop)?;
     assert_eq!(verified_file.path(), lowering.generated_path());
     assert_eq!(verified_file.sha256(), lowering.generated_sha256());
-    assert_eq!(lowering.fields().len(), 3);
+    assert_eq!(lowering.fields().len(), 7);
     let byte_range = |span: wow_core::SourceSpan| -> TestResult<std::ops::Range<usize>> {
         Ok(
             usize::try_from(span.byte_start().ok_or("missing byte start")?)?
@@ -351,23 +352,165 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
     let definitions = lowering.alias_definitions();
     assert_eq!(
         definitions.len(),
-        2,
+        4,
         "only the used projected dependency subgraph"
     );
     assert_eq!(definitions[0].name(), "LeafId");
     assert_eq!(definitions[0].lowered_definition(), "number|string");
     assert!(definitions[0].dependency_names().is_empty());
-    assert_eq!(definitions[1].name(), "OuterId");
-    assert_eq!(definitions[1].lowered_definition(), "LeafId");
     assert_eq!(
-        definitions[1].dependency_names(),
+        definitions
+            .iter()
+            .map(|definition| definition.name())
+            .collect::<Vec<_>>(),
+        ["LeafId", "ObjectAlias", "OuterId", "RecordAlias"]
+    );
+    let outer_alias = definitions
+        .iter()
+        .find(|definition| definition.name() == "OuterId")
+        .ok_or("used OuterId alias dependency")?;
+    assert_eq!(outer_alias.lowered_definition(), "LeafId");
+    assert_eq!(
+        outer_alias.dependency_names(),
         &[Box::<str>::from("LeafId")]
+    );
+    let record_alias = definitions
+        .iter()
+        .find(|definition| definition.name() == "RecordAlias")
+        .ok_or("used projected alias to a source-defined Structure")?;
+    assert_eq!(record_alias.lowered_definition(), "FixtureRecord");
+    assert!(record_alias.type_atoms().iter().any(|atom| {
+        atom.source_name() == "FixtureRecord" && atom.rendered_name() == "FixtureRecord"
+    }));
+    let object_alias = definitions
+        .iter()
+        .find(|definition| definition.name() == "ObjectAlias")
+        .ok_or("used projected alias to a source-defined ScriptObject")?;
+    assert!(object_alias.type_atoms().iter().any(|atom| {
+        atom.source_name() == "FixtureObject" && atom.rendered_name() == "FixtureObject"
+    }));
+    assert!(
+        lowering
+            .fields()
+            .iter()
+            .flat_map(|field| field.type_atoms())
+            .all(|atom| atom.rendered_name() != "FixtureObject"),
+        "the ScriptObject declaration is selected only through the used alias atom"
+    );
+    let callable_atoms = lowering
+        .fields()
+        .iter()
+        .flat_map(|field| field.type_atoms())
+        .map(|atom| atom.rendered_name())
+        .collect::<Vec<_>>();
+    assert!(callable_atoms.contains(&"FixtureCallback"));
+    assert!(callable_atoms.contains(&"Enum.FixtureMode"));
+    use wow_core::CallableTypeDeclarationKind as DeclarationKind;
+    let declarations = lowering.type_declarations();
+    let expected_declarations = [
+        (DeclarationKind::Structure, "FixtureRecord"),
+        (DeclarationKind::Callback, "FixtureCallback"),
+        (DeclarationKind::Enum, "Enum.FixtureMode"),
+        (DeclarationKind::ScriptObject, "FixtureObject"),
+    ];
+    assert_eq!(declarations.len(), expected_declarations.len());
+    for (kind, rendered_name) in expected_declarations {
+        let matches = declarations
+            .iter()
+            .filter(|declaration| {
+                declaration.kind() == kind && declaration.rendered_name() == rendered_name
+            })
+            .collect::<Vec<_>>();
+        let [declaration] = matches.as_slice() else {
+            return Err(format!("expected one used {kind:?} declaration {rendered_name}").into());
+        };
+        assert_eq!(declaration.source_revision(), revision);
+        assert_eq!(
+            declaration.source_path(),
+            "Blizzard_APIDocumentationGenerated/API.lua"
+        );
+        assert_eq!(
+            declaration.source_sha256().canonical(),
+            wow_reference::native::source_digest(NATIVE_API_SOURCE.as_bytes())
+        );
+        let source_range = byte_range(declaration.source_span())?;
+        let source_document = NATIVE_API_SOURCE
+            .get(source_range)
+            .ok_or("declaration source identity range")?;
+        assert!(
+            source_document.contains(declaration.source_name()),
+            "declaration source span retains its source-defined name"
+        );
+        let generated_range = byte_range(declaration.name_span())?;
+        let generated_file = rebuilt
+            .annotation_files()
+            .iter()
+            .find(|file| file.path == declaration.generated_path())
+            .ok_or("generated declaration file")?;
+        assert_eq!(
+            generated_file.sha256,
+            declaration.generated_sha256().canonical()
+        );
+        let generated_view =
+            binding.file_view(&generated_file.path, &generated_file.text, &stop)?;
+        assert_eq!(
+            generated_view.slice(generated_range.start, generated_range.end, &stop)?,
+            rendered_name
+        );
+    }
+    assert!(
+        declarations.iter().any(
+            |declaration| declaration.kind() == DeclarationKind::Structure
+                && declaration.rendered_name() == "FixtureRecord"
+        ),
+        "used RecordAlias atom captures its emitted native target"
+    );
+    assert!(
+        declarations.iter().any(
+            |declaration| declaration.kind() == DeclarationKind::ScriptObject
+                && declaration.rendered_name() == "FixtureObject"
+        ),
+        "used ObjectAlias atom captures its emitted native target"
     );
     let alias_file = rebuilt
         .annotation_files()
         .iter()
         .find(|file| file.path == definitions[0].generated_path())
         .ok_or("retained generated alias file")?;
+    let enum_declaration = declarations
+        .iter()
+        .find(|declaration| {
+            declaration.kind() == DeclarationKind::Enum
+                && declaration.rendered_name() == "Enum.FixtureMode"
+        })
+        .ok_or("retained enum declaration")?;
+    let enum_file = rebuilt
+        .annotation_files()
+        .iter()
+        .find(|file| file.path == enum_declaration.generated_path())
+        .ok_or("retained generated enum file")?;
+    assert_ne!(
+        enum_file.path, annotation_file.path,
+        "enum declaration uses its additional generated file"
+    );
+    assert_ne!(
+        enum_file.path, alias_file.path,
+        "enum declaration file is distinct from the alias file"
+    );
+    let enum_name = byte_range(enum_declaration.name_span())?;
+    assert_eq!(
+        enum_file.text.get(enum_name.clone()),
+        Some(enum_declaration.rendered_name()),
+        "positive enum declaration range was verified above"
+    );
+    let mut corrupted_enum = enum_file.text.clone();
+    corrupted_enum.replace_range(enum_name.clone(), &"x".repeat(enum_name.len()));
+    assert_eq!(corrupted_enum.len(), enum_file.text.len());
+    assert!(
+        matches!(binding.file_view(&enum_file.path, &corrupted_enum, &stop),
+        Err(error) if error.code() == wow_project::ProjectErrorCode::FileDigestMismatch),
+        "same-length corruption of the separate native declaration file is rejected"
+    );
     let alias_view = binding.file_view(&alias_file.path, &alias_file.text, &stop)?;
     for definition in definitions {
         assert_eq!(definition.source_scope(), "annotation_alias_catalog");
@@ -391,7 +534,11 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
         matches!(binding.file_view(&alias_file.path, &corrupted_alias, &stop),
         Err(error) if error.code() == wow_project::ProjectErrorCode::FileDigestMismatch)
     );
-    let returned_lowering = &lowering.fields()[2];
+    let returned_lowering = lowering
+        .fields()
+        .iter()
+        .find(|field| field.lane() == CallableLoweringLane::Return && field.ordinal() == 0)
+        .ok_or("original first return lowering")?;
     assert_eq!(returned_lowering.lane(), CallableLoweringLane::Return);
     assert_eq!(returned_lowering.ordinal(), 0);
     // The fixture explicitly corrects number -> FixtureRecord before emission;
@@ -439,7 +586,7 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
     let original_arguments = original_signature["signature"]["arguments"]
         .as_array()
         .ok_or("original arguments")?;
-    assert_eq!(original_arguments.len(), 2);
+    assert_eq!(original_arguments.len(), 6);
     assert_eq!(original_arguments[0]["type_name"], "bool");
     assert_eq!(
         original_arguments[0]["default"]["kind"],
@@ -447,6 +594,10 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
     );
     assert_eq!(original_arguments[1]["type_name"], "table");
     assert_eq!(original_arguments[1]["inner_type"], "OuterId");
+    assert_eq!(original_arguments[2]["inner_type"], "RecordAlias");
+    assert_eq!(original_arguments[3]["inner_type"], "ObjectAlias");
+    assert_eq!(original_arguments[4]["type_name"], "FixtureCallback");
+    assert_eq!(original_arguments[5]["type_name"], "FixtureMode");
     assert_eq!(
         original_signature["signature"]["returns"][0]["type_name"],
         "number"
@@ -456,7 +607,7 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
     let fields = type_signature["fields"]
         .as_array()
         .ok_or("owner type fields")?;
-    assert_eq!(fields.len(), 3);
+    assert_eq!(fields.len(), 7);
     assert_eq!(fields[0]["original_type"], "bool");
     assert_eq!(fields[0]["status"], "unresolved");
     assert_eq!(fields[1]["original_type"], "table");
@@ -464,7 +615,15 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
         fields[1]["status"], "unsupported",
         "Reference atomic catalog remains separate from annotation aliases"
     );
-    let returned = &fields[2];
+    let returned_matches = fields
+        .iter()
+        .filter(|field| {
+            field["lane"].as_str() == Some("returns") && field["ordinal"].as_u64() == Some(0)
+        })
+        .collect::<Vec<_>>();
+    let [returned] = returned_matches.as_slice() else {
+        return Err("expected exactly one Reference return observation at ordinal 0".into());
+    };
     assert_eq!(returned["lane"], "returns");
     assert_eq!(returned["ordinal"], 0);
     assert_eq!(returned["original_type"], "number");
@@ -495,8 +654,29 @@ fn selected_corrections_reopen_into_primary_reference_facts() -> TestResult {
         .owner()
         .partition("wow-service.native-api-callables")
         .ok_or("original native API partition")?;
-    let [accepted] = producer.report().accepted_entities() else {
-        return Err("fixture requires one original accepted native callable".into());
+    let callable_proposals = producer
+        .batch()
+        .entity_proposals()
+        .iter()
+        .filter(|proposal| {
+            matches!(
+                proposal.semantic_key().get("record_key"),
+                Some(wow_graph::GraphProposalValue::String(record_key))
+                    if record_key.as_ref() == record.key()
+            )
+        })
+        .collect::<Vec<_>>();
+    let [callable_proposal] = callable_proposals.as_slice() else {
+        return Err("expected exactly one selected C_Transport.Read proposal".into());
+    };
+    let accepted_matches = producer
+        .report()
+        .accepted_entities()
+        .iter()
+        .filter(|accepted| accepted.proposal_id() == callable_proposal.proposal_id())
+        .collect::<Vec<_>>();
+    let [accepted] = accepted_matches.as_slice() else {
+        return Err("expected exactly one accepted selected C_Transport.Read proposal".into());
     };
     let node =
         graph_read.published_entity(producer.partition_id(), accepted.proposal_id(), &stop)?;

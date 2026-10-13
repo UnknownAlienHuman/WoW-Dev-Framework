@@ -1247,3 +1247,13 @@ identifiers, digests, paths or spans fail with their typed Core codes; ordering
 and member-shape violations use `ContractViolation`; limits and overflow refuse.
 No owner lookup, IO, rendering, lowering or provenance decision occurs here.
 Concrete consumers and required byte verification are in `CONSUMER_GUIDE.md`.
+
+`CallableAliasDefinition::with_type_atoms` admits at most 16 ordered atoms inside
+the emitted alias type token. `CallableTypeDeclaration::admit` validates bounded
+source/generated identities, typed digests and name-range containment before
+owning its strings. `CallableLoweringObservation::with_type_declarations` admits
+at most 4096 descriptors in unique rendered-name order and 16 MiB of metadata.
+Core verifies shape; Context and Service bind each selected generated file to
+the held Project/Library snapshot and verify its declaration/name bytes and
+membership in the callable or used alias atoms. Acquisition and verification
+consume the continuing cancellable operation Budget.

@@ -8,6 +8,24 @@ pub use wow_render_contract::*;
 const MAX_MEMBERS: usize = 65_536;
 const MAX_EXACT_INTEGER: i64 = 9_007_199_254_740_991;
 
+/// Exact final-output ranges for one emitted enum declaration. `index` refers
+/// to the enum's position in the caller's original input, before name sorting.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderedEnumDeclaration {
+    pub index: usize,
+    pub start: usize,
+    pub end: usize,
+    /// The complete `Enum.Name` nominal token in the `---@enum` header.
+    pub name_span: (usize, usize),
+}
+
+/// Native enum rendering plus bounded declaration metadata.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderedEnums {
+    pub text: String,
+    pub declarations: Vec<RenderedEnumDeclaration>,
+}
+
 /// Bounded, dependency-free literal renderer. No partially rendered output is
 /// returned on failure. Results are UTF-8/LF with the donor's analysis-only meta
 /// header and contain no source-provided code or annotation directives.
@@ -76,6 +94,26 @@ impl LiteralRenderer {
         enums: &[EnumDeclaration],
         constants: &[ConstantGroup],
     ) -> Result<String, LiteralError> {
+        self.render_enums_inner(enums, constants, false)
+            .map(|rendered| rendered.text)
+    }
+
+    /// The existing enum algorithm with exact native declaration/name ranges.
+    /// Metadata indices always refer to the original input order.
+    pub fn render_enums_mapped(
+        &self,
+        enums: &[EnumDeclaration],
+        constants: &[ConstantGroup],
+    ) -> Result<RenderedEnums, LiteralError> {
+        self.render_enums_inner(enums, constants, true)
+    }
+
+    fn render_enums_inner(
+        &self,
+        enums: &[EnumDeclaration],
+        constants: &[ConstantGroup],
+        capture_declarations: bool,
+    ) -> Result<RenderedEnums, LiteralError> {
         item_limit(enums.len().saturating_add(constants.len()))?;
         let member_count = enums
             .iter()
@@ -85,18 +123,27 @@ impl LiteralRenderer {
         if member_count > MAX_MEMBERS {
             return Err(LiteralError::InputLimit);
         }
-        let mut enums = enums.iter().collect::<Vec<_>>();
-        enums.sort_by(|a, b| a.name.cmp(&b.name));
+        let mut enums = enums.iter().enumerate().collect::<Vec<_>>();
+        enums.sort_by(|(_, a), (_, b)| a.name.cmp(&b.name));
         let mut constants = constants.iter().collect::<Vec<_>>();
         constants.sort_by(|a, b| a.name.cmp(&b.name));
         let mut out = self.output("---@meta _\nEnum = {}\n\n")?;
+        let mut declarations = if capture_declarations {
+            Vec::with_capacity(enums.len())
+        } else {
+            Vec::new()
+        };
         let mut previous = None;
-        for declaration in enums {
+        for (index, declaration) in enums {
             identifier(&declaration.name)?;
             unique(&mut previous, &declaration.name)?;
             let members = members(&declaration.values, MemberOrder::Value, true)?;
-            out.push("---@enum Enum.")?;
+            let start = out.bytes.len();
+            out.push("---@enum ")?;
+            let name_start = out.bytes.len();
+            out.push("Enum.")?;
             out.push(&declaration.name)?;
+            let name_end = out.bytes.len();
             out.push("\nEnum.")?;
             out.push(&declaration.name)?;
             out.push(" = {\n")?;
@@ -108,6 +155,14 @@ impl LiteralRenderer {
                 out.push(",\n")?;
             }
             out.push("}\n\n")?;
+            if capture_declarations {
+                declarations.push(RenderedEnumDeclaration {
+                    index,
+                    start,
+                    end: out.bytes.len(),
+                    name_span: (name_start, name_end),
+                });
+            }
         }
         out.push("Constants = {\n")?;
         previous = None;
@@ -128,7 +183,10 @@ impl LiteralRenderer {
             out.push("\t},\n")?;
         }
         out.push("}\n")?;
-        Ok(out.bytes)
+        Ok(RenderedEnums {
+            text: out.bytes,
+            declarations,
+        })
     }
 
     fn output(&self, header: &str) -> Result<Output, LiteralError> {

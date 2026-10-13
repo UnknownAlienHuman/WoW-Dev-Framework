@@ -213,26 +213,16 @@ pub(crate) fn project<'a>(
     known.extend(function_containers.defined.iter().cloned());
     let mut states = vec![None; facts.len()];
     let mut lowered = vec![None; facts.len()];
-    let dependency_bytes = facts.iter().try_fold(
-        facts
-            .len()
-            .checked_mul(std::mem::size_of::<Vec<String>>())
-            .ok_or(RenderError::OutputLimit)?,
-        |total, fact| {
-            fact.terms
-                .as_deref()
-                .unwrap_or(&[])
-                .iter()
-                .try_fold(total, |total, term| {
-                    // Enum qualification adds at most five bytes to an input atom.
-                    total
-                        .checked_add(term.len())
-                        .and_then(|n| n.checked_add(5 + std::mem::size_of::<String>()))
-                        .ok_or(RenderError::OutputLimit)
-                })
-        },
-    )?;
-    capture_budget.reserve(0, 0, dependency_bytes, cancelled)?;
+    let outer_vec_bytes = facts
+        .len()
+        .checked_mul(
+            std::mem::size_of::<Vec<String>>() + std::mem::size_of::<Vec<callable::PendingAtom>>(),
+        )
+        .ok_or(RenderError::OutputLimit)?;
+    capture_budget.reserve(0, 0, outer_vec_bytes, cancelled)?;
+    let mut lowered_atoms = (0..facts.len())
+        .map(|_| Vec::<callable::PendingAtom>::new())
+        .collect::<Vec<_>>();
     let mut direct_dependencies = vec![Vec::<String>::new(); facts.len()];
     let mut candidates = BTreeMap::new();
     for (index, fact) in facts.iter().enumerate() {
@@ -267,12 +257,61 @@ pub(crate) fn project<'a>(
             Some("unsupported_alias_type")
         } else if let Some(terms) = &fact.terms {
             match renderer.lower_type_mapped(&terms.join("|")) {
-                Ok(ty) => {
-                    direct_dependencies[index] = ty
-                        .atoms
-                        .iter()
-                        .map(|atom| atom.rendered_name.clone())
-                        .collect();
+                Ok(mut ty) => {
+                    let atom_count = ty.atoms.len();
+                    let mut atom_bytes = 0usize;
+                    let mut dependency_string_bytes = 0usize;
+                    for atom in &ty.atoms {
+                        if cancelled.load(Ordering::Acquire) {
+                            return Err(RenderError::Cancelled);
+                        }
+                        atom_bytes = atom_bytes
+                            .checked_add(atom.source_name.len())
+                            .and_then(|n| n.checked_add(atom.rendered_name.len()))
+                            .ok_or(RenderError::OutputLimit)?;
+                        dependency_string_bytes = dependency_string_bytes
+                            .checked_add(atom.rendered_name.len())
+                            .ok_or(RenderError::OutputLimit)?;
+                    }
+                    capture_budget.reserve(
+                        0,
+                        0,
+                        atom_bytes
+                            .checked_add(dependency_string_bytes)
+                            .ok_or(RenderError::OutputLimit)?,
+                        cancelled,
+                    )?;
+                    crate::native::lowering::reserve_vec(
+                        &mut lowered_atoms[index],
+                        atom_count,
+                        capture_budget,
+                        cancelled,
+                    )?;
+                    let mut dependencies = Vec::new();
+                    crate::native::lowering::reserve_vec(
+                        &mut dependencies,
+                        atom_count,
+                        capture_budget,
+                        cancelled,
+                    )?;
+                    for atom in &ty.atoms {
+                        if cancelled.load(Ordering::Acquire) {
+                            return Err(RenderError::Cancelled);
+                        }
+                        dependencies.push(atom.rendered_name.clone());
+                    }
+                    direct_dependencies[index] = dependencies;
+                    for atom in ty.atoms.drain(..) {
+                        if cancelled.load(Ordering::Acquire) {
+                            return Err(RenderError::Cancelled);
+                        }
+                        lowered_atoms[index].push(callable::PendingAtom {
+                            source_name: atom.source_name.into_boxed_str(),
+                            rendered_name: atom.rendered_name.into_boxed_str(),
+                            start: atom.start,
+                            end: atom.end,
+                        });
+                    }
                     lowered[index] = Some(ty.text);
                     None
                 }
@@ -421,6 +460,7 @@ pub(crate) fn project<'a>(
                     end: type_end,
                 },
                 lowered_definition: ty.to_owned().into_boxed_str(),
+                atoms: std::mem::take(&mut lowered_atoms[index]).into_boxed_slice(),
                 dependency_names: {
                     let mut names = direct_dependencies[index]
                         .iter()

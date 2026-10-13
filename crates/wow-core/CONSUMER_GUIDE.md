@@ -512,3 +512,7 @@ Project-qualified exact Library file, verify emitted tokens/markers against its
 bytes, and charge the continuing operation budget. Missing emission is absent,
 never authoritative absence; supplied mismatch refuses. Emitted syntax leaves
 consumer semantics and runtime behavior `NotEvaluated`.
+
+### Emitted native declaration links
+
+A `CallableLoweringObservation` may carry optional `CallableTypeDeclaration` entries. They link a name already present in the selected callable's emitted type atoms or used alias atoms to one exact native declaration range. Consumers must bind the entry to the genuine Reference signature and the held Project Library file, and verify the declaration/name bytes. They must preserve source and generated identities separately and charge lookups, views, and retained metadata to the existing operation Budget. Missing or ambiguous declarations are not negative authority; mismatches refuse admission. This handoff does not establish Annotation producer custody, consumer type semantics, or runtime behavior; those remain `NotEvaluated`.

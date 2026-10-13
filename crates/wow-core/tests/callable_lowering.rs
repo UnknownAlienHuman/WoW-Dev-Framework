@@ -1,6 +1,7 @@
 use wow_core::{
     CallableAliasDefinition, CallableFieldLowering, CallableLoweringLane,
-    CallableLoweringObservation, CallableTypeAtom, SourceSpan,
+    CallableLoweringObservation, CallableTypeAtom, CallableTypeDeclaration,
+    CallableTypeDeclarationKind, SourceSpan,
 };
 
 fn span(start: u64, end: u64) -> wow_core::CoreResult<SourceSpan> {
@@ -186,6 +187,56 @@ fn callable_lowering_admission_enforces_ranges_and_identity_shape()
     assert!(
         bad_digest.is_err(),
         "source digests require canonical typed SourceContent spelling"
+    );
+    let empty_declarations = admitted.with_type_declarations(&[])?;
+    assert_eq!(
+        wow_core::canonical_json_bytes(&empty_declarations)?,
+        old_observation_bytes,
+        "empty declaration selection preserves bytes"
+    );
+    let declaration = CallableTypeDeclaration::admit(
+        CallableTypeDeclarationKind::Structure,
+        "FixtureType",
+        "FixtureType",
+        &"a".repeat(40),
+        "docs/API.lua",
+        &digest,
+        span(0, 12)?,
+        "library/Types.lua",
+        &digest,
+        span(48, 70)?,
+        span(50, 61)?,
+    )?;
+    let declarations = [declaration.clone()];
+    let linked = admitted.with_type_declarations(&declarations)?;
+    assert_eq!(linked.type_declarations()[0].rendered_name(), "FixtureType");
+    assert!(
+        serde_json::to_value(linked)?
+            .get("type_declarations")
+            .is_some()
+    );
+    assert!(
+        admitted
+            .with_type_declarations(&[declaration.clone(), declaration])
+            .is_err(),
+        "duplicate emitted names are not exact links"
+    );
+    assert!(
+        CallableTypeDeclaration::admit(
+            CallableTypeDeclarationKind::Structure,
+            "FixtureType",
+            "FixtureType",
+            &"a".repeat(40),
+            "docs/API.lua",
+            &digest,
+            span(0, 12)?,
+            "library/Types.lua",
+            &digest,
+            span(48, 70)?,
+            span(71, 82)?,
+        )
+        .is_err(),
+        "name outside its declaration is rejected"
     );
     let skipped = [field(1, Some(span(14, 15)?))?];
     assert!(

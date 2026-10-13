@@ -172,3 +172,11 @@ definitions are not admitted as resolved facts. No selected alias is proof of
 complete inventory, producer custody, consumer type semantics or runtime safety.
 The optional typed fields are omitted when empty; NativeLibrary serialization,
 Reference identities and retained producer-input/1 and /2 remain unchanged.
+
+## Selected callable emitted declaration links
+
+The existing native Annotation emitter may attach exact declaration/name ranges for `Structure`, `Callback`, `ScriptObject` (including its emitted reviewed rename alias), and `Enum`. It retains only rendered names already used by the selected callable parameter/return atoms or selected alias atoms. Selection is unique and canonical by rendered name; duplicate/ambiguous names, absent declarations, and un-emitted names do not become exact links. This records names already present in emitted syntax; it does not build a complete type closure.
+
+Each descriptor keeps the original source revision/path/digest/span separate from the generated Library path/digest and declaration/name byte ranges. Context binds the genuine Reference signature and exact held Project Library file views, then checks file identity and the exact declaration/name slices. Service supplies those held views from its operation-local verified-file cache; lookup, verification, retained view metadata and sorting work consume the continuing cancellable preparation/construction Budget. No source-body mirror is introduced.
+
+The per-callable selection is bounded to 4096 declarations and 16 MiB of descriptor metadata, with a 16 Mi-step cancellable selection traversal. The existing native capture bound remains 64 MiB. The selected Wasm path has no native enum range mapping and provides no native enum declaration links; no native fallback is permitted. Empty optional metadata is omitted. Emitted Library, artifact, map, loss and retained producer-input/1 and producer-input/2 bytes/identities stay unchanged. Producer custody, consumer type semantics and runtime behavior remain `NotEvaluated`; these links prove neither complete inventory nor authoritative absence.
