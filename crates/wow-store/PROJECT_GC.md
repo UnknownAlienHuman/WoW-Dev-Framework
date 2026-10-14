@@ -72,6 +72,24 @@ canonical receipt readback. Unprovable outcomes stay `OutcomeUnknown`.
 requests conflict. Batches are bounded and atomic, without filesystem deletion,
 scheduling or multi-batch retry loops.
 
+Before the transaction, physical WAL admission counts every page of the selected
+tables and their indexes with the compiled SQLite DBSTAT facility, including
+internal and overflow pages. It includes initial freelist pages, the database
+header and a finite receipt/allocation allowance. Untouched partition payloads
+are excluded when no partition version is selected for deletion. The reservation
+is checked against the existing 128 MiB sidecar ceiling; an issued plan is never
+silently reduced to fit.
+
+For this transaction only, the owner lowers the native page-count limit to the
+admitted growth allowance and disables cache spilling. This bounds dirty page
+identities before commit, including transient rebalancing allocation. The
+original effective page limit and spill threshold are restored on both success
+and failure; an unprovable restoration is `OutcomeUnknown`. Canonical plan,
+receipt and epoch bytes are unchanged. Counting whole affected trees and the
+initial freelist is conservative: a smaller logical delete batch can still be
+refused when those physical pages or the retained WAL cannot fit. Extra native
+allocation exhaustion rolls back, rather than enlarging the allowance.
+
 The store lifecycle uses three genuine validated publications with shared data,
 pins, a reader across activation, policy/root/lease stale plans, actual reclamation,
 current/shared preservation, cancellation, released-ID conflicts and durable

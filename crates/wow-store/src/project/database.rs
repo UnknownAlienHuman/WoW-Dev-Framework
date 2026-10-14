@@ -385,6 +385,10 @@ impl Database {
         Ok(c)
     }
     pub fn write_budget(&self, bytes: usize) -> StoreResult<()> {
+        let reserve = (bytes as u64).saturating_mul(3).saturating_add(1024 * 1024);
+        self.reserve_wal_bytes(reserve)
+    }
+    pub(super) fn reserve_wal_bytes(&self, reserve: u64) -> StoreResult<()> {
         self.ensure_idle()?;
         // Reserve WAL growth conservatively before entering any transaction. A
         // pinned reader can cause an explicit refusal, never unbounded growth.
@@ -395,8 +399,7 @@ impl Database {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => 0,
             Err(_) => return Err(invalid()),
         };
-        let reserve = (bytes as u64).saturating_mul(3).saturating_add(1024 * 1024);
-        if size.saturating_add(reserve) > 128 * 1024 * 1024 {
+        if size.saturating_add(reserve) > MAX_SIDECAR_BYTES {
             return Err(failure(StoreErrorCode::BudgetExceeded));
         }
         Ok(())

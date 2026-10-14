@@ -2,6 +2,9 @@
 mod inventory;
 mod model;
 mod policy;
+#[cfg(test)]
+mod tests;
+mod wal_budget;
 use super::{ProjectStore, database::Lifetime, model::*, release::require_release};
 use crate::{OperationId, StoreError, StoreErrorCode, StoreResult};
 pub use model::ProjectGcPolicy;
@@ -233,7 +236,23 @@ impl ProjectStore {
             return Err(failure(StoreErrorCode::CurrentConflict));
         }
         let receipt = ProjectGcReceipt::new(id.clone(), plan.report.clone())?;
-        self.db.write_budget(2 * 1024 * 1024)?;
+        let receipt_bytes = receipt.canonical_bytes()?;
+        let limits = wal_budget::admit(&self.db, &plan.report, receipt_bytes.len(), stop)?;
+        let result =
+            self.execute_gc_transaction(plan, id, request_digest, receipt, receipt_bytes, stop);
+        limits.restore(&self.db.connection)?;
+        result
+    }
+
+    fn execute_gc_transaction(
+        &mut self,
+        plan: &ProjectGcPlan,
+        id: &OperationId,
+        request_digest: String,
+        receipt: ProjectGcReceipt,
+        receipt_bytes: Vec<u8>,
+        stop: &AtomicBool,
+    ) -> StoreResult<ProjectGcReceipt> {
         let tx = self
             .db
             .connection
@@ -307,11 +326,7 @@ impl ProjectStore {
         super::read::read_current(&tx, &self.db.epoch)?;
         tx.execute(
             "INSERT INTO gc_operations(operation_id,request_digest,record) VALUES(?1,?2,?3)",
-            params![
-                id.as_str(),
-                request_digest,
-                encode(&receipt, 2 * 1024 * 1024)?
-            ],
+            params![id.as_str(), request_digest, receipt_bytes],
         )
         .map_err(StoreError::database)?;
         checkpoint(stop)?;
