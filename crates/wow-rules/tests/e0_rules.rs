@@ -97,17 +97,7 @@ fn configuration() -> TestResult<ProjectConfiguration> {
 }
 
 fn project() -> TestResult<ProjectView> {
-    let configuration = configuration()?;
-    let library = LuaWorkspaceSnapshot::build(
-        configuration.analyzer_binding().backend().clone(),
-        LuaWorkspaceUniverse::Fixture,
-        vec![LuaWorkspaceFileInput::new(
-            "library/C_E0Fixture.lua",
-            LIBRARY_SOURCE,
-        )],
-        LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
-    )?;
-    let files = vec![
+    project_with_main_sources(vec![
         ProjectInputFile::declared(
             "main/clean.lua",
             CLEAN_SOURCE,
@@ -129,7 +119,20 @@ fn project() -> TestResult<ProjectView> {
             ProjectFileRole::FirstPartyMain,
             Some("wow-emmy/workspace-fixture:main/secret-local.lua"),
         )?,
-    ];
+    ])
+}
+
+fn project_with_main_sources(files: Vec<ProjectInputFile>) -> TestResult<ProjectView> {
+    let configuration = configuration()?;
+    let library = LuaWorkspaceSnapshot::build(
+        configuration.analyzer_binding().backend().clone(),
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "library/C_E0Fixture.lua",
+            LIBRARY_SOURCE,
+        )],
+        LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
+    )?;
     let bundle = ProjectInputBundle::closed(configuration, files, vec![library])?;
     let mut publisher = ProjectPublisher::new();
     let snapshot = publisher.publish_initial(bundle)?;
@@ -210,12 +213,28 @@ fn run(
     reference: &ReferenceView,
     cancelled: &AtomicBool,
 ) -> TestResult<wow_rules::RuleExecutionReport> {
+    let budget = RuleExecutionBudget::fixture_e0()?;
+    Ok(run_with_budget(
+        project,
+        reference,
+        cancelled,
+        budget,
+        &RuleScope::all(),
+    )?)
+}
+
+fn run_with_budget(
+    project: &ProjectView,
+    reference: &ReferenceView,
+    cancelled: &AtomicBool,
+    budget: RuleExecutionBudget,
+    scope: &RuleScope,
+) -> wow_rules::RuleResult<wow_rules::RuleExecutionReport> {
     let registry = RuleRegistry::e0()?;
     let policy = RuleFixturePolicy::e0()?;
-    let budget = RuleExecutionBudget::fixture_e0()?;
     let context =
         RuleExecutionContext::new(&registry, &policy, project, reference, budget, cancelled);
-    Ok(execute_e0(&context, &RuleScope::all())?)
+    execute_e0(&context, scope)
 }
 
 fn clean_record(outcome: &RuleEvaluationOutcome) -> Option<&CleanEvaluationRecord> {
@@ -223,6 +242,80 @@ fn clean_record(outcome: &RuleEvaluationOutcome) -> Option<&CleanEvaluationRecor
         RuleEvaluationOutcome::EvaluatedClean { record } => Some(record),
         _ => None,
     }
+}
+
+#[test]
+fn request_budget_preflights_shared_evaluations_and_exact_output_bytes() -> TestResult {
+    let project = project()?;
+    let reference = reference(
+        &project,
+        ReferenceCoverageStatus::Complete,
+        ReferenceCoverageStatus::Complete,
+        true,
+        false,
+    )?;
+    let cancelled = AtomicBool::new(false);
+    let default_budget = RuleExecutionBudget::fixture_e0()?;
+    let selected_files = project
+        .file_manifest()
+        .iter()
+        .filter(|file| {
+            matches!(
+                file.relative_path().as_str(),
+                "main/missing-api.lua" | "main/secret-local.lua"
+            )
+        })
+        .map(|file| file.file_id().clone())
+        .collect::<Vec<_>>();
+    let scope = RuleScope::files(selected_files);
+    let report = run_with_budget(&project, &reference, &cancelled, default_budget, &scope)?;
+    let api_count = report
+        .evaluations()
+        .iter()
+        .filter(|evaluation| evaluation.rule_id().as_str() == API_EXISTS_RULE)
+        .count();
+    let secret_count = report
+        .evaluations()
+        .iter()
+        .filter(|evaluation| evaluation.rule_id().as_str() == SECRET_LOCAL_RULE)
+        .count();
+    assert!(api_count > 0);
+    assert!(secret_count > 0);
+
+    let canonical = wow_core::canonical_json_bytes(&report)?;
+    let exact_output_bytes = u64::try_from(canonical.len())?;
+    let exact_budget = RuleExecutionBudget::new(1_024, 256, 4_096, 4_096, exact_output_bytes)?;
+    let exact_report = run_with_budget(&project, &reference, &cancelled, exact_budget, &scope)?;
+    assert_eq!(exact_report, report);
+    assert_eq!(wow_core::canonical_json_bytes(&exact_report)?, canonical);
+
+    let one_byte_short =
+        RuleExecutionBudget::new(1_024, 256, 4_096, 4_096, exact_output_bytes - 1)?;
+    assert_eq!(
+        run_with_budget(&project, &reference, &cancelled, one_byte_short, &scope,)
+            .err()
+            .map(|error| error.code()),
+        Some(wow_rules::RuleErrorCode::RuleOutputBudgetExceeded)
+    );
+
+    let single_provider_limit = u64::try_from(api_count.max(secret_count))?;
+    let limit_one = RuleExecutionBudget::new(1, 256, 4_096, 4_096, exact_output_bytes)?;
+    assert_eq!(
+        run_with_budget(&project, &reference, &cancelled, limit_one, &scope)
+            .err()
+            .map(|error| error.code()),
+        Some(wow_rules::RuleErrorCode::RuleExecutionBudgetExceeded)
+    );
+
+    let shared_limit =
+        RuleExecutionBudget::new(single_provider_limit, 256, 4_096, 4_096, exact_output_bytes)?;
+    assert_eq!(
+        run_with_budget(&project, &reference, &cancelled, shared_limit, &scope,)
+            .err()
+            .map(|error| error.code()),
+        Some(wow_rules::RuleErrorCode::RuleExecutionBudgetExceeded)
+    );
+    Ok(())
 }
 
 #[test]

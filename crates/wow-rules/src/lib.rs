@@ -4,6 +4,7 @@
 //! `wow.api.exists@1` and `wow.secret.local_operation@1` remain the only active providers;
 //! fixture and explicitly admitted native production policies are separate.
 
+mod budget;
 mod context;
 mod descriptor;
 mod engine;

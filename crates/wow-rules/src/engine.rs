@@ -6,8 +6,8 @@ use wow_core::{
     EntityKey, EvidenceConfidence, EvidenceRecord, FindingDraft, MessageArgument,
     MessageArgumentKind, MessageCode, NotEvaluatedRecord, ProducerId, ProvenanceClass, Remediation,
     RemediationClass, RolloutPolicy, Severity, SourceContent, SourceHandle, SourceHandleBuilder,
-    SourceOriginKind, SourceSpan, ToolVersion, canonical_json_bytes, derive_evidence,
-    derive_root_cause_key, validate_evidence_derivation_graph,
+    SourceOriginKind, SourceSpan, ToolVersion, derive_evidence, derive_root_cause_key,
+    validate_evidence_derivation_graph,
 };
 use wow_emmy::{
     EmmyControlFlowRelationKind, EmmyGuardFact, EmmyGuardKind, EmmyLocalBindingFact,
@@ -26,6 +26,11 @@ use wow_reference::{
     LookupResult, LookupUnknownReason, ReferenceRecord, ReferenceRecordKind, RestrictionState,
 };
 
+use crate::budget::{
+    Admission, ArgumentPlan, FindingMaterial, ReportMaterial, SourcePlan, admit_source_plan,
+    preflight_cancelled, preflight_clean, preflight_finding, preflight_lookup,
+    preflight_not_evaluated, preflight_report, verify_canonical_output,
+};
 use crate::descriptor::{API_EXISTS_RULE, SECRET_LOCAL_RULE};
 use crate::identity::canonical_id;
 use crate::output::RuleFindingSetInput;
@@ -39,6 +44,49 @@ use crate::{
 const FIXTURE_SECRET_ENTITY: &str = "function:C_E0Fixture.SecretText";
 const PRODUCER_ID: &str = "wow.rules";
 const PRODUCER_VERSION: &str = "1.0.0";
+
+#[derive(Clone, Copy)]
+enum Construction {
+    Evaluation,
+    Lookup,
+    Handle,
+    Evidence,
+    Root,
+    Finding,
+    Report,
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+struct ConstructionCounts {
+    evaluations: usize,
+    lookups: usize,
+    handles: usize,
+    evidence: usize,
+    roots: usize,
+    findings: usize,
+    reports: usize,
+}
+#[cfg(test)]
+thread_local! { static CONSTRUCTIONS: std::cell::Cell<ConstructionCounts> = std::cell::Cell::new(ConstructionCounts::default()); }
+#[cfg(test)]
+fn observe(construction: Construction) {
+    CONSTRUCTIONS.with(|cell| {
+        let mut counts = cell.get();
+        match construction {
+            Construction::Evaluation => counts.evaluations += 1,
+            Construction::Lookup => counts.lookups += 1,
+            Construction::Handle => counts.handles += 1,
+            Construction::Evidence => counts.evidence += 1,
+            Construction::Root => counts.roots += 1,
+            Construction::Finding => counts.findings += 1,
+            Construction::Report => counts.reports += 1,
+        }
+        cell.set(counts);
+    });
+}
+#[cfg(not(test))]
+fn observe(_: Construction) {}
 
 struct ApiFindingInput<'a> {
     file: &'a ProjectFileRecord,
@@ -86,6 +134,13 @@ pub fn execute(
     context: &RuleExecutionContext<'_>,
     scope: &RuleScope,
 ) -> RuleResult<RuleExecutionReport> {
+    run_providers(context, scope)
+}
+
+fn run_providers(
+    context: &RuleExecutionContext<'_>,
+    scope: &RuleScope,
+) -> RuleResult<RuleExecutionReport> {
     context.validate(scope)?;
     if context.is_cancelled() {
         return cancelled_report(context);
@@ -99,78 +154,94 @@ pub fn execute(
         .descriptor(SECRET_LOCAL_RULE)
         .ok_or_else(|| registry_error("Secret rule descriptor is missing"))?;
 
-    let mut evaluations = evaluate_api(context, scope, api)?;
-    evaluations.extend(evaluate_secret(context, scope, secret)?);
-    let usage = summarize_usage(&evaluations)?;
-    enforce_budget(context, usage)?;
-    let report = RuleExecutionReport::build(
-        context.registry().registry_id(),
-        context
-            .project()
-            .snapshot()
-            .generation_context()
-            .context_id(),
-        context.project().snapshot_id(),
-        context.project().analyzer_snapshot_id(),
-        context.reference().generation_id(),
-        context.reference().self_digest(),
-        context.policy_id(),
-        evaluations,
-        usage,
-    )?;
-    if u64::try_from(
-        canonical_json_bytes(&report)
-            .map_err(core_construction)?
-            .len(),
-    )
-    .unwrap_or(u64::MAX)
-        > context.budget().max_serialized_output_bytes()
-    {
-        return Err(RuleError::new(
-            RuleErrorCode::RuleOutputBudgetExceeded,
-            "serialized rule report exceeds the configured output budget",
-        ));
-    }
-    Ok(report)
+    // One continuing request-local admission. Providers never reset it, so the
+    // selected limits bound construction as well as the final result.
+    let mut admission = Admission::new(context);
+    let mut evaluations = Vec::new();
+    let mut api_evaluations = evaluate_api(context, scope, api, &mut admission)?;
+    evaluations.append(&mut api_evaluations);
+    let mut secret_evaluations = evaluate_secret(context, scope, secret, &mut admission)?;
+    evaluations.append(&mut secret_evaluations);
+    build_report(context, evaluations, &admission)
 }
 
 fn cancelled_report(context: &RuleExecutionContext<'_>) -> RuleResult<RuleExecutionReport> {
     let version = rule_version()?;
-    let evaluations = [API_EXISTS_RULE, SECRET_LOCAL_RULE]
-        .into_iter()
-        .map(|rule| {
-            Ok(RuleEvaluationRecord::new(
-                rule.parse().map_err(core_construction)?,
-                version.clone(),
-                "cancelled:preflight",
-                RuleEvaluationOutcome::Cancelled,
-            ))
-        })
-        .collect::<RuleResult<Vec<_>>>()?;
-    RuleExecutionReport::build(
-        context.registry().registry_id(),
-        context
-            .project()
-            .snapshot()
-            .generation_context()
-            .context_id(),
-        context.project().snapshot_id(),
-        context.project().analyzer_snapshot_id(),
-        context.reference().generation_id(),
-        context.reference().self_digest(),
-        context.policy_id(),
+    let mut admission = Admission::new(context);
+    let mut evaluations = Vec::with_capacity(2);
+    for rule in [API_EXISTS_RULE, SECRET_LOCAL_RULE] {
+        admission.admit_evaluation()?;
+        let rule_id = rule.parse().map_err(core_construction)?;
+        preflight_cancelled(
+            &mut admission,
+            context,
+            &rule_id,
+            &version,
+            "cancelled:preflight",
+        )?;
+        observe(Construction::Evaluation);
+        evaluations.push(RuleEvaluationRecord::new(
+            rule_id,
+            version.clone(),
+            "cancelled:preflight",
+            RuleEvaluationOutcome::Cancelled,
+        ));
+    }
+    build_report(context, evaluations, &admission)
+}
+
+fn build_report(
+    context: &RuleExecutionContext<'_>,
+    evaluations: Vec<RuleEvaluationRecord>,
+    admission: &Admission,
+) -> RuleResult<RuleExecutionReport> {
+    let usage = admission.usage();
+    let registry_id = context.registry().registry_id();
+    let context_id = context
+        .project()
+        .snapshot()
+        .generation_context()
+        .context_id();
+    let project_snapshot_id = context.project().snapshot_id();
+    let analyzer_snapshot_id = context.project().analyzer_snapshot_id();
+    let reference_generation = context.reference().generation_id();
+    let reference_view_digest = context.reference().self_digest();
+    let fixture_policy_id = context.policy_id();
+    let max_bytes = context.budget().max_serialized_output_bytes();
+    let material = ReportMaterial {
+        registry_id,
+        context_id,
+        project_snapshot_id,
+        analyzer_snapshot_id,
+        reference_generation,
+        reference_view_digest,
+        fixture_policy_id,
+        evaluations: &evaluations,
+        budget_usage: usage,
+    };
+    let expected_bytes = preflight_report(&material, max_bytes)?;
+    admission.verify_report_plan(&material, expected_bytes)?;
+    observe(Construction::Report);
+    let report = RuleExecutionReport::build(
+        registry_id,
+        context_id,
+        project_snapshot_id,
+        analyzer_snapshot_id,
+        reference_generation,
+        reference_view_digest,
+        fixture_policy_id,
         evaluations,
-        RuleBudgetUsage {
-            evaluations: 2,
-            ..RuleBudgetUsage::default()
-        },
-    )
+        usage,
+    )?;
+    verify_canonical_output(&report, expected_bytes, max_bytes)?;
+    Ok(report)
 }
 
 fn evaluate_api(
     context: &RuleExecutionContext<'_>,
     scope: &RuleScope,
     descriptor: &crate::RuleDescriptor,
+    admission: &mut Admission,
 ) -> RuleResult<Vec<RuleEvaluationRecord>> {
     let mut output = Vec::new();
     let calls = context
@@ -186,10 +257,20 @@ fn evaluate_api(
         }
         for fact in context.project().member_references_for_file(file.file_id()) {
             if context.is_cancelled() {
+                admission.admit_evaluation()?;
+                let cancelled_scope = format!("api:{}:cancelled", file.file_id());
+                preflight_cancelled(
+                    admission,
+                    context,
+                    descriptor.rule_id(),
+                    descriptor.rule_version(),
+                    &cancelled_scope,
+                )?;
+                observe(Construction::Evaluation);
                 output.push(RuleEvaluationRecord::new(
                     descriptor.rule_id().clone(),
                     descriptor.rule_version().clone(),
-                    &format!("api:{}:cancelled", file.file_id()),
+                    &cancelled_scope,
                     RuleEvaluationOutcome::Cancelled,
                 ));
                 return Ok(output);
@@ -201,6 +282,7 @@ fn evaluate_api(
             {
                 continue;
             }
+            admission.admit_evaluation()?;
             let scope_id = format!("api:{}:{}", file.file_id(), fact.fact_id());
             let call = calls.get(fact.fact_id()).copied();
             let fact_ids = api_fact_ids(fact, call);
@@ -208,6 +290,7 @@ fn evaluate_api(
                 output.push(not_evaluated(
                     context,
                     descriptor,
+                    admission,
                     &scope_id,
                     vec![RuleBlockerKind::AmbiguousReference],
                     descriptor.required_capabilities().to_vec(),
@@ -222,6 +305,7 @@ fn evaluate_api(
                 output.push(not_evaluated(
                     context,
                     descriptor,
+                    admission,
                     &scope_id,
                     gate.blockers,
                     gate.blocking_capabilities,
@@ -231,13 +315,18 @@ fn evaluate_api(
                 )?);
                 continue;
             }
-            let (lookup, found) =
-                exact_lookup(context, context.api_partition_id(), &entity_lookup_key)?;
+            let (lookup, found) = exact_lookup(
+                context,
+                admission,
+                context.api_partition_id(),
+                &entity_lookup_key,
+            )?;
             match lookup.outcome() {
                 RuleReferenceOutcome::Found => {
                     output.push(clean(
                         context,
                         descriptor,
+                        admission,
                         CleanInput {
                             scope_id: &scope_id,
                             claim: RuleCleanClaimKind::ApiExistsForExactUse,
@@ -254,6 +343,7 @@ fn evaluate_api(
                     output.push(api_finding(
                         context,
                         descriptor,
+                        admission,
                         ApiFindingInput {
                             file,
                             fact,
@@ -268,6 +358,7 @@ fn evaluate_api(
                     output.push(not_evaluated(
                         context,
                         descriptor,
+                        admission,
                         &scope_id,
                         vec![RuleBlockerKind::UnsupportedFactShape],
                         vec![capability("reference.symbol.exact_lookup")?],
@@ -280,6 +371,7 @@ fn evaluate_api(
                     output.push(not_evaluated(
                         context,
                         descriptor,
+                        admission,
                         &scope_id,
                         vec![RuleBlockerKind::ReferenceConflict],
                         vec![capability("reference.symbol.exact_lookup")?],
@@ -294,6 +386,7 @@ fn evaluate_api(
                     output.push(not_evaluated(
                         context,
                         descriptor,
+                        admission,
                         &scope_id,
                         reference_blockers(lookup.outcome()),
                         vec![capability("reference.symbol.exact_lookup")?],
@@ -313,7 +406,7 @@ fn evaluate_api(
             }
         }
     }
-    evaluate_xml_api(context, scope, descriptor, &mut output)?;
+    evaluate_xml_api(context, scope, descriptor, admission, &mut output)?;
     Ok(output)
 }
 
@@ -321,6 +414,7 @@ fn evaluate_xml_api(
     context: &RuleExecutionContext<'_>,
     scope: &RuleScope,
     descriptor: &crate::RuleDescriptor,
+    admission: &mut Admission,
     output: &mut Vec<RuleEvaluationRecord>,
 ) -> RuleResult<()> {
     let Some(report) = context
@@ -343,10 +437,20 @@ fn evaluate_xml_api(
             .collect::<BTreeMap<_, _>>();
         for fact in &unit.member_references {
             if context.is_cancelled() {
+                admission.admit_evaluation()?;
+                let cancelled_scope = format!("api:xml:{}:cancelled", unit.unit_id);
+                preflight_cancelled(
+                    admission,
+                    context,
+                    descriptor.rule_id(),
+                    descriptor.rule_version(),
+                    &cancelled_scope,
+                )?;
+                observe(Construction::Evaluation);
                 output.push(RuleEvaluationRecord::new(
                     descriptor.rule_id().clone(),
                     descriptor.rule_version().clone(),
-                    &format!("api:xml:{}:cancelled", unit.unit_id),
+                    &cancelled_scope,
                     RuleEvaluationOutcome::Cancelled,
                 ));
                 return Ok(());
@@ -359,6 +463,7 @@ fn evaluate_xml_api(
             if context.is_fixture_policy() && fact.resolution == EmmyReferenceResolution::Resolved {
                 continue;
             }
+            admission.admit_evaluation()?;
             let scope_id = format!("api:xml:{}:{}", unit.unit_id, fact.fact_id);
             let call = calls.get(fact.fact_id.as_ref()).copied();
             let fact_ids = xml_api_fact_ids(fact, call);
@@ -366,6 +471,7 @@ fn evaluate_xml_api(
                 output.push(not_evaluated(
                     context,
                     descriptor,
+                    admission,
                     &scope_id,
                     vec![RuleBlockerKind::AmbiguousReference],
                     descriptor.required_capabilities().to_vec(),
@@ -380,6 +486,7 @@ fn evaluate_xml_api(
                 output.push(not_evaluated(
                     context,
                     descriptor,
+                    admission,
                     &scope_id,
                     gate.blockers,
                     gate.blocking_capabilities,
@@ -389,13 +496,18 @@ fn evaluate_xml_api(
                 )?);
                 continue;
             }
-            let (lookup, found) =
-                exact_lookup(context, context.api_partition_id(), &entity_lookup_key)?;
+            let (lookup, found) = exact_lookup(
+                context,
+                admission,
+                context.api_partition_id(),
+                &entity_lookup_key,
+            )?;
             match lookup.outcome() {
                 RuleReferenceOutcome::Found => {
                     output.push(clean(
                         context,
                         descriptor,
+                        admission,
                         CleanInput {
                             scope_id: &scope_id,
                             claim: RuleCleanClaimKind::ApiExistsForExactUse,
@@ -412,6 +524,7 @@ fn evaluate_xml_api(
                     output.push(xml_api_finding(
                         context,
                         descriptor,
+                        admission,
                         XmlApiFindingInput {
                             unit,
                             fact,
@@ -426,6 +539,7 @@ fn evaluate_xml_api(
                     output.push(not_evaluated(
                         context,
                         descriptor,
+                        admission,
                         &scope_id,
                         vec![RuleBlockerKind::UnsupportedFactShape],
                         vec![capability("reference.symbol.exact_lookup")?],
@@ -438,6 +552,7 @@ fn evaluate_xml_api(
                     output.push(not_evaluated(
                         context,
                         descriptor,
+                        admission,
                         &scope_id,
                         vec![RuleBlockerKind::ReferenceConflict],
                         vec![capability("reference.symbol.exact_lookup")?],
@@ -452,6 +567,7 @@ fn evaluate_xml_api(
                     output.push(not_evaluated(
                         context,
                         descriptor,
+                        admission,
                         &scope_id,
                         reference_blockers(lookup.outcome()),
                         vec![capability("reference.symbol.exact_lookup")?],
@@ -631,11 +747,14 @@ fn evaluate_secret(
     context: &RuleExecutionContext<'_>,
     scope: &RuleScope,
     descriptor: &crate::RuleDescriptor,
+    admission: &mut Admission,
 ) -> RuleResult<Vec<RuleEvaluationRecord>> {
     if !context.supports_secret_policy() {
+        admission.admit_evaluation()?;
         return Ok(vec![not_evaluated(
             context,
             descriptor,
+            admission,
             "secret:production-policy:restriction-facets-unavailable",
             vec![RuleBlockerKind::MissingRestrictionFacet],
             vec![capability("reference.restriction.facets")?],
@@ -650,9 +769,11 @@ fn evaluate_secret(
         .iter()
         .all(|partition| partition.id() != context.secret_partition_id())
     {
+        admission.admit_evaluation()?;
         return Ok(vec![not_evaluated(
             context,
             descriptor,
+            admission,
             "secret:restriction-partition-unavailable",
             vec![RuleBlockerKind::ReferencePartitionMissing],
             vec![capability("reference.restriction.facets")?],
@@ -717,6 +838,7 @@ fn evaluate_secret(
             output.push(secret_missing_relation(
                 context,
                 descriptor,
+                admission,
                 file.file_id(),
                 binding,
                 "reference",
@@ -727,6 +849,7 @@ fn evaluate_secret(
             output.push(secret_missing_relation(
                 context,
                 descriptor,
+                admission,
                 file.file_id(),
                 binding,
                 "call",
@@ -768,6 +891,7 @@ fn evaluate_secret(
             continue;
         }
         for operation in operations {
+            admission.admit_evaluation()?;
             let scope_id = format!("secret:{}:{}", file.file_id(), operation.fact_id());
             let gate = capability_gate(context, file, descriptor.required_capabilities())?;
             let mut fact_ids = vec![
@@ -788,6 +912,7 @@ fn evaluate_secret(
                 output.push(not_evaluated(
                     context,
                     descriptor,
+                    admission,
                     &scope_id,
                     gate.blockers,
                     gate.blocking_capabilities,
@@ -801,6 +926,7 @@ fn evaluate_secret(
                 output.push(not_evaluated(
                     context,
                     descriptor,
+                    admission,
                     &scope_id,
                     vec![RuleBlockerKind::UnsupportedFactShape],
                     vec![capability("emmy.fact.operations")?],
@@ -814,6 +940,7 @@ fn evaluate_secret(
                 output.push(not_evaluated(
                     context,
                     descriptor,
+                    admission,
                     &scope_id,
                     vec![RuleBlockerKind::MissingFactRelation],
                     vec![capability("emmy.fact.local_flow")?],
@@ -823,8 +950,12 @@ fn evaluate_secret(
                 )?);
                 continue;
             }
-            let (lookup, found) =
-                exact_lookup(context, context.secret_partition_id(), &producer_entity)?;
+            let (lookup, found) = exact_lookup(
+                context,
+                admission,
+                context.secret_partition_id(),
+                &producer_entity,
+            )?;
             match lookup.outcome() {
                 RuleReferenceOutcome::Found => {
                     let record = found.ok_or_else(|| {
@@ -838,6 +969,7 @@ fn evaluate_secret(
                             output.push(clean(
                                 context,
                                 descriptor,
+                                admission,
                                 CleanInput {
                                     scope_id: &scope_id,
                                     claim: RuleCleanClaimKind::SecretProducerHasNoMatchingFacet,
@@ -853,6 +985,7 @@ fn evaluate_secret(
                             output.push(not_evaluated(
                                 context,
                                 descriptor,
+                                admission,
                                 &scope_id,
                                 vec![RuleBlockerKind::MissingRestrictionFacet],
                                 vec![capability("reference.restriction.facets")?],
@@ -868,6 +1001,7 @@ fn evaluate_secret(
                     if !context.is_fixture_policy() {
                         let (guard_lookup, guard_record) = exact_lookup(
                             context,
+                            admission,
                             context.secret_partition_id(),
                             context.guard_entity(),
                         )?;
@@ -895,6 +1029,7 @@ fn evaluate_secret(
                             output.push(not_evaluated(
                                 context,
                                 descriptor,
+                                admission,
                                 &scope_id,
                                 blockers,
                                 vec![capability("reference.restriction.facets")?],
@@ -926,6 +1061,7 @@ fn evaluate_secret(
                         output.push(clean(
                             context,
                             descriptor,
+                            admission,
                             CleanInput {
                                 scope_id: &scope_id,
                                 claim: if context.is_fixture_policy() {
@@ -943,6 +1079,7 @@ fn evaluate_secret(
                         output.push(secret_finding(
                             context,
                             descriptor,
+                            admission,
                             file,
                             binding,
                             reference,
@@ -962,6 +1099,7 @@ fn evaluate_secret(
                     output.push(clean(
                         context,
                         descriptor,
+                        admission,
                         CleanInput {
                             scope_id: &scope_id,
                             claim: RuleCleanClaimKind::SecretProducerHasNoMatchingFacet,
@@ -976,6 +1114,7 @@ fn evaluate_secret(
                     output.push(not_evaluated(
                         context,
                         descriptor,
+                        admission,
                         &scope_id,
                         vec![RuleBlockerKind::ReferenceConflict],
                         vec![capability("reference.restriction.facets")?],
@@ -990,6 +1129,7 @@ fn evaluate_secret(
                     output.push(not_evaluated(
                         context,
                         descriptor,
+                        admission,
                         &scope_id,
                         reference_blockers(lookup.outcome()),
                         vec![capability("reference.restriction.facets")?],
@@ -1141,6 +1281,7 @@ fn span_contains(outer: SourceSpan, inner: SourceSpan) -> bool {
 fn api_finding(
     context: &RuleExecutionContext<'_>,
     descriptor: &crate::RuleDescriptor,
+    admission: &mut Admission,
     input: ApiFindingInput<'_>,
 ) -> RuleResult<RuleEvaluationRecord> {
     let ApiFindingInput {
@@ -1151,28 +1292,78 @@ fn api_finding(
         lookup,
         coverage_ids,
     } = input;
-    let input_fact_ids = api_fact_ids(fact, call);
+    // The provider admitted this evaluation before lookup or fact retention.
+    admission.admit_finding()?;
+    let mut input_fact_ids = api_fact_ids(fact, call);
+    input_fact_ids.sort();
+    input_fact_ids.dedup();
     let entity = wow_core::EntityKey::new(
         "function",
         &format!("{}.{}", fact.receiver(), fact.member()),
     )
     .map_err(core_construction)?;
-    let primary = project_handle(context, file, fact.member_span(), Some(entity.clone()))?;
-    let mut related = Vec::new();
+    let mut plans = Vec::new();
+    admit_source_plan(
+        admission,
+        &mut plans,
+        project_source_plan(
+            context,
+            file.relative_path().as_str(),
+            file.content_digest(),
+            fact.member_span(),
+            Some(&entity),
+        ),
+    )?;
     if let Some(call) = call {
-        related.push(project_handle(context, file, call.call_span(), None)?);
+        admit_source_plan(
+            admission,
+            &mut plans,
+            project_source_plan(
+                context,
+                file.relative_path().as_str(),
+                file.content_digest(),
+                call.call_span(),
+                None,
+            ),
+        )?;
     }
-    let reference_handle = reference_view_handle(context)?;
-    related.push(reference_handle.clone());
-    let mut source_handles = vec![primary.clone()];
-    source_handles.extend(related.iter().cloned());
-    canonicalize_sources(&mut source_handles);
-    let evidence = evidence_bundle(context, &source_handles, reference_handle.handle_id())?;
+    let reference_origin = reference_origin(context);
+    admit_source_plan(
+        admission,
+        &mut plans,
+        reference_source_plan(context, &reference_origin)?,
+    )?;
+    let scope_id = format!("api:{}:{}", file.file_id(), fact.fact_id());
+    let arguments = api_argument_plans(
+        context,
+        entity_lookup_key,
+        fact.receiver(),
+        fact.member(),
+        call.is_some(),
+    );
+    preflight_finding(
+        admission,
+        context,
+        &FindingMaterial {
+            scope_id: &scope_id,
+            descriptor,
+            subject: &entity,
+            sources: &plans,
+            arguments: &arguments,
+            fact_ids: &input_fact_ids,
+            coverage_ids: &coverage_ids,
+            lookup: &lookup,
+            guard: None,
+        },
+    )?;
+    let (primary, related, source_handles, reference_handle_id) =
+        materialize_sources(context, plans)?;
+    let evidence = evidence_bundle(context, &source_handles, reference_handle_id)?;
     let evidence_ids = evidence
         .iter()
         .map(EvidenceRecord::evidence_id)
         .collect::<Vec<_>>();
-    let root = derive_root_cause_key(&(
+    let root_material = (
         descriptor.rule_id(),
         descriptor.rule_version(),
         context
@@ -1184,8 +1375,10 @@ fn api_finding(
         lookup.lookup_id(),
         primary.handle_id(),
         entity_lookup_key,
-    ))
-    .map_err(core_construction)?;
+    );
+    admission.preflight_identity("wow-core/root-cause/e0-1", &root_material)?;
+    observe(Construction::Root);
+    let root = derive_root_cause_key(&root_material).map_err(core_construction)?;
     let draft = FindingDraft::new(
         context
             .project()
@@ -1204,35 +1397,13 @@ fn api_finding(
     .related_source_handle_ids(related.iter().map(SourceHandle::handle_id).collect())
     .evidence_ids(evidence_ids)
     .required_capability_ids(descriptor.required_capabilities().to_vec())
-    .message_arguments(vec![
-        argument("authority", "authoritative_absent")?,
-        identifier_argument("entity", entity_lookup_key)?,
-        identifier_argument("member", fact.member())?,
-        identifier_argument(
-            "profile",
-            context
-                .project()
-                .configuration()
-                .selected_profile()
-                .profile_id()
-                .as_str(),
-        )?,
-        identifier_argument("receiver", fact.receiver())?,
-        identifier_argument("remediation_plan", "verify-current-api-contract")?,
-        argument(
-            "use_kind",
-            if call.is_some() {
-                "direct_member_call"
-            } else {
-                "member_reference"
-            },
-        )?,
-    ])
+    .message_arguments(materialize_arguments(&arguments)?)
     .map_err(core_construction)?
     .root_causes(Some(root), None)
     .remediation(
         Remediation::new(RemediationClass::PlanOnly, None, None).map_err(core_construction)?,
     );
+    observe(Construction::Finding);
     let finding = draft
         .bind(
             context
@@ -1244,7 +1415,6 @@ fn api_finding(
             &evidence,
         )
         .map_err(core_construction)?;
-    let scope_id = format!("api:{}:{}", file.file_id(), fact.fact_id());
     let usage = RuleBudgetUsage {
         evaluations: 1,
         findings: 1,
@@ -1264,6 +1434,7 @@ fn api_finding(
             budget_usage: usage,
         },
     )?;
+    observe(Construction::Evaluation);
     Ok(RuleEvaluationRecord::new(
         descriptor.rule_id().clone(),
         descriptor.rule_version().clone(),
@@ -1277,6 +1448,7 @@ fn api_finding(
 fn xml_api_finding(
     context: &RuleExecutionContext<'_>,
     descriptor: &crate::RuleDescriptor,
+    admission: &mut Admission,
     input: XmlApiFindingInput<'_>,
 ) -> RuleResult<RuleEvaluationRecord> {
     let XmlApiFindingInput {
@@ -1287,28 +1459,69 @@ fn xml_api_finding(
         lookup,
         coverage_ids,
     } = input;
-    let input_fact_ids = xml_api_fact_ids(fact, call);
+    // The provider admitted this evaluation before lookup or fact retention.
+    admission.admit_finding()?;
+    let mut input_fact_ids = xml_api_fact_ids(fact, call);
+    input_fact_ids.sort();
+    input_fact_ids.dedup();
     let entity = EntityKey::new("function", &format!("{}.{}", fact.receiver, fact.member))
         .map_err(core_construction)?;
-    let mut member_handles =
-        xml_project_handles(context, unit, &fact.member_source, Some(entity.clone()))?;
-    let primary = member_handles.remove(0);
-    let mut related = member_handles;
+    let mut plans = Vec::new();
+    plan_xml_sources(
+        context,
+        admission,
+        &mut plans,
+        unit,
+        &fact.member_source,
+        Some(&entity),
+    )?;
     if let Some(call) = call {
-        related.extend(xml_project_handles(context, unit, &call.call_source, None)?);
+        plan_xml_sources(
+            context,
+            admission,
+            &mut plans,
+            unit,
+            &call.call_source,
+            None,
+        )?;
     }
-    let reference_handle = reference_view_handle(context)?;
-    related.push(reference_handle.clone());
-    canonicalize_sources(&mut related);
-    let mut source_handles = vec![primary.clone()];
-    source_handles.extend(related.iter().cloned());
-    canonicalize_sources(&mut source_handles);
-    let evidence = evidence_bundle(context, &source_handles, reference_handle.handle_id())?;
+    let reference_origin = reference_origin(context);
+    admit_source_plan(
+        admission,
+        &mut plans,
+        reference_source_plan(context, &reference_origin)?,
+    )?;
+    let scope_id = format!("api:xml:{}:{}", unit.unit_id, fact.fact_id);
+    let arguments = api_argument_plans(
+        context,
+        entity_lookup_key,
+        &fact.receiver,
+        &fact.member,
+        call.is_some(),
+    );
+    preflight_finding(
+        admission,
+        context,
+        &FindingMaterial {
+            scope_id: &scope_id,
+            descriptor,
+            subject: &entity,
+            sources: &plans,
+            arguments: &arguments,
+            fact_ids: &input_fact_ids,
+            coverage_ids: &coverage_ids,
+            lookup: &lookup,
+            guard: None,
+        },
+    )?;
+    let (primary, related, source_handles, reference_handle_id) =
+        materialize_sources(context, plans)?;
+    let evidence = evidence_bundle(context, &source_handles, reference_handle_id)?;
     let evidence_ids = evidence
         .iter()
         .map(EvidenceRecord::evidence_id)
         .collect::<Vec<_>>();
-    let root = derive_root_cause_key(&(
+    let root_material = (
         descriptor.rule_id(),
         descriptor.rule_version(),
         context
@@ -1322,8 +1535,10 @@ fn xml_api_finding(
         lookup.lookup_id(),
         primary.handle_id(),
         entity_lookup_key,
-    ))
-    .map_err(core_construction)?;
+    );
+    admission.preflight_identity("wow-core/root-cause/e0-1", &root_material)?;
+    observe(Construction::Root);
+    let root = derive_root_cause_key(&root_material).map_err(core_construction)?;
     let draft = FindingDraft::new(
         context
             .project()
@@ -1342,35 +1557,13 @@ fn xml_api_finding(
     .related_source_handle_ids(related.iter().map(SourceHandle::handle_id).collect())
     .evidence_ids(evidence_ids)
     .required_capability_ids(descriptor.required_capabilities().to_vec())
-    .message_arguments(vec![
-        argument("authority", "authoritative_absent")?,
-        identifier_argument("entity", entity_lookup_key)?,
-        identifier_argument("member", &fact.member)?,
-        identifier_argument(
-            "profile",
-            context
-                .project()
-                .configuration()
-                .selected_profile()
-                .profile_id()
-                .as_str(),
-        )?,
-        identifier_argument("receiver", &fact.receiver)?,
-        identifier_argument("remediation_plan", "verify-current-api-contract")?,
-        argument(
-            "use_kind",
-            if call.is_some() {
-                "direct_member_call"
-            } else {
-                "member_reference"
-            },
-        )?,
-    ])
+    .message_arguments(materialize_arguments(&arguments)?)
     .map_err(core_construction)?
     .root_causes(Some(root), None)
     .remediation(
         Remediation::new(RemediationClass::PlanOnly, None, None).map_err(core_construction)?,
     );
+    observe(Construction::Finding);
     let finding = draft
         .bind(
             context
@@ -1382,7 +1575,6 @@ fn xml_api_finding(
             &evidence,
         )
         .map_err(core_construction)?;
-    let scope_id = format!("api:xml:{}:{}", unit.unit_id, fact.fact_id);
     let usage = RuleBudgetUsage {
         evaluations: 1,
         findings: 1,
@@ -1402,6 +1594,7 @@ fn xml_api_finding(
             budget_usage: usage,
         },
     )?;
+    observe(Construction::Evaluation);
     Ok(RuleEvaluationRecord::new(
         descriptor.rule_id().clone(),
         descriptor.rule_version().clone(),
@@ -1416,19 +1609,22 @@ fn xml_api_finding(
 fn secret_finding(
     context: &RuleExecutionContext<'_>,
     descriptor: &crate::RuleDescriptor,
+    admission: &mut Admission,
     file: &ProjectFileRecord,
     binding: &EmmyLocalBindingFact,
     reference: &EmmyMemberReferenceFact,
     call: &EmmyMemberCallFact,
     operation: &EmmyOperationFact,
     producer_entity: &str,
-    input_fact_ids: Vec<Box<str>>,
+    mut input_fact_ids: Vec<Box<str>>,
     uses: &[&wow_emmy::EmmyLocalUseFact],
     guards: &[EmmyGuardFact],
     guard: RuleGuardClassification,
     lookup: RuleReferenceLookupRecord,
     coverage_ids: Vec<CoverageId>,
 ) -> RuleResult<RuleEvaluationRecord> {
+    // The provider admitted this evaluation before lookup or fact retention.
+    admission.admit_finding()?;
     let entity_name = producer_entity.strip_prefix("function:").ok_or_else(|| {
         RuleError::new(
             RuleErrorCode::RuleFindingInputInvalid,
@@ -1436,39 +1632,118 @@ fn secret_finding(
         )
     })?;
     let entity = wow_core::EntityKey::new("function", entity_name).map_err(core_construction)?;
-    let primary = project_handle(
-        context,
-        file,
-        operation.operation_span(),
-        Some(entity.clone()),
+    input_fact_ids.sort();
+    input_fact_ids.dedup();
+    let mut plans = Vec::new();
+    admit_source_plan(
+        admission,
+        &mut plans,
+        project_source_plan(
+            context,
+            file.relative_path().as_str(),
+            file.content_digest(),
+            operation.operation_span(),
+            Some(&entity),
+        ),
     )?;
-    let mut related = vec![
-        project_handle(context, file, reference.reference_span(), None)?,
-        project_handle(context, file, call.call_span(), None)?,
-        project_handle(context, file, binding.declaration_span(), None)?,
-    ];
+    for span in [
+        reference.reference_span(),
+        call.call_span(),
+        binding.declaration_span(),
+    ] {
+        admit_source_plan(
+            admission,
+            &mut plans,
+            project_source_plan(
+                context,
+                file.relative_path().as_str(),
+                file.content_digest(),
+                span,
+                None,
+            ),
+        )?;
+    }
     for use_fact in uses {
-        related.push(project_handle(context, file, use_fact.use_span(), None)?);
+        admit_source_plan(
+            admission,
+            &mut plans,
+            project_source_plan(
+                context,
+                file.relative_path().as_str(),
+                file.content_digest(),
+                use_fact.use_span(),
+                None,
+            ),
+        )?;
     }
     if let Some(guard_fact) = representative_guard(guards, binding, operation, guard) {
-        related.push(project_handle(
-            context,
-            file,
-            guard_fact.guard_span(),
-            None,
-        )?);
+        admit_source_plan(
+            admission,
+            &mut plans,
+            project_source_plan(
+                context,
+                file.relative_path().as_str(),
+                file.content_digest(),
+                guard_fact.guard_span(),
+                None,
+            ),
+        )?;
     }
-    let reference_handle = reference_view_handle(context)?;
-    related.push(reference_handle.clone());
-    let mut source_handles = vec![primary.clone()];
-    source_handles.extend(related.iter().cloned());
-    canonicalize_sources(&mut source_handles);
-    let evidence = evidence_bundle(context, &source_handles, reference_handle.handle_id())?;
+    let reference_origin = reference_origin(context);
+    admit_source_plan(
+        admission,
+        &mut plans,
+        reference_source_plan(context, &reference_origin)?,
+    )?;
+    let scope_id = format!("secret:{}:{}", file.file_id(), operation.fact_id());
+    let arguments = [
+        ArgumentPlan::new("facet", MessageArgumentKind::Identifier, "secret.return"),
+        ArgumentPlan::new(
+            if context.is_fixture_policy() {
+                "fixture_policy"
+            } else {
+                "rule_policy"
+            },
+            MessageArgumentKind::Identifier,
+            context.policy_id(),
+        ),
+        ArgumentPlan::new("guard_state", MessageArgumentKind::Text, guard_name(guard)),
+        ArgumentPlan::new(
+            "operation",
+            MessageArgumentKind::Identifier,
+            "concatenation",
+        ),
+        ArgumentPlan::new("producer", MessageArgumentKind::Identifier, producer_entity),
+        ArgumentPlan::new(
+            "remediation_plan",
+            MessageArgumentKind::Identifier,
+            "restructure-secret-capable-value-use",
+        ),
+        ArgumentPlan::new("return_position", MessageArgumentKind::Integer, "1"),
+    ];
+    preflight_finding(
+        admission,
+        context,
+        &FindingMaterial {
+            scope_id: &scope_id,
+            descriptor,
+            subject: &entity,
+            sources: &plans,
+            arguments: &arguments,
+            fact_ids: &input_fact_ids,
+            coverage_ids: &coverage_ids,
+            lookup: &lookup,
+            guard: Some(guard),
+        },
+    )?;
+    let (primary, related, source_handles, reference_handle_id) =
+        materialize_sources(context, plans)?;
+    let evidence = evidence_bundle(context, &source_handles, reference_handle_id)?;
     let evidence_ids = evidence
         .iter()
         .map(EvidenceRecord::evidence_id)
         .collect::<Vec<_>>();
-    let root = derive_root_cause_key(&(
+    let root_material = (
         descriptor.rule_id(),
         descriptor.rule_version(),
         context
@@ -1483,8 +1758,10 @@ fn secret_finding(
         context.policy_digest(),
         guard,
         primary.handle_id(),
-    ))
-    .map_err(core_construction)?;
+    );
+    admission.preflight_identity("wow-core/root-cause/e0-1", &root_material)?;
+    observe(Construction::Root);
+    let root = derive_root_cause_key(&root_material).map_err(core_construction)?;
     let draft = FindingDraft::new(
         context
             .project()
@@ -1503,28 +1780,13 @@ fn secret_finding(
     .related_source_handle_ids(related.iter().map(SourceHandle::handle_id).collect())
     .evidence_ids(evidence_ids)
     .required_capability_ids(descriptor.required_capabilities().to_vec())
-    .message_arguments(vec![
-        identifier_argument("facet", "secret.return")?,
-        identifier_argument(
-            if context.is_fixture_policy() {
-                "fixture_policy"
-            } else {
-                "rule_policy"
-            },
-            context.policy_id(),
-        )?,
-        argument("guard_state", guard_name(guard))?,
-        identifier_argument("operation", "concatenation")?,
-        identifier_argument("producer", producer_entity)?,
-        identifier_argument("remediation_plan", "restructure-secret-capable-value-use")?,
-        MessageArgument::new("return_position", MessageArgumentKind::Integer, "1", true)
-            .map_err(core_construction)?,
-    ])
+    .message_arguments(materialize_arguments(&arguments)?)
     .map_err(core_construction)?
     .root_causes(Some(root), None)
     .remediation(
         Remediation::new(RemediationClass::PlanOnly, None, None).map_err(core_construction)?,
     );
+    observe(Construction::Finding);
     let finding = draft
         .bind(
             context
@@ -1536,7 +1798,6 @@ fn secret_finding(
             &evidence,
         )
         .map_err(core_construction)?;
-    let scope_id = format!("secret:{}:{}", file.file_id(), operation.fact_id());
     let usage = RuleBudgetUsage {
         evaluations: 1,
         findings: 1,
@@ -1556,6 +1817,7 @@ fn secret_finding(
             budget_usage: usage,
         },
     )?;
+    observe(Construction::Evaluation);
     Ok(RuleEvaluationRecord::new(
         descriptor.rule_id().clone(),
         descriptor.rule_version().clone(),
@@ -1612,16 +1874,32 @@ fn representative_guard<'a>(
 fn clean(
     context: &RuleExecutionContext<'_>,
     descriptor: &crate::RuleDescriptor,
+    admission: &mut Admission,
     input: CleanInput<'_>,
 ) -> RuleResult<RuleEvaluationRecord> {
     let CleanInput {
         scope_id,
         claim,
-        fact_ids,
+        mut fact_ids,
         lookup,
-        coverage_ids,
+        mut coverage_ids,
         guard,
     } = input;
+    fact_ids.sort();
+    fact_ids.dedup();
+    coverage_ids.sort_unstable();
+    coverage_ids.dedup();
+    preflight_clean(
+        admission,
+        context,
+        descriptor,
+        scope_id,
+        claim,
+        &fact_ids,
+        lookup,
+        &coverage_ids,
+        guard,
+    )?;
     let record = CleanEvaluationRecord::build(
         descriptor.rule_id().clone(),
         descriptor.rule_version().clone(),
@@ -1643,6 +1921,7 @@ fn clean(
             ..RuleBudgetUsage::default()
         },
     )?;
+    observe(Construction::Evaluation);
     Ok(RuleEvaluationRecord::new(
         descriptor.rule_id().clone(),
         descriptor.rule_version().clone(),
@@ -1655,11 +1934,12 @@ fn clean(
 fn not_evaluated(
     context: &RuleExecutionContext<'_>,
     descriptor: &crate::RuleDescriptor,
+    admission: &mut Admission,
     scope_id: &str,
-    blockers: Vec<RuleBlockerKind>,
+    mut blockers: Vec<RuleBlockerKind>,
     mut blocking_capabilities: Vec<CapabilityId>,
     blocking_partitions: Vec<BlockingPartitionRef>,
-    fact_ids: Vec<Box<str>>,
+    mut fact_ids: Vec<Box<str>>,
     lookup: Option<&RuleReferenceLookupRecord>,
 ) -> RuleResult<RuleEvaluationRecord> {
     if blocking_capabilities.is_empty() {
@@ -1671,6 +1951,21 @@ fn not_evaluated(
                 .ok_or_else(|| registry_error("descriptor has no capability requirement"))?,
         );
     }
+    blockers.sort();
+    blockers.dedup();
+    fact_ids.sort();
+    fact_ids.dedup();
+    preflight_not_evaluated(
+        admission,
+        context,
+        descriptor,
+        scope_id,
+        &blockers,
+        &blocking_capabilities,
+        &blocking_partitions,
+        &fact_ids,
+        lookup,
+    )?;
     let core = NotEvaluatedRecord::new(
         context
             .project()
@@ -1701,6 +1996,7 @@ fn not_evaluated(
         fact_ids,
         lookup.map(RuleReferenceLookupRecord::lookup_id),
     )?;
+    observe(Construction::Evaluation);
     Ok(RuleEvaluationRecord::new(
         descriptor.rule_id().clone(),
         descriptor.rule_version().clone(),
@@ -1714,14 +2010,17 @@ fn not_evaluated(
 fn secret_missing_relation(
     context: &RuleExecutionContext<'_>,
     descriptor: &crate::RuleDescriptor,
+    admission: &mut Admission,
     file_id: &ProjectFileId,
     binding: &EmmyLocalBindingFact,
     relation: &str,
 ) -> RuleResult<RuleEvaluationRecord> {
+    admission.admit_evaluation()?;
     let scope_id = format!("secret:{file_id}:{}:{relation}", binding.fact_id());
     not_evaluated(
         context,
         descriptor,
+        admission,
         &scope_id,
         vec![RuleBlockerKind::MissingFactRelation],
         vec![capability("emmy.fact.local_bindings")?],
@@ -1964,10 +2263,34 @@ fn finalize_capability_gate(gate: &mut CapabilityGate) {
 
 fn exact_lookup<'a>(
     context: &'a RuleExecutionContext<'_>,
+    admission: &Admission,
     partition: &str,
     key: &str,
 ) -> RuleResult<(RuleReferenceLookupRecord, Option<&'a ReferenceRecord>)> {
     let result = context.reference().lookup(partition, key);
+    let outcome = match &result {
+        LookupResult::Found(_) => RuleReferenceOutcome::Found,
+        LookupResult::AuthoritativeAbsence => RuleReferenceOutcome::AuthoritativeAbsent,
+        LookupResult::Conflict(_) => RuleReferenceOutcome::Conflict,
+        LookupResult::Unknown(LookupUnknownReason::PartitionMissing) => {
+            RuleReferenceOutcome::PartitionMissing
+        }
+        LookupResult::Unknown(LookupUnknownReason::PartialCoverage) => {
+            RuleReferenceOutcome::PartialCoverage
+        }
+        LookupResult::Unknown(LookupUnknownReason::NotEvaluated) => {
+            RuleReferenceOutcome::NotEvaluated
+        }
+    };
+    preflight_lookup(admission, context, partition, key, outcome)?;
+    match &result {
+        LookupResult::Found(record) => admission.preflight_value(record)?,
+        LookupResult::Conflict(conflict) => {
+            admission.preflight_identity("wow-rules/reference-conflict/e0-e/1", conflict)?
+        }
+        _ => {}
+    }
+    observe(Construction::Lookup);
     match result {
         LookupResult::Found(record) => Ok((
             RuleReferenceLookupRecord::new(
@@ -2044,29 +2367,62 @@ fn reference_blockers(outcome: RuleReferenceOutcome) -> Vec<RuleBlockerKind> {
     }
 }
 
-fn project_handle(
-    context: &RuleExecutionContext<'_>,
-    file: &ProjectFileRecord,
+fn project_source_plan<'a>(
+    context: &'a RuleExecutionContext<'_>,
+    path: &'a str,
+    content_digest: ContentDigest<SourceContent>,
     span: SourceSpan,
-    entity: Option<EntityKey>,
-) -> RuleResult<SourceHandle> {
-    context
+    entity: Option<&'a EntityKey>,
+) -> SourcePlan<'a> {
+    let origin = context
         .project()
-        .source_handle(file.relative_path().as_str(), span, entity)
-        .map_err(|error| {
-            RuleError::new(
-                RuleErrorCode::RuleSourceHandleInvalid,
-                format!("project source handle construction failed: {error}"),
-            )
-        })
+        .snapshot()
+        .source_registry()
+        .source_origin();
+    let origin_kind = match origin.origin_kind() {
+        wow_project::ProjectSourceOriginKind::FixtureProject => SourceOriginKind::Fixture,
+        wow_project::ProjectSourceOriginKind::RepositoryProject => {
+            SourceOriginKind::GeneratedArtifact
+        }
+        wow_project::ProjectSourceOriginKind::BlizzardUiPlatformSource => {
+            // The published registry was admitted by Project. Its profile is the
+            // same closed source-class input used by Project::source_handle.
+            if context
+                .project()
+                .configuration()
+                .platform_packages()
+                .is_some_and(|packages| {
+                    packages.source().profile().source_class()
+                        == wow_project::platform_source::PlatformSourceClass::SyntheticFixture
+                })
+            {
+                SourceOriginKind::Fixture
+            } else {
+                SourceOriginKind::GeneratedArtifact
+            }
+        }
+    };
+    SourcePlan {
+        origin_kind,
+        origin_id: origin.origin_id().as_str(),
+        revision: origin.revision_identity(),
+        reference_generation: Some(context.project().configuration().reference_generation()),
+        project_generation: Some(context.project().project_generation()),
+        path,
+        span,
+        content_digest,
+        entity_key: entity,
+    }
 }
 
-fn xml_project_handles(
-    context: &RuleExecutionContext<'_>,
-    unit: &XmlLuaUnitAnalysis,
+fn plan_xml_sources<'a>(
+    context: &'a RuleExecutionContext<'_>,
+    admission: &mut Admission,
+    plans: &mut Vec<SourcePlan<'a>>,
+    unit: &'a XmlLuaUnitAnalysis,
     mapping: &XmlLuaMappedSpan,
-    entity: Option<EntityKey>,
-) -> RuleResult<Vec<SourceHandle>> {
+    entity: Option<&'a EntityKey>,
+) -> RuleResult<()> {
     let source = context
         .project()
         .xml_document_source(&unit.document)
@@ -2087,26 +2443,23 @@ fn xml_project_handles(
             .with_scope(unit.unit_id.as_ref())
         })?;
     validate_xml_mapping(unit, mapping, source.byte_length(), true)?;
-    let mut handles = Vec::with_capacity(mapping.xml_spans.len());
     for (index, piece) in mapping.xml_spans.iter().enumerate() {
         let span =
             SourceSpan::byte_range(piece.byte_start, piece.byte_end).map_err(core_construction)?;
-        let handle_entity = if index == 0 { entity.clone() } else { None };
-        handles.push(
-            context
-                .project()
-                .source_handle(&unit.document, span, handle_entity)
-                .map_err(|error| {
-                    RuleError::new(
-                        RuleErrorCode::RuleSourceHandleInvalid,
-                        format!("XML project source handle construction failed: {error}"),
-                    )
-                    .with_rule(API_EXISTS_RULE)
-                    .with_scope(unit.unit_id.as_ref())
-                })?,
-        );
+        let handle_entity = if index == 0 { entity } else { None };
+        admit_source_plan(
+            admission,
+            plans,
+            project_source_plan(
+                context,
+                &unit.document,
+                source.content_digest(),
+                span,
+                handle_entity,
+            ),
+        )?;
     }
-    if handles.is_empty() {
+    if mapping.xml_spans.is_empty() {
         return Err(RuleError::new(
             RuleErrorCode::RuleSourceHandleInvalid,
             "XML source mapping did not produce a primary source handle",
@@ -2114,7 +2467,132 @@ fn xml_project_handles(
         .with_rule(API_EXISTS_RULE)
         .with_scope(unit.unit_id.as_ref()));
     }
-    Ok(handles)
+    Ok(())
+}
+
+fn reference_origin(context: &RuleExecutionContext<'_>) -> String {
+    if context.is_fixture_policy() {
+        "reference-fixture:e0-e".to_owned()
+    } else {
+        format!("native-reference:{}", context.policy_profile_id())
+    }
+}
+
+fn reference_source_plan<'a>(
+    context: &'a RuleExecutionContext<'_>,
+    origin_id: &'a str,
+) -> RuleResult<SourcePlan<'a>> {
+    Ok(SourcePlan {
+        origin_kind: if context.is_fixture_policy() {
+            SourceOriginKind::Fixture
+        } else {
+            SourceOriginKind::GeneratedArtifact
+        },
+        origin_id,
+        revision: context.reference().generation_id(),
+        reference_generation: Some(context.project().configuration().reference_generation()),
+        project_generation: None,
+        path: if context.is_fixture_policy() {
+            "reference/fixture-view.json"
+        } else {
+            "reference/native-view.json"
+        },
+        span: SourceSpan::whole_file(),
+        content_digest: context
+            .reference()
+            .self_digest()
+            .parse()
+            .map_err(core_construction)?,
+        entity_key: None,
+    })
+}
+
+type MaterializedSources = (
+    SourceHandle,
+    Vec<SourceHandle>,
+    Vec<SourceHandle>,
+    wow_core::StableHandleId,
+);
+fn materialize_sources(
+    context: &RuleExecutionContext<'_>,
+    plans: Vec<SourcePlan<'_>>,
+) -> RuleResult<MaterializedSources> {
+    let mut handles = Vec::with_capacity(plans.len());
+    for plan in plans {
+        observe(Construction::Handle);
+        let handle = if plan.project_generation.is_some() {
+            context
+                .project()
+                .source_handle(plan.path, plan.span, plan.entity_key.cloned())
+                .map_err(|error| {
+                    RuleError::new(
+                        RuleErrorCode::RuleSourceHandleInvalid,
+                        format!("project source handle construction failed: {error}"),
+                    )
+                })?
+        } else {
+            reference_view_handle(context)?
+        };
+        handles.push(handle);
+    }
+    let primary = handles.first().ok_or_else(budget_error)?.clone();
+    let reference_id = handles.last().ok_or_else(budget_error)?.handle_id();
+    let mut related = handles.iter().skip(1).cloned().collect::<Vec<_>>();
+    canonicalize_sources(&mut related);
+    canonicalize_sources(&mut handles);
+    Ok((primary, related, handles, reference_id))
+}
+
+fn api_argument_plans<'a>(
+    context: &'a RuleExecutionContext<'_>,
+    entity: &'a str,
+    receiver: &'a str,
+    member: &'a str,
+    call: bool,
+) -> [ArgumentPlan<'a>; 7] {
+    [
+        ArgumentPlan::new(
+            "authority",
+            MessageArgumentKind::Text,
+            "authoritative_absent",
+        ),
+        ArgumentPlan::new("entity", MessageArgumentKind::Identifier, entity),
+        ArgumentPlan::new("member", MessageArgumentKind::Identifier, member),
+        ArgumentPlan::new(
+            "profile",
+            MessageArgumentKind::Identifier,
+            context
+                .project()
+                .configuration()
+                .selected_profile()
+                .profile_id()
+                .as_str(),
+        ),
+        ArgumentPlan::new("receiver", MessageArgumentKind::Identifier, receiver),
+        ArgumentPlan::new(
+            "remediation_plan",
+            MessageArgumentKind::Identifier,
+            "verify-current-api-contract",
+        ),
+        ArgumentPlan::new(
+            "use_kind",
+            MessageArgumentKind::Text,
+            if call {
+                "direct_member_call"
+            } else {
+                "member_reference"
+            },
+        ),
+    ]
+}
+
+fn materialize_arguments(plans: &[ArgumentPlan<'_>]) -> RuleResult<Vec<MessageArgument>> {
+    plans
+        .iter()
+        .map(|plan| {
+            MessageArgument::new(plan.name, plan.kind, plan.value, true).map_err(core_construction)
+        })
+        .collect()
 }
 
 fn reference_view_handle(context: &RuleExecutionContext<'_>) -> RuleResult<SourceHandle> {
@@ -2156,6 +2634,7 @@ fn evidence_bundle(
     source_handles: &[SourceHandle],
     reference_handle_id: wow_core::StableHandleId,
 ) -> RuleResult<Vec<EvidenceRecord>> {
+    // All three records and their full output were admitted from borrowed plans.
     let context_id = context
         .project()
         .snapshot()
@@ -2166,6 +2645,7 @@ fn evidence_bundle(
         .filter(|handle| handle.handle_id() != reference_handle_id)
         .map(SourceHandle::handle_id)
         .collect::<Vec<_>>();
+    observe(Construction::Evidence);
     let project = derive_evidence(
         context_id,
         ProvenanceClass::ProjectSource,
@@ -2178,6 +2658,7 @@ fn evidence_bundle(
         Vec::new(),
     )
     .map_err(core_construction)?;
+    observe(Construction::Evidence);
     let reference = derive_evidence(
         context_id,
         ProvenanceClass::PlatformSource,
@@ -2190,6 +2671,7 @@ fn evidence_bundle(
         Vec::new(),
     )
     .map_err(core_construction)?;
+    observe(Construction::Evidence);
     let derivation = derive_evidence(
         context_id,
         ProvenanceClass::ExternalImplementation,
@@ -2248,15 +2730,6 @@ fn xml_api_fact_ids(
     ids
 }
 
-fn argument(name: &str, value: &str) -> RuleResult<MessageArgument> {
-    MessageArgument::new(name, MessageArgumentKind::Text, value, true).map_err(core_construction)
-}
-
-fn identifier_argument(name: &str, value: &str) -> RuleResult<MessageArgument> {
-    MessageArgument::new(name, MessageArgumentKind::Identifier, value, true)
-        .map_err(core_construction)
-}
-
 const fn guard_name(value: RuleGuardClassification) -> &'static str {
     match value {
         RuleGuardClassification::Absent => "absent",
@@ -2264,43 +2737,6 @@ const fn guard_name(value: RuleGuardClassification) -> &'static str {
         RuleGuardClassification::AfterUse => "after_use",
         RuleGuardClassification::DifferentValue => "different_value",
         RuleGuardClassification::NonDominating => "non_dominating",
-    }
-}
-
-fn summarize_usage(evaluations: &[RuleEvaluationRecord]) -> RuleResult<RuleBudgetUsage> {
-    let mut usage = RuleBudgetUsage {
-        evaluations: usize_to_u64(evaluations.len())?,
-        ..RuleBudgetUsage::default()
-    };
-    for evaluation in evaluations {
-        if let RuleEvaluationOutcome::Findings { result } = evaluation.outcome() {
-            usage.findings = usage
-                .findings
-                .checked_add(usize_to_u64(result.findings().len())?)
-                .ok_or_else(budget_error)?;
-            usage.source_handles = usage
-                .source_handles
-                .checked_add(usize_to_u64(result.source_handles().len())?)
-                .ok_or_else(budget_error)?;
-            usage.evidence_records = usage
-                .evidence_records
-                .checked_add(usize_to_u64(result.evidence_records().len())?)
-                .ok_or_else(budget_error)?;
-        }
-    }
-    Ok(usage)
-}
-
-fn enforce_budget(context: &RuleExecutionContext<'_>, usage: RuleBudgetUsage) -> RuleResult<()> {
-    let budget = context.budget();
-    if usage.evaluations > budget.max_evaluations()
-        || usage.findings > budget.max_findings()
-        || usage.source_handles > budget.max_source_handles()
-        || usage.evidence_records > budget.max_evidence_records()
-    {
-        Err(budget_error())
-    } else {
-        Ok(())
     }
 }
 
@@ -2355,4 +2791,176 @@ fn reference_error(error: wow_reference::ReferenceViewError) -> RuleError {
         RuleErrorCode::RuleLookupOutcomeInvalid,
         format!("reference record validation failed: {error}"),
     )
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::{CONSTRUCTIONS, ConstructionCounts};
+    use crate as wow_rules;
+
+    // Reuse the existing real native fixture, without adding source members.
+    include!("../tests/e0_rules.rs");
+
+    #[test]
+    fn construction_boundaries_refuse_before_the_next_owner() -> TestResult {
+        let project = project()?;
+        let reference = reference(
+            &project,
+            ReferenceCoverageStatus::Complete,
+            ReferenceCoverageStatus::Complete,
+            true,
+            false,
+        )?;
+        let cancelled = AtomicBool::new(false);
+        let api_file = project
+            .file_manifest()
+            .iter()
+            .find(|file| file.relative_path().as_str() == "main/missing-api.lua")
+            .ok_or("API fixture file")?;
+        let api_scope = RuleScope::files(vec![api_file.file_id().clone()]);
+        let reset = || CONSTRUCTIONS.with(|cell| cell.set(ConstructionCounts::default()));
+        let observed = || CONSTRUCTIONS.with(std::cell::Cell::get);
+
+        reset();
+        let first = run_with_budget(
+            &project,
+            &reference,
+            &cancelled,
+            RuleExecutionBudget::fixture_e0()?,
+            &api_scope,
+        )?;
+        let first_counts = observed();
+        assert_eq!(first_counts.evaluations, 1);
+        assert_eq!(first_counts.lookups, 1);
+        assert_eq!(
+            first_counts.handles,
+            usize::try_from(first.budget_usage().source_handles)?
+        );
+        assert_eq!(first_counts.evidence, 3);
+        assert_eq!(first_counts.findings, 1);
+        assert_eq!(first_counts.reports, 1);
+        let first_bytes = wow_core::canonical_json_bytes(&first)?;
+        let exact_bytes = u64::try_from(first_bytes.len())?;
+
+        let all = run_with_budget(
+            &project,
+            &reference,
+            &cancelled,
+            RuleExecutionBudget::fixture_e0()?,
+            &RuleScope::all(),
+        )?;
+        let (retained_handles, retained_evidence) =
+            all.evaluations()
+                .iter()
+                .fold((0, 0), |(handles, evidence), evaluation| {
+                    if let RuleEvaluationOutcome::Findings { result } = evaluation.outcome() {
+                        (
+                            handles + result.source_handles().len(),
+                            evidence + result.evidence_records().len(),
+                        )
+                    } else {
+                        (handles, evidence)
+                    }
+                });
+        assert_eq!(
+            all.budget_usage().source_handles,
+            u64::try_from(retained_handles)?
+        );
+        assert_eq!(
+            all.budget_usage().evidence_records,
+            u64::try_from(retained_evidence)?
+        );
+        // Dedup happens on complete plans: no duplicate handle is constructed
+        // and then discarded, including Secret's overlapping local-use spans.
+        assert_eq!(observed().handles, first_counts.handles + retained_handles);
+        let all_bytes = u64::try_from(wow_core::canonical_json_bytes(&all)?.len())?;
+        reset();
+        let limit_one = RuleExecutionBudget::new(1, 256, 4_096, 4_096, all_bytes)?;
+        let error = run_with_budget(
+            &project,
+            &reference,
+            &cancelled,
+            limit_one,
+            &RuleScope::all(),
+        )
+        .err()
+        .ok_or("evaluation refusal")?;
+        assert_eq!(
+            error.code(),
+            wow_rules::RuleErrorCode::RuleExecutionBudgetExceeded
+        );
+        // API evaluation one completes; Secret cannot create its next lookup,
+        // handles, evidence, finding, evaluation or final report.
+        assert_eq!(
+            observed(),
+            ConstructionCounts {
+                reports: 0,
+                ..first_counts
+            }
+        );
+
+        for budget in [
+            RuleExecutionBudget::new(
+                1_024,
+                256,
+                first.budget_usage().source_handles - 1,
+                4_096,
+                exact_bytes,
+            )?,
+            RuleExecutionBudget::new(1_024, 256, 4_096, 2, exact_bytes)?,
+        ] {
+            reset();
+            let error = run_with_budget(&project, &reference, &cancelled, budget, &api_scope)
+                .err()
+                .ok_or("retention refusal")?;
+            assert_eq!(
+                error.code(),
+                wow_rules::RuleErrorCode::RuleExecutionBudgetExceeded
+            );
+            assert_eq!(
+                observed(),
+                ConstructionCounts {
+                    lookups: 1,
+                    ..ConstructionCounts::default()
+                }
+            );
+        }
+
+        reset();
+        let short = RuleExecutionBudget::new(1_024, 256, 4_096, 4_096, exact_bytes - 1)?;
+        let error = run_with_budget(&project, &reference, &cancelled, short, &api_scope)
+            .err()
+            .ok_or("byte refusal")?;
+        assert_eq!(
+            error.code(),
+            wow_rules::RuleErrorCode::RuleOutputBudgetExceeded
+        );
+        // Full borrowed output preflight refuses before SourceHandleBuilder,
+        // evidence derivation, root/fingerprint binding and report Core calls.
+        assert_eq!(
+            observed(),
+            ConstructionCounts {
+                lookups: 1,
+                ..ConstructionCounts::default()
+            }
+        );
+
+        reset();
+        let tiny = RuleExecutionBudget::new(1_024, 256, 4_096, 4_096, 1)?;
+        assert_eq!(
+            run_with_budget(&project, &reference, &cancelled, tiny, &api_scope)
+                .err()
+                .map(|error| error.code()),
+            Some(wow_rules::RuleErrorCode::RuleOutputBudgetExceeded)
+        );
+        assert_eq!(observed(), ConstructionCounts::default());
+
+        reset();
+        let exact = RuleExecutionBudget::new(1_024, 256, 4_096, 4_096, exact_bytes)?;
+        let admitted = run_with_budget(&project, &reference, &cancelled, exact, &api_scope)?;
+        assert_eq!(admitted, first);
+        assert_eq!(wow_core::canonical_json_bytes(&admitted)?, first_bytes);
+        assert_eq!(observed(), first_counts);
+        Ok(())
+    }
 }
