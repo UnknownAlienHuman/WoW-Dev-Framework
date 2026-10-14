@@ -337,6 +337,43 @@ impl VerifiedBackup {
         additional: AuthoritySet,
         stop: &AtomicBool,
     ) -> StoreResult<Self> {
+        self.restore_to_new_with_authorities_at_boundary(
+            root,
+            operation_id,
+            additional,
+            stop,
+            |_| Ok(()),
+        )
+    }
+    pub(super) fn restore_to_new_with_boundary<F>(
+        &self,
+        root: &Path,
+        operation_id: &OperationId,
+        stop: &AtomicBool,
+        after_archive: F,
+    ) -> StoreResult<Self>
+    where
+        F: FnOnce(&VerifiedBackup) -> StoreResult<()>,
+    {
+        self.restore_to_new_with_authorities_at_boundary(
+            root,
+            operation_id,
+            AuthoritySet::empty(),
+            stop,
+            after_archive,
+        )
+    }
+    fn restore_to_new_with_authorities_at_boundary<F>(
+        &self,
+        root: &Path,
+        operation_id: &OperationId,
+        additional: AuthoritySet,
+        stop: &AtomicBool,
+        after_archive: F,
+    ) -> StoreResult<Self>
+    where
+        F: FnOnce(&VerifiedBackup) -> StoreResult<()>,
+    {
         self.verify(stop)?;
         let archives = archives::read(
             &self.root,
@@ -347,10 +384,13 @@ impl VerifiedBackup {
         archives.validate_epoch(&self.store.db.epoch)?;
         let sources = source_authority::read(&self.root, self.manifest.source_authorities(), stop)?
             .merge(additional)?;
-        self.store
-            .backup_to_new_with_context(root, operation_id, &archives, &sources, stop)
+        let restored =
+            self.store
+                .backup_to_new_with_context(root, operation_id, &archives, &sources, stop)?;
+        // backup_to_new_with_context returns only after independent reopen and verification.
+        after_archive(&restored)?;
+        Ok(restored)
     }
-
     /// Finish a new private candidate only after compiled adapters independently
     /// validated every retained generation. Original semantic IDs and durable
     /// attestations survive unchanged; no live registry is replaced.

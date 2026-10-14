@@ -37,24 +37,30 @@ own canonical bytes and each `PartitionVersionId` is reproduced exactly.
 
 ## Write order and interruption
 
-The durable intent precedes partition and publication writes, not every write.
-`stage` first creates the target root, its writer lock, epoch directory and SQLite
-database, writes both the root and epoch-directory `epoch-manifest.json`, and then
-restores the source snapshot under `source-archive`. Only after that does it persist
-`migration-intent.json` and prepare publications.
+The `stage` operation creates the inactive target root, writer lock, epoch
+directory and SQLite database, then writes both root and epoch-directory
+`epoch-manifest.json` files. It computes the migration intent from the verified
+source and target epoch and persists that intent before creating `source-archive`.
+The archive uses the intent's derived operation and is checked against the
+intent's source epoch and snapshot digest before target publications begin.
 
-An interruption before the intent exists can leave incomplete root metadata,
-an empty target database or a partial source archive on disk. The migration is not
-resumable through `MigrationCandidate::open`, which requires the intent file to
-exist and to equal a recomputed intent byte for byte. The root is not silently
-adopted either: `create_inactive_with_gc` creates its directory and database with
-`create_new`, so re-staging onto the same path fails, and `open` refuses any root
-that already has a selector. A pre-intent partial root is retained for inspection;
-this API cannot resume or delete it.
+A process interruption after the source archive has completed but before target
+publication leaves an exact intent and independently verified archive. The same
+operation can resume through `MigrationCandidate::open`, which rechecks the
+intent, source archive and every existing target effect before writing missing
+work. The intent format and migration identity remain unchanged.
+
+An interruption during target database creation or plan construction can still
+leave a root without `migration-intent.json`. An interruption during source
+archive creation can leave an incomplete archive without `backup-manifest.json`;
+`MigrationCandidate::open` requires a complete independently verified archive
+and does not adopt or repair that partial state. These roots are retained for
+inspection, and recovery or cleanup at those earlier boundaries remains
+NotEvaluated. This process-boundary repair makes no power-loss durability claim.
 
 `source-archive` is operational evidence of what this migration consumed: the
-frozen, independently verifiable input from which identity comparisons are derived.
-It is not authority for current Blizzard facts or domain semantics, and
+frozen, independently verifiable input from which identity comparisons are
+derived. It is not authority for current Blizzard facts or domain semantics, and
 revalidating patch-sensitive claims against current source remains a separate
 obligation.
 

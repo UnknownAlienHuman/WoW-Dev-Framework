@@ -606,6 +606,81 @@ fn v2_migration_reopens_exact_intent_and_requires_real_owner_checks() -> TestRes
 }
 
 #[test]
+fn migration_reopens_after_source_archive_before_target_publication() -> TestResult {
+    let stop = AtomicBool::new(false);
+    let (root, mut store, catalog) = at(
+        "create source-archive recovery fixture",
+        fixture("archive-recovery", false),
+    )?;
+    let original = request(
+        &store,
+        "fixture:archive-recovery-source",
+        "fixture:archive-recovery",
+        73,
+    )?;
+    let original_current = activate(&mut store, &original, 73, &stop)?;
+    let backup = store.backup_to_new(
+        root.join("backup"),
+        &OperationId::new("fixture:archive-recovery-backup")?,
+        &stop,
+    )?;
+    let snapshot = backup.manifest().snapshot_digest().to_owned();
+    let operation = OperationId::new("fixture:archive-recovery-migration")?;
+    let migration_root = root.join("migration");
+
+    let interrupted = MigrationCandidate::stage_unprepared_with_boundary(
+        &backup,
+        &migration_root,
+        &operation,
+        &stop,
+        |stage_root| {
+            assert!(
+                stage_root
+                    .join("source-archive")
+                    .join("backup-manifest.json")
+                    .is_file(),
+                "archive must be complete at the injected boundary"
+            );
+            assert!(
+                stage_root.join("migration-intent.json").is_file(),
+                "migration intent must precede the completed-archive boundary"
+            );
+            Err(super::failure(StoreErrorCode::OutcomeUnknown))
+        },
+    );
+    rejected(interrupted, StoreErrorCode::OutcomeUnknown)?;
+    assert!(migration_root.join("migration-intent.json").is_file());
+    assert!(
+        migration_root
+            .join("source-archive")
+            .join("backup-manifest.json")
+            .is_file()
+    );
+
+    let reopened = at(
+        "resume exact migration from archive-complete boundary",
+        MigrationCandidate::open(&migration_root, &catalog, &operation, &snapshot, &stop),
+    )?;
+    assert_eq!(reopened.target_generations().len(), 1);
+    let target = reopened
+        .mappings()
+        .first()
+        .ok_or("missing migration mapping")?
+        .target_generation()
+        .clone();
+    let read = reopened.read_generation(&target, &stop)?;
+    check(&read, 73, &stop)?;
+    drop(read);
+    assert_eq!(reopened.store.recovery_report(&stop)?.operations().len(), 1);
+    assert_eq!(store.current()?.as_ref(), Some(&original_current));
+    drop(reopened);
+    drop(backup);
+    drop(store);
+    fs::remove_dir_all(root)?;
+    Ok(())
+}
+
+#[test]
 fn mutated_target_seal_blocks_finish_and_reopen_without_changing_the_source() -> TestResult {
     let stop = AtomicBool::new(false);
     let (root, mut store, catalog) = at("create corruption source", fixture("target-seal", true))?;

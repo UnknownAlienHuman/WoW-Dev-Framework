@@ -45,6 +45,33 @@ impl MigrationCandidate {
         operation: &OperationId,
         stop: &AtomicBool,
     ) -> StoreResult<Self> {
+        let mut result = Self::stage_unprepared(source, root, operation, stop)?;
+        result.prepare_all(stop)?;
+        result.verify(stop)?;
+        Ok(result)
+    }
+    /// Persist the exact request before creating the source archive. If the
+    /// process stops after that archive is complete, reopening can safely resume
+    /// the inactive target without guessing which operation owns the path.
+    fn stage_unprepared(
+        source: &VerifiedBackup,
+        root: &Path,
+        operation: &OperationId,
+        stop: &AtomicBool,
+    ) -> StoreResult<Self> {
+        Self::stage_unprepared_with_boundary(source, root, operation, stop, |_| Ok(()))
+    }
+    // Private deterministic fault seam after the source archive is fully verified.
+    fn stage_unprepared_with_boundary<F>(
+        source: &VerifiedBackup,
+        root: &Path,
+        operation: &OperationId,
+        stop: &AtomicBool,
+        after_archive: F,
+    ) -> StoreResult<Self>
+    where
+        F: FnOnce(&Path) -> StoreResult<()>,
+    {
         checkpoint(stop)?;
         OperationId::new(operation.as_str())?;
         source.verify(stop)?;
@@ -60,20 +87,30 @@ impl MigrationCandidate {
             source.manifest().epoch().catalog.clone(),
         )?;
         let root = db.root.clone();
-        let source_operation = plan::derived_operation(operation, "source-archive")?;
-        let source = source.restore_to_new(root.join("source-archive"), &source_operation, stop)?;
-        let intent = plan::build(&source, &db.epoch, operation, stop)?;
-        // Durable request precedes all target partition/publication writes.
+        let intent = plan::build(source, &db.epoch, operation, stop)?;
+        // Durable request precedes the archive copy and target publication writes.
         backup::write_new(&root.join("migration-intent.json"), &intent.bytes()?)?;
-        let mut result = Self {
+        let source = source.restore_to_new_with_boundary(
+            &root.join("source-archive"),
+            &intent.source_archive_operation,
+            stop,
+            |archive| {
+                if archive.manifest().operation_id() != &intent.source_archive_operation
+                    || archive.manifest().epoch() != &intent.source_epoch
+                    || archive.manifest().snapshot_digest()
+                        != intent.source_snapshot_digest.as_str()
+                {
+                    return Err(failure(StoreErrorCode::OperationConflict));
+                }
+                after_archive(&root)
+            },
+        )?;
+        Ok(Self {
             store: ProjectStore { db },
             source,
             intent,
             root,
-        };
-        result.prepare_all(stop)?;
-        result.verify(stop)?;
-        Ok(result)
+        })
     }
     /// Reconcile exactly the declared frozen source and original operation.
     /// Only missing work from that immutable request may be resumed.

@@ -74,7 +74,7 @@ pub(super) fn build(
     let intent = MigrationIntent {
         schema: "wow-store/project-migration-intent/1".into(),
         operation_id: operation.clone(),
-        source_archive_operation: manifest.operation_id().clone(),
+        source_archive_operation: derived_operation(operation, "source-archive")?,
         source_epoch: manifest.epoch().clone(),
         source_snapshot_digest: manifest.snapshot_digest().into(),
         source_current: manifest.current().cloned(),
