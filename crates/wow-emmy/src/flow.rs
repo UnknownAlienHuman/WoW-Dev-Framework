@@ -530,6 +530,7 @@ type LoopRegionKey = (usize, usize);
 /// A local declaration identity is not a reaching-value identity. This census
 /// retains semantically resolved assignments to collected bindings and records
 /// cross-function uses, without re-parsing source text.
+#[derive(Default)]
 struct WriteModel {
     /// Resolved assignment targets after each declaration's initializer.
     writes: HashMap<LuaSemanticDeclId, Vec<SourceSpan>>,
@@ -898,6 +899,11 @@ fn collect_write_model(
     stop: &AtomicBool,
 ) -> EmmyLocalFlowResult<WriteModel> {
     flow_checkpoint(stop, file)?;
+    // No collected local binding can be written or captured. Avoid imposing
+    // this independent flow census on a selected member-only request.
+    if bindings.is_empty() {
+        return Ok(WriteModel::default());
+    }
     let mut census_nodes = 0_usize;
     for _ in root.descendants::<LuaAst>() {
         flow_checkpoint(stop, file)?;
