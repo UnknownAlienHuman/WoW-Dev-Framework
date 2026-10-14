@@ -12,6 +12,10 @@ use wow_service::{
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
+const NATIVE_FLOW_LIBRARY_WITH_GUARD: &str = "---@meta _\n---@class C_E0Fixture\n---@field SecretText fun(): string\nC_E0Fixture = {}\n\n---@param value any\n---@return boolean accessible\nfunction canaccessvalue(value) end\n";
+const NATIVE_FLOW_LIBRARY_WITHOUT_GUARD: &str =
+    "---@meta _\n---@class C_E0Fixture\n---@field SecretText fun(): string\nC_E0Fixture = {}\n";
+
 fn sha(byte: char) -> String {
     format!("sha256:{}", byte.to_string().repeat(64))
 }
@@ -182,6 +186,13 @@ fn service_with_context(
 }
 
 fn native_flow_service(source: &str) -> TestResult<Service<LocalProjectBackend>> {
+    native_flow_service_with_library(source, NATIVE_FLOW_LIBRARY_WITH_GUARD)
+}
+
+fn native_flow_service_with_library(
+    source: &str,
+    library_source: &str,
+) -> TestResult<Service<LocalProjectBackend>> {
     use wow_core::{
         CanonicalResult, ContentDigest, ProfileId, ProfileIdentityBuilder, ProfileKind,
         ReferenceGenerationId, SchemaId, SchemaVersionEntry, SourceKind, SourceLogicalSnapshot,
@@ -200,8 +211,6 @@ fn native_flow_service(source: &str) -> TestResult<Service<LocalProjectBackend>>
         CoverageStatus, ReferencePartition, ReferenceRecord, ReferenceRecordKind, ReferenceView,
         RestrictionFacet, RestrictionState,
     };
-
-    const LIBRARY_SOURCE: &str = "---@meta _\n---@class C_E0Fixture\n---@field SecretText fun(): string\nC_E0Fixture = {}\n\n---@param value any\n---@return boolean accessible\nfunction canaccessvalue(value) end\n";
 
     let profile_id: ProfileId = "profile:fixture:retail-120100-e0-v1".parse()?;
     let schema_id: SchemaId = "schema:wow:fixture-e0".parse()?;
@@ -257,7 +266,7 @@ fn native_flow_service(source: &str) -> TestResult<Service<LocalProjectBackend>>
         LuaWorkspaceUniverse::Fixture,
         vec![LuaWorkspaceFileInput::new(
             "library/C_E0Fixture.lua",
-            LIBRARY_SOURCE,
+            library_source,
         )],
         LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
     )?;
@@ -558,6 +567,66 @@ fn native_service_does_not_clean_a_reassigned_guard_value() -> TestResult {
                 .any(|evaluation| evaluation.state() == RuleEvaluationState::Findings)
         );
     }
+    Ok(())
+}
+
+#[test]
+fn native_service_requires_library_guard_and_direct_operand_flow() -> TestResult {
+    let inexact_source = concat!(
+        "function canaccessvalue(value) return true end\n",
+        "local function helper(value) return \"constant\" end\n",
+        "local text = C_E0Fixture.SecretText()\n",
+        "local other = C_E0Fixture.SecretText()\n",
+        "if canaccessvalue(text) then\n",
+        "    local rendered = text .. helper(other)\n",
+        "end\n",
+    );
+    let inexact_service =
+        native_flow_service_with_library(inexact_source, NATIVE_FLOW_LIBRARY_WITHOUT_GUARD)?;
+    let inexact_result = inexact_service.check(
+        &CheckRequest::new(
+            OperationId::new("operation:check:native-inexact-flow")?,
+            GenerationSelector::current_published("fixture-service-flow-e0-v1")?,
+            CheckScope::WholeProject,
+        ),
+        &AtomicBool::new(false),
+    )?;
+    assert_eq!(
+        inexact_result.semantic_status(),
+        ServiceSemanticStatus::Partial
+    );
+    let secret_evaluations = inexact_result
+        .rule_evaluations()
+        .iter()
+        .filter(|evaluation| evaluation.rule_id() == "wow.secret.local_operation@1")
+        .collect::<Vec<_>>();
+    assert!(!secret_evaluations.is_empty());
+    assert!(
+        secret_evaluations
+            .iter()
+            .all(|evaluation| evaluation.state() == RuleEvaluationState::NotEvaluated)
+    );
+
+    let exact_source = concat!(
+        "local text = C_E0Fixture.SecretText()\n",
+        "if canaccessvalue(text) then\n",
+        "    local rendered = text .. \"!\"\n",
+        "end\n",
+    );
+    let exact_service = native_flow_service(exact_source)?;
+    let exact_result = exact_service.check(
+        &CheckRequest::new(
+            OperationId::new("operation:check:native-library-guard")?,
+            GenerationSelector::current_published("fixture-service-flow-e0-v1")?,
+            CheckScope::WholeProject,
+        ),
+        &AtomicBool::new(false),
+    )?;
+    assert_eq!(exact_result.semantic_status(), ServiceSemanticStatus::Clean);
+    assert!(exact_result.rule_evaluations().iter().any(|evaluation| {
+        evaluation.rule_id() == "wow.secret.local_operation@1"
+            && evaluation.state() == RuleEvaluationState::EvaluatedClean
+    }));
     Ok(())
 }
 

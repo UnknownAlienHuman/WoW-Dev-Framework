@@ -534,6 +534,10 @@ type LoopRegionKey = (usize, usize);
 struct WriteModel {
     /// Resolved assignment targets after each declaration's initializer.
     writes: HashMap<LuaSemanticDeclId, Vec<SourceSpan>>,
+    /// Exact spans of references resolved to the collected local bindings.
+    /// This bounded index lets unsupported operation operands be recognized
+    /// without walking their descendant subtrees a second time.
+    tracked_local_spans: Vec<SourceSpan>,
     /// Declarations referenced from a different enclosing function.
     captured: HashSet<LuaSemanticDeclId>,
     /// Declarations assigned within each enclosing repeated loop region.
@@ -543,6 +547,19 @@ struct WriteModel {
 }
 
 impl WriteModel {
+    fn has_tracked_local_within(&self, range: SourceSpan) -> bool {
+        let Some(range_start) = range.byte_start() else {
+            return true;
+        };
+        let first_possible = self.tracked_local_spans.partition_point(|span| {
+            span.byte_start()
+                .is_some_and(|span_start| span_start < range_start)
+        });
+        self.tracked_local_spans
+            .get(first_possible)
+            .is_some_and(|span| span_contains(range, *span))
+    }
+
     fn has_write_before(&self, binding: &BindingInternal, operation_span: SourceSpan) -> bool {
         let Some(declaration_end) = binding.fact.declaration_span.byte_end() else {
             return true;
@@ -709,6 +726,12 @@ pub(crate) fn collect_registered(
             None,
         ));
     }
+    let library_root_storage =
+        registered_library_roots(main_root, main.snapshot_id(), member_report)?;
+    let library_roots = library_root_storage
+        .iter()
+        .map(PathBuf::as_path)
+        .collect::<Vec<_>>();
     let member_calls = member_report.calls();
     let member_references = member_report.references();
 
@@ -772,23 +795,29 @@ pub(crate) fn collect_registered(
             &root,
             &file_bindings,
             &semantic_bindings,
+            &write_model,
         )?;
-        let mut unresolved_flow =
-            operation_flow_is_unresolved(&file_bindings, &file_operations, &write_model);
+        let mut unresolved_flow = file_operations.unresolved_flow
+            || operation_flow_is_unresolved(
+                &file_bindings,
+                &file_operations.operations,
+                &write_model,
+            );
         let (mut file_guards, mut file_control, unresolved_guard_flow) = collect_guards(
             main,
             file,
             &model,
             &root,
+            &library_roots,
             &file_bindings,
             &semantic_bindings,
-            &file_operations,
+            &file_operations.operations,
             &write_model,
         )?;
         unresolved_flow |= unresolved_guard_flow;
 
         bindings.extend(file_bindings.drain(..).map(|binding| binding.fact));
-        for operation in file_operations.drain(..) {
+        for operation in file_operations.operations.drain(..) {
             uses.extend(operation.uses);
             operations.push(operation.fact);
         }
@@ -920,6 +949,7 @@ fn collect_write_model(
     flow_checkpoint(stop, file)?;
     let mut writes: HashMap<LuaSemanticDeclId, Vec<SourceSpan>> =
         HashMap::with_capacity(bindings.len());
+    let mut tracked_local_spans = Vec::new();
     let mut captured = HashSet::with_capacity(bindings.len());
     let mut loop_writes: HashMap<LoopRegionKey, HashSet<LuaSemanticDeclId>> = HashMap::new();
     let mut loop_write_count = 0_usize;
@@ -982,6 +1012,7 @@ fn collect_write_model(
                 let Some(binding_index) = semantic_bindings.get(&decl).copied() else {
                     continue;
                 };
+                tracked_local_spans.push(ast_span(file, name.syntax().text_range())?);
                 if is_captured_upvalue(name.syntax(), bindings[binding_index].function_scope) {
                     captured.insert(decl);
                 }
@@ -989,8 +1020,10 @@ fn collect_write_model(
             _ => {}
         }
     }
+    tracked_local_spans.sort_by_key(|span| span.byte_start().unwrap_or(u64::MAX));
     Ok(WriteModel {
         writes,
+        tracked_local_spans,
         captured,
         loop_writes,
         loop_write_overflow,
@@ -1164,6 +1197,21 @@ fn direct_member_initializer<'a>(
     Some(Ok((call, reference)))
 }
 
+struct OperationCollection {
+    operations: Vec<OperationInternal>,
+    unresolved_flow: bool,
+}
+
+fn direct_local_name(mut expression: LuaExpr) -> Option<LuaNameExpr> {
+    loop {
+        match expression {
+            LuaExpr::NameExpr(name) => return Some(name),
+            LuaExpr::ParenExpr(paren) => expression = paren.get_expr()?,
+            _ => return None,
+        }
+    }
+}
+
 fn collect_operations(
     main: &LuaWorkspaceSnapshot,
     file: &LuaWorkspaceFile,
@@ -1171,8 +1219,10 @@ fn collect_operations(
     root: &emmylua_parser::LuaChunk,
     bindings: &[BindingInternal],
     semantic_bindings: &HashMap<LuaSemanticDeclId, usize>,
-) -> EmmyLocalFlowResult<Vec<OperationInternal>> {
+    write_model: &WriteModel,
+) -> EmmyLocalFlowResult<OperationCollection> {
     let mut result = Vec::new();
+    let mut unresolved_flow = false;
     let mut active_loop_regions = Vec::new();
     let mut loop_region_count = 0_usize;
     let mut loop_context_overflow = false;
@@ -1192,8 +1242,14 @@ fn collect_operations(
         }
         let operation_span = ast_span(file, binary.syntax().text_range())?;
         let mut operand_occurrences = Vec::new();
-        for node in binary.syntax().descendants() {
-            let Some(name) = LuaNameExpr::cast(node) else {
+        let Some((left, right)) = binary.get_exprs() else {
+            unresolved_flow |= write_model.has_tracked_local_within(operation_span);
+            continue;
+        };
+        for expression in [left, right] {
+            let Some(name) = direct_local_name(expression.clone()) else {
+                let operand_span = ast_span(file, expression.syntax().text_range())?;
+                unresolved_flow |= write_model.has_tracked_local_within(operand_span);
                 continue;
             };
             let Some(decl) =
@@ -1318,7 +1374,10 @@ fn collect_operations(
         });
     }
     result.sort_by(|left, right| left.fact.cmp(&right.fact));
-    Ok(result)
+    Ok(OperationCollection {
+        operations: result,
+        unresolved_flow,
+    })
 }
 
 #[allow(clippy::too_many_arguments)] // Explicit semantic facts and exact-value proof inputs.
@@ -1327,6 +1386,7 @@ fn collect_guards(
     file: &LuaWorkspaceFile,
     model: &SemanticModel<'_>,
     root: &emmylua_parser::LuaChunk,
+    library_roots: &[&Path],
     bindings: &[BindingInternal],
     semantic_bindings: &HashMap<LuaSemanticDeclId, usize>,
     operations: &[OperationInternal],
@@ -1339,11 +1399,19 @@ fn collect_guards(
         let LuaAst::LuaIfStat(if_stat) = node else {
             continue;
         };
-        let Some((binding_index, guard_span, block_span)) =
-            access_guard(file, model, &if_stat, semantic_bindings)?
+        let Some(candidate) =
+            access_guard(file, model, &if_stat, library_roots, semantic_bindings)?
         else {
             continue;
         };
+        if !candidate.library_target {
+            unresolved_flow |= operations.iter().any(|operation| {
+                span_contains(candidate.block_span, operation.fact.operation_span)
+                    && operation.binding_indices.contains(&candidate.binding_index)
+            });
+            continue;
+        }
+        let binding_index = candidate.binding_index;
         let guard_function_scope = enclosing_closure(if_stat.syntax());
         if guards.len() >= MAX_FACTS {
             return Err(fact_budget(file));
@@ -1368,8 +1436,8 @@ fn collect_guards(
                 path: file.path(),
                 content_sha256: file.content_sha256(),
                 binding_fact_id: binding.fact_id(),
-                guard_span,
-                block_span,
+                guard_span: candidate.guard_span,
+                block_span: candidate.block_span,
             },
         )?;
         let guard = EmmyGuardFact {
@@ -1380,11 +1448,11 @@ fn collect_guards(
             callee: "canaccessvalue",
             guarded_binding_fact_id: binding.fact_id().into(),
             guarded_name: binding.name().into(),
-            guard_span,
-            guarded_block_span: block_span,
+            guard_span: candidate.guard_span,
+            guarded_block_span: candidate.block_span,
         };
         for operation in operations {
-            if !span_contains(block_span, operation.fact.operation_span())
+            if !span_contains(candidate.block_span, operation.fact.operation_span())
                 || !operation
                     .fact
                     .operand_binding_fact_ids()
@@ -1441,12 +1509,20 @@ fn collect_guards(
     Ok((guards, control_flow, unresolved_flow))
 }
 
+struct AccessGuardCandidate {
+    binding_index: usize,
+    guard_span: SourceSpan,
+    block_span: SourceSpan,
+    library_target: bool,
+}
+
 fn access_guard(
     file: &LuaWorkspaceFile,
     model: &SemanticModel<'_>,
     if_stat: &LuaIfStat,
+    library_roots: &[&Path],
     semantic_bindings: &HashMap<LuaSemanticDeclId, usize>,
-) -> EmmyLocalFlowResult<Option<(usize, SourceSpan, SourceSpan)>> {
+) -> EmmyLocalFlowResult<Option<AccessGuardCandidate>> {
     let Some(LuaExpr::CallExpr(call)) = if_stat.get_condition_expr() else {
         return Ok(None);
     };
@@ -1456,24 +1532,42 @@ fn access_guard(
     if callee.get_name_text().as_deref() != Some("canaccessvalue") {
         return Ok(None);
     }
-    if let Some(LuaSemanticDeclId::LuaDecl(id)) =
-        model.find_decl(callee.syntax().clone().into(), SemanticDeclLevel::default())
+    let library_target = match model
+        .find_decl(callee.syntax().clone().into(), SemanticDeclLevel::default())
     {
-        let declaration = model
-            .get_db()
-            .get_decl_index()
-            .get_decl(&id)
-            .ok_or_else(|| {
-                EmmyLocalFlowError::new(
-                    EmmyLocalFlowErrorCode::SemanticModelUnavailable,
-                    "guard declaration is unavailable",
-                    Some(file.path()),
-                )
-            })?;
-        if declaration.is_local() {
-            return Ok(None);
+        Some(LuaSemanticDeclId::LuaDecl(id)) => {
+            let declaration = model
+                .get_db()
+                .get_decl_index()
+                .get_decl(&id)
+                .ok_or_else(|| {
+                    EmmyLocalFlowError::new(
+                        EmmyLocalFlowErrorCode::SemanticModelUnavailable,
+                        "guard declaration is unavailable",
+                        Some(file.path()),
+                    )
+                })?;
+            if declaration.is_local() {
+                // Preserve the existing local-shadow behavior: it is not a
+                // candidate for the selected Library predicate contract.
+                return Ok(None);
+            }
+            let unique_global = model
+                .get_db()
+                .get_global_index()
+                .get_global_decl_ids("canaccessvalue")
+                .is_some_and(|declarations| {
+                    declarations.len() == 1 && declarations.first() == Some(&id)
+                });
+            let selected_library_file = model
+                .get_db()
+                .get_vfs()
+                .get_file_path(&id.file_id)
+                .is_some_and(|path| library_roots.iter().any(|root| path.starts_with(root)));
+            declaration.is_global() && unique_global && selected_library_file
         }
-    }
+        _ => false,
+    };
     let Some(args) = call.get_args_list() else {
         return Ok(None);
     };
@@ -1496,11 +1590,12 @@ fn access_guard(
     let Some(block) = if_stat.get_block() else {
         return Ok(None);
     };
-    Ok(Some((
+    Ok(Some(AccessGuardCandidate {
         binding_index,
-        ast_span(file, call.syntax().text_range())?,
-        ast_span(file, block.syntax().text_range())?,
-    )))
+        guard_span: ast_span(file, call.syntax().text_range())?,
+        block_span: ast_span(file, block.syntax().text_range())?,
+        library_target,
+    }))
 }
 
 fn build_analysis(
@@ -1636,7 +1731,14 @@ fn canonical_id(prefix: &str, value: &impl Serialize) -> EmmyLocalFlowResult<Str
 }
 
 fn virtual_root(role: &str, snapshot_id: &str) -> PathBuf {
-    let stable = snapshot_id
+    std::env::temp_dir()
+        .join("wow-emmy-local-flow-v1")
+        .join(role)
+        .join(snapshot_path_component(snapshot_id))
+}
+
+fn snapshot_path_component(snapshot_id: &str) -> String {
+    snapshot_id
         .bytes()
         .map(|byte| {
             if byte.is_ascii_alphanumeric() {
@@ -1645,11 +1747,44 @@ fn virtual_root(role: &str, snapshot_id: &str) -> PathBuf {
                 '_'
             }
         })
-        .collect::<String>();
-    std::env::temp_dir()
-        .join("wow-emmy-local-flow-v1")
-        .join(role)
-        .join(stable)
+        .collect()
+}
+
+fn registered_library_roots(
+    main_root: &Path,
+    main_snapshot_id: &str,
+    member_report: &EmmyMemberCallReport,
+) -> EmmyLocalFlowResult<Vec<PathBuf>> {
+    let invalid_root = || {
+        EmmyLocalFlowError::new(
+            EmmyLocalFlowErrorCode::MemberCallAnalysisFailed,
+            "registered Main root cannot bind its selected Library roots",
+            None,
+        )
+    };
+    let role_root = main_root.parent().ok_or_else(invalid_root)?;
+    if role_root.file_name().and_then(|name| name.to_str()) != Some("main")
+        || main_root.file_name().and_then(|name| name.to_str())
+            != Some(snapshot_path_component(main_snapshot_id).as_str())
+    {
+        return Err(invalid_root());
+    }
+    let workspace_root = role_root.parent().ok_or_else(invalid_root)?;
+    if !matches!(
+        workspace_root.file_name().and_then(|name| name.to_str()),
+        Some("wow-emmy-local-flow-v1" | "wow-emmy-member-calls-v1")
+    ) {
+        return Err(invalid_root());
+    }
+    Ok(member_report
+        .library_snapshot_ids()
+        .enumerate()
+        .map(|(ordinal, snapshot_id)| {
+            workspace_root
+                .join(format!("library-{ordinal}"))
+                .join(snapshot_path_component(snapshot_id))
+        })
+        .collect())
 }
 
 fn to_u64(value: usize, path: &str) -> EmmyLocalFlowResult<u64> {

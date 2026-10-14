@@ -53,6 +53,21 @@ fn library() -> TestResult<LuaWorkspaceSnapshot> {
     )
 }
 
+fn library_without_guard() -> TestResult<LuaWorkspaceSnapshot> {
+    snapshot(
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "library/C_E0Fixture.lua",
+            concat!(
+                "---@meta _\n",
+                "---@class C_E0Fixture\n",
+                "---@field SecretText fun(): string\n",
+                "C_E0Fixture = {}\n",
+            ),
+        )],
+    )
+}
+
 fn secret_source() -> &'static str {
     concat!(
         "local function unsafe_concat()\n",
@@ -160,6 +175,238 @@ fn exact_local_flow_distinguishes_dominating_and_non_dominating_guards() -> Test
     assert!(!serialized.contains("secret_value"));
     assert!(!serialized.contains("operation_is_safe"));
     assert!(!serialized.contains(std::env::temp_dir().to_string_lossy().as_ref()));
+    Ok(())
+}
+
+#[test]
+fn guard_dominance_requires_one_selected_library_declaration() -> TestResult {
+    let unguarded_library = library_without_guard()?;
+    let guarded_source = concat!(
+        "local text = C_E0Fixture.SecretText()\n",
+        "if canaccessvalue(text) then\n",
+        "    local rendered = text .. \"!\"\n",
+        "end\n",
+    );
+
+    let main_defined = snapshot(
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "main/main-guard.lua",
+            format!("function canaccessvalue(value) return true end\n{guarded_source}"),
+        )],
+    )?;
+    let main_report = analyze_local_flow(&main_defined, &[&unguarded_library])?;
+    assert_eq!(
+        main_report.files()[0].status(),
+        EmmyLocalFlowFileStatus::PartialUnresolvedFlow
+    );
+    assert!(main_report.guards().is_empty());
+    assert!(main_report.control_flow().is_empty());
+
+    let unresolved_main = snapshot(
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "main/unresolved-guard.lua",
+            guarded_source,
+        )],
+    )?;
+    let unresolved_report = analyze_local_flow(&unresolved_main, &[&unguarded_library])?;
+    assert_eq!(
+        unresolved_report.files()[0].status(),
+        EmmyLocalFlowFileStatus::PartialUnresolvedFlow
+    );
+    assert!(unresolved_report.guards().is_empty());
+    assert!(unresolved_report.control_flow().is_empty());
+
+    let ambiguous_library = snapshot(
+        LuaWorkspaceUniverse::Fixture,
+        vec![
+            LuaWorkspaceFileInput::new(
+                "library/C_E0Fixture.lua",
+                concat!(
+                    "---@meta _\n",
+                    "---@class C_E0Fixture\n",
+                    "---@field SecretText fun(): string\n",
+                    "C_E0Fixture = {}\n",
+                ),
+            ),
+            LuaWorkspaceFileInput::new(
+                "library/guard-a.lua",
+                "function canaccessvalue(value) end\n",
+            ),
+            LuaWorkspaceFileInput::new(
+                "library/guard-b.lua",
+                "function canaccessvalue(value) end\n",
+            ),
+        ],
+    )?;
+    let ambiguous_main = snapshot(
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "main/ambiguous-guard.lua",
+            guarded_source,
+        )],
+    )?;
+    let ambiguous_report = analyze_local_flow(&ambiguous_main, &[&ambiguous_library])?;
+    assert_eq!(
+        ambiguous_report.files()[0].status(),
+        EmmyLocalFlowFileStatus::PartialUnresolvedFlow
+    );
+    assert!(ambiguous_report.guards().is_empty());
+    assert!(ambiguous_report.control_flow().is_empty());
+
+    let operation_outside_block = snapshot(
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "main/outside-guard.lua",
+            concat!(
+                "function canaccessvalue(value) return true end\n",
+                "local text = C_E0Fixture.SecretText()\n",
+                "if canaccessvalue(text) then local accepted = true end\n",
+                "local rendered = text .. \"!\"\n",
+            ),
+        )],
+    )?;
+    let outside_report = analyze_local_flow(&operation_outside_block, &[&unguarded_library])?;
+    assert_eq!(
+        outside_report.files()[0].status(),
+        EmmyLocalFlowFileStatus::Complete
+    );
+    assert!(outside_report.guards().is_empty());
+    assert!(outside_report.control_flow().is_empty());
+    Ok(())
+}
+
+#[test]
+fn concatenation_facts_keep_direct_operands_and_mark_unsupported_result_flow_partial() -> TestResult
+{
+    let library = library()?;
+    let nested_operands = [
+        "helper(other)",
+        "(function() return other end)",
+        "{ value = other }",
+    ];
+    for (index, nested_operand) in nested_operands.into_iter().enumerate() {
+        let source = format!(
+            "local text = C_E0Fixture.SecretText()\nlocal other = C_E0Fixture.SecretText()\nlocal rendered = text .. {nested_operand}\n"
+        );
+        let main = snapshot(
+            LuaWorkspaceUniverse::Fixture,
+            vec![LuaWorkspaceFileInput::new(
+                format!("main/unsupported-{index}.lua"),
+                &source,
+            )],
+        )?;
+        let report = analyze_local_flow(&main, &[&library])?;
+        assert_eq!(
+            report.files()[0].status(),
+            EmmyLocalFlowFileStatus::PartialUnresolvedFlow
+        );
+        assert_eq!(report.operations().len(), 1);
+        assert_eq!(
+            report.operations()[0].operand_names().collect::<Vec<_>>(),
+            vec!["text"]
+        );
+        let operation_id = report.operations()[0].fact_id();
+        let uses = report
+            .uses()
+            .iter()
+            .filter(|fact| fact.operation_fact_id() == operation_id)
+            .collect::<Vec<_>>();
+        assert_eq!(uses.len(), 1);
+        assert_eq!(uses[0].name(), "text");
+        assert_eq!(source_slice(&source, uses[0].use_span())?, "text");
+    }
+
+    let helper_only_source = concat!(
+        "local function helper(value) return \"constant\" end\n",
+        "local text = C_E0Fixture.SecretText()\n",
+        "local rendered = helper(text) .. \"!\"\n",
+    );
+    let helper_only_main = snapshot(
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "main/helper-only.lua",
+            helper_only_source,
+        )],
+    )?;
+    let helper_only_report = analyze_local_flow(&helper_only_main, &[&library])?;
+    assert_eq!(
+        helper_only_report.files()[0].status(),
+        EmmyLocalFlowFileStatus::PartialUnresolvedFlow
+    );
+    assert!(helper_only_report.operations().is_empty());
+    assert!(helper_only_report.uses().is_empty());
+
+    let parenthesized_source = concat!(
+        "local text = C_E0Fixture.SecretText()\n",
+        "local rendered = ((text)) .. \"!\"\n",
+    );
+    let parenthesized_main = snapshot(
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "main/parenthesized.lua",
+            parenthesized_source,
+        )],
+    )?;
+    let parenthesized_report = analyze_local_flow(&parenthesized_main, &[&library])?;
+    assert_eq!(
+        parenthesized_report.files()[0].status(),
+        EmmyLocalFlowFileStatus::Complete
+    );
+    assert_eq!(parenthesized_report.operations().len(), 1);
+    assert_eq!(
+        parenthesized_report.operations()[0]
+            .operand_names()
+            .collect::<Vec<_>>(),
+        vec!["text"]
+    );
+    assert_eq!(parenthesized_report.uses().len(), 1);
+    assert_eq!(
+        source_slice(
+            parenthesized_source,
+            parenthesized_report.uses()[0].use_span()
+        )?,
+        "text"
+    );
+
+    let nested_concat_source = concat!(
+        "local text = C_E0Fixture.SecretText()\n",
+        "local other = C_E0Fixture.SecretText()\n",
+        "local rendered = text .. (other .. \"!\")\n",
+    );
+    let nested_concat_main = snapshot(
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "main/nested-concat.lua",
+            nested_concat_source,
+        )],
+    )?;
+    let nested_concat_report = analyze_local_flow(&nested_concat_main, &[&library])?;
+    assert_eq!(
+        nested_concat_report.files()[0].status(),
+        EmmyLocalFlowFileStatus::PartialUnresolvedFlow
+    );
+    assert_eq!(nested_concat_report.operations().len(), 2);
+    for expected_name in ["text", "other"] {
+        let operation = nested_concat_report
+            .operations()
+            .iter()
+            .find(|operation| operation.operand_names().any(|name| name == expected_name))
+            .ok_or("expected nested-concatenation operand")?;
+        assert_eq!(
+            operation.operand_names().collect::<Vec<_>>(),
+            vec![expected_name]
+        );
+        assert_eq!(
+            nested_concat_report
+                .uses()
+                .iter()
+                .filter(|fact| fact.operation_fact_id() == operation.fact_id())
+                .count(),
+            1
+        );
+    }
     Ok(())
 }
 
