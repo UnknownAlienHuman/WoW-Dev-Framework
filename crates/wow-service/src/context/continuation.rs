@@ -1540,12 +1540,13 @@ fn persist_operation(
     batch
         .add_object(outcome_object.clone())
         .map_err(|_| store_failure())?;
-    if store.commit(batch).is_err() {
-        let _ = store.mark_outcome_unknown(&operation_id, &request_digest);
-        return Err(failure(ServiceErrorCode::StoreOutcomeUnknown));
-    }
     if store
-        .complete_operation(&operation_id, &request_digest, outcome_object.object_id())
+        .commit_operation(
+            batch,
+            &operation_id,
+            &request_digest,
+            outcome_object.object_id(),
+        )
         .is_err()
     {
         let _ = store.mark_outcome_unknown(&operation_id, &request_digest);

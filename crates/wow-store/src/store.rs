@@ -1,4 +1,6 @@
 mod bootstrap;
+#[cfg(test)]
+mod operation_batch_tests;
 use std::{fs, io::Cursor, path::Path, time::Duration};
 
 use rusqlite::{
@@ -218,6 +220,11 @@ fn require_owned(outcome: AdmissionOutcome) -> StoreResult<()> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OperationCommitBoundary {
+    BeforeCommit,
+    AfterCommit,
+}
 /// One synchronous durable store. SQLite handles and physical schema stay private.
 pub struct Store {
     connection: Connection,
@@ -369,6 +376,142 @@ impl Store {
     }
 
     pub fn commit(&mut self, batch: WriteBatch) -> StoreResult<CommitReceipt> {
+        self.preflight_batch(&batch)?;
+        let max_object_bytes = self.configuration.limits().max_object_bytes;
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(StoreError::database)?;
+        let (inserted, deduplicated, changes) =
+            apply_write_batch(&transaction, &batch, max_object_bytes)?;
+        transaction.commit().map_err(StoreError::database)?;
+        CommitReceipt::build(inserted, deduplicated, changes)
+    }
+
+    /// Atomically applies a validated batch and completes its exact prepared journal entry.
+    ///
+    /// The result object may already exist or be included in the batch; either way
+    /// its presence is checked in the same transaction as object/catalog writes.
+    /// Exact completed retries return the durable operation record without replaying
+    /// the batch or its compare-and-swap mutations.
+    pub fn commit_operation(
+        &mut self,
+        batch: WriteBatch,
+        operation_id: &OperationId,
+        request_digest: &RequestDigest,
+        result_object_id: &ObjectId,
+    ) -> StoreResult<OperationRecord> {
+        self.commit_operation_with_boundary(
+            batch,
+            operation_id,
+            request_digest,
+            result_object_id,
+            |_| Ok(()),
+        )
+    }
+
+    fn commit_operation_with_boundary<F>(
+        &mut self,
+        batch: WriteBatch,
+        operation_id: &OperationId,
+        request_digest: &RequestDigest,
+        result_object_id: &ObjectId,
+        mut observe: F,
+    ) -> StoreResult<OperationRecord>
+    where
+        F: FnMut(OperationCommitBoundary) -> StoreResult<()>,
+    {
+        self.preflight_batch(&batch)?;
+        let max_object_bytes = self.configuration.limits().max_object_bytes;
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(StoreError::database)?;
+        let current = read_operation(&transaction, operation_id)?.ok_or_else(|| {
+            StoreError::new(
+                StoreErrorCode::OperationStateInvalid,
+                "operation was not prepared",
+            )
+        })?;
+        if current.request_digest() != request_digest {
+            return Err(StoreError::new(
+                StoreErrorCode::OperationConflict,
+                "operation request digest does not match",
+            ));
+        }
+
+        if current.state() == OperationState::Completed {
+            if current.result_object_id() != Some(result_object_id) {
+                return Err(StoreError::new(
+                    StoreErrorCode::OperationStateInvalid,
+                    "completed operation has a different result object",
+                ));
+            }
+            if read_object(&transaction, result_object_id, max_object_bytes)?.is_none() {
+                return Err(StoreError::new(
+                    StoreErrorCode::ObjectMissing,
+                    "completed operation result object is missing",
+                ));
+            }
+            observe(OperationCommitBoundary::BeforeCommit)?;
+            transaction.commit().map_err(StoreError::database)?;
+            observe(OperationCommitBoundary::AfterCommit)?;
+            return Ok(current);
+        }
+
+        if current.state() != OperationState::Prepared {
+            return Err(StoreError::new(
+                StoreErrorCode::OperationStateInvalid,
+                "operation is already terminal",
+            ));
+        }
+
+        let _ = apply_write_batch(&transaction, &batch, max_object_bytes)?;
+        if read_object(&transaction, result_object_id, max_object_bytes)?.is_none() {
+            return Err(StoreError::new(
+                StoreErrorCode::ObjectMissing,
+                "operation result object does not exist",
+            ));
+        }
+        let changed = transaction
+            .execute(
+                "UPDATE store_operations
+                 SET state = 'completed', result_object_id = ?1
+                 WHERE operation_id = ?2 AND request_digest = ?3 AND state = 'prepared'",
+                params![
+                    result_object_id.as_str(),
+                    operation_id.as_str(),
+                    request_digest.as_str(),
+                ],
+            )
+            .map_err(StoreError::database)?;
+        if changed != 1 {
+            return Err(StoreError::new(
+                StoreErrorCode::OperationStateInvalid,
+                "prepared operation changed before atomic completion",
+            ));
+        }
+        let completed = read_operation(&transaction, operation_id)?.ok_or_else(|| {
+            StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                "operation disappeared during atomic completion",
+            )
+        })?;
+        if completed.state() != OperationState::Completed
+            || completed.result_object_id() != Some(result_object_id)
+        {
+            return Err(StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                "atomic operation completion did not read back",
+            ));
+        }
+        observe(OperationCommitBoundary::BeforeCommit)?;
+        transaction.commit().map_err(StoreError::database)?;
+        observe(OperationCommitBoundary::AfterCommit)?;
+        Ok(completed)
+    }
+
+    fn preflight_batch(&self, batch: &WriteBatch) -> StoreResult<()> {
         let limits = self.configuration.limits();
         if batch.objects().len() > limits.max_batch_objects as usize
             || batch.catalog_mutations().len() > limits.max_catalog_mutations as usize
@@ -378,64 +521,8 @@ impl Store {
                 "write batch exceeds configured limits",
             ));
         }
-        validate_batch(&batch, limits.max_object_bytes)?;
-        let transaction = self
-            .connection
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(StoreError::database)?;
-        let mut inserted = Vec::new();
-        let mut deduplicated = Vec::new();
-        for object in batch.objects() {
-            let changed = transaction
-                .execute(
-                    "INSERT OR IGNORE INTO store_objects(
-                         object_id, kind, schema_version, content_sha256, canonical_json
-                     ) VALUES (?1, ?2, ?3, ?4, ?5)",
-                    params![
-                        object.object_id().as_str(),
-                        object.kind(),
-                        i64::from(object.schema_version()),
-                        object.content_sha256(),
-                        object.canonical_json(),
-                    ],
-                )
-                .map_err(StoreError::database)?;
-            if changed == 1 {
-                inserted.push(object.object_id().clone());
-            } else {
-                let existing =
-                    read_object(&transaction, object.object_id(), limits.max_object_bytes)?
-                        .ok_or_else(|| {
-                            StoreError::new(
-                                StoreErrorCode::IntegrityViolation,
-                                "deduplicated object disappeared inside transaction",
-                            )
-                        })?;
-                if existing.kind() != object.kind()
-                    || existing.schema_version() != object.schema_version()
-                    || existing.content_sha256() != object.content_sha256()
-                    || existing.canonical_json() != object.canonical_json()
-                {
-                    return Err(StoreError::new(
-                        StoreErrorCode::ObjectConflict,
-                        "object id is already bound to different bytes",
-                    ));
-                }
-                deduplicated.push(object.object_id().clone());
-            }
-        }
-        let mut changes = Vec::new();
-        for mutation in batch.catalog_mutations() {
-            changes.push(apply_catalog_mutation(
-                &transaction,
-                mutation,
-                limits.max_object_bytes,
-            )?);
-        }
-        transaction.commit().map_err(StoreError::database)?;
-        CommitReceipt::build(inserted, deduplicated, changes)
+        validate_batch(batch, limits.max_object_bytes)
     }
-
     pub fn begin_operation(
         &mut self,
         operation_id: OperationId,
@@ -1200,6 +1287,61 @@ fn build_logical_manifest(
     )
 }
 
+fn apply_write_batch(
+    transaction: &Transaction<'_>,
+    batch: &WriteBatch,
+    max_object_bytes: u64,
+) -> StoreResult<(Vec<ObjectId>, Vec<ObjectId>, Vec<CatalogChange>)> {
+    let mut inserted = Vec::new();
+    let mut deduplicated = Vec::new();
+    for object in batch.objects() {
+        let changed = transaction
+            .execute(
+                "INSERT OR IGNORE INTO store_objects(
+                     object_id, kind, schema_version, content_sha256, canonical_json
+                 ) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    object.object_id().as_str(),
+                    object.kind(),
+                    i64::from(object.schema_version()),
+                    object.content_sha256(),
+                    object.canonical_json(),
+                ],
+            )
+            .map_err(StoreError::database)?;
+        if changed == 1 {
+            inserted.push(object.object_id().clone());
+        } else {
+            let existing = read_object(transaction, object.object_id(), max_object_bytes)?
+                .ok_or_else(|| {
+                    StoreError::new(
+                        StoreErrorCode::IntegrityViolation,
+                        "deduplicated object disappeared inside transaction",
+                    )
+                })?;
+            if existing.kind() != object.kind()
+                || existing.schema_version() != object.schema_version()
+                || existing.content_sha256() != object.content_sha256()
+                || existing.canonical_json() != object.canonical_json()
+            {
+                return Err(StoreError::new(
+                    StoreErrorCode::ObjectConflict,
+                    "object id is already bound to different bytes",
+                ));
+            }
+            deduplicated.push(object.object_id().clone());
+        }
+    }
+    let mut changes = Vec::new();
+    for mutation in batch.catalog_mutations() {
+        changes.push(apply_catalog_mutation(
+            transaction,
+            mutation,
+            max_object_bytes,
+        )?);
+    }
+    Ok((inserted, deduplicated, changes))
+}
 fn validate_batch(batch: &WriteBatch, max_object_bytes: u64) -> StoreResult<()> {
     for object in batch.objects() {
         if object.canonical_json().len() as u64 > max_object_bytes {

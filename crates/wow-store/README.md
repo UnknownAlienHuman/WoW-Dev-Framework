@@ -139,7 +139,18 @@ Migrations are registered, versioned, deterministic owner and store operations w
 
 ## Response loss
 
-Every write, CAS, backup, restore, publication, or GC effect reconciles by exact `OperationId + CanonicalRequestDigest` and target identity. Same operation ID with a different digest fails. A possible commit with a lost response remains unknown; no duplicate effect or newest-state selection is permitted.
+Every write, CAS, backup, restore, publication, or GC effect reconciles by exact
+`OperationId + CanonicalRequestDigest` and target identity. Same operation ID with a
+different digest fails. A possible commit with a lost response remains unknown
+until the exact durable record is reread; no duplicate effect or newest-state
+selection is permitted.
+
+`Store::commit_operation` applies one validated `WriteBatch` and completes its
+matching prepared operation record in the same transaction. A matching completed
+retry returns the durable operation record without replaying catalog
+compare-and-swap mutations. Preparation remains a separate earlier boundary, so
+an interrupted operation can still be Prepared before its batch transaction
+starts.
 
 ## Current implementation state
 
