@@ -9,7 +9,7 @@ use wow_store::project::{
 use wow_store::{
     CatalogExpectation, CatalogMutation, CatalogName, CatalogPath, ObjectId, OperationBegin,
     OperationId, OperationState, PendingObject, RequestDigest, Store, StoreConfiguration,
-    StoreLimits, WriteBatch,
+    StoreErrorCode, StoreLimits, WriteBatch,
 };
 
 use super::operation::{with_checked_context_read, with_native_progressive};
@@ -230,7 +230,7 @@ fn continuation_id(
     .into_boxed_str())
 }
 
-fn retention_root(
+pub(super) fn retention_root(
     store: &LiveProjectStore,
     request_id: &str,
     generation: StoreGenerationId,
@@ -287,10 +287,10 @@ fn select_and_retain_generation(
     match (selected, closed) {
         (Ok(value), Ok(())) => Ok(value),
         (Err(error), Ok(())) => Err(error),
-        (Ok((_, root, _)), Err(_)) => {
-            let _ = release_retention_root(host, &root);
-            Err(failure(ServiceErrorCode::InternalContractViolation))
-        }
+        (Ok((_, root, _)), Err(_)) => match release_retention_root(host, &root) {
+            Ok(()) => Err(failure(ServiceErrorCode::InternalContractViolation)),
+            Err(_) => Err(failure(ServiceErrorCode::StoreOutcomeUnknown)),
+        },
         (Err(_), Err(_)) => Err(failure(ServiceErrorCode::InternalContractViolation)),
     }
 }
@@ -318,6 +318,30 @@ fn release_retention_root(host: &ContextMapHostInput, root: &RetentionRoot) -> S
         (Err(error), Ok(())) => Err(error),
         (_, Err(_)) => Err(failure(ServiceErrorCode::InternalContractViolation)),
     }
+}
+
+/// Remove only a hold from this prepared issuance when the atomic batch is
+/// durably known not to have completed. Any terminal or unreadable journal
+/// state keeps the hold so a receipt can never outlive its generation.
+fn release_preissuance_retention_if_prepared(
+    host: &ContextMapHostInput,
+    continuation_store: &Store,
+    operation_id: &OperationId,
+    request_digest: &RequestDigest,
+    root: &RetentionRoot,
+) -> ServiceResult<bool> {
+    let operation = continuation_store
+        .operation(operation_id)
+        .map_err(|_| failure(ServiceErrorCode::StoreOutcomeUnknown))?
+        .ok_or_else(|| failure(ServiceErrorCode::StoreOutcomeUnknown))?;
+    if operation.request_digest() != request_digest {
+        return Err(failure(ServiceErrorCode::OperationConflict));
+    }
+    if operation.state() != OperationState::Prepared {
+        return Ok(false);
+    }
+    release_retention_root(host, root)?;
+    Ok(true)
 }
 
 fn verify_retention_root(host: &ContextMapHostInput, root: &RetentionRoot) -> ServiceResult<()> {
@@ -426,6 +450,32 @@ fn replay_completed_result(
     Ok(Some(response_result(bytes)?))
 }
 
+fn prepare_initial_operation(
+    store: &mut Store,
+    operation_id: &OperationId,
+    request_digest: &RequestDigest,
+    host: &ContextMapHostInput,
+    stop: &AtomicBool,
+) -> ServiceResult<Option<ContextMapResult>> {
+    match store
+        .begin_operation(operation_id.clone(), request_digest.clone())
+        .map_err(|error| {
+            if error.code() == StoreErrorCode::OperationConflict {
+                failure(ServiceErrorCode::OperationConflict)
+            } else {
+                store_failure()
+            }
+        })? {
+        OperationBegin::Started(_) => Ok(None),
+        OperationBegin::Replay(record) if record.state() == OperationState::Completed => {
+            replay_completed_result(store, operation_id, request_digest, host, stop)?
+                .map(Some)
+                .ok_or_else(store_failure)
+        }
+        OperationBegin::Replay(_) => Err(failure(ServiceErrorCode::StoreOutcomeUnknown)),
+    }
+}
+
 pub(super) fn execute_context_build_with_continuation(
     host: &ContextMapHostInput,
     request: &ContextBuildRequest,
@@ -475,8 +525,8 @@ pub(super) fn execute_context_build_with_continuation(
             );
         }
     };
-    match replay_completed_result(
-        &continuation_store,
+    match prepare_initial_operation(
+        &mut continuation_store,
         &operation_id,
         &request_digest,
         host,
@@ -513,9 +563,14 @@ pub(super) fn execute_context_build_with_continuation(
     let token = match continuation_id(&request_id, &generation, 1) {
         Ok(token) => token,
         Err(error) => {
-            let cleanup = release_retention_root(host, &retention);
-            if cleanup.is_err() {
-                return Err(failure(ServiceErrorCode::InternalContractViolation));
+            if !release_preissuance_retention_if_prepared(
+                host,
+                &continuation_store,
+                &operation_id,
+                &request_digest,
+                &retention,
+            )? {
+                return Err(failure(ServiceErrorCode::StoreOutcomeUnknown));
             }
             return Err(error);
         }
@@ -536,25 +591,42 @@ pub(super) fn execute_context_build_with_continuation(
     let (response_bytes, _) = match built {
         Ok(value) if closure == "closed" => value,
         Ok(_) => {
-            let _ = release_retention_root(host, &retention);
+            let code = if release_preissuance_retention_if_prepared(
+                host,
+                &continuation_store,
+                &operation_id,
+                &request_digest,
+                &retention,
+            )? {
+                ServiceErrorCode::InternalContractViolation
+            } else {
+                ServiceErrorCode::StoreOutcomeUnknown
+            };
             return super::operation::failed_operation(
                 request,
                 &request_id,
-                ServiceErrorCode::InternalContractViolation,
+                code,
                 closure,
                 super::build::CONTEXT_BUILD_CONTINUATION_RESULT_SCHEMA,
                 "context_build",
             );
         }
         Err(error) => {
-            let cleanup = release_retention_root(host, &retention);
-            if cleanup.is_err() {
-                return Err(failure(ServiceErrorCode::InternalContractViolation));
-            }
+            let code = if release_preissuance_retention_if_prepared(
+                host,
+                &continuation_store,
+                &operation_id,
+                &request_digest,
+                &retention,
+            )? {
+                error.code()
+            } else {
+                ServiceErrorCode::StoreOutcomeUnknown
+            };
             return super::operation::failed_operation(
                 request,
                 &request_id,
-                error.code(),
+                code,
                 closure,
                 super::build::CONTEXT_BUILD_CONTINUATION_RESULT_SCHEMA,
                 "context_build",
@@ -574,9 +646,14 @@ pub(super) fn execute_context_build_with_continuation(
     let (replay, semantic_pack_id) = match receipt_data {
         Ok(value) => value,
         Err(error) => {
-            let cleanup = release_retention_root(host, &retention);
-            if cleanup.is_err() {
-                return Err(failure(ServiceErrorCode::InternalContractViolation));
+            if !release_preissuance_retention_if_prepared(
+                host,
+                &continuation_store,
+                &operation_id,
+                &request_digest,
+                &retention,
+            )? {
+                return Err(failure(ServiceErrorCode::StoreOutcomeUnknown));
             }
             return Err(error);
         }
@@ -590,11 +667,11 @@ pub(super) fn execute_context_build_with_continuation(
         semantic_pack_id,
         retention_root: retention.clone(),
     };
-    let persisted = persist_operation(
+    let persisted = persist_prepared_operation(
         &mut continuation_store,
         OperationWrite {
-            operation_id,
-            request_digest,
+            operation_id: operation_id.clone(),
+            request_digest: request_digest.clone(),
             response_bytes: &response_bytes,
             receipt: Some(draft),
             retire_continuation: None,
@@ -617,13 +694,17 @@ pub(super) fn execute_context_build_with_continuation(
             response_result(bytes)
         }
         Err(error) => {
-            if error.code() != ServiceErrorCode::StoreOutcomeUnknown {
-                let cleanup = release_retention_root(host, &retention);
-                if cleanup.is_err() {
-                    return Err(failure(ServiceErrorCode::InternalContractViolation));
-                }
+            if release_preissuance_retention_if_prepared(
+                host,
+                &continuation_store,
+                &operation_id,
+                &request_digest,
+                &retention,
+            )? {
+                Err(error)
+            } else {
+                Err(failure(ServiceErrorCode::StoreOutcomeUnknown))
             }
-            Err(error)
         }
     }
 }
@@ -1430,6 +1511,23 @@ fn persist_operation(
     operation: OperationWrite<'_>,
     stop: &AtomicBool,
 ) -> ServiceResult<(ContinuationOperationOutcome, Box<[u8]>)> {
+    persist_operation_inner(store, operation, stop, false)
+}
+
+fn persist_prepared_operation(
+    store: &mut Store,
+    operation: OperationWrite<'_>,
+    stop: &AtomicBool,
+) -> ServiceResult<(ContinuationOperationOutcome, Box<[u8]>)> {
+    persist_operation_inner(store, operation, stop, true)
+}
+
+fn persist_operation_inner(
+    store: &mut Store,
+    operation: OperationWrite<'_>,
+    stop: &AtomicBool,
+    already_prepared: bool,
+) -> ServiceResult<(ContinuationOperationOutcome, Box<[u8]>)> {
     let OperationWrite {
         operation_id,
         request_digest,
@@ -1502,15 +1600,36 @@ fn persist_operation(
     )
     .map_err(|_| store_failure())?;
 
-    match store
-        .begin_operation(operation_id.clone(), request_digest.clone())
-        .map_err(|_| store_failure())?
-    {
-        OperationBegin::Replay(record) if record.state() == OperationState::Completed => {
-            return read_completed_outcome(store, &operation_id, &request_digest);
+    if already_prepared {
+        let Some(record) = store
+            .operation(&operation_id)
+            .map_err(|_| store_failure())?
+        else {
+            return Err(failure(ServiceErrorCode::StoreOutcomeUnknown));
+        };
+        if record.request_digest() != &request_digest {
+            return Err(failure(ServiceErrorCode::OperationConflict));
         }
-        OperationBegin::Replay(_) => return Err(failure(ServiceErrorCode::StoreOutcomeUnknown)),
-        OperationBegin::Started(_) => {}
+        match record.state() {
+            OperationState::Prepared => {}
+            OperationState::Completed => {
+                return read_completed_outcome(store, &operation_id, &request_digest);
+            }
+            _ => return Err(failure(ServiceErrorCode::StoreOutcomeUnknown)),
+        }
+    } else {
+        match store
+            .begin_operation(operation_id.clone(), request_digest.clone())
+            .map_err(|_| store_failure())?
+        {
+            OperationBegin::Replay(record) if record.state() == OperationState::Completed => {
+                return read_completed_outcome(store, &operation_id, &request_digest);
+            }
+            OperationBegin::Replay(_) => {
+                return Err(failure(ServiceErrorCode::StoreOutcomeUnknown));
+            }
+            OperationBegin::Started(_) => {}
+        }
     }
 
     let mut batch = WriteBatch::new();

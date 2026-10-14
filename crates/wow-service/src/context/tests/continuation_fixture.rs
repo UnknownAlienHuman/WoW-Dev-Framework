@@ -360,6 +360,85 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
     assert_eq!(after.generation_id, advanced.generation_id);
     current_store.close()?;
 
+    // Model a process loss after the initial hold but before the response,
+    // receipt, and token batch reaches Store::commit_operation. The durable
+    // Prepared record must stop an exact retry before it can resolve Current
+    // onto the newly advanced generation; the old hold remains conservative.
+    let orphan_request = ContextBuildRequest::primary(
+        STORE_ID,
+        ContextMapPublication::Current,
+        ContextInspectLevel::L1,
+        ContextMapRoot::graph_entity(selected[0].as_str())?,
+        ContextRenderSelection::None,
+        None,
+        Some(reference_guard(&profile, &reference)?),
+    )?
+    .with_progressive_expansion(vec![
+        vec![ContextMapRoot::graph_entity(selected[1].as_str())?],
+        vec![ContextMapRoot::graph_entity(selected[2].as_str())?],
+        vec![ContextMapRoot::graph_entity(selected[3].as_str())?],
+        vec![ContextMapRoot::graph_entity(selected[4].as_str())?],
+    ])?
+    .with_continuation_retention_profile(CONTEXT_CONTINUATION_RETENTION_PROFILE_ID)?;
+    let (orphan_request_id, orphan_operation_id, orphan_request_digest) =
+        crate::context::continuation::build_operation_identity(&orphan_request)?;
+    let continuation_store_path = scratch.root.join("continuation-store.sqlite");
+    let configuration = crate::context::continuation::continuation_store_configuration()
+        .map_err(|error| std::io::Error::other(format!("orphan store configuration: {error:?}")))?;
+    let mut journal = wow_store::Store::open(&continuation_store_path, configuration)?;
+    let prepared =
+        journal.begin_operation(orphan_operation_id.clone(), orphan_request_digest.clone())?;
+    assert!(matches!(prepared, wow_store::OperationBegin::Started(_)));
+    drop(journal);
+
+    let orphan_root = {
+        let mut project_store = LiveProjectStore::open(&store_root)?;
+        let root = crate::context::continuation::retention_root(
+            &project_store,
+            &orphan_request_id,
+            publication.generation_id.clone(),
+        )?;
+        assert_eq!(project_store.put_retention_root(&root, &stop)?, root);
+        project_store.close()?;
+        root
+    };
+    let orphan_retry = execute_context_build(&host, &orphan_request, &stop)?;
+    assert_eq!(
+        orphan_retry.failure_code(),
+        Some(crate::ServiceErrorCode::StoreOutcomeUnknown)
+    );
+    let journal = wow_store::Store::open(
+        &continuation_store_path,
+        crate::context::continuation::continuation_store_configuration().map_err(|error| {
+            std::io::Error::other(format!("orphan replay configuration: {error:?}"))
+        })?,
+    )?;
+    assert_eq!(
+        journal
+            .operation(&orphan_operation_id)?
+            .ok_or("prepared orphan operation")?
+            .state(),
+        wow_store::OperationState::Prepared
+    );
+    drop(journal);
+    let project_store = LiveProjectStore::open(&store_root)?;
+    assert_eq!(
+        project_store
+            .current()?
+            .ok_or("current after orphan retry")?
+            .generation_id,
+        advanced.generation_id
+    );
+    let roots_after_orphan_retry = project_store.retention_roots(&stop)?;
+    assert!(roots_after_orphan_retry.contains(&orphan_root));
+    let advanced_orphan_root = crate::context::continuation::retention_root(
+        &project_store,
+        &orphan_request_id,
+        advanced.generation_id.clone(),
+    )?;
+    assert!(!roots_after_orphan_retry.contains(&advanced_orphan_root));
+    project_store.close()?;
+
     let continuation =
         ContextContinueRequest::new(token, issued_envelope["request_id"].as_str(), Some(pack_id))?;
     let continuation_operation =
@@ -641,17 +720,27 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
 
     let mut store = LiveProjectStore::open(&store_root)?;
     let roots = store.retention_roots(&stop)?;
+    assert_eq!(roots.len(), if budget_stopped { 2 } else { 1 });
+    assert!(roots.contains(&orphan_root));
     if budget_stopped {
-        assert_eq!(
-            roots.len(),
-            1,
-            "budget refusal preserves the exact active hold"
-        );
+        let active_root = crate::context::continuation::retention_root(
+            &store,
+            issued_envelope["request_id"]
+                .as_str()
+                .ok_or("initial request ID")?,
+            publication.generation_id.clone(),
+        )?;
+        assert!(roots.contains(&active_root));
         for root in roots {
             assert!(store.remove_retention_root(root.root_id(), root.pin_digest(), &stop)?);
         }
     } else {
-        assert!(roots.is_empty());
+        assert_eq!(roots, vec![orphan_root.clone()]);
+        assert!(store.remove_retention_root(
+            orphan_root.root_id(),
+            orphan_root.pin_digest(),
+            &stop
+        )?);
     }
     store.close()?;
     eprintln!(
