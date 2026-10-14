@@ -7,6 +7,8 @@ use std::collections::{BTreeMap, BTreeSet};
 // greps Rust source for symbol spellings and never infers a state from a file list.
 const GRAPH_CONTRACT: &str = "crates/wow-graph/e2/CONTRACT.json";
 const GRAPH_MANIFEST: &str = "crates/wow-graph/e2/examples/CHECKSUMS.json";
+const SERVICE_CONTRACT: &str = "crates/wow-service/e1/CONTRACT.json";
+const SERVICE_MANIFEST: &str = "crates/wow-service/e1/examples/CHECKSUMS.json";
 
 const ANNOTATION_CONTRACT: &str = "crates/wow-annotations/e1/CONTRACT.json";
 const ANNOTATION_MANIFEST: &str = "crates/wow-annotations/e1/examples/CHECKSUMS.json";
@@ -26,6 +28,7 @@ struct OwnerSpec {
     manifest_id: &'static str,
     capabilities: &'static [CapabilitySpec],
     manifest_history_is_object: bool,
+    application_selection: Option<&'static str>,
 }
 
 const PROJECT_CAPABILITIES: &[CapabilitySpec] = &[
@@ -115,6 +118,33 @@ const ANNOTATION_CAPABILITIES: &[CapabilitySpec] = &[
     },
 ];
 
+const SERVICE_CAPABILITIES: &[CapabilitySpec] = &[
+    CapabilitySpec {
+        name: "reference-pack-build",
+        owners: &[(
+            "crates/wow-service/src/reference_pack.rs",
+            "reference_pack_build",
+        )],
+        application_routes: &[("apps/wow-reference-builder/src/lib.rs", "build")],
+    },
+    CapabilitySpec {
+        name: "reference-pack-validation",
+        owners: &[(
+            "crates/wow-service/src/reference_pack.rs",
+            "reference_pack_validate",
+        )],
+        application_routes: &[("apps/wow-reference-builder/src/lib.rs", "validate")],
+    },
+    CapabilitySpec {
+        name: "reference-pack-rebuild-comparison",
+        owners: &[(
+            "crates/wow-service/src/reference_pack.rs",
+            "reference_pack_rebuild_compare",
+        )],
+        application_routes: &[("apps/wow-reference-builder/src/lib.rs", "rebuild_compare")],
+    },
+];
+
 const OWNERS: &[OwnerSpec] = &[
     OwnerSpec {
         id: "wow-annotations/e1-projection-and-parity",
@@ -123,6 +153,7 @@ const OWNERS: &[OwnerSpec] = &[
         manifest_id: "wow-annotations-e1-pending-acceptance-v2",
         capabilities: ANNOTATION_CAPABILITIES,
         manifest_history_is_object: false,
+        application_selection: None,
     },
     OwnerSpec {
         id: "wow-project/e0-d/1",
@@ -131,6 +162,7 @@ const OWNERS: &[OwnerSpec] = &[
         manifest_id: "wow-project-e0-d-pending-acceptance-v2",
         capabilities: PROJECT_CAPABILITIES,
         manifest_history_is_object: true,
+        application_selection: None,
     },
     OwnerSpec {
         id: "wow-graph/e2-a/typed-assertion-partition-query-core",
@@ -139,6 +171,16 @@ const OWNERS: &[OwnerSpec] = &[
         manifest_id: "wow-graph-e2-a-pending-acceptance-v2",
         capabilities: GRAPH_CAPABILITIES,
         manifest_history_is_object: false,
+        application_selection: None,
+    },
+    OwnerSpec {
+        id: "wow-service/e1-d-reference-pack-build-validation",
+        contract_path: SERVICE_CONTRACT,
+        manifest_path: SERVICE_MANIFEST,
+        manifest_id: "wow-service-e1-d-pending-acceptance-v2",
+        capabilities: SERVICE_CAPABILITIES,
+        manifest_history_is_object: false,
+        application_selection: Some("application-selected"),
     },
 ];
 
@@ -258,6 +300,14 @@ fn validate_contract(owner: &OwnerSpec, value: &Value, files: &BTreeSet<&str>) -
     common_state(value, "partial-functional-freeze-open")?;
     if value["schema_version"].as_u64() != Some(2) || text(value, "contract_id")? != owner.id {
         return Err("machine-state contract identity/schema mismatch".into());
+    }
+    match owner.application_selection {
+        Some(expected) if text(value, "application_selection")? != expected => {
+            return Err(
+                "machine-state application selection differs from the explicit owner map".into(),
+            );
+        }
+        _ => {}
     }
     if !value
         .get("historical_preimplementation_requirements")
@@ -514,13 +564,16 @@ mod tests {
             routing.push(json!({"capability":capability.name,"status":"partial-functional",
                 "owners":owners,"application_routes":routes,"acceptance_status":"pending","blocking_issues":[120,122]}));
         }
-        let contract = json!({"schema_version":2,"contract_id":spec.id,"state":"partial-functional-freeze-open",
+        let mut contract = json!({"schema_version":2,"contract_id":spec.id,"state":"partial-functional-freeze-open",
             "implementation_status":"partial-functional","acceptance_status":"pending","canonical_issue":120,
             "preimplementation_freeze":{"status":"missed","evaluation":"NotEvaluated"},
             "functional_checkpoint":{"commit":"abcdefabcdefabcdefabcdefabcdefabcdefabcd","quick_run":7},
             "historical_preimplementation_requirements":[],
             "checksum_contract":{"state":"pending-acceptance-freeze","manifest":spec.manifest_path,"rule":"pending"},
             "capability_routing":routing});
+        if let Some(selection) = spec.application_selection {
+            contract["application_selection"] = json!(selection);
+        }
         let history = if spec.manifest_history_is_object {
             json!({})
         } else {
@@ -640,6 +693,84 @@ mod tests {
         let mut frozen = manifest.clone();
         frozen["bundle_sha256"] = json!("not-an-acceptance-proof");
         assert!(check(spec, contract, frozen, &files).is_err());
+        Ok(())
+    }
+
+    fn service_e1_records() -> Result<(&'static OwnerSpec, Value, Value, BTreeSet<&'static str>)> {
+        let spec = OWNERS
+            .iter()
+            .find(|owner| owner.id == "wow-service/e1-d-reference-pack-build-validation")
+            .ok_or("Service E1-D owner mapping is absent")?;
+        let contract = serde_json::from_str(include_str!(
+            "../../../../crates/wow-service/e1/CONTRACT.json"
+        ))?;
+        let manifest = serde_json::from_str(include_str!(
+            "../../../../crates/wow-service/e1/examples/CHECKSUMS.json"
+        ))?;
+        let mut files = BTreeSet::from([spec.contract_path, spec.manifest_path]);
+        for capability in spec.capabilities {
+            for (path, _) in capability
+                .owners
+                .iter()
+                .chain(capability.application_routes)
+            {
+                files.insert(*path);
+            }
+        }
+        Ok((spec, contract, manifest, files))
+    }
+
+    #[test]
+    fn service_e1_rejects_stale_no_code_and_accepted_missing_evidence() -> Result<()> {
+        let (spec, contract, manifest, files) = service_e1_records()?;
+        check(spec, contract.clone(), manifest.clone(), &files)?;
+
+        assert_eq!(
+            text(&contract, "application_selection")?,
+            "application-selected"
+        );
+        assert!(
+            manifest["prerequisite_pins"]
+                .as_object()
+                .is_some_and(|pins| pins.values().all(Value::is_null))
+        );
+        assert!(
+            manifest["profile_pins"]
+                .as_object()
+                .is_some_and(|pins| pins.values().all(Value::is_null))
+        );
+        assert!(
+            manifest["member_sha256"]
+                .as_object()
+                .is_some_and(serde_json::Map::is_empty)
+        );
+        assert!(manifest["bundle_sha256"].is_null());
+
+        let mut no_code_contract = contract.clone();
+        no_code_contract["state"] = json!("implementation-ready-documentation-no-rust-code");
+        no_code_contract["implementation_status"] = json!("not-started");
+        no_code_contract["implementation_state"] = json!("not-started");
+        assert!(validate_contract(spec, &no_code_contract, &files).is_err());
+
+        let mut no_code_manifest = manifest.clone();
+        no_code_manifest["state"] = json!("pending-byte-freeze-before-first-rust-implementation");
+        no_code_manifest["implementation_status"] = json!("not-started");
+        no_code_manifest["implementation_state"] = json!("not-started");
+        assert!(validate_manifest(spec, &no_code_manifest).is_err());
+
+        let mut accepted_contract = contract.clone();
+        accepted_contract["state"] = json!("accepted");
+        accepted_contract["acceptance_status"] = json!("accepted");
+        assert!(validate_contract(spec, &accepted_contract, &files).is_err());
+
+        let mut accepted_manifest = manifest.clone();
+        accepted_manifest["state"] = json!("accepted");
+        accepted_manifest["acceptance_status"] = json!("accepted");
+        assert!(validate_manifest(spec, &accepted_manifest).is_err());
+
+        let mut library_only = contract;
+        library_only["application_selection"] = json!("library-only");
+        assert!(validate_contract(spec, &library_only, &files).is_err());
         Ok(())
     }
 }

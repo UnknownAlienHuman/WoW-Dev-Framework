@@ -1,9 +1,16 @@
 {
-  "schema_version": 1,
-  "manifest_id": "wow-service-e1-d-checksums-v1",
+  "schema_version": 2,
+  "manifest_id": "wow-service-e1-d-pending-acceptance-v2",
   "algorithm": "sha256",
-  "state": "pending-byte-freeze-before-first-rust-implementation",
-  "implementation_state": "not-started",
+  "state": "pending-acceptance-freeze",
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "contract_id": "wow-service/e1-d-reference-pack-build-validation",
+  "canonical_issue": 120,
+  "preimplementation_freeze": {
+    "status": "missed",
+    "evaluation": "NotEvaluated"
+  },
   "prerequisite_pins": {
     "wow_core_implementation_commit": null,
     "wow_core_fixture_bundle_sha256": null,
@@ -51,9 +58,20 @@
   "member_sha256": {},
   "bundle_sha256": null,
   "canonicalization_profile_id": null,
-  "freeze_rules": [
-    "null values are allowed only while implementation_state is not-started",
-    "all prerequisite pins profiles request/result/member vectors and checksums freeze before first Rust commit",
+  "historical_preimplementation_requirements": [
+    "all prerequisite implementation commits and fixture bundle digests",
+    "exact source snapshot profile and component set",
+    "pack layout and materialization profiles",
+    "build validation and rebuild requests/results",
+    "member paths identities sizes and digests",
+    "pack manifest gate and checksum IDs",
+    "CLI requests stdout stderr and exit-code vectors",
+    "all member and bundle SHA-256 values"
+  ],
+  "acceptance_rules": [
+    "member_sha256 remains empty and bundle_sha256 remains null while acceptance is pending",
+    "prerequisite and profile pins remain null until their exact evidence is reviewed",
+    "no automatic pin or fixture promotion from code presence",
     "tests verify committed bytes and never rewrite golden files automatically"
   ]
 }

@@ -1,7 +1,29 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract_id": "wow-service/e1-d-reference-pack-build-validation",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "application_selection": "application-selected",
+  "canonical_issue": 120,
+  "preimplementation_freeze": {
+    "status": "missed",
+    "evaluation": "NotEvaluated"
+  },
+  "functional_checkpoint": {
+    "commit": "4060524557011eb3ae92472b81e46e8bb8903694",
+    "quick_run": 38563196649
+  },
+  "historical_preimplementation_requirements": [
+    "all prerequisite implementation commits and fixture bundle digests",
+    "exact source snapshot profile and component set",
+    "pack layout and materialization profiles",
+    "build validation and rebuild requests/results",
+    "member paths identities sizes and digests",
+    "pack manifest gate and checksum IDs",
+    "CLI requests stdout stderr and exit-code vectors",
+    "all member and bundle SHA-256 values"
+  ],
   "work_package": "E1-D",
   "crate": "wow-service",
   "application": "wow-reference-builder",
@@ -34,6 +56,67 @@
     "reference_pack_validate",
     "reference_pack_rebuild_compare"
   ],
+  "capability_routing": [
+    {
+      "capability": "reference-pack-build",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-service/src/reference_pack.rs",
+          "symbol": "reference_pack_build"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "apps/wow-reference-builder/src/lib.rs",
+          "symbol": "build"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "reference-pack-validation",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-service/src/reference_pack.rs",
+          "symbol": "reference_pack_validate"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "apps/wow-reference-builder/src/lib.rs",
+          "symbol": "validate"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "reference-pack-rebuild-comparison",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-service/src/reference_pack.rs",
+          "symbol": "reference_pack_rebuild_compare"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "apps/wow-reference-builder/src/lib.rs",
+          "symbol": "rebuild_compare"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    }
+  ],
+  "checksum_contract": {
+    "state": "pending-acceptance-freeze",
+    "manifest": "crates/wow-service/e1/examples/CHECKSUMS.json",
+    "rule": "member_sha256 remains empty and bundle_sha256 remains null while acceptance is pending"
+  },
   "eligibility_states": [
     "fixture",
     "candidate",
@@ -122,18 +205,5 @@
     "apps/wow-reference-builder/examples/README.md",
     "apps/wow-reference-builder/examples/cli-cases.json",
     "apps/wow-reference-builder/examples/CHECKSUMS.json"
-  ],
-  "freeze_gate": {
-    "implementation_state": "not-started",
-    "required_before_first_rust_implementation": [
-      "all prerequisite implementation commits and fixture bundle digests",
-      "exact source snapshot profile and component set",
-      "pack layout and materialization profiles",
-      "build validation and rebuild requests/results",
-      "member paths identities sizes and digests",
-      "pack manifest gate and checksum IDs",
-      "CLI requests stdout stderr and exit-code vectors",
-      "all member and bundle SHA-256 values"
-    ]
-  }
+  ]
 }
