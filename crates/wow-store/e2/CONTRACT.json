@@ -1,8 +1,29 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract_id": "wow-store/e2-d/projectstore-coherent-publication",
   "contract_revision": 2,
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "canonical_issue": 120,
+  "preimplementation_freeze": {
+    "status": "missed",
+    "evaluation": "NotEvaluated"
+  },
+  "functional_checkpoint": {
+    "commit": "953e8e2f7df6e6f8a136064481f81ff0a83a7cfb",
+    "quick_run": 38566536046
+  },
+  "historical_preimplementation_requirements": [
+    "all prerequisite implementation commits and fixture bundle digests",
+    "exact SQLite library Rust binding compile options and platform adapter",
+    "effective WAL synchronous busy checkpoint limits and durability profile",
+    "store project and graph schema operation validation bundle IDs and digests",
+    "physical profile partition identity membership operation idempotency publication reader continuation recovery and GC profiles",
+    "synthetic and pinned roth-ui benchmark corpus plus quantitative thresholds",
+    "all partition publication response-loss crash read lease cursor recovery backup retention GC and benchmark vectors",
+    "all member and bundle SHA-256 values"
+  ],
   "work_package": "E2-D",
   "crate": "wow-store",
   "selected_physical_profile_id": "project-store-wal-manifested-partitions-v1",
@@ -87,6 +108,325 @@
     "garbage_collect_project_store",
     "build_and_activate_project_store_epoch"
   ],
+  "capability_routing": [
+    {
+      "capability": "validate_project_store_runtime_profile",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/mod.rs", "symbol": "ProjectStore::open"}
+      ],
+      "application_routes": [
+        {"path": "apps/wow/src/graph_store.rs", "symbol": "run"},
+        {"path": "apps/wow/src/project.rs", "symbol": "run"}
+      ],
+      "service_routes": [
+        {"path": "crates/wow-service/src/graph/persistence.rs", "symbol": "publish_graph_bundle"},
+        {"path": "crates/wow-service/src/live_project/operations.rs", "symbol": "publish_local_project"}
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "validate_project_store_schema_set",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/model.rs", "symbol": "RecordCatalog::new"},
+        {"path": "crates/wow-store/src/project/mod.rs", "symbol": "ProjectStore::open"}
+      ],
+      "application_routes": [
+        {"path": "apps/wow/src/graph_store.rs", "symbol": "run"},
+        {"path": "apps/wow/src/project.rs", "symbol": "run"}
+      ],
+      "service_routes": [
+        {"path": "crates/wow-service/src/graph/persistence.rs", "symbol": "publish_graph_bundle"},
+        {"path": "crates/wow-service/src/live_project/operations.rs", "symbol": "publish_local_project"}
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "create_project_store_epoch",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/mod.rs", "symbol": "ProjectStore::create"},
+        {"path": "crates/wow-store/src/project/mod.rs", "symbol": "ProjectStore::open_or_create"}
+      ],
+      "application_routes": [
+        {"path": "apps/wow/src/graph_store.rs", "symbol": "run"},
+        {"path": "apps/wow/src/project.rs", "symbol": "run"}
+      ],
+      "service_routes": [
+        {"path": "crates/wow-service/src/graph/persistence.rs", "symbol": "publish_graph_bundle"},
+        {"path": "crates/wow-service/src/live_project/operations.rs", "symbol": "publish_local_project"}
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "open_project_store_epoch",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/mod.rs", "symbol": "ProjectStore::open"}
+      ],
+      "application_routes": [
+        {"path": "apps/wow/src/graph.rs", "symbol": "run"},
+        {"path": "apps/wow/src/project.rs", "symbol": "run"}
+      ],
+      "service_routes": [
+        {"path": "crates/wow-service/src/graph/persistence.rs", "symbol": "execute_graph_store_read"},
+        {"path": "crates/wow-service/src/live_project/operations.rs", "symbol": "read_live_project"}
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "acquire_project_store_writer",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/mod.rs", "symbol": "ProjectStore::open"},
+        {"path": "crates/wow-store/src/project/publication.rs", "symbol": "ProjectStore::prepare"}
+      ],
+      "application_routes": [
+        {"path": "apps/wow/src/graph_store.rs", "symbol": "run"},
+        {"path": "apps/wow/src/project.rs", "symbol": "run"}
+      ],
+      "service_routes": [
+        {"path": "crates/wow-service/src/graph/persistence.rs", "symbol": "publish_graph_bundle"},
+        {"path": "crates/wow-service/src/live_project/operations.rs", "symbol": "publish_local_project"}
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "plan_partition_version_materialization",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/model.rs", "symbol": "PartitionRecord::new"},
+        {"path": "crates/wow-store/src/project/model.rs", "symbol": "PublicationRequest::new"},
+        {"path": "crates/wow-store/src/project/publication.rs", "symbol": "ProjectStore::prepare"}
+      ],
+      "application_routes": [
+        {"path": "apps/wow/src/graph_store.rs", "symbol": "run"},
+        {"path": "apps/wow/src/project.rs", "symbol": "run"}
+      ],
+      "service_routes": [
+        {"path": "crates/wow-service/src/graph/persistence.rs", "symbol": "publish_graph_bundle"},
+        {"path": "crates/wow-service/src/live_project/operations.rs", "symbol": "publish_local_project"}
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "build_inactive_project_store_generation",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/publication.rs", "symbol": "ProjectStore::prepare"}
+      ],
+      "application_routes": [
+        {"path": "apps/wow/src/graph_store.rs", "symbol": "run"},
+        {"path": "apps/wow/src/project.rs", "symbol": "run"}
+      ],
+      "service_routes": [
+        {"path": "crates/wow-service/src/graph/persistence.rs", "symbol": "publish_graph_bundle"},
+        {"path": "crates/wow-service/src/live_project/operations.rs", "symbol": "publish_local_project"}
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "open_project_store_generation_snapshot",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/mod.rs", "symbol": "ProjectStore::read"},
+        {"path": "crates/wow-store/src/project/read.rs", "symbol": "ReadSnapshot::acquire"}
+      ],
+      "application_routes": [
+        {"path": "apps/wow/src/graph.rs", "symbol": "run"},
+        {"path": "apps/wow/src/project.rs", "symbol": "run"}
+      ],
+      "service_routes": [
+        {"path": "crates/wow-service/src/graph/persistence.rs", "symbol": "execute_graph_store_read"},
+        {"path": "crates/wow-service/src/live_project/operations.rs", "symbol": "read_live_project"}
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "validate_inactive_project_store_generation",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/publication.rs", "symbol": "ProjectStore::validate_inactive"},
+        {"path": "crates/wow-store/src/project/read.rs", "symbol": "ReadSnapshot::owner_validation"}
+      ],
+      "application_routes": [
+        {"path": "apps/wow/src/graph_store.rs", "symbol": "run"},
+        {"path": "apps/wow/src/project.rs", "symbol": "run"}
+      ],
+      "service_routes": [
+        {"path": "crates/wow-service/src/graph/persistence.rs", "symbol": "publish_graph_bundle"},
+        {"path": "crates/wow-service/src/live_project/operations.rs", "symbol": "publish_local_project"}
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "activate_project_store_generation",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/publication.rs", "symbol": "ProjectStore::activate"},
+        {"path": "crates/wow-store/src/project/mod.rs", "symbol": "ProjectStore::current"}
+      ],
+      "application_routes": [
+        {"path": "apps/wow/src/graph_store.rs", "symbol": "run"},
+        {"path": "apps/wow/src/project.rs", "symbol": "run"}
+      ],
+      "service_routes": [
+        {"path": "crates/wow-service/src/graph/persistence.rs", "symbol": "publish_graph_bundle"},
+        {"path": "crates/wow-service/src/live_project/operations.rs", "symbol": "publish_local_project"}
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "open_current_project_store_snapshot",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/mod.rs", "symbol": "ProjectStore::read"},
+        {"path": "crates/wow-store/src/project/read.rs", "symbol": "ReadSnapshot::acquire"}
+      ],
+      "application_routes": [
+        {"path": "apps/wow/src/graph.rs", "symbol": "run"},
+        {"path": "apps/wow/src/project.rs", "symbol": "run"}
+      ],
+      "service_routes": [
+        {"path": "crates/wow-service/src/graph/persistence.rs", "symbol": "execute_graph_store_read"},
+        {"path": "crates/wow-service/src/live_project/operations.rs", "symbol": "read_live_project"}
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "checkpoint_project_store",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/mod.rs", "symbol": "ProjectStore::checkpoint"}
+      ],
+      "application_routes": [],
+      "service_routes": [],
+      "application_selection": "library-only",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "backup_project_store",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/backup.rs", "symbol": "ProjectStore::backup_to_new"},
+        {"path": "crates/wow-store/src/project/backup.rs", "symbol": "VerifiedBackup::open"},
+        {"path": "crates/wow-store/src/project/backup.rs", "symbol": "VerifiedBackup::verify"},
+        {"path": "crates/wow-store/src/project/backup.rs", "symbol": "VerifiedBackup::restore_to_new"},
+        {"path": "crates/wow-store/src/project/backup.rs", "symbol": "VerifiedBackup::finish_restore"}
+      ],
+      "application_routes": [],
+      "service_routes": [
+        {"path": "crates/wow-service/src/live_project/recovery.rs", "symbol": "backup_to_new"},
+        {"path": "crates/wow-service/src/live_project/recovery.rs", "symbol": "restore_live_project_to_new"}
+      ],
+      "application_selection": "library-only",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "recover_project_store",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/recovery.rs", "symbol": "ProjectStore::recovery_report"},
+        {"path": "crates/wow-store/src/project/publication.rs", "symbol": "ProjectStore::reconcile"}
+      ],
+      "application_routes": [
+        {"path": "apps/wow/src/graph_store.rs", "symbol": "run"},
+        {"path": "apps/wow/src/project.rs", "symbol": "run"}
+      ],
+      "service_routes": [
+        {"path": "crates/wow-service/src/graph/persistence.rs", "symbol": "reconcile_graph_publication"},
+        {"path": "crates/wow-service/src/live_project/operations.rs", "symbol": "reconcile_live_project"},
+        {"path": "crates/wow-service/src/live_project/recovery.rs", "symbol": "recover_live_project"}
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "retain_project_store_generations",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/retention.rs", "symbol": "ProjectStore::retention_roots"},
+        {"path": "crates/wow-store/src/project/retention.rs", "symbol": "ProjectStore::put_retention_root"},
+        {"path": "crates/wow-store/src/project/retention.rs", "symbol": "ProjectStore::remove_retention_root"}
+      ],
+      "application_routes": [],
+      "service_routes": [
+        {"path": "crates/wow-service/src/live_project/retention.rs", "symbol": "retention_roots"},
+        {"path": "crates/wow-service/src/live_project/retention.rs", "symbol": "put_retention_root"},
+        {"path": "crates/wow-service/src/live_project/retention.rs", "symbol": "remove_retention_root"}
+      ],
+      "application_selection": "library-only",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "garbage_collect_project_store",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/gc.rs", "symbol": "ProjectStore::plan_gc"},
+        {"path": "crates/wow-store/src/project/gc.rs", "symbol": "ProjectStore::execute_gc"},
+        {"path": "crates/wow-store/src/project/gc.rs", "symbol": "ProjectStore::reconcile_gc"}
+      ],
+      "application_routes": [],
+      "service_routes": [
+        {"path": "crates/wow-service/src/live_project/gc.rs", "symbol": "plan_gc"},
+        {"path": "crates/wow-service/src/live_project/gc.rs", "symbol": "execute_gc"},
+        {"path": "crates/wow-service/src/live_project/gc.rs", "symbol": "reconcile_gc"}
+      ],
+      "application_selection": "library-only",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
+      "capability": "build_and_activate_project_store_epoch",
+      "status": "partial-functional",
+      "owners": [
+        {"path": "crates/wow-store/src/project/migration.rs", "symbol": "MigrationCandidate::stage"},
+        {"path": "crates/wow-store/src/project/migration.rs", "symbol": "ValidatedMigration::finish"},
+        {"path": "crates/wow-store/src/project/migration/selection.rs", "symbol": "ProjectStore::activate_ready_selection"}
+      ],
+      "application_routes": [],
+      "service_routes": [
+        {"path": "crates/wow-service/src/live_project/migration.rs", "symbol": "prepare_live_project_migration"},
+        {"path": "crates/wow-service/src/live_project/migration.rs", "symbol": "migrate_live_project_to_new"},
+        {"path": "crates/wow-service/src/live_project/migration.rs", "symbol": "activate_ready_selection"}
+      ],
+      "application_selection": "library-only",
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    }
+  ],
+  "checksum_contract": {
+    "state": "pending-acceptance-freeze",
+    "manifest": "crates/wow-store/e2/examples/CHECKSUMS.json",
+    "rule": "null prerequisite/runtime-evidence/schema/vector pins remain null and member_sha256 stays empty with bundle_sha256 null while acceptance is pending"
+  },
   "generation_states": [
     "Building",
     "PublishedInactive",
@@ -166,18 +506,5 @@
     "crates/wow-store/e2/examples/retention-gc-cases.json",
     "crates/wow-store/e2/examples/benchmark-cases.json",
     "crates/wow-store/e2/examples/CHECKSUMS.json"
-  ],
-  "freeze_gate": {
-    "implementation_state": "not-started",
-    "required_before_first_rust_implementation": [
-      "all prerequisite implementation commits and fixture bundle digests",
-      "exact SQLite library Rust binding compile options and platform adapter",
-      "effective WAL synchronous busy checkpoint limits and durability profile",
-      "store project and graph schema operation validation bundle IDs and digests",
-      "physical profile partition identity membership operation idempotency publication reader continuation recovery and GC profiles",
-      "synthetic and pinned roth-ui benchmark corpus plus quantitative thresholds",
-      "all partition publication response-loss crash read lease cursor recovery backup retention GC and benchmark vectors",
-      "all member and bundle SHA-256 values"
-    ]
-  }
+  ]
 }

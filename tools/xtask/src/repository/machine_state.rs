@@ -9,6 +9,8 @@ const GRAPH_CONTRACT: &str = "crates/wow-graph/e2/CONTRACT.json";
 const GRAPH_MANIFEST: &str = "crates/wow-graph/e2/examples/CHECKSUMS.json";
 const SERVICE_CONTRACT: &str = "crates/wow-service/e1/CONTRACT.json";
 const SERVICE_MANIFEST: &str = "crates/wow-service/e1/examples/CHECKSUMS.json";
+const STORE_E2_CONTRACT: &str = "crates/wow-store/e2/CONTRACT.json";
+const STORE_E2_MANIFEST: &str = "crates/wow-store/e2/examples/CHECKSUMS.json";
 
 const ANNOTATION_CONTRACT: &str = "crates/wow-annotations/e1/CONTRACT.json";
 const ANNOTATION_MANIFEST: &str = "crates/wow-annotations/e1/examples/CHECKSUMS.json";
@@ -19,6 +21,8 @@ struct CapabilitySpec {
     name: &'static str,
     owners: &'static [(&'static str, &'static str)],
     application_routes: &'static [(&'static str, &'static str)],
+    service_routes: Option<&'static [(&'static str, &'static str)]>,
+    application_selection: Option<&'static str>,
 }
 
 struct OwnerSpec {
@@ -29,6 +33,7 @@ struct OwnerSpec {
     capabilities: &'static [CapabilitySpec],
     manifest_history_is_object: bool,
     application_selection: Option<&'static str>,
+    operation_matrix_matches_capabilities: bool,
 }
 
 const PROJECT_CAPABILITIES: &[CapabilitySpec] = &[
@@ -49,6 +54,8 @@ const PROJECT_CAPABILITIES: &[CapabilitySpec] = &[
             ("crates/wow-service/src/local/backend.rs", "acquire_project"),
             ("apps/wow/src/project.rs", "run"),
         ],
+        service_routes: None,
+        application_selection: None,
     },
     CapabilitySpec {
         name: "native-library-byte-view",
@@ -64,6 +71,8 @@ const PROJECT_CAPABILITIES: &[CapabilitySpec] = &[
             ),
             ("apps/wow/src/context.rs", "run"),
         ],
+        service_routes: None,
+        application_selection: None,
     },
 ];
 
@@ -81,6 +90,8 @@ const ANNOTATION_CAPABILITIES: &[CapabilitySpec] = &[
             ),
             ("apps/wow/src/native.rs", "run"),
         ],
+        service_routes: None,
+        application_selection: None,
     },
     CapabilitySpec {
         name: "source-bound-callable-lowering",
@@ -95,6 +106,8 @@ const ANNOTATION_CAPABILITIES: &[CapabilitySpec] = &[
             ),
             ("apps/wow/src/context.rs", "run"),
         ],
+        service_routes: None,
+        application_selection: None,
     },
     CapabilitySpec {
         name: "native-artifact-and-projection-sidecars",
@@ -115,6 +128,8 @@ const ANNOTATION_CAPABILITIES: &[CapabilitySpec] = &[
             ),
             ("apps/wow/src/native.rs", "run"),
         ],
+        service_routes: None,
+        application_selection: None,
     },
 ];
 
@@ -126,6 +141,8 @@ const SERVICE_CAPABILITIES: &[CapabilitySpec] = &[
             "reference_pack_build",
         )],
         application_routes: &[("apps/wow-reference-builder/src/lib.rs", "build")],
+        service_routes: None,
+        application_selection: None,
     },
     CapabilitySpec {
         name: "reference-pack-validation",
@@ -134,6 +151,8 @@ const SERVICE_CAPABILITIES: &[CapabilitySpec] = &[
             "reference_pack_validate",
         )],
         application_routes: &[("apps/wow-reference-builder/src/lib.rs", "validate")],
+        service_routes: None,
+        application_selection: None,
     },
     CapabilitySpec {
         name: "reference-pack-rebuild-comparison",
@@ -142,6 +161,368 @@ const SERVICE_CAPABILITIES: &[CapabilitySpec] = &[
             "reference_pack_rebuild_compare",
         )],
         application_routes: &[("apps/wow-reference-builder/src/lib.rs", "rebuild_compare")],
+        service_routes: None,
+        application_selection: None,
+    },
+];
+
+const STORE_PUBLISH_SERVICE_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/graph/persistence.rs",
+        "publish_graph_bundle",
+    ),
+    (
+        "crates/wow-service/src/live_project/operations.rs",
+        "publish_local_project",
+    ),
+];
+
+const STORE_PUBLISH_APPLICATION_ROUTES: &[(&str, &str)] = &[
+    ("apps/wow/src/graph_store.rs", "run"),
+    ("apps/wow/src/project.rs", "run"),
+];
+
+const STORE_READ_SERVICE_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/graph/persistence.rs",
+        "execute_graph_store_read",
+    ),
+    (
+        "crates/wow-service/src/live_project/operations.rs",
+        "read_live_project",
+    ),
+];
+
+const STORE_READ_APPLICATION_ROUTES: &[(&str, &str)] = &[
+    ("apps/wow/src/graph.rs", "run"),
+    ("apps/wow/src/project.rs", "run"),
+];
+
+const STORE_RECOVERY_SERVICE_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/graph/persistence.rs",
+        "reconcile_graph_publication",
+    ),
+    (
+        "crates/wow-service/src/live_project/operations.rs",
+        "reconcile_live_project",
+    ),
+    (
+        "crates/wow-service/src/live_project/recovery.rs",
+        "recover_live_project",
+    ),
+];
+
+const STORE_RECOVERY_APPLICATION_ROUTES: &[(&str, &str)] = &[
+    ("apps/wow/src/graph_store.rs", "run"),
+    ("apps/wow/src/project.rs", "run"),
+];
+
+const STORE_BACKUP_SERVICE_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/live_project/recovery.rs",
+        "backup_to_new",
+    ),
+    (
+        "crates/wow-service/src/live_project/recovery.rs",
+        "restore_live_project_to_new",
+    ),
+];
+
+const STORE_RETENTION_SERVICE_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/live_project/retention.rs",
+        "retention_roots",
+    ),
+    (
+        "crates/wow-service/src/live_project/retention.rs",
+        "put_retention_root",
+    ),
+    (
+        "crates/wow-service/src/live_project/retention.rs",
+        "remove_retention_root",
+    ),
+];
+
+const STORE_GC_SERVICE_ROUTES: &[(&str, &str)] = &[
+    ("crates/wow-service/src/live_project/gc.rs", "plan_gc"),
+    ("crates/wow-service/src/live_project/gc.rs", "execute_gc"),
+    ("crates/wow-service/src/live_project/gc.rs", "reconcile_gc"),
+];
+
+const STORE_MIGRATION_SERVICE_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/live_project/migration.rs",
+        "prepare_live_project_migration",
+    ),
+    (
+        "crates/wow-service/src/live_project/migration.rs",
+        "migrate_live_project_to_new",
+    ),
+    (
+        "crates/wow-service/src/live_project/migration.rs",
+        "activate_ready_selection",
+    ),
+];
+
+const STORE_E2_CAPABILITIES: &[CapabilitySpec] = &[
+    CapabilitySpec {
+        name: "validate_project_store_runtime_profile",
+        owners: &[("crates/wow-store/src/project/mod.rs", "ProjectStore::open")],
+        application_routes: STORE_PUBLISH_APPLICATION_ROUTES,
+        service_routes: Some(STORE_PUBLISH_SERVICE_ROUTES),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "validate_project_store_schema_set",
+        owners: &[
+            (
+                "crates/wow-store/src/project/model.rs",
+                "RecordCatalog::new",
+            ),
+            ("crates/wow-store/src/project/mod.rs", "ProjectStore::open"),
+        ],
+        application_routes: STORE_PUBLISH_APPLICATION_ROUTES,
+        service_routes: Some(STORE_PUBLISH_SERVICE_ROUTES),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "create_project_store_epoch",
+        owners: &[
+            (
+                "crates/wow-store/src/project/mod.rs",
+                "ProjectStore::create",
+            ),
+            (
+                "crates/wow-store/src/project/mod.rs",
+                "ProjectStore::open_or_create",
+            ),
+        ],
+        application_routes: STORE_PUBLISH_APPLICATION_ROUTES,
+        service_routes: Some(STORE_PUBLISH_SERVICE_ROUTES),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "open_project_store_epoch",
+        owners: &[("crates/wow-store/src/project/mod.rs", "ProjectStore::open")],
+        application_routes: STORE_READ_APPLICATION_ROUTES,
+        service_routes: Some(STORE_READ_SERVICE_ROUTES),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "acquire_project_store_writer",
+        owners: &[
+            ("crates/wow-store/src/project/mod.rs", "ProjectStore::open"),
+            (
+                "crates/wow-store/src/project/publication.rs",
+                "ProjectStore::prepare",
+            ),
+        ],
+        application_routes: STORE_PUBLISH_APPLICATION_ROUTES,
+        service_routes: Some(STORE_PUBLISH_SERVICE_ROUTES),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "plan_partition_version_materialization",
+        owners: &[
+            (
+                "crates/wow-store/src/project/model.rs",
+                "PartitionRecord::new",
+            ),
+            (
+                "crates/wow-store/src/project/model.rs",
+                "PublicationRequest::new",
+            ),
+            (
+                "crates/wow-store/src/project/publication.rs",
+                "ProjectStore::prepare",
+            ),
+        ],
+        application_routes: STORE_PUBLISH_APPLICATION_ROUTES,
+        service_routes: Some(STORE_PUBLISH_SERVICE_ROUTES),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "build_inactive_project_store_generation",
+        owners: &[(
+            "crates/wow-store/src/project/publication.rs",
+            "ProjectStore::prepare",
+        )],
+        application_routes: STORE_PUBLISH_APPLICATION_ROUTES,
+        service_routes: Some(STORE_PUBLISH_SERVICE_ROUTES),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "open_project_store_generation_snapshot",
+        owners: &[
+            ("crates/wow-store/src/project/mod.rs", "ProjectStore::read"),
+            (
+                "crates/wow-store/src/project/read.rs",
+                "ReadSnapshot::acquire",
+            ),
+        ],
+        application_routes: STORE_READ_APPLICATION_ROUTES,
+        service_routes: Some(STORE_READ_SERVICE_ROUTES),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "validate_inactive_project_store_generation",
+        owners: &[
+            (
+                "crates/wow-store/src/project/publication.rs",
+                "ProjectStore::validate_inactive",
+            ),
+            (
+                "crates/wow-store/src/project/read.rs",
+                "ReadSnapshot::owner_validation",
+            ),
+        ],
+        application_routes: STORE_PUBLISH_APPLICATION_ROUTES,
+        service_routes: Some(STORE_PUBLISH_SERVICE_ROUTES),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "activate_project_store_generation",
+        owners: &[
+            (
+                "crates/wow-store/src/project/publication.rs",
+                "ProjectStore::activate",
+            ),
+            (
+                "crates/wow-store/src/project/mod.rs",
+                "ProjectStore::current",
+            ),
+        ],
+        application_routes: STORE_PUBLISH_APPLICATION_ROUTES,
+        service_routes: Some(STORE_PUBLISH_SERVICE_ROUTES),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "open_current_project_store_snapshot",
+        owners: &[
+            ("crates/wow-store/src/project/mod.rs", "ProjectStore::read"),
+            (
+                "crates/wow-store/src/project/read.rs",
+                "ReadSnapshot::acquire",
+            ),
+        ],
+        application_routes: STORE_READ_APPLICATION_ROUTES,
+        service_routes: Some(STORE_READ_SERVICE_ROUTES),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "checkpoint_project_store",
+        owners: &[(
+            "crates/wow-store/src/project/mod.rs",
+            "ProjectStore::checkpoint",
+        )],
+        application_routes: &[],
+        service_routes: Some(&[]),
+        application_selection: Some("library-only"),
+    },
+    CapabilitySpec {
+        name: "backup_project_store",
+        owners: &[
+            (
+                "crates/wow-store/src/project/backup.rs",
+                "ProjectStore::backup_to_new",
+            ),
+            (
+                "crates/wow-store/src/project/backup.rs",
+                "VerifiedBackup::open",
+            ),
+            (
+                "crates/wow-store/src/project/backup.rs",
+                "VerifiedBackup::verify",
+            ),
+            (
+                "crates/wow-store/src/project/backup.rs",
+                "VerifiedBackup::restore_to_new",
+            ),
+            (
+                "crates/wow-store/src/project/backup.rs",
+                "VerifiedBackup::finish_restore",
+            ),
+        ],
+        application_routes: &[],
+        service_routes: Some(STORE_BACKUP_SERVICE_ROUTES),
+        application_selection: Some("library-only"),
+    },
+    CapabilitySpec {
+        name: "recover_project_store",
+        owners: &[
+            (
+                "crates/wow-store/src/project/recovery.rs",
+                "ProjectStore::recovery_report",
+            ),
+            (
+                "crates/wow-store/src/project/publication.rs",
+                "ProjectStore::reconcile",
+            ),
+        ],
+        application_routes: STORE_RECOVERY_APPLICATION_ROUTES,
+        service_routes: Some(STORE_RECOVERY_SERVICE_ROUTES),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "retain_project_store_generations",
+        owners: &[
+            (
+                "crates/wow-store/src/project/retention.rs",
+                "ProjectStore::retention_roots",
+            ),
+            (
+                "crates/wow-store/src/project/retention.rs",
+                "ProjectStore::put_retention_root",
+            ),
+            (
+                "crates/wow-store/src/project/retention.rs",
+                "ProjectStore::remove_retention_root",
+            ),
+        ],
+        application_routes: &[],
+        service_routes: Some(STORE_RETENTION_SERVICE_ROUTES),
+        application_selection: Some("library-only"),
+    },
+    CapabilitySpec {
+        name: "garbage_collect_project_store",
+        owners: &[
+            (
+                "crates/wow-store/src/project/gc.rs",
+                "ProjectStore::plan_gc",
+            ),
+            (
+                "crates/wow-store/src/project/gc.rs",
+                "ProjectStore::execute_gc",
+            ),
+            (
+                "crates/wow-store/src/project/gc.rs",
+                "ProjectStore::reconcile_gc",
+            ),
+        ],
+        application_routes: &[],
+        service_routes: Some(STORE_GC_SERVICE_ROUTES),
+        application_selection: Some("library-only"),
+    },
+    CapabilitySpec {
+        name: "build_and_activate_project_store_epoch",
+        owners: &[
+            (
+                "crates/wow-store/src/project/migration.rs",
+                "MigrationCandidate::stage",
+            ),
+            (
+                "crates/wow-store/src/project/migration.rs",
+                "ValidatedMigration::finish",
+            ),
+            (
+                "crates/wow-store/src/project/migration/selection.rs",
+                "ProjectStore::activate_ready_selection",
+            ),
+        ],
+        application_routes: &[],
+        service_routes: Some(STORE_MIGRATION_SERVICE_ROUTES),
+        application_selection: Some("library-only"),
     },
 ];
 
@@ -154,6 +535,7 @@ const OWNERS: &[OwnerSpec] = &[
         capabilities: ANNOTATION_CAPABILITIES,
         manifest_history_is_object: false,
         application_selection: None,
+        operation_matrix_matches_capabilities: false,
     },
     OwnerSpec {
         id: "wow-project/e0-d/1",
@@ -163,6 +545,7 @@ const OWNERS: &[OwnerSpec] = &[
         capabilities: PROJECT_CAPABILITIES,
         manifest_history_is_object: true,
         application_selection: None,
+        operation_matrix_matches_capabilities: false,
     },
     OwnerSpec {
         id: "wow-graph/e2-a/typed-assertion-partition-query-core",
@@ -172,6 +555,7 @@ const OWNERS: &[OwnerSpec] = &[
         capabilities: GRAPH_CAPABILITIES,
         manifest_history_is_object: false,
         application_selection: None,
+        operation_matrix_matches_capabilities: false,
     },
     OwnerSpec {
         id: "wow-service/e1-d-reference-pack-build-validation",
@@ -181,6 +565,17 @@ const OWNERS: &[OwnerSpec] = &[
         capabilities: SERVICE_CAPABILITIES,
         manifest_history_is_object: false,
         application_selection: Some("application-selected"),
+        operation_matrix_matches_capabilities: false,
+    },
+    OwnerSpec {
+        id: "wow-store/e2-d/projectstore-coherent-publication",
+        contract_path: STORE_E2_CONTRACT,
+        manifest_path: STORE_E2_MANIFEST,
+        manifest_id: "wow-store-e2-d-pending-acceptance-v3",
+        capabilities: STORE_E2_CAPABILITIES,
+        manifest_history_is_object: false,
+        application_selection: None,
+        operation_matrix_matches_capabilities: true,
     },
 ];
 
@@ -195,6 +590,8 @@ const GRAPH_CAPABILITIES: &[CapabilitySpec] = &[
             ),
             ("apps/wow/src/graph.rs", "run"),
         ],
+        service_routes: None,
+        application_selection: None,
     },
     CapabilitySpec {
         name: "atomic-producer-partition-replacement",
@@ -206,6 +603,8 @@ const GRAPH_CAPABILITIES: &[CapabilitySpec] = &[
             ),
             ("apps/wow/src/graph.rs", "run"),
         ],
+        service_routes: None,
+        application_selection: None,
     },
     CapabilitySpec {
         name: "immutable-graph-snapshot-publication",
@@ -224,6 +623,8 @@ const GRAPH_CAPABILITIES: &[CapabilitySpec] = &[
             ),
             ("apps/wow/src/graph_store.rs", "run"),
         ],
+        service_routes: None,
+        application_selection: None,
     },
     CapabilitySpec {
         name: "exact-neighbor-axis-path-subgraph-explain-queries",
@@ -242,6 +643,8 @@ const GRAPH_CAPABILITIES: &[CapabilitySpec] = &[
             ("crates/wow-service/src/graph/mod.rs", "execute_graph_read"),
             ("apps/wow/src/graph.rs", "run"),
         ],
+        service_routes: None,
+        application_selection: None,
     },
 ];
 #[derive(Default)]
@@ -334,6 +737,7 @@ fn validate_contract(owner: &OwnerSpec, value: &Value, files: &BTreeSet<&str>) -
             .get("functional_checkpoint")
             .ok_or("functional checkpoint is absent")?,
     )?;
+    validate_operation_matrix(owner, value)?;
     validate_capabilities(owner, value, files)
 }
 
@@ -415,6 +819,25 @@ fn validate_checkpoint(value: &Value) -> Result<()> {
     Ok(())
 }
 
+fn validate_operation_matrix(owner: &OwnerSpec, contract: &Value) -> Result<()> {
+    if !owner.operation_matrix_matches_capabilities {
+        return Ok(());
+    }
+    let operations = contract
+        .get("operations")
+        .and_then(Value::as_array)
+        .ok_or("operations must be an array")?;
+    if operations.len() != owner.capabilities.len()
+        || operations
+            .iter()
+            .zip(owner.capabilities)
+            .any(|(operation, capability)| operation.as_str() != Some(capability.name))
+    {
+        return Err("Store E2 operations differ from the explicit owner routing matrix".into());
+    }
+    Ok(())
+}
+
 fn validate_capabilities(
     owner: &OwnerSpec,
     contract: &Value,
@@ -426,27 +849,57 @@ fn validate_capabilities(
         .ok_or("capability_routing must be an array")?;
     let mut names = BTreeSet::new();
     for row in rows {
-        exact(
-            row,
-            &[
-                "capability",
-                "status",
-                "owners",
-                "application_routes",
-                "acceptance_status",
-                "blocking_issues",
-            ],
-        )?;
         let name = text(row, "capability")?;
-        if !owner
+        let expected = owner
             .capabilities
             .iter()
-            .any(|expected| expected.name == name)
-        {
-            return Err("capability is outside the explicit owner mapping".into());
+            .find(|expected| expected.name == name)
+            .ok_or("capability is outside the explicit owner mapping")?;
+        let mut fields = vec![
+            "capability",
+            "status",
+            "owners",
+            "application_routes",
+            "acceptance_status",
+            "blocking_issues",
+        ];
+        if expected.service_routes.is_some() {
+            fields.push("service_routes");
         }
+        if expected.application_selection.is_some() {
+            fields.push("application_selection");
+        }
+        exact(row, &fields)?;
         if !names.insert(name) {
             return Err("capability routing contains a duplicate".into());
+        }
+        match expected.application_selection {
+            Some(selection) if text(row, "application_selection")? != selection => {
+                return Err(
+                    "capability application selection differs from the explicit owner map".into(),
+                );
+            }
+            _ => {}
+        }
+        if let Some(selection) = expected.application_selection {
+            let app_routes = row["application_routes"]
+                .as_array()
+                .ok_or("application_routes must be an array")?;
+            match selection {
+                "application-selected" if expected.application_routes.is_empty() => {
+                    return Err(
+                        "application-selected capability requires an explicit app route".into(),
+                    );
+                }
+                "library-only" if !expected.application_routes.is_empty() => {
+                    return Err("library-only capability cannot map an app route".into());
+                }
+                "library-only" if !app_routes.is_empty() => {
+                    return Err("library-only capability must have an empty app route set".into());
+                }
+                "application-selected" | "library-only" => {}
+                _ => return Err("capability has an unsupported application selection".into()),
+            }
         }
         text(row, "status")?;
         text(row, "acceptance_status")?;
@@ -459,6 +912,13 @@ fn validate_capabilities(
                 .ok_or("application_routes are absent")?,
             files,
         )?;
+        if let Some(expected_routes) = expected.service_routes {
+            let service_routes = row
+                .get("service_routes")
+                .ok_or("service_routes are absent")?;
+            routes(service_routes, files)?;
+            require_routes(service_routes, expected_routes)?;
+        }
     }
     for expected in owner.capabilities {
         let row = rows
@@ -468,7 +928,7 @@ fn validate_capabilities(
         if text(row, "status")? != "partial-functional"
             || text(row, "acceptance_status")? != "pending"
         {
-            return Err("selected capability must remain partial-functional/pending".into());
+            return Err("mapped capability must remain partial-functional/pending".into());
         }
         require_routes(&row["owners"], expected.owners)?;
         require_routes(&row["application_routes"], expected.application_routes)?;
@@ -561,16 +1021,36 @@ mod tests {
                     json!({"path":path,"symbol":symbol})
                 })
                 .collect::<Vec<_>>();
-            routing.push(json!({"capability":capability.name,"status":"partial-functional",
-                "owners":owners,"application_routes":routes,"acceptance_status":"pending","blocking_issues":[120,122]}));
+            let mut row = json!({"capability":capability.name,"status":"partial-functional",
+                "owners":owners,"application_routes":routes,"acceptance_status":"pending","blocking_issues":[120,122]});
+            if let Some(selection) = capability.application_selection {
+                row["application_selection"] = json!(selection);
+            }
+            if let Some(service_routes) = capability.service_routes {
+                row["service_routes"] = Value::Array(
+                    service_routes
+                        .iter()
+                        .map(|(path, symbol)| {
+                            files.insert(*path);
+                            json!({"path":path,"symbol":symbol})
+                        })
+                        .collect(),
+                );
+            }
+            routing.push(row);
         }
+        let operations = spec
+            .capabilities
+            .iter()
+            .map(|capability| capability.name)
+            .collect::<Vec<_>>();
         let mut contract = json!({"schema_version":2,"contract_id":spec.id,"state":"partial-functional-freeze-open",
             "implementation_status":"partial-functional","acceptance_status":"pending","canonical_issue":120,
             "preimplementation_freeze":{"status":"missed","evaluation":"NotEvaluated"},
             "functional_checkpoint":{"commit":"abcdefabcdefabcdefabcdefabcdefabcdefabcd","quick_run":7},
             "historical_preimplementation_requirements":[],
             "checksum_contract":{"state":"pending-acceptance-freeze","manifest":spec.manifest_path,"rule":"pending"},
-            "capability_routing":routing});
+            "operations":operations,"capability_routing":routing});
         if let Some(selection) = spec.application_selection {
             contract["application_selection"] = json!(selection);
         }
@@ -720,6 +1200,31 @@ mod tests {
         Ok((spec, contract, manifest, files))
     }
 
+    fn store_e2_records() -> Result<(&'static OwnerSpec, Value, Value, BTreeSet<&'static str>)> {
+        let spec = OWNERS
+            .iter()
+            .find(|owner| owner.id == "wow-store/e2-d/projectstore-coherent-publication")
+            .ok_or("Store E2-D owner mapping is absent")?;
+        let contract = serde_json::from_str(include_str!(
+            "../../../../crates/wow-store/e2/CONTRACT.json"
+        ))?;
+        let manifest = serde_json::from_str(include_str!(
+            "../../../../crates/wow-store/e2/examples/CHECKSUMS.json"
+        ))?;
+        let mut files = BTreeSet::from([spec.contract_path, spec.manifest_path]);
+        for capability in spec.capabilities {
+            for (path, _) in capability
+                .owners
+                .iter()
+                .chain(capability.application_routes)
+                .chain(capability.service_routes.into_iter().flatten())
+            {
+                files.insert(*path);
+            }
+        }
+        Ok((spec, contract, manifest, files))
+    }
+
     #[test]
     fn service_e1_rejects_stale_no_code_and_accepted_missing_evidence() -> Result<()> {
         let (spec, contract, manifest, files) = service_e1_records()?;
@@ -771,6 +1276,146 @@ mod tests {
         let mut library_only = contract;
         library_only["application_selection"] = json!("library-only");
         assert!(validate_contract(spec, &library_only, &files).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn store_e2_rejects_stale_and_accepted_claims_without_evidence() -> Result<()> {
+        let (spec, contract, manifest, files) = store_e2_records()?;
+        check(spec, contract.clone(), manifest.clone(), &files)?;
+
+        let operations = contract["operations"]
+            .as_array()
+            .ok_or("Store E2 operations must be an array")?;
+        let routes = contract["capability_routing"]
+            .as_array()
+            .ok_or("Store E2 capability routing must be an array")?;
+        assert_eq!(operations.len(), 17);
+        assert_eq!(routes.len(), operations.len());
+        assert_eq!(
+            routes
+                .iter()
+                .filter(|row| row["application_selection"] == "application-selected")
+                .count(),
+            12
+        );
+        assert_eq!(
+            routes
+                .iter()
+                .filter(|row| row["application_selection"] == "library-only")
+                .count(),
+            5
+        );
+        assert_eq!(
+            routes
+                .iter()
+                .filter(|row| {
+                    row["application_selection"] == "library-only"
+                        && row["application_routes"]
+                            .as_array()
+                            .is_some_and(Vec::is_empty)
+                })
+                .count(),
+            5
+        );
+        assert!(
+            routes
+                .iter()
+                .filter(|row| row["application_selection"] == "application-selected")
+                .all(|row| row["application_routes"]
+                    .as_array()
+                    .is_some_and(|routes| !routes.is_empty()))
+        );
+
+        let prerequisites = manifest["prerequisite_pins"]
+            .as_object()
+            .ok_or("prerequisite pins must be an object")?;
+        assert_eq!(prerequisites.len(), 10);
+        assert!(prerequisites.values().all(Value::is_null));
+        let runtime = manifest["runtime_profile_pins"]
+            .as_object()
+            .ok_or("runtime profile pins must be an object")?;
+        assert_eq!(runtime.len(), 7);
+        assert_eq!(
+            runtime.get("physical_profile_id").and_then(Value::as_str),
+            Some("project-store-wal-manifested-partitions-v1")
+        );
+        assert!(
+            runtime
+                .iter()
+                .filter(|(key, _)| key.as_str() != "physical_profile_id")
+                .all(|(_, value)| value.is_null())
+        );
+        for group in ["schema_profile_pins", "vector_pins"] {
+            let pins = manifest[group]
+                .as_object()
+                .ok_or("schema/vector pins must be objects")?;
+            assert!(pins.values().all(Value::is_null));
+        }
+        assert!(
+            manifest["member_sha256"]
+                .as_object()
+                .is_some_and(serde_json::Map::is_empty)
+        );
+        assert!(manifest["bundle_sha256"].is_null());
+
+        let mut no_code_contract = contract.clone();
+        no_code_contract["state"] = json!("implementation-ready-documentation-no-rust-code");
+        no_code_contract["implementation_status"] = json!("not-started");
+        no_code_contract["implementation_state"] = json!("not-started");
+        assert!(validate_contract(spec, &no_code_contract, &files).is_err());
+
+        let mut no_code_manifest = manifest.clone();
+        no_code_manifest["state"] = json!("pending-byte-freeze-before-first-rust-implementation");
+        no_code_manifest["implementation_status"] = json!("not-started");
+        no_code_manifest["implementation_state"] = json!("not-started");
+        assert!(validate_manifest(spec, &no_code_manifest).is_err());
+
+        let mut accepted_contract = contract.clone();
+        accepted_contract["state"] = json!("accepted");
+        accepted_contract["acceptance_status"] = json!("accepted");
+        assert!(validate_contract(spec, &accepted_contract, &files).is_err());
+
+        let mut accepted_manifest = manifest.clone();
+        accepted_manifest["state"] = json!("accepted");
+        accepted_manifest["acceptance_status"] = json!("accepted");
+        assert!(validate_manifest(spec, &accepted_manifest).is_err());
+
+        let mut stale_matrix = contract.clone();
+        stale_matrix["operations"][16] = json!("unsupported_store_operation");
+        assert!(validate_contract(spec, &stale_matrix, &files).is_err());
+
+        let mut journal_read_as_creator = contract.clone();
+        journal_read_as_creator["capability_routing"][6]["owners"] = json!([
+            {"path":"crates/wow-store/src/project/publication.rs","symbol":"ProjectStore::prepare"},
+            {"path":"crates/wow-store/src/project/mod.rs","symbol":"ProjectStore::operation"}
+        ]);
+        assert!(validate_contract(spec, &journal_read_as_creator, &files).is_err());
+
+        let mut state_type_as_creator = contract.clone();
+        state_type_as_creator["capability_routing"][6]["owners"] = json!([
+            {"path":"crates/wow-store/src/project/publication.rs","symbol":"ProjectStore::prepare"},
+            {"path":"crates/wow-store/src/project/model.rs","symbol":"PublicationOperation"}
+        ]);
+        assert!(validate_contract(spec, &state_type_as_creator, &files).is_err());
+
+        let mut routed_library_only = contract.clone();
+        routed_library_only["capability_routing"][11]["application_routes"] =
+            json!([{"path":"apps/wow/src/project.rs","symbol":"run"}]);
+        assert!(validate_contract(spec, &routed_library_only, &files).is_err());
+
+        let mut missing_service_route = contract.clone();
+        missing_service_route["capability_routing"][16]["service_routes"] = json!([]);
+        assert!(validate_contract(spec, &missing_service_route, &files).is_err());
+
+        let mut stale_migration_owner = contract.clone();
+        stale_migration_owner["capability_routing"][16]["owners"][2]["symbol"] =
+            json!("LiveProjectStore::activate_ready_selection");
+        assert!(validate_contract(spec, &stale_migration_owner, &files).is_err());
+
+        let mut misclassified = contract;
+        misclassified["capability_routing"][0]["application_selection"] = json!("library-only");
+        assert!(validate_contract(spec, &misclassified, &files).is_err());
         Ok(())
     }
 }
