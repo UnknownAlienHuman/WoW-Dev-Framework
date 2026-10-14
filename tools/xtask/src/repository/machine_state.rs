@@ -1,7 +1,12 @@
-//! Bounded validation for the two reviewed machine-state owners.
+//! Bounded validation for reviewed machine-state contract owners.
 use crate::Result;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
+
+// Declared anchors only. This owner validates explicit contract records; it never
+// greps Rust source for symbol spellings and never infers a state from a file list.
+const GRAPH_CONTRACT: &str = "crates/wow-graph/e2/CONTRACT.json";
+const GRAPH_MANIFEST: &str = "crates/wow-graph/e2/examples/CHECKSUMS.json";
 
 const ANNOTATION_CONTRACT: &str = "crates/wow-annotations/e1/CONTRACT.json";
 const ANNOTATION_MANIFEST: &str = "crates/wow-annotations/e1/examples/CHECKSUMS.json";
@@ -127,8 +132,76 @@ const OWNERS: &[OwnerSpec] = &[
         capabilities: PROJECT_CAPABILITIES,
         manifest_history_is_object: true,
     },
+    OwnerSpec {
+        id: "wow-graph/e2-a/typed-assertion-partition-query-core",
+        contract_path: GRAPH_CONTRACT,
+        manifest_path: GRAPH_MANIFEST,
+        manifest_id: "wow-graph-e2-a-pending-acceptance-v2",
+        capabilities: GRAPH_CAPABILITIES,
+        manifest_history_is_object: false,
+    },
 ];
 
+const GRAPH_CAPABILITIES: &[CapabilitySpec] = &[
+    CapabilitySpec {
+        name: "versioned-kind-relation-axis-registry",
+        owners: &[("crates/wow-graph/src/registry.rs", "GraphRegistryBundle")],
+        application_routes: &[
+            (
+                "crates/wow-service/src/graph/build/state_core.rs",
+                "publish_bound",
+            ),
+            ("apps/wow/src/graph.rs", "run"),
+        ],
+    },
+    CapabilitySpec {
+        name: "atomic-producer-partition-replacement",
+        owners: &[("crates/wow-graph/src/partition.rs", "prepare_replacement")],
+        application_routes: &[
+            (
+                "crates/wow-service/src/graph/build/state_core.rs",
+                "publish_bound",
+            ),
+            ("apps/wow/src/graph.rs", "run"),
+        ],
+    },
+    CapabilitySpec {
+        name: "immutable-graph-snapshot-publication",
+        owners: &[
+            ("crates/wow-graph/src/persistent.rs", "publish_current"),
+            ("crates/wow-graph/src/persistent.rs", "read_current"),
+        ],
+        application_routes: &[
+            (
+                "crates/wow-service/src/graph/persistence.rs",
+                "publish_graph_bundle",
+            ),
+            (
+                "crates/wow-service/src/graph/persistence.rs",
+                "execute_graph_store_read",
+            ),
+            ("apps/wow/src/graph_store.rs", "run"),
+        ],
+    },
+    CapabilitySpec {
+        name: "exact-neighbor-axis-path-subgraph-explain-queries",
+        owners: &[
+            ("crates/wow-graph/src/direct.rs", "GraphEntityQuery"),
+            (
+                "crates/wow-graph/src/direct/neighbors.rs",
+                "GraphNeighborReadQuery",
+            ),
+            ("crates/wow-graph/src/axes.rs", "GraphAxisQuery"),
+            ("crates/wow-graph/src/paths.rs", "GraphPathQuery"),
+            ("crates/wow-graph/src/subgraph.rs", "GraphSubgraphQuery"),
+            ("crates/wow-graph/src/explain.rs", "GraphExplainQuery"),
+        ],
+        application_routes: &[
+            ("crates/wow-service/src/graph/mod.rs", "execute_graph_read"),
+            ("apps/wow/src/graph.rs", "run"),
+        ],
+    },
+];
 #[derive(Default)]
 pub(super) struct Scope {
     documents: BTreeMap<&'static str, Value>,
@@ -538,5 +611,35 @@ mod tests {
     #[test]
     fn unrelated_future_only_inventory_is_out_of_scope() -> Result<()> {
         Scope::default().finish(&BTreeSet::from(["docs/future-contract.json"]))
+    }
+
+    #[test]
+    fn graph_e2_stale_state_is_rejected_while_real_routes_are_honored() -> Result<()> {
+        let spec = &OWNERS[2];
+        let (contract, manifest, files) = valid(spec);
+        check(spec, contract.clone(), manifest.clone(), &files)?;
+        let mut legacy_state = contract.clone();
+        legacy_state["state"] = json!("implementation-ready-documentation-no-rust-code");
+        assert!(check(spec, legacy_state, manifest.clone(), &files).is_err());
+        let mut legacy_manifest = manifest.clone();
+        legacy_manifest["manifest_id"] = json!("wow-graph-e2-a-checksums-v1");
+        legacy_manifest["implementation_state"] = json!("not-started");
+        assert!(check(spec, contract.clone(), legacy_manifest, &files).is_err());
+        let mut fabricated_route = contract.clone();
+        fabricated_route["capability_routing"][0]["owners"] = json!([{
+            "path": "crates/wow-graph/src/registry.rs",
+            "symbol": "fabricated_symbol"
+        }]);
+        assert!(check(spec, fabricated_route, manifest.clone(), &files).is_err());
+        let mut no_route = contract.clone();
+        no_route["capability_routing"][0]["application_routes"] = json!([]);
+        assert!(check(spec, no_route, manifest.clone(), &files).is_err());
+        let mut stale_prerequisite = contract.clone();
+        stale_prerequisite["capability_routing"][0]["status"] = json!("accepted");
+        assert!(check(spec, stale_prerequisite, manifest.clone(), &files).is_err());
+        let mut frozen = manifest.clone();
+        frozen["bundle_sha256"] = json!("not-an-acceptance-proof");
+        assert!(check(spec, contract, frozen, &files).is_err());
+        Ok(())
     }
 }

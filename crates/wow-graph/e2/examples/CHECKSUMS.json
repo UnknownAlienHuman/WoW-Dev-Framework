@@ -1,9 +1,16 @@
 {
-  "schema_version": 1,
-  "manifest_id": "wow-graph-e2-a-checksums-v1",
+  "schema_version": 2,
+  "manifest_id": "wow-graph-e2-a-pending-acceptance-v2",
   "algorithm": "sha256",
-  "state": "pending-byte-freeze-before-first-rust-implementation",
-  "implementation_state": "not-started",
+  "state": "pending-acceptance-freeze",
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
+  "canonical_issue": 120,
+  "preimplementation_freeze": {
+    "status": "missed",
+    "evaluation": "NotEvaluated"
+  },
   "prerequisite_pins": {
     "wow_core_implementation_commit": null,
     "wow_core_fixture_bundle_sha256": null,
@@ -46,9 +53,16 @@
   ],
   "member_sha256": {},
   "bundle_sha256": null,
-  "freeze_rules": [
-    "null values allowed only while implementation_state is not-started",
-    "all prerequisite registry partition snapshot query store and checksum values freeze before first Rust commit",
-    "tests verify committed bytes and never rewrite fixtures automatically"
+  "historical_preimplementation_requirements": [
+    "wow-core and wow-store implementation commits and fixture digests",
+    "selected ProjectStore physical/runtime profile",
+    "registry bundle and compatibility IDs",
+    "partition/assertion/snapshot/query/store vectors",
+    "all member and bundle SHA-256 values"
+  ],
+  "acceptance_rules": [
+    "member_sha256 remains empty and bundle_sha256 remains null while acceptance is pending",
+    "no auto-filled or auto-blessed fixture/checksum values",
+    "downstream prerequisites reference capability and acceptance state, not a vague boolean"
   ]
 }

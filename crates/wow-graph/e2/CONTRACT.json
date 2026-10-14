@@ -1,9 +1,158 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "canonical_issue": 120,
   "work_package": "E2-A",
   "crate": "wow-graph",
+  "preimplementation_freeze": {
+    "status": "missed",
+    "evaluation": "NotEvaluated"
+  },
+  "functional_checkpoint": {
+    "commit": "b4104cd6831c088bb03f0a732e9c42d550a1e88d",
+    "quick_run": 38517055297
+  },
+  "historical_preimplementation_requirements": [
+    "wow-core and wow-store implementation commits and fixture digests",
+    "selected ProjectStore physical/runtime profile",
+    "registry bundle and compatibility IDs",
+    "partition/assertion/snapshot/query/store vectors",
+    "all member and bundle SHA-256 values"
+  ],
+  "capability_routing": [
+    {
+      "capability": "versioned-kind-relation-axis-registry",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/registry.rs",
+          "symbol": "GraphRegistryBundle"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build/state_core.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        120
+      ]
+    },
+    {
+      "capability": "atomic-producer-partition-replacement",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/partition.rs",
+          "symbol": "prepare_replacement"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build/state_core.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        120
+      ]
+    },
+    {
+      "capability": "immutable-graph-snapshot-publication",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/persistent.rs",
+          "symbol": "publish_current"
+        },
+        {
+          "path": "crates/wow-graph/src/persistent.rs",
+          "symbol": "read_current"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/persistence.rs",
+          "symbol": "publish_graph_bundle"
+        },
+        {
+          "path": "crates/wow-service/src/graph/persistence.rs",
+          "symbol": "execute_graph_store_read"
+        },
+        {
+          "path": "apps/wow/src/graph_store.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        120
+      ]
+    },
+    {
+      "capability": "exact-neighbor-axis-path-subgraph-explain-queries",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/direct.rs",
+          "symbol": "GraphEntityQuery"
+        },
+        {
+          "path": "crates/wow-graph/src/direct/neighbors.rs",
+          "symbol": "GraphNeighborReadQuery"
+        },
+        {
+          "path": "crates/wow-graph/src/axes.rs",
+          "symbol": "GraphAxisQuery"
+        },
+        {
+          "path": "crates/wow-graph/src/paths.rs",
+          "symbol": "GraphPathQuery"
+        },
+        {
+          "path": "crates/wow-graph/src/subgraph.rs",
+          "symbol": "GraphSubgraphQuery"
+        },
+        {
+          "path": "crates/wow-graph/src/explain.rs",
+          "symbol": "GraphExplainQuery"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/mod.rs",
+          "symbol": "execute_graph_read"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        120
+      ]
+    }
+  ],
+  "checksum_contract": {
+    "state": "pending-acceptance-freeze",
+    "manifest": "crates/wow-graph/e2/examples/CHECKSUMS.json",
+    "rule": "member_sha256 remains empty and bundle_sha256 remains null while acceptance is pending"
+  },
   "direct_framework_dependencies": [
     "wow-core",
     "wow-store"
@@ -99,14 +248,258 @@
     "crates/wow-graph/e2/examples/conflict-cases.json",
     "crates/wow-graph/e2/examples/CHECKSUMS.json"
   ],
-  "freeze_gate": {
-    "implementation_state": "not-started",
-    "required_before_first_rust_implementation": [
-      "wow-core and wow-store implementation commits and fixture digests",
-      "selected ProjectStore physical/runtime profile",
-      "registry bundle and compatibility IDs",
-      "partition/assertion/snapshot/query/store vectors",
-      "all member and bundle SHA-256 values"
-    ]
+  "operation_routing": {
+    "validate_graph_registry_bundle": {
+      "status": "partial",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/registry.rs",
+          "symbol": "GraphRegistryBundle::validate"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build/state_core.rs",
+          "symbol": "publish_bound"
+        }
+      ],
+      "blocking_issues": [
+        120
+      ]
+    },
+    "validate_graph_partition_batch": {
+      "status": "partial",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/proposal.rs",
+          "symbol": "validate_graph_proposal_batch"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build/state_core.rs",
+          "symbol": "publish_bound"
+        }
+      ],
+      "blocking_issues": [
+        120
+      ]
+    },
+    "plan_graph_partition_replacement": {
+      "status": "partial",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/partition.rs",
+          "symbol": "prepare_replacement"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build/state_core.rs",
+          "symbol": "publish_bound"
+        }
+      ],
+      "blocking_issues": [
+        120
+      ]
+    },
+    "publish_graph_snapshot": {
+      "status": "partial",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/persistent.rs",
+          "symbol": "publish_current"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/persistence.rs",
+          "symbol": "publish_graph_bundle"
+        },
+        {
+          "path": "apps/wow/src/graph_store.rs",
+          "symbol": "run"
+        }
+      ],
+      "blocking_issues": [
+        120
+      ]
+    },
+    "open_graph_view": {
+      "status": "partial",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/persistent.rs",
+          "symbol": "read_current"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/persistence.rs",
+          "symbol": "execute_graph_store_read"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        }
+      ],
+      "blocking_issues": [
+        120
+      ]
+    },
+    "entity_exact": {
+      "status": "partial",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/direct.rs",
+          "symbol": "GraphEntityQuery::execute"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/mod.rs",
+          "symbol": "execute_graph_read"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        }
+      ],
+      "blocking_issues": [
+        120
+      ]
+    },
+    "neighbors": {
+      "status": "partial",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/direct/neighbors.rs",
+          "symbol": "GraphNeighborReadQuery::execute"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/mod.rs",
+          "symbol": "execute_graph_read"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        }
+      ],
+      "blocking_issues": [
+        120
+      ]
+    },
+    "traverse_axis": {
+      "status": "partial",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/axes.rs",
+          "symbol": "GraphAxisQuery::execute"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/mod.rs",
+          "symbol": "execute_graph_read"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        }
+      ],
+      "blocking_issues": [
+        120
+      ]
+    },
+    "bounded_paths": {
+      "status": "partial",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/paths.rs",
+          "symbol": "GraphPathQuery::execute"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/mod.rs",
+          "symbol": "execute_graph_read"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        }
+      ],
+      "blocking_issues": [
+        120
+      ]
+    },
+    "project_subgraph": {
+      "status": "partial",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/subgraph.rs",
+          "symbol": "GraphSubgraphQuery::execute"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/mod.rs",
+          "symbol": "execute_graph_read"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        }
+      ],
+      "blocking_issues": [
+        120
+      ]
+    },
+    "explain_entity": {
+      "status": "partial",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/explain.rs",
+          "symbol": "GraphExplainQuery::execute"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/mod.rs",
+          "symbol": "execute_graph_read"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        }
+      ],
+      "blocking_issues": [
+        120
+      ]
+    },
+    "explain_relation": {
+      "status": "partial",
+      "owners": [
+        {
+          "path": "crates/wow-graph/src/explain.rs",
+          "symbol": "GraphExplainQuery::execute"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/mod.rs",
+          "symbol": "execute_graph_read"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        }
+      ],
+      "blocking_issues": [
+        120
+      ]
+    }
   }
 }
