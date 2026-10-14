@@ -8,6 +8,15 @@ contracts, not implementation or release evidence.
 
 ## Contract routes
 
+Generic `Store::open` initializes a missing database in an exclusively created
+private directory beside the requested path. It closes, validates and syncs the
+database before atomic no-replace hard-link publication. An existing winner still
+passes regular-file, physical-schema and configuration admission; unknown empty
+files remain refused. Unsupported hard-link publication returns a typed error.
+An interrupted process can leave its private staging directory; retries create a
+new attempt without adopting or deleting old remnants. This process-interruption
+boundary does not qualify parent-directory durability under power loss.
+
 ### E1-A — storage foundation and immutable ReferenceStore
 
 The complete pre-E2 overview is preserved as [`E1_A_OVERVIEW.md`](E1_A_OVERVIEW.md). Its earlier ProjectStore boundary is preserved as [`PROJECT_STORE_PRE_E2_BOUNDARY.md`](PROJECT_STORE_PRE_E2_BOUNDARY.md).

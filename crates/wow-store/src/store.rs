@@ -1,11 +1,5 @@
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
-use std::{
-    fs::{self, OpenOptions},
-    io::Cursor,
-    path::Path,
-    time::Duration,
-};
+mod bootstrap;
+use std::{fs, io::Cursor, path::Path, time::Duration};
 
 use rusqlite::{
     Connection, MAIN_DB, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
@@ -231,72 +225,29 @@ pub struct Store {
 }
 
 impl Store {
-    /// Opens one owned store file, creating it atomically when it does not exist.
+    /// Opens one owned store file, publishing a completely initialized file when
+    /// it does not exist. Interrupted staging never occupies the final pathname.
     ///
-    /// Creation is a single atomic `create_new` (`O_CREAT | O_EXCL`) so this is the
-    /// sole creator: no check-then-open race can adopt a file created in the window.
-    /// On unix the new file is created with mode 0600. If the path already exists it
+    /// Creation uses an exclusive private staging directory and file, then an
+    /// atomic no-replace hard-link publication on the same volume. On Unix the
+    /// directory/file modes are 0700/0600. If the path already exists it
     /// is admitted read-only first: its physical schema, header identity and
     /// configuration identity must match this compiled store exactly before a
     /// writable handle opens or any DDL runs. A foreign, incompatible, or pre-existing
     /// empty file is refused with its bytes untouched. No caller-asserted ownership
-    /// flag exists; ownership of a new store is this create_new alone.
+    /// flag exists. This is a process-interruption boundary, not a claim of
+    /// power-loss durability for the parent directory.
     pub fn open(path: impl AsRef<Path>, configuration: StoreConfiguration) -> StoreResult<Self> {
         configuration.limits().validate()?;
         let path = path.as_ref();
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            options.mode(0o600);
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            // Keep the creator handle open without delete sharing until SQLite
-            // has initialized this same newly created path.
-            options.share_mode(3);
-        }
-        match options.open(path) {
-            Ok(file) => {
-                file.sync_all().map_err(|_| {
-                    StoreError::new(
-                        StoreErrorCode::IntegrityViolation,
-                        "new store file could not be persisted",
-                    )
-                })?;
-                let connection =
-                    Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)
-                        .map_err(StoreError::database)?;
-                let result = Self::initialize_connection(connection, configuration);
-                drop(file);
-                result
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                let existing = fs::symlink_metadata(path).map_err(|_| {
-                    StoreError::new(
-                        StoreErrorCode::IntegrityViolation,
-                        "store path could not be inspected",
-                    )
-                })?;
-                #[cfg(windows)]
-                let reparse = {
-                    use std::os::windows::fs::MetadataExt;
-                    existing.file_attributes() & 0x400 != 0
-                };
-                #[cfg(not(windows))]
-                let reparse = false;
-                if !existing.file_type().is_file() || existing.file_type().is_symlink() || reparse {
-                    return Err(StoreError::new(
-                        StoreErrorCode::IntegrityViolation,
-                        "store path is not a regular file",
-                    ));
-                }
-                admit_file(path, configuration)
+        match fs::symlink_metadata(path) {
+            Ok(_) => admit_file(path, configuration),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                bootstrap::create(path, configuration)
             }
             Err(_) => Err(StoreError::new(
                 StoreErrorCode::IntegrityViolation,
-                "store path could not be created",
+                "store path could not be inspected",
             )),
         }
     }
@@ -308,7 +259,7 @@ impl Store {
 
     /// Initializes a brand-new, store-created database.
     ///
-    /// Only reached from the atomic create_new and in-memory creator routes, which
+    /// Only reached from the private staging and in-memory creator routes, which
     /// own the database by construction. A fresh empty database is initialized here.
     fn initialize_connection(
         connection: Connection,
@@ -329,6 +280,8 @@ impl Store {
             ));
         }
         initialize_schema(&connection)?;
+        #[cfg(test)]
+        bootstrap::interrupt_at("schema");
         validate_connection_identity(&connection, &configuration, true)?;
         Ok(Self {
             connection,
@@ -826,6 +779,26 @@ impl Store {
 /// schema, and sidecars are preserved exactly. Only an exact owned match
 /// opens a writable connection.
 fn admit_file(path: &Path, configuration: StoreConfiguration) -> StoreResult<Store> {
+    // Also check a winner created while our private bootstrap was running.
+    let existing = fs::symlink_metadata(path).map_err(|_| {
+        StoreError::new(
+            StoreErrorCode::IntegrityViolation,
+            "store path could not be inspected",
+        )
+    })?;
+    #[cfg(windows)]
+    let reparse = {
+        use std::os::windows::fs::MetadataExt;
+        existing.file_attributes() & 0x400 != 0
+    };
+    #[cfg(not(windows))]
+    let reparse = false;
+    if !existing.file_type().is_file() || existing.file_type().is_symlink() || reparse {
+        return Err(StoreError::new(
+            StoreErrorCode::IntegrityViolation,
+            "store path is not a regular file",
+        ));
+    }
     let compiled = OwnedSchemaShape::compiled()?;
     let inspect = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(StoreError::database)?;
