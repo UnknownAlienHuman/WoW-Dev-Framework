@@ -8,8 +8,13 @@ use std::process::ExitCode;
 use serde::Serialize;
 use serde_json::json;
 use wow_reference::ui_topology::{
-    UiTopologyDocumentLookup, UiTopologyIndex, import_ui_topology_draft,
+    UiTopologyDocumentLookup, UiTopologyImportErrorCode, UiTopologyIndex, import_ui_topology_draft,
 };
+
+#[path = "wow-reference/host_input.rs"]
+mod host_input;
+#[path = "../ui_topology_limits.rs"]
+mod ui_topology_limits;
 
 fn main() -> ExitCode {
     match run(env::args_os().skip(1).collect()) {
@@ -75,7 +80,14 @@ fn usage() -> String {
 
 fn load_index(path: &Path) -> Result<UiTopologyIndex, String> {
     let bytes =
-        fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+        host_input::read_bounded_artifact(path, ui_topology_limits::MAX_UI_TOPOLOGY_DRAFT_BYTES)
+            .map_err(|error| match error {
+                host_input::ReadError::TooLarge => format!(
+                    "topology import failed ({:?}): topology draft exceeds the import limit",
+                    UiTopologyImportErrorCode::InputTooLarge
+                ),
+                error => format!("cannot read {}: {error}", path.display()),
+            })?;
     import_ui_topology_draft(&bytes).map_err(|error| {
         format!(
             "topology import failed ({:?}): {}",

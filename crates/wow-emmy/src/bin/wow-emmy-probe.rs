@@ -1,12 +1,16 @@
 use std::env;
 use std::ffi::OsString;
-use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
 use serde_json::json;
-use wow_emmy::compatibility::backend_identity_from_report;
+use wow_emmy::compatibility::{EmmyCompatibilityErrorCode, backend_identity_from_report};
+
+#[path = "../compatibility/limits.rs"]
+mod compatibility_limits;
+#[path = "wow-emmy-probe/host_input.rs"]
+mod host_input;
 
 #[path = "wow-emmy-probe/source.rs"]
 mod source;
@@ -35,8 +39,19 @@ fn run(arguments: Vec<OsString>) -> Result<(), String> {
         }
         "verify-backend" if arguments.len() == 2 => {
             let path = Path::new(&arguments[1]);
-            let bytes = fs::read(path)
-                .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+            // Bound host acquisition before the importer is reached. The owner
+            // still owns every semantic validation of the bytes.
+            let bytes = host_input::read_bounded_artifact(
+                path,
+                compatibility_limits::MAX_REPORT_BYTES,
+            )
+            .map_err(|error| match error {
+                host_input::ReadError::TooLarge => format!(
+                    "backend report import failed ({:?}): EmmyLua compatibility report exceeds the import limit",
+                    EmmyCompatibilityErrorCode::InputTooLarge
+                ),
+                error => format!("cannot read {}: {error}", path.display()),
+            })?;
             let identity = backend_identity_from_report(&bytes).map_err(|error| {
                 format!(
                     "backend report import failed ({:?}): {}",

@@ -1,6 +1,8 @@
 //! Deterministic reference-data boundary for the WoW development framework.
 
 mod deterministic_view;
+mod generated_api_limits;
+mod ui_topology_limits;
 
 pub use deterministic_view::{
     CoverageStatus, LookupResult, LookupUnknownReason, REFERENCE_VIEW_SCHEMA, ReferenceConflict,

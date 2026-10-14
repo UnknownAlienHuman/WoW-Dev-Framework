@@ -7,6 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use crate::generated_api_limits::MAX_GENERATED_API_DRAFT_BYTES;
 use crate::wire_json::canonical_json_bytes;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -17,7 +18,6 @@ const SCHEMA_VERSION: u64 = 1;
 const PRODUCER_ID: &str = "blizzard-generated-api-reference";
 const GENERATED_ROOT: &str = "Interface/AddOns/Blizzard_APIDocumentationGenerated/";
 const GENERATED_SUFFIX: &str = "Documentation.lua";
-const MAX_DRAFT_BYTES: usize = 512 * 1024 * 1024;
 
 /// Stable generated API import failure class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -540,7 +540,7 @@ impl GeneratedApiIndex {
 
 /// Imports and independently validates one normalized generated API draft.
 pub fn import_generated_api_draft(bytes: &[u8]) -> GeneratedApiImportResult<GeneratedApiIndex> {
-    if bytes.len() > MAX_DRAFT_BYTES {
+    if bytes.len() > MAX_GENERATED_API_DRAFT_BYTES {
         return Err(error(
             GeneratedApiImportErrorCode::InputTooLarge,
             "generated API draft exceeds the import limit",

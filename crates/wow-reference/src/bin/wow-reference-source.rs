@@ -9,12 +9,20 @@ use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use wow_reference::generated_api::{
-    GeneratedApiCoverageStatus, GeneratedApiIndex, import_generated_api_draft,
+    GeneratedApiCoverageStatus, GeneratedApiImportErrorCode, GeneratedApiIndex,
+    import_generated_api_draft,
 };
 use wow_reference::ui_topology::{
-    UiTopologyCoverageStatus, UiTopologyIndex, import_ui_topology_draft,
+    UiTopologyCoverageStatus, UiTopologyImportErrorCode, UiTopologyIndex, import_ui_topology_draft,
 };
 use wow_reference::wire_json::canonical_json_bytes;
+
+#[path = "../generated_api_limits.rs"]
+mod generated_api_limits;
+#[path = "wow-reference/host_input.rs"]
+mod host_input;
+#[path = "../ui_topology_limits.rs"]
+mod ui_topology_limits;
 
 fn main() -> ExitCode {
     match run(env::args_os().skip(1).collect()) {
@@ -62,8 +70,17 @@ fn usage() -> String {
 }
 
 fn load_api(path: &Path) -> Result<GeneratedApiIndex, String> {
-    let bytes =
-        fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let bytes = host_input::read_bounded_artifact(
+        path,
+        generated_api_limits::MAX_GENERATED_API_DRAFT_BYTES,
+    )
+    .map_err(|error| match error {
+        host_input::ReadError::TooLarge => format!(
+            "generated API import failed ({:?}): generated API draft exceeds the import limit",
+            GeneratedApiImportErrorCode::InputTooLarge
+        ),
+        error => format!("cannot read {}: {error}", path.display()),
+    })?;
     import_generated_api_draft(&bytes).map_err(|error| {
         format!(
             "generated API import failed ({:?}): {}",
@@ -75,7 +92,14 @@ fn load_api(path: &Path) -> Result<GeneratedApiIndex, String> {
 
 fn load_topology(path: &Path) -> Result<UiTopologyIndex, String> {
     let bytes =
-        fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+        host_input::read_bounded_artifact(path, ui_topology_limits::MAX_UI_TOPOLOGY_DRAFT_BYTES)
+            .map_err(|error| match error {
+                host_input::ReadError::TooLarge => format!(
+                    "topology import failed ({:?}): topology draft exceeds the import limit",
+                    UiTopologyImportErrorCode::InputTooLarge
+                ),
+                error => format!("cannot read {}: {error}", path.display()),
+            })?;
     import_ui_topology_draft(&bytes).map_err(|error| {
         format!(
             "UI topology import failed ({:?}): {}",
@@ -200,18 +224,47 @@ fn print_json<T: Serialize>(value: &T) -> Result<(), String> {
         .map_err(|error| format!("cannot write output: {error}"))
 }
 
+fn existing_output_matches(path: &Path, expected: &[u8]) -> Result<bool, String> {
+    let metadata =
+        fs::symlink_metadata(path).map_err(|error| format!("cannot inspect output: {error}"))?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err("existing output is not a regular file".to_owned());
+    }
+    let expected_len = u64::try_from(expected.len())
+        .map_err(|_| "expected output length is not representable".to_owned())?;
+    if metadata.len() != expected_len {
+        return Ok(false);
+    }
+
+    let mut file = fs::File::open(path).map_err(|error| format!("cannot read output: {error}"))?;
+    let opened_metadata = file
+        .metadata()
+        .map_err(|error| format!("cannot read output: {error}"))?;
+    if !opened_metadata.is_file() {
+        return Err("existing output is not a regular file".to_owned());
+    }
+    if opened_metadata.len() != expected_len {
+        return Ok(false);
+    }
+
+    let existing = match host_input::read_bounded(&mut file, opened_metadata.len(), expected.len())
+    {
+        Ok(existing) => existing,
+        Err(host_input::ReadError::TooLarge | host_input::ReadError::ChangedLength) => {
+            return Ok(false);
+        }
+        Err(error) => return Err(format!("cannot read output: {error}")),
+    };
+    Ok(existing == expected)
+}
+
 fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
     let mut bytes = serde_json::to_vec_pretty(value)
         .map_err(|error| format!("cannot serialize bundle: {error}"))?;
     bytes.push(b'\n');
     let matches_existing = || -> Result<(), String> {
-        let metadata = fs::symlink_metadata(path)
-            .map_err(|error| format!("cannot inspect output: {error}"))?;
-        if !metadata.is_file() || metadata.file_type().is_symlink() {
-            return Err("existing output is not a regular file".to_owned());
-        }
-        let existing = fs::read(path).map_err(|error| format!("cannot read output: {error}"))?;
-        if existing != bytes {
+        let matches = existing_output_matches(path, &bytes)?;
+        if !matches {
             return Err("refusing to replace different existing output".to_owned());
         }
         Ok(())
@@ -297,5 +350,35 @@ mod tests {
         changed.manifest_sha256 =
             "sha256:4444444444444444444444444444444444444444444444444444444444444444".to_owned();
         assert_ne!(first, changed);
+    }
+
+    #[test]
+    fn exact_existing_output_matches() -> Result<(), String> {
+        let path =
+            std::env::temp_dir().join(format!("wdf-reference-source-{}-exact", std::process::id()));
+        let _ = fs::remove_file(&path);
+        fs::write(&path, b"same").map_err(|error| format!("write fixture: {error}"))?;
+
+        let matches = super::existing_output_matches(&path, b"same")?;
+
+        let _ = fs::remove_file(&path);
+        assert!(matches);
+        Ok(())
+    }
+
+    #[test]
+    fn incompatible_declared_output_length_is_rejected_before_reading() -> Result<(), String> {
+        let path = std::env::temp_dir().join(format!(
+            "wdf-reference-source-{}-wrong-length",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&path);
+        fs::write(&path, b"longer").map_err(|error| format!("write fixture: {error}"))?;
+
+        let matches = super::existing_output_matches(&path, b"same")?;
+
+        let _ = fs::remove_file(&path);
+        assert!(!matches);
+        Ok(())
     }
 }

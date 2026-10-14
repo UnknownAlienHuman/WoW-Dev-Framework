@@ -8,8 +8,14 @@ use std::process::ExitCode;
 use serde::Serialize;
 use serde_json::json;
 use wow_reference::generated_api::{
-    GeneratedApiFactKind, GeneratedApiIndex, GeneratedApiLookup, import_generated_api_draft,
+    GeneratedApiFactKind, GeneratedApiImportErrorCode, GeneratedApiIndex, GeneratedApiLookup,
+    import_generated_api_draft,
 };
+
+#[path = "../generated_api_limits.rs"]
+mod generated_api_limits;
+#[path = "wow-reference/host_input.rs"]
+mod host_input;
 
 fn main() -> ExitCode {
     match run(env::args_os().skip(1).collect()) {
@@ -64,8 +70,17 @@ fn usage() -> String {
 }
 
 fn load_index(path: &Path) -> Result<GeneratedApiIndex, String> {
-    let bytes =
-        fs::read(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let bytes = host_input::read_bounded_artifact(
+        path,
+        generated_api_limits::MAX_GENERATED_API_DRAFT_BYTES,
+    )
+    .map_err(|error| match error {
+        host_input::ReadError::TooLarge => format!(
+            "generated API import failed ({:?}): generated API draft exceeds the import limit",
+            GeneratedApiImportErrorCode::InputTooLarge
+        ),
+        error => format!("cannot read {}: {error}", path.display()),
+    })?;
     import_generated_api_draft(&bytes).map_err(|error| {
         format!(
             "generated API import failed ({:?}): {}",
@@ -202,4 +217,70 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String>
         let _ = fs::remove_file(&temporary);
     }
     result
+}
+
+#[cfg(test)]
+mod host_input_tests {
+    use super::host_input::{ReadError, read_bounded};
+    use std::io::{self, Read};
+
+    const TINY_LIMIT: usize = 6;
+
+    struct CountingReader {
+        remaining: usize,
+        bytes_read: usize,
+    }
+
+    impl Read for CountingReader {
+        fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+            let count = output.len().min(self.remaining);
+            output[..count].fill(b'x');
+            self.remaining -= count;
+            self.bytes_read += count;
+            Ok(count)
+        }
+    }
+
+    #[test]
+    fn accepts_the_declared_exact_limit() -> Result<(), String> {
+        let mut reader = CountingReader {
+            remaining: TINY_LIMIT,
+            bytes_read: 0,
+        };
+
+        let bytes = read_bounded(&mut reader, TINY_LIMIT as u64, TINY_LIMIT)
+            .map_err(|error| format!("exact-limit reader was rejected: {error}"))?;
+
+        assert_eq!(bytes, vec![b'x'; TINY_LIMIT]);
+        assert_eq!(reader.bytes_read, TINY_LIMIT);
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_an_over_limit_declared_length_before_reading() {
+        let mut reader = CountingReader {
+            remaining: TINY_LIMIT + 1,
+            bytes_read: 0,
+        };
+
+        assert!(matches!(
+            read_bounded(&mut reader, (TINY_LIMIT + 1) as u64, TINY_LIMIT),
+            Err(ReadError::TooLarge)
+        ));
+        assert_eq!(reader.bytes_read, 0);
+    }
+
+    #[test]
+    fn rejects_growth_after_an_admitted_declared_length_at_limit_plus_one() {
+        let mut reader = CountingReader {
+            remaining: TINY_LIMIT + 5,
+            bytes_read: 0,
+        };
+
+        assert!(matches!(
+            read_bounded(&mut reader, TINY_LIMIT as u64, TINY_LIMIT),
+            Err(ReadError::TooLarge)
+        ));
+        assert_eq!(reader.bytes_read, TINY_LIMIT + 1);
+    }
 }

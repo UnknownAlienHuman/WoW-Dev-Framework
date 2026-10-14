@@ -7,6 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use crate::ui_topology_limits::MAX_UI_TOPOLOGY_DRAFT_BYTES;
 use crate::wire_json::canonical_json_bytes;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -16,7 +17,6 @@ const SCHEMA: &str = "wow-dev-framework/blizzard-ui-topology-draft";
 const SCHEMA_VERSION: u64 = 1;
 const PRODUCER_ID: &str = "blizzard-ui-topology";
 const INTERFACE_ROOT: &str = "Interface/";
-const MAX_DRAFT_BYTES: usize = 1024 * 1024 * 1024;
 const REFERENCE_ISSUES: [&str; 4] = [
     "invalid_reference",
     "missing_target",
@@ -604,7 +604,7 @@ impl UiTopologyIndex {
 
 /// Imports one topology draft after independently validating it.
 pub fn import_ui_topology_draft(bytes: &[u8]) -> UiTopologyImportResult<UiTopologyIndex> {
-    if bytes.len() > MAX_DRAFT_BYTES {
+    if bytes.len() > MAX_UI_TOPOLOGY_DRAFT_BYTES {
         return Err(failure(
             UiTopologyImportErrorCode::InputTooLarge,
             "topology draft exceeds the import limit",

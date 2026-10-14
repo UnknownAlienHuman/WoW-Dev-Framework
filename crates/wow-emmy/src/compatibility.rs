@@ -6,9 +6,11 @@ use wow_core::canonical_json_bytes;
 
 use crate::workspace::{EmmyBackendIdentity, EmmyWorkspaceError};
 
+mod limits;
+use limits::MAX_REPORT_BYTES;
+
 const REPORT_SCHEMA: &str = "wow-dev-framework/emmylua-compatibility-report";
 const REPORT_SCHEMA_VERSION: u64 = 1;
-const MAX_REPORT_BYTES: usize = 64 * 1024 * 1024;
 
 pub mod compiled_probe;
 
