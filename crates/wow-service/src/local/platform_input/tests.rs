@@ -1,4 +1,5 @@
 use super::*;
+mod builder_attempts;
 mod empty_packages;
 mod function_fingerprints;
 mod native_type_resolution;

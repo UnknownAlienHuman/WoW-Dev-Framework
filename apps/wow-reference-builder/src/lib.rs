@@ -630,9 +630,9 @@ fn materialize_and_finalize(
     let parent = output
         .parent()
         .ok_or_else(|| CliError::security("invalid_output_parent", "output has no parent"))?;
-    let paths = materialization_paths(output, plan.plan_id())?;
+    let paths = materialization_paths(output, request.request_id())?;
     // Validate an existing private state file and permit its absence. Creation
-    // and ownership are the store's atomic create_new, not a builder pre-create.
+    // and ready publication belong to Store, not a builder pre-create.
     ensure_private_state_file(&paths.state_file)?;
     let configuration = ReferencePackMaterializationConfiguration::new(
         "wow-reference-builder-materialization:1",
@@ -952,14 +952,29 @@ struct MaterializationPaths {
     quarantine: PathBuf,
 }
 
-fn materialization_paths(output: &Path, plan_id: &str) -> Result<MaterializationPaths, CliError> {
+fn materialization_paths(
+    output: &Path,
+    request_id: &str,
+) -> Result<MaterializationPaths, CliError> {
     let parent = output
         .parent()
         .ok_or_else(|| CliError::security("invalid_output_parent", "output has no parent"))?;
     let output_text = path_text(output)?;
-    let token = hex(&Sha256::digest(
-        format!("{output_text}\n{plan_id}").as_bytes(),
-    ));
+    // An explicit request identifies an installation attempt. Content remains
+    // bound by the journal's stored request, so reusing this ID with another
+    // plan conflicts rather than choosing a fresh operation implicitly.
+    let identity = serde_json::to_vec(&(
+        "wow-reference-builder/materialization-attempt/1",
+        output_text.as_ref(),
+        request_id,
+    ))
+    .map_err(|_| {
+        CliError::security(
+            "materialization_operation_id_invalid",
+            "materialization attempt identity could not be encoded",
+        )
+    })?;
+    let token = hex(&Sha256::digest(identity));
     let state_token = hex(&Sha256::digest(output_text.as_bytes()));
     let operation_id =
         ReferencePackMaterializationOperationId::new(format!("reference-pack-materialize:{token}"))
@@ -1020,8 +1035,8 @@ fn path_text(path: &Path) -> Result<Box<str>, CliError> {
 /// Validates the private materialization state path and permits its absence.
 ///
 /// An existing path must be a safe regular file; a missing path is permitted so the
-/// store can own its atomic create_new. This helper never creates or pre-opens the
-/// file: store creation and ownership are the store's own create_new, so there is no
+/// store can publish its ready database. This helper never creates or pre-opens the
+/// file: creation and ready publication belong to Store, so there is no
 /// caller-asserted ownership and no empty-file heuristic.
 fn ensure_private_state_file(path: &Path) -> Result<(), CliError> {
     match fs::symlink_metadata(path) {

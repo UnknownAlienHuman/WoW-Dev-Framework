@@ -75,7 +75,14 @@ Build writes only into a deterministic private staging directory beside the requ
 
 Before any staging or rename effect, the app opens a private sibling SQLite journal and registers an exact materialization operation through `wow_service::reference_pack_materialization`. The request binds the output, deterministic staging/backup/quarantine paths, pack/plan/validation identities, and the original destination pack. Durable checkpoints are written before and after backup, install, final read-back, cleanup, and rollback. Re-running the same command observes the exact filesystem state and either resumes a proven-safe step, returns the completed receipt without repeating effects, restores the prior destination, or stops with `OutcomeUnknown`; blind retry is prohibited for ambiguous observations.
 
-The Store owns atomic creation of a missing journal. The builder validates an
+The explicit build `request_id` and exact output path identify an installation
+attempt. Retry the same request to reconcile that operation; select a new request
+ID for another installation, including A after B. Reusing an attempt ID with a
+different plan fails with a conflict. Pack and plan identities remain content
+identities. Historical content-keyed operation records are retained; new requests
+do not rebind their IDs or reset the journal.
+
+The Store owns ready publication of a missing journal from private staging. The builder validates an
 existing regular path without precreating an empty file; existing empty or
 foreign databases are refused before any initialization or schema mutation.
 

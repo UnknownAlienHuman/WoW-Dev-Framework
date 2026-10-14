@@ -227,7 +227,6 @@ impl ReferencePackBuildRequest {
         if !valid_identity(&self.request_id)
             || !valid_identity(&self.expected_profile_id)
             || !valid_identity(&self.expected_reference_generation_id)
-            || !valid_identity(&self.execution_profile_id)
         {
             return Err(error(
                 ReferencePackErrorCode::InvalidRequest,
@@ -245,6 +244,8 @@ impl ReferencePackBuildRequest {
             self.budgets.max_member_bytes,
             self.budgets.max_total_bytes,
         )?;
+        // This is a closed profile selector, not an opaque identity. Its two
+        // exact supported constants include '/', which opaque identities forbid.
         execution_input_order(&self.execution_profile_id)?;
         if let Some(report) = &self.deterministic_rebuild_report {
             report.validate()?;

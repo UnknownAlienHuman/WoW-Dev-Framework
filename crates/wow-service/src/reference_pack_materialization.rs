@@ -1496,6 +1496,7 @@ fn materialization_receipt_id(
         plan_id: &'a str,
         final_validation_report_id: &'a str,
         destination_state: ReferencePackMaterializationDestinationState,
+        #[serde(skip_serializing_if = "Option::is_none")]
         prior_destination_pack_id: Option<&'a str>,
         member_count: u32,
         total_bytes: u64,
