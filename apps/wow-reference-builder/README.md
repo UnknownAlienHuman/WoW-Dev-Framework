@@ -75,6 +75,10 @@ Build writes only into a deterministic private staging directory beside the requ
 
 Before any staging or rename effect, the app opens a private sibling SQLite journal and registers an exact materialization operation through `wow_service::reference_pack_materialization`. The request binds the output, deterministic staging/backup/quarantine paths, pack/plan/validation identities, and the original destination pack. Durable checkpoints are written before and after backup, install, final read-back, cleanup, and rollback. Re-running the same command observes the exact filesystem state and either resumes a proven-safe step, returns the completed receipt without repeating effects, restores the prior destination, or stops with `OutcomeUnknown`; blind retry is prohibited for ambiguous observations.
 
+The Store owns atomic creation of a missing journal. The builder validates an
+existing regular path without precreating an empty file; existing empty or
+foreign databases are refused before any initialization or schema mutation.
+
 Pack validation rejects traversal, non-UTF-8 member paths, case-insensitive collisions, symlinks/reparse points, special files, member-count overflow, and byte-budget overflow. Rebuild comparison writes its canonical report to an isolated scratch session, reopens it, and removes the session.
 
 Current limitation: the durable state machine is implemented but process-kill/response-loss fault injection and Windows-specific sharing/reparse/rename evidence have not yet been executed.

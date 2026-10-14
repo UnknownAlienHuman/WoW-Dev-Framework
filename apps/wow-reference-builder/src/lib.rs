@@ -631,9 +631,11 @@ fn materialize_and_finalize(
         .parent()
         .ok_or_else(|| CliError::security("invalid_output_parent", "output has no parent"))?;
     let paths = materialization_paths(output, plan.plan_id())?;
+    // Validate an existing private state file and permit its absence. Creation
+    // and ownership are the store's atomic create_new, not a builder pre-create.
     ensure_private_state_file(&paths.state_file)?;
     let configuration = ReferencePackMaterializationConfiguration::new(
-        "wow-reference-builder-materialization/1",
+        "wow-reference-builder-materialization:1",
         ReferencePackMaterializationStoreLimits::default(),
     )?;
     let mut journal = ReferencePackMaterializationService::open(&paths.state_file, configuration)?;
@@ -1015,6 +1017,12 @@ fn path_text(path: &Path) -> Result<Box<str>, CliError> {
         })
 }
 
+/// Validates the private materialization state path and permits its absence.
+///
+/// An existing path must be a safe regular file; a missing path is permitted so the
+/// store can own its atomic create_new. This helper never creates or pre-opens the
+/// file: store creation and ownership are the store's own create_new, so there is no
+/// caller-asserted ownership and no empty-file heuristic.
 fn ensure_private_state_file(path: &Path) -> Result<(), CliError> {
     match fs::symlink_metadata(path) {
         Ok(metadata) => {
@@ -1026,24 +1034,7 @@ fn ensure_private_state_file(path: &Path) -> Result<(), CliError> {
             }
             Ok(())
         }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            let mut options = OpenOptions::new();
-            options.create_new(true).read(true).write(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                options.mode(0o600);
-            }
-            options
-                .open(path)
-                .and_then(|file| file.sync_all())
-                .map_err(|_| {
-                    CliError::security(
-                        "materialization_state_create_failed",
-                        "materialization state file could not be created safely",
-                    )
-                })
-        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(_) => Err(CliError::security(
             "materialization_state_metadata_failed",
             "materialization state metadata is unavailable",
@@ -1920,5 +1911,44 @@ fn write_output(writer: &mut dyn Write, bytes: &[u8]) -> Result<(), CliError> {
             "output_write_failed",
             "output write failed",
         )),
+    }
+}
+
+#[cfg(test)]
+mod journal_admission_tests {
+    use super::*;
+
+    #[test]
+    fn builder_journal_has_one_real_creator_and_reopens_owned_state()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let root = std::env::temp_dir().join(format!(
+            "wow-builder-journal-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        fs::create_dir(&root)?;
+        let path = root.join("journal.sqlite");
+        ensure_private_state_file(&path).map_err(|error| format!("{error:?}"))?;
+        assert!(!path.exists(), "builder precreated an ownership assertion");
+        let configuration = ReferencePackMaterializationConfiguration::new(
+            "wow-reference-builder-materialization:1",
+            ReferencePackMaterializationStoreLimits::default(),
+        )?;
+        let journal = ReferencePackMaterializationService::open(&path, configuration.clone())?;
+        assert!(fs::metadata(&path)?.len() > 0);
+        drop(journal);
+        ensure_private_state_file(&path).map_err(|error| format!("{error:?}"))?;
+        drop(ReferencePackMaterializationService::open(
+            &path,
+            configuration.clone(),
+        )?);
+        fs::write(&path, [])?;
+        ensure_private_state_file(&path).map_err(|error| format!("{error:?}"))?;
+        assert!(ReferencePackMaterializationService::open(&path, configuration).is_err());
+        assert_eq!(fs::metadata(&path)?.len(), 0);
+        fs::remove_dir_all(root)?;
+        Ok(())
     }
 }

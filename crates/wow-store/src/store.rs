@@ -1,6 +1,16 @@
-use std::{io::Cursor, path::Path, time::Duration};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+use std::{
+    fs::{self, OpenOptions},
+    io::Cursor,
+    path::Path,
+    time::Duration,
+};
 
-use rusqlite::{Connection, MAIN_DB, OptionalExtension, Transaction, TransactionBehavior, params};
+use rusqlite::{
+    Connection, MAIN_DB, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
+    types::ValueRef,
+};
 
 use crate::{
     CatalogChange, CatalogEntry, CatalogExpectation, CatalogMutation, CatalogName, CatalogPath,
@@ -13,6 +23,207 @@ use crate::{
 const APPLICATION_ID: i64 = 0x5744_4631;
 const USER_VERSION: i64 = 1;
 
+/// Busy window for the read-only admission probe of a candidate file.
+const ADMISSION_TIMEOUT_MS: u64 = 500;
+
+/// Maximum accepted physical schema object count, bounding the comparison.
+const MAX_SCHEMA_OBJECTS: usize = 32;
+
+/// Maximum length of an owned schema object name, bounded before any query.
+const MAX_SCHEMA_NAME_BYTES: usize = 256;
+
+/// Maximum length of an owned schema object definition, bounded before any query.
+const MAX_SCHEMA_SQL_BYTES: usize = 8192;
+
+/// Exact SQLite internal object names this compiled schema may contain.
+const INTERNAL_SCHEMA_NAMES: &[&str] = &[
+    "sqlite_autoindex_store_meta_1",
+    "sqlite_autoindex_store_objects_1",
+    "sqlite_autoindex_store_catalog_1",
+    "sqlite_autoindex_store_operations_1",
+    "sqlite_autoindex_store_leases_1",
+];
+
+/// Bounded physical-schema inspection. It describes objects, never runs them.
+const SCHEMA_INSPECTION_SQL: &str = "SELECT type, name, tbl_name, sql FROM sqlite_schema LIMIT 33";
+
+/// One owned description of this compiled store's physical schema.
+///
+/// The expected shape is derived from the crate's own DDL in a private in-memory
+/// database, never from the file under admission. The comparison covers the exact
+/// object kind, name and definition text, so altered columns, constraints, indexes,
+/// or substituted views are a refusal rather than an adoption.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OwnedSchemaShape {
+    objects: Vec<OwnedSchemaObject>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct OwnedSchemaObject {
+    kind: String,
+    name: String,
+    table_name: String,
+    sql: String,
+}
+
+impl OwnedSchemaShape {
+    /// Builds the expected shape from the crate's own compiled DDL.
+    fn compiled() -> StoreResult<Self> {
+        let connection = Connection::open_in_memory().map_err(StoreError::database)?;
+        initialize_schema(&connection)?;
+        Self::observed(&connection)
+    }
+
+    /// Reads the exact physical shape from one already-configured connection.
+    ///
+    /// Every mandatory field is bound and length-checked as a borrowed `ValueRef`
+    /// before any owned copy, and the row count is bounded, so a foreign schema
+    /// cannot force an allocation or a silently skipped row.
+    fn observed(connection: &Connection) -> StoreResult<Self> {
+        let mut statement = connection
+            .prepare(SCHEMA_INSPECTION_SQL)
+            .map_err(StoreError::database)?;
+        let mut rows = statement.query([]).map_err(StoreError::database)?;
+        let mut objects = Vec::new();
+        while let Some(row) = rows.next().map_err(StoreError::database)? {
+            if objects.len() >= MAX_SCHEMA_OBJECTS {
+                return Err(StoreError::new(
+                    StoreErrorCode::IntegrityViolation,
+                    "physical schema exceeds the reviewed object budget",
+                ));
+            }
+            objects.push(Self::bounded_row(row)?);
+        }
+        objects.sort();
+        Ok(Self { objects })
+    }
+
+    fn bounded_row(row: &rusqlite::Row<'_>) -> StoreResult<OwnedSchemaObject> {
+        let kind = Self::bounded_owned_text(row.get_ref(0), 16, "schema object kind")?;
+        let name =
+            Self::bounded_owned_text(row.get_ref(1), MAX_SCHEMA_NAME_BYTES, "schema object name")?;
+        let table_name =
+            Self::bounded_owned_text(row.get_ref(2), MAX_SCHEMA_NAME_BYTES, "schema table name")?;
+        let sql = match row.get_ref(3).map_err(StoreError::database)? {
+            ValueRef::Null if kind == "index" && INTERNAL_SCHEMA_NAMES.contains(&name.as_str()) => {
+                String::new()
+            }
+            _ => {
+                Self::bounded_owned_text(row.get_ref(3), MAX_SCHEMA_SQL_BYTES, "schema definition")?
+            }
+        };
+        Ok(OwnedSchemaObject {
+            kind,
+            name,
+            table_name,
+            sql,
+        })
+    }
+
+    /// Binds one mandatory schema field, refusing a NULL and bounding its length before
+    /// any owned allocation.
+    fn bounded_owned_text(
+        value: rusqlite::Result<ValueRef<'_>>,
+        max_bytes: usize,
+        label: &'static str,
+    ) -> StoreResult<String> {
+        match value {
+            Ok(ValueRef::Text(bytes)) if bytes.len() > max_bytes => Err(StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                format!("{label} exceeds the reviewed budget"),
+            )),
+            Ok(ValueRef::Text(bytes)) => std::str::from_utf8(bytes)
+                .map(|text| text.to_owned())
+                .map_err(|_| {
+                    StoreError::new(
+                        StoreErrorCode::IntegrityViolation,
+                        format!("{label} is not valid UTF-8"),
+                    )
+                }),
+            _ => Err(StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                format!("{label} is missing or is not text"),
+            )),
+        }
+    }
+    fn matches_compiled(&self, compiled: &Self) -> bool {
+        self.objects == compiled.objects
+    }
+}
+
+/// Admission decision for one candidate database.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum AdmissionOutcome {
+    /// The database carries no object owned by this compiled store.
+    Fresh,
+    /// The exact compiled schema, headers and configuration identity all match.
+    Owned,
+    /// The compiled schema and headers match but the configuration identity does
+    /// not. This is a typed configuration refusal, distinct from a foreign file.
+    ConfigMismatch,
+    /// The database is foreign, incompatible, or holds a mismatched identity.
+    Foreign,
+}
+
+/// Compares one candidate against the compiled schema before any named query.
+///
+/// Only an exact schema match proceeds to the configuration identity query, so a
+/// substituted view is refused before it can run in place of an owned object. The
+/// inspection enumerates every schema row, so an unregistered object is refused
+/// rather than hidden by a name filter.
+fn inspect_candidate(
+    connection: &Connection,
+    configuration: &StoreConfiguration,
+    compiled: &OwnedSchemaShape,
+    allow_initialize: bool,
+) -> StoreResult<AdmissionOutcome> {
+    let observed = OwnedSchemaShape::observed(connection)?;
+    if !observed.matches_compiled(compiled) {
+        // An empty database carries no object that could execute during a query.
+        return Ok(if allow_initialize && observed.objects.is_empty() {
+            AdmissionOutcome::Fresh
+        } else {
+            AdmissionOutcome::Foreign
+        });
+    }
+    let application_id: i64 = connection
+        .query_row("PRAGMA application_id", [], |row| row.get(0))
+        .map_err(StoreError::database)?;
+    let user_version: i64 = connection
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .map_err(StoreError::database)?;
+    if application_id != APPLICATION_ID || user_version != USER_VERSION {
+        return Ok(AdmissionOutcome::Foreign);
+    }
+    let observed_configuration: Option<Option<String>> = connection
+        .query_row(
+            "SELECT CASE WHEN length(value)<=256 THEN value END FROM store_meta WHERE key='configuration_id'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(StoreError::database)?;
+    Ok(match observed_configuration.flatten() {
+        Some(value) if value == configuration.configuration_id() => AdmissionOutcome::Owned,
+        Some(_) => AdmissionOutcome::ConfigMismatch,
+        None => AdmissionOutcome::Foreign,
+    })
+}
+
+fn require_owned(outcome: AdmissionOutcome) -> StoreResult<()> {
+    match outcome {
+        AdmissionOutcome::Owned => Ok(()),
+        AdmissionOutcome::ConfigMismatch => Err(StoreError::new(
+            StoreErrorCode::ConfigurationInvalid,
+            "store configuration does not match the durable database",
+        )),
+        AdmissionOutcome::Fresh | AdmissionOutcome::Foreign => Err(StoreError::new(
+            StoreErrorCode::IntegrityViolation,
+            "store file does not match the compiled store layout and identity",
+        )),
+    }
+}
+
 /// One synchronous durable store. SQLite handles and physical schema stay private.
 pub struct Store {
     connection: Connection,
@@ -20,22 +231,103 @@ pub struct Store {
 }
 
 impl Store {
+    /// Opens one owned store file, creating it atomically when it does not exist.
+    ///
+    /// Creation is a single atomic `create_new` (`O_CREAT | O_EXCL`) so this is the
+    /// sole creator: no check-then-open race can adopt a file created in the window.
+    /// On unix the new file is created with mode 0600. If the path already exists it
+    /// is admitted read-only first: its physical schema, header identity and
+    /// configuration identity must match this compiled store exactly before a
+    /// writable handle opens or any DDL runs. A foreign, incompatible, or pre-existing
+    /// empty file is refused with its bytes untouched. No caller-asserted ownership
+    /// flag exists; ownership of a new store is this create_new alone.
     pub fn open(path: impl AsRef<Path>, configuration: StoreConfiguration) -> StoreResult<Self> {
-        let connection = Connection::open(path).map_err(StoreError::database)?;
-        Self::from_connection(connection, configuration)
+        configuration.limits().validate()?;
+        let path = path.as_ref();
+        let mut options = OpenOptions::new();
+        options.read(true).write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            options.mode(0o600);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            // Keep the creator handle open without delete sharing until SQLite
+            // has initialized this same newly created path.
+            options.share_mode(3);
+        }
+        match options.open(path) {
+            Ok(file) => {
+                file.sync_all().map_err(|_| {
+                    StoreError::new(
+                        StoreErrorCode::IntegrityViolation,
+                        "new store file could not be persisted",
+                    )
+                })?;
+                let connection =
+                    Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)
+                        .map_err(StoreError::database)?;
+                let result = Self::initialize_connection(connection, configuration);
+                drop(file);
+                result
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                let existing = fs::symlink_metadata(path).map_err(|_| {
+                    StoreError::new(
+                        StoreErrorCode::IntegrityViolation,
+                        "store path could not be inspected",
+                    )
+                })?;
+                #[cfg(windows)]
+                let reparse = {
+                    use std::os::windows::fs::MetadataExt;
+                    existing.file_attributes() & 0x400 != 0
+                };
+                #[cfg(not(windows))]
+                let reparse = false;
+                if !existing.file_type().is_file() || existing.file_type().is_symlink() || reparse {
+                    return Err(StoreError::new(
+                        StoreErrorCode::IntegrityViolation,
+                        "store path is not a regular file",
+                    ));
+                }
+                admit_file(path, configuration)
+            }
+            Err(_) => Err(StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                "store path could not be created",
+            )),
+        }
     }
 
     pub fn open_in_memory(configuration: StoreConfiguration) -> StoreResult<Self> {
         let connection = Connection::open_in_memory().map_err(StoreError::database)?;
-        Self::from_connection(connection, configuration)
+        Self::initialize_connection(connection, configuration)
     }
 
-    fn from_connection(
+    /// Initializes a brand-new, store-created database.
+    ///
+    /// Only reached from the atomic create_new and in-memory creator routes, which
+    /// own the database by construction. A fresh empty database is initialized here.
+    fn initialize_connection(
         connection: Connection,
         configuration: StoreConfiguration,
     ) -> StoreResult<Self> {
         configuration.limits().validate()?;
         configure_connection(&connection, false)?;
+        let compiled = OwnedSchemaShape::compiled()?;
+        // Fresh authorization is not public: only a database this call created empty
+        // may proceed to initialization.
+        if !matches!(
+            inspect_candidate(&connection, &configuration, &compiled, true)?,
+            AdmissionOutcome::Fresh
+        ) {
+            return Err(StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                "store database is not a fresh owned database",
+            ));
+        }
         initialize_schema(&connection)?;
         validate_connection_identity(&connection, &configuration, true)?;
         Ok(Self {
@@ -44,6 +336,31 @@ impl Store {
         })
     }
 
+    /// Re-admits an already read-only-admitted existing file as writable.
+    ///
+    /// The physical schema, headers and configuration identity are re-checked on
+    /// this writable handle with initialization forbidden, so a path swapped or
+    /// removed between the read-only proof and this open can only ever be refused,
+    /// never adopted or initialized. The RW handle is opened without CREATE.
+    fn adopt_connection(
+        connection: Connection,
+        configuration: StoreConfiguration,
+    ) -> StoreResult<Self> {
+        configuration.limits().validate()?;
+        configure_connection(&connection, false)?;
+        let compiled = OwnedSchemaShape::compiled()?;
+        require_owned(inspect_candidate(
+            &connection,
+            &configuration,
+            &compiled,
+            false,
+        )?)?;
+        validate_connection_identity(&connection, &configuration, false)?;
+        Ok(Self {
+            connection,
+            configuration,
+        })
+    }
     /// Serializes one complete, integrity-checked SQLite database image.
     ///
     /// The returned bytes are detached from this mutable handle. Callers must drop
@@ -78,7 +395,11 @@ impl Store {
     }
 
     pub fn object(&self, object_id: &ObjectId) -> StoreResult<Option<ObjectRecord>> {
-        read_object(&self.connection, object_id)
+        read_object(
+            &self.connection,
+            object_id,
+            self.configuration.limits().max_object_bytes,
+        )
     }
 
     pub fn catalog_entry(
@@ -129,12 +450,14 @@ impl Store {
             if changed == 1 {
                 inserted.push(object.object_id().clone());
             } else {
-                let existing = read_object(&transaction, object.object_id())?.ok_or_else(|| {
-                    StoreError::new(
-                        StoreErrorCode::IntegrityViolation,
-                        "deduplicated object disappeared inside transaction",
-                    )
-                })?;
+                let existing =
+                    read_object(&transaction, object.object_id(), limits.max_object_bytes)?
+                        .ok_or_else(|| {
+                            StoreError::new(
+                                StoreErrorCode::IntegrityViolation,
+                                "deduplicated object disappeared inside transaction",
+                            )
+                        })?;
                 if existing.kind() != object.kind()
                     || existing.schema_version() != object.schema_version()
                     || existing.content_sha256() != object.content_sha256()
@@ -150,7 +473,11 @@ impl Store {
         }
         let mut changes = Vec::new();
         for mutation in batch.catalog_mutations() {
-            changes.push(apply_catalog_mutation(&transaction, mutation)?);
+            changes.push(apply_catalog_mutation(
+                &transaction,
+                mutation,
+                limits.max_object_bytes,
+            )?);
         }
         transaction.commit().map_err(StoreError::database)?;
         CommitReceipt::build(inserted, deduplicated, changes)
@@ -244,6 +571,7 @@ impl Store {
         state: OperationState,
         result_object_id: Option<&ObjectId>,
     ) -> StoreResult<OperationRecord> {
+        let max_object_bytes = self.configuration.limits().max_object_bytes;
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -273,7 +601,7 @@ impl Store {
             ));
         }
         if let Some(object_id) = result_object_id
-            && read_object(&transaction, object_id)?.is_none()
+            && read_object(&transaction, object_id, max_object_bytes)?.is_none()
         {
             return Err(StoreError::new(
                 StoreErrorCode::ObjectMissing,
@@ -317,11 +645,12 @@ impl Store {
             holder.clone(),
             expires_after,
         )?;
+        let max_object_bytes = self.configuration.limits().max_object_bytes;
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(StoreError::database)?;
-        if read_object(&transaction, &object_id)?.is_none() {
+        if read_object(&transaction, &object_id, max_object_bytes)?.is_none() {
             return Err(StoreError::new(
                 StoreErrorCode::ObjectMissing,
                 "lease object does not exist",
@@ -490,6 +819,29 @@ impl Store {
     }
 }
 
+/// Inspects one existing file read-only and admits it before any write.
+///
+/// The compiled schema is compared first. A foreign, incompatible, or
+/// non-owned file never reaches a writable handle, so its bytes,
+/// schema, and sidecars are preserved exactly. Only an exact owned match
+/// opens a writable connection.
+fn admit_file(path: &Path, configuration: StoreConfiguration) -> StoreResult<Store> {
+    let compiled = OwnedSchemaShape::compiled()?;
+    let inspect = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(StoreError::database)?;
+    configure_connection(&inspect, true)?;
+    inspect
+        .busy_timeout(Duration::from_millis(ADMISSION_TIMEOUT_MS))
+        .map_err(StoreError::database)?;
+    let outcome = inspect_candidate(&inspect, &configuration, &compiled, false)?;
+    drop(inspect);
+    require_owned(outcome)?;
+    // Reopen read-write without CREATE and re-admit as Owned only, on
+    // the exact handle that will run the store.
+    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)
+        .map_err(StoreError::database)?;
+    Store::adopt_connection(connection, configuration)
+}
 /// Read-only handle over a detached serialized store image.
 ///
 /// The SQLite image is deserialized with SQLite's read-only flag and the public
@@ -519,6 +871,16 @@ impl SealedStore {
             .deserialize_read_exact(MAIN_DB, Cursor::new(bytes), bytes.len(), true)
             .map_err(StoreError::database)?;
         configure_connection(&connection, true)?;
+        // Admit the exact compiled physical schema before any named object
+        // query. A substituted view, altered constraint, or extra object is
+        // refused here, before it can execute in place of an owned table.
+        let compiled = OwnedSchemaShape::compiled()?;
+        require_owned(inspect_candidate(
+            &connection,
+            &configuration,
+            &compiled,
+            false,
+        )?)?;
         validate_connection_identity(&connection, &configuration, false)?;
         let sealed = Self {
             connection,
@@ -541,7 +903,11 @@ impl SealedStore {
     }
 
     pub fn object(&self, object_id: &ObjectId) -> StoreResult<Option<ObjectRecord>> {
-        read_object(&self.connection, object_id)
+        read_object(
+            &self.connection,
+            object_id,
+            self.configuration.limits().max_object_bytes,
+        )
     }
 
     pub fn catalog_entry(
@@ -567,6 +933,16 @@ impl SealedStore {
 }
 
 fn configure_connection(connection: &Connection, read_only: bool) -> StoreResult<()> {
+    use rusqlite::config::DbConfig;
+    connection
+        .set_db_config(DbConfig::SQLITE_DBCONFIG_DEFENSIVE, true)
+        .map_err(StoreError::database)?;
+    connection
+        .set_db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER, false)
+        .map_err(StoreError::database)?;
+    connection
+        .set_db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_VIEW, false)
+        .map_err(StoreError::database)?;
     connection
         .busy_timeout(Duration::from_secs(5))
         .map_err(StoreError::database)?;
@@ -749,20 +1125,31 @@ fn validate_connection_integrity(
     }
     let mut statement = connection
         .prepare(
-            "SELECT object_id, kind, schema_version, content_sha256, canonical_json
+            "SELECT object_id, kind, schema_version, content_sha256,
+                    CASE WHEN length(canonical_json) <= ?2 THEN canonical_json END
              FROM store_objects ORDER BY object_id LIMIT ?1",
         )
         .map_err(StoreError::database)?;
+    let max_object_bytes =
+        i64::try_from(configuration.limits().max_object_bytes).map_err(|_| {
+            StoreError::new(
+                StoreErrorCode::ConfigurationInvalid,
+                "object byte limit is outside the reviewed profile",
+            )
+        })?;
     let rows = statement
-        .query_map([i64::from(max_objects) + 1], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, i64>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, Vec<u8>>(4)?,
-            ))
-        })
+        .query_map(
+            params![i64::from(max_objects) + 1, max_object_bytes],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<Vec<u8>>>(4)?,
+                ))
+            },
+        )
         .map_err(StoreError::database)?;
     let mut checked_objects = 0_u64;
     let mut complete = true;
@@ -773,6 +1160,14 @@ fn validate_connection_integrity(
         }
         let (object_id, kind, schema_version, content_sha256, canonical_json) =
             row.map_err(StoreError::database)?;
+        // A persisted row larger than the selected ceiling is refused here,
+        // before any complete report can be produced from it.
+        let Some(canonical_json) = canonical_json else {
+            return Err(StoreError::new(
+                StoreErrorCode::ObjectTooLarge,
+                "stored object exceeds the configured byte budget",
+            ));
+        };
         ObjectRecord::from_parts(
             ObjectId::new(object_id)?,
             kind.into(),
@@ -847,6 +1242,7 @@ fn validate_batch(batch: &WriteBatch, max_object_bytes: u64) -> StoreResult<()> 
 fn apply_catalog_mutation(
     transaction: &Transaction<'_>,
     mutation: &CatalogMutation,
+    max_object_bytes: u64,
 ) -> StoreResult<CatalogChange> {
     let current: Option<String> = transaction
         .query_row(
@@ -868,7 +1264,7 @@ fn apply_catalog_mutation(
         ));
     }
     if let Some(target) = mutation.target() {
-        if read_object(transaction, target)?.is_none() {
+        if read_object(transaction, target, max_object_bytes)?.is_none() {
             return Err(StoreError::new(
                 StoreErrorCode::ObjectMissing,
                 "catalog target object does not exist",
@@ -902,24 +1298,44 @@ fn apply_catalog_mutation(
     ))
 }
 
-fn read_object(connection: &Connection, object_id: &ObjectId) -> StoreResult<Option<ObjectRecord>> {
+fn read_object(
+    connection: &Connection,
+    object_id: &ObjectId,
+    max_object_bytes: u64,
+) -> StoreResult<Option<ObjectRecord>> {
+    // Admit the borrowed row length before any owned payload materialization,
+    // on the same held statement and snapshot as the read itself. An oversized
+    // row yields a NULL payload here and is refused before allocation.
+    let limit = i64::try_from(max_object_bytes).map_err(|_| {
+        StoreError::new(
+            StoreErrorCode::ConfigurationInvalid,
+            "object byte limit is outside the reviewed profile",
+        )
+    })?;
     let row = connection
         .query_row(
-            "SELECT kind, schema_version, content_sha256, canonical_json
+            "SELECT kind, schema_version, content_sha256,
+                    CASE WHEN length(canonical_json) <= ?2 THEN canonical_json END
              FROM store_objects WHERE object_id = ?1",
-            [object_id.as_str()],
+            params![object_id.as_str(), limit],
             |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, i64>(1)?,
                     row.get::<_, String>(2)?,
-                    row.get::<_, Vec<u8>>(3)?,
+                    row.get::<_, Option<Vec<u8>>>(3)?,
                 ))
             },
         )
         .optional()
         .map_err(StoreError::database)?;
     row.map(|(kind, schema_version, content_sha256, canonical_json)| {
+        let Some(canonical_json) = canonical_json else {
+            return Err(StoreError::new(
+                StoreErrorCode::ObjectTooLarge,
+                "stored object exceeds the configured byte budget",
+            ));
+        };
         ObjectRecord::from_parts(
             object_id.clone(),
             kind.into(),
