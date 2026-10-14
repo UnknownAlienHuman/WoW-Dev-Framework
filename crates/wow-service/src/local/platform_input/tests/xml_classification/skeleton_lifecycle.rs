@@ -1262,8 +1262,46 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
         &original_native["page"],
     )?;
 
-    // Derive NEW-stage ceilings from the actual None Build usage. Prove the
-    // predecessor still succeeds under each ceiling; preserve every old refusal.
+    // Preserve the already-published native owners and positive inputs before
+    // boundary diagnostics; a failure must not discard its repro fixture.
+    if let Some(destination) = &export {
+        for (name, bytes) in [
+            (
+                "budget-host.json",
+                wow_core::canonical_json_bytes(&host_wire)?,
+            ),
+            (
+                "budget-inspect-request.json",
+                wow_core::canonical_json_bytes(&inspect_request)?,
+            ),
+            (
+                "budget-none-request.json",
+                wow_core::canonical_json_bytes(&build_none)?,
+            ),
+            (
+                "budget-both-request.json",
+                wow_core::canonical_json_bytes(&build_request)?,
+            ),
+            (
+                "budget-inspect-envelope.json",
+                inspect_observed.canonical_bytes().to_vec(),
+            ),
+            (
+                "budget-none-envelope.json",
+                none_observed.canonical_bytes().to_vec(),
+            ),
+            (
+                "budget-both-envelope.json",
+                build_observed.canonical_bytes().to_vec(),
+            ),
+        ] {
+            assert!(bytes.len() <= CONTEXT_MAP_RESULT_MAX_BYTES);
+            std::fs::write(destination.join(name), bytes)?;
+        }
+    }
+
+    // Narrow the independent receipt reservation to complete observed receipts
+    // before choosing the cap that distinguishes Inspect from None Build.
     let none_usage = &none_payload["operation_budget_usage"];
     let both_usage = &build_payload["operation_budget_usage"];
     assert_eq!(none_usage["reservation_basis"], "before_service_delivery");
@@ -1288,6 +1326,34 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
             .ok_or("Both Build actual bytes")?
             > none_bytes
     );
+    let receipts = inspect_primary_map["core"]["supports"]
+        .as_array()
+        .ok_or("native Primary receipts")?;
+    let receipt_ceiling = receipts
+        .iter()
+        .map(|receipt| wow_core::canonical_json_bytes(receipt).map(|bytes| bytes.len()))
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .max()
+        .ok_or("native Primary receipt maximum")?;
+    let platform_receipt = &original_platform_map["core"]["native"]["body"]["root_support"];
+    assert!(platform_receipt.is_object());
+    let receipt_ceiling =
+        receipt_ceiling.max(wow_core::canonical_json_bytes(platform_receipt)?.len());
+    // Graph explanation/support and derivation collection reserve 2048 bytes
+    // (wow-graph/src/explain/{collect,records}.rs); evidence resolution reserves
+    // another 1024 (wow-graph/src/evidence/resolve.rs). Include both owner
+    // reservations rather than treating final receipt length as a stage bound.
+    let receipt_ceiling = u32::try_from(receipt_ceiling)?
+        .checked_add(2048 + 1024)
+        .ok_or("receipt resolver reservation overflow")?;
+    let receipt_upper = u64::try_from(receipts.len())?
+        .checked_mul(u64::from(receipt_ceiling))
+        .ok_or("receipt reservation overflow")?;
+    assert!(receipt_upper < none_bytes);
+    eprintln!(
+        "combined-stage budget: none_work={none_work} none_reserved_bytes={none_bytes} receipt_ceiling={receipt_ceiling} receipt_upper={receipt_upper}"
+    );
     for (field, ceiling, predecessor, selected) in [
         ("max_context_work", none_work, &build_none, &build_request),
         (
@@ -1298,23 +1364,45 @@ fn selected_candidate_and_primary_source_absent_reopen_reaches_combined_map() ->
         ),
     ] {
         let mut stage_host = host_wire.clone();
+        let mut predecessor_wire = serde_json::to_value(predecessor)?;
+        let mut selected_wire = serde_json::to_value(selected)?;
         stage_host["primary"]["limits"][field] = json!(ceiling);
         stage_host["platform"]["limits"][field] = json!(ceiling);
+        if field == "max_metadata_bytes" {
+            for owner in ["primary", "platform"] {
+                stage_host[owner]["limits"]["explain"]["max_output_bytes"] = json!(receipt_ceiling);
+            }
+            // Keep the selected native platform query within the same explicit
+            // host ceiling; the original binding/root/candidate stay exact.
+            for request in [&mut predecessor_wire, &mut selected_wire] {
+                request["platform"]["input"]["limits"]["root_explanation"]["max_output_bytes"] =
+                    json!(receipt_ceiling);
+            }
+        }
         let stage_host = ContextCombinedHostInput::from_json_slice(
             &wow_core::canonical_json_bytes(&stage_host)?,
             &stop,
         )?;
-        let before = execute_context_combined(&stage_host, predecessor, &stop)?;
+        let predecessor = ContextCombinedRequest::from_json_slice(
+            &wow_core::canonical_json_bytes(&predecessor_wire)?,
+            &stop,
+        )?;
+        let selected = ContextCombinedRequest::from_json_slice(
+            &wow_core::canonical_json_bytes(&selected_wire)?,
+            &stop,
+        )?;
+        let before = execute_context_combined(&stage_host, &predecessor, &stop)?;
         assert_eq!(
             before.status(),
             ContextMapStatus::Partial,
-            "predecessor must fit {field}"
+            "predecessor must fit {field}; ceiling={ceiling}; failure={:?}",
+            before.failure_code()
         );
         assert_eq!(before.failure_code(), None);
         let before: Value = serde_json::from_slice(before.canonical_bytes())?;
         assert_eq!(before["resource_closure"], "closed");
         assert!(before.get("payload").is_some());
-        let refused = execute_context_combined(&stage_host, selected, &stop)?;
+        let refused = execute_context_combined(&stage_host, &selected, &stop)?;
         assert_eq!(refused.status(), ContextMapStatus::Failed);
         assert_eq!(
             refused.failure_code(),
