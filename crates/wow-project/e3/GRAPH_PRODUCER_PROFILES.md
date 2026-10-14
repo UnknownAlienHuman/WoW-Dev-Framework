@@ -134,3 +134,11 @@ The E3-A graph registry/profile must freeze:
 - compatibility with E2-A base registry.
 
 Unknown or incompatible registry versions block publication.
+
+Recognizer custom-signal relation IDs are admitted only by the explicit
+`custom_signal_relations_v1` capability in the persisted
+`DirectCapabilitiesV1` selection. The capability participates in the existing
+canonical capability-set registry version. Existing `15`, `16`, native-API,
+and capability-set registry definitions keep their admitted bytes; a selected
+custom-signal recipe gets a distinct registry version and Registration-axis
+profile. The capability does not change Project-owned producer partitions.

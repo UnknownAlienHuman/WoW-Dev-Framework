@@ -365,12 +365,17 @@ fn validate_rule(
         &aliases,
         &rule.required_capabilities,
     )?;
+    let visible_aliases = validate_clause_bindings(&rule.clauses, &BTreeSet::new())?;
+    let visible_aliases = visible_aliases
+        .iter()
+        .map(|alias| alias.as_ref())
+        .collect::<BTreeSet<_>>();
 
     let mut captures = BTreeSet::new();
     for capture in &rule.captures {
         validate_component(&capture.name, RecognizerErrorCode::PackInvalid)?;
         validate_component(&capture.value_type, RecognizerErrorCode::PackInvalid)?;
-        validate_field_reference(&capture.source, &aliases)?;
+        validate_field_reference(&capture.source, &visible_aliases)?;
         if !captures.insert(capture.name.as_ref()) {
             return Err(RecognizerError::new(
                 RecognizerErrorCode::PackInvalid,
@@ -403,7 +408,7 @@ fn validate_rule(
                 }
                 for (key, value) in semantic_key {
                     validate_component(key, RecognizerErrorCode::PackOutputInvalid)?;
-                    validate_output_reference(value, &captures, &aliases)?;
+                    validate_output_reference(value, &captures, &visible_aliases)?;
                 }
             }
             RecognizerOutput::RelationAssertion {
@@ -415,8 +420,8 @@ fn validate_rule(
             } => {
                 validate_output_id(output_id, &mut outputs)?;
                 validate_component(relation_kind_id, RecognizerErrorCode::PackOutputInvalid)?;
-                validate_output_reference(source, &captures, &aliases)?;
-                validate_output_reference(target, &captures, &aliases)?;
+                validate_output_reference(source, &captures, &visible_aliases)?;
+                validate_output_reference(target, &captures, &visible_aliases)?;
             }
         }
     }
@@ -545,6 +550,191 @@ fn validate_clauses(
         }
     }
     Ok(())
+}
+
+pub(crate) fn clause_scope_order(clauses: &[RecognizerClause]) -> RecognizerResult<Vec<usize>> {
+    let outputs = clauses
+        .iter()
+        .map(clause_output_aliases)
+        .collect::<Vec<_>>();
+    let mut dependencies = vec![BTreeSet::new(); clauses.len()];
+    for (index, clause) in clauses.iter().enumerate() {
+        for alias in clause_required_aliases(clause)? {
+            if let Some((producer, _)) = outputs
+                .iter()
+                .enumerate()
+                .find(|(candidate, produced)| *candidate != index && produced.contains(&alias))
+            {
+                dependencies[index].insert(producer);
+            }
+        }
+    }
+
+    let mut order = Vec::with_capacity(clauses.len());
+    let mut completed = BTreeSet::new();
+    while order.len() < clauses.len() {
+        let next = (0..clauses.len())
+            .filter(|index| !completed.contains(index))
+            .filter(|index| dependencies[*index].is_subset(&completed))
+            .min_by_key(|index| (clause_cost_rank(&clauses[*index]), *index));
+        let Some(next) = next else {
+            return Err(RecognizerError::new(
+                RecognizerErrorCode::PackClauseInvalid,
+                "recognizer clause binding dependencies contain a scope cycle",
+            ));
+        };
+        completed.insert(next);
+        order.push(next);
+    }
+    Ok(order)
+}
+
+pub(crate) fn clause_required_aliases(
+    clause: &RecognizerClause,
+) -> RecognizerResult<BTreeSet<Box<str>>> {
+    let mut required = BTreeSet::new();
+    collect_clause_reference_aliases(clause, &mut required)?;
+    let mut local = BTreeSet::new();
+    collect_local_aliases(clause, &mut local);
+    required.retain(|alias| !local.contains(alias));
+    Ok(required)
+}
+
+fn validate_clause_bindings(
+    clauses: &[RecognizerClause],
+    inherited: &BTreeSet<Box<str>>,
+) -> RecognizerResult<BTreeSet<Box<str>>> {
+    let mut available = inherited.clone();
+    for index in clause_scope_order(clauses)? {
+        let clause = &clauses[index];
+        if !clause_required_aliases(clause)?.is_subset(&available) {
+            return Err(RecognizerError::new(
+                RecognizerErrorCode::PackClauseInvalid,
+                "recognizer clause binding escapes its original scope or is unavailable",
+            ));
+        }
+        match clause {
+            RecognizerClause::Exists { clauses }
+            | RecognizerClause::NotExists { clauses, .. }
+            | RecognizerClause::AllOf { clauses } => {
+                validate_clause_bindings(clauses, &available)?;
+            }
+            RecognizerClause::AnyOf { clauses } => {
+                for branch in clauses {
+                    validate_clause_bindings(std::slice::from_ref(branch), &available)?;
+                }
+            }
+            _ => {}
+        }
+        available.extend(clause_output_aliases(clause));
+    }
+    Ok(available)
+}
+
+fn clause_output_aliases(clause: &RecognizerClause) -> BTreeSet<Box<str>> {
+    match clause {
+        RecognizerClause::Fact { alias, .. } => BTreeSet::from([alias.clone()]),
+        RecognizerClause::Exists { clauses } | RecognizerClause::AllOf { clauses } => {
+            scope_output_aliases(clauses)
+        }
+        RecognizerClause::AnyOf { clauses } => {
+            let Some((first, rest)) = clauses.split_first() else {
+                return BTreeSet::new();
+            };
+            let mut common = clause_output_aliases(first);
+            for clause in rest {
+                let output = clause_output_aliases(clause);
+                common.retain(|alias| output.contains(alias));
+            }
+            common
+        }
+        RecognizerClause::NotExists { .. }
+        | RecognizerClause::Join { .. }
+        | RecognizerClause::FieldEq { .. }
+        | RecognizerClause::FieldIn { .. }
+        | RecognizerClause::SameScope { .. }
+        | RecognizerClause::OrderedRelation { .. }
+        | RecognizerClause::ControlFlowRelation { .. } => BTreeSet::new(),
+    }
+}
+
+fn scope_output_aliases(clauses: &[RecognizerClause]) -> BTreeSet<Box<str>> {
+    clauses.iter().flat_map(clause_output_aliases).collect()
+}
+
+fn collect_local_aliases(clause: &RecognizerClause, aliases: &mut BTreeSet<Box<str>>) {
+    match clause {
+        RecognizerClause::Fact { alias, .. } => {
+            aliases.insert(alias.clone());
+        }
+        RecognizerClause::Exists { clauses }
+        | RecognizerClause::NotExists { clauses, .. }
+        | RecognizerClause::AllOf { clauses }
+        | RecognizerClause::AnyOf { clauses } => {
+            for clause in clauses {
+                collect_local_aliases(clause, aliases);
+            }
+        }
+        RecognizerClause::Join { .. }
+        | RecognizerClause::FieldEq { .. }
+        | RecognizerClause::FieldIn { .. }
+        | RecognizerClause::SameScope { .. }
+        | RecognizerClause::OrderedRelation { .. }
+        | RecognizerClause::ControlFlowRelation { .. } => {}
+    }
+}
+
+fn collect_clause_reference_aliases(
+    clause: &RecognizerClause,
+    aliases: &mut BTreeSet<Box<str>>,
+) -> RecognizerResult<()> {
+    match clause {
+        RecognizerClause::Fact { .. } => Ok(()),
+        RecognizerClause::Join { left, right }
+        | RecognizerClause::SameScope { left, right, .. }
+        | RecognizerClause::OrderedRelation { left, right, .. }
+        | RecognizerClause::ControlFlowRelation { left, right, .. } => {
+            collect_field_alias(left, aliases)?;
+            collect_field_alias(right, aliases)
+        }
+        RecognizerClause::FieldEq { field, .. } | RecognizerClause::FieldIn { field, .. } => {
+            collect_field_alias(field, aliases)
+        }
+        RecognizerClause::Exists { clauses }
+        | RecognizerClause::NotExists { clauses, .. }
+        | RecognizerClause::AllOf { clauses }
+        | RecognizerClause::AnyOf { clauses } => {
+            for clause in clauses {
+                collect_clause_reference_aliases(clause, aliases)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn collect_field_alias(field: &str, aliases: &mut BTreeSet<Box<str>>) -> RecognizerResult<()> {
+    let Some((alias, _)) = field.split_once('.') else {
+        return Err(RecognizerError::new(
+            RecognizerErrorCode::PackClauseInvalid,
+            "recognizer field reference must be alias.field",
+        ));
+    };
+    aliases.insert(alias.into());
+    Ok(())
+}
+
+fn clause_cost_rank(clause: &RecognizerClause) -> u8 {
+    match clause {
+        RecognizerClause::Fact { .. } => 0,
+        RecognizerClause::FieldEq { .. } | RecognizerClause::FieldIn { .. } => 1,
+        RecognizerClause::SameScope { .. } => 2,
+        RecognizerClause::OrderedRelation { .. } => 3,
+        RecognizerClause::ControlFlowRelation { .. } => 4,
+        RecognizerClause::Exists { .. } => 5,
+        RecognizerClause::NotExists { .. } => 6,
+        RecognizerClause::Join { .. } => 7,
+        RecognizerClause::AllOf { .. } | RecognizerClause::AnyOf { .. } => 8,
+    }
 }
 
 fn validate_literal(value: &RecognizerPackLiteral) -> RecognizerResult<()> {

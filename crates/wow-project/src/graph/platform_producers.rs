@@ -51,6 +51,9 @@ impl DirectRecipe {
                             producer,
                             PlatformGraphProducer::Inventory | PlatformGraphProducer::XmlStructure
                         ),
+                        // This capability changes registry admission only; it does not
+                        // change any Project-owned producer partition.
+                        crate::PlatformGraphCapability::CustomSignalRelationsV1 => false,
                     };
                     if affected {
                         version.push(':');
@@ -72,6 +75,9 @@ impl DirectRecipe {
     }
     pub(super) const fn xml_schema_classification(self) -> bool {
         matches!(self, Self::Capabilities(capabilities) if capabilities.contains(crate::PlatformGraphCapability::XmlSchemaClassificationV1))
+    }
+    pub(super) const fn custom_signal_relations(self) -> bool {
+        matches!(self, Self::Capabilities(capabilities) if capabilities.contains(crate::PlatformGraphCapability::CustomSignalRelationsV1))
     }
 }
 const ORDER: [PlatformGraphProducer; 4] = [

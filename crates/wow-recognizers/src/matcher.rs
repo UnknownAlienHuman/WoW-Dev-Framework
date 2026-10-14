@@ -424,10 +424,34 @@ impl RecognizerOutputPartition {
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 struct Binding(BTreeMap<Box<str>, RecognizerFactId>);
 
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum SemanticOutputIdentity<'a> {
+    Entity {
+        output_id: &'a str,
+        entity_kind_id: &'a str,
+        semantic_key: BTreeMap<Box<str>, RecognizerFactValue>,
+    },
+    Relation {
+        output_id: &'a str,
+        relation_kind_id: &'a str,
+        source: RecognizerFactValue,
+        target: RecognizerFactValue,
+    },
+}
+
 #[derive(Default)]
 struct EvaluationBudget {
     expansions: u64,
     truncated: bool,
+}
+
+struct ClauseExecution<'a> {
+    bundle: &'a RecognizerFactBundle,
+    plan: &'a CompiledRecognizerRulePlan,
+    budget: &'a mut EvaluationBudget,
+    cancelled: &'a AtomicBool,
+    order_by_path: BTreeMap<Vec<u32>, usize>,
 }
 
 #[derive(Debug)]
@@ -528,14 +552,23 @@ fn evaluate_rule(
     }
 
     let mut budget = EvaluationBudget::default();
-    let rows = match evaluate_all(
-        &rule.clauses,
-        vec![Binding::default()],
-        bundle,
-        plan,
-        &mut budget,
-        cancelled,
-    ) {
+    let order_by_path = plan
+        .evaluation_order()
+        .iter()
+        .enumerate()
+        .map(|(order, step)| (step.clause_path().to_vec(), order))
+        .collect::<BTreeMap<_, _>>();
+    let rows = {
+        let mut execution = ClauseExecution {
+            bundle,
+            plan,
+            budget: &mut budget,
+            cancelled,
+            order_by_path,
+        };
+        evaluate_all(&rule.clauses, vec![Binding::default()], &[], &mut execution)
+    };
+    let rows = match rows {
         Ok(rows) => rows,
         Err(EvaluationAbort::NotEvaluated(mut blockers)) => {
             blockers.extend(coverage.blockers);
@@ -562,6 +595,40 @@ fn evaluate_rule(
     let mut rows = rows;
     rows.sort();
     rows.dedup();
+    let mut semantic_keys_by_row = Vec::with_capacity(rows.len());
+    let mut semantic_key_counts = BTreeMap::<Vec<u8>, usize>::new();
+    for binding in &rows {
+        if cancelled.load(Ordering::Relaxed) {
+            return Ok(terminal_outcome(
+                rule,
+                RecognizerRuleOutcomeState::Cancelled,
+                vec!["matcher.cancelled".into()],
+            ));
+        }
+        let Some(keys) = semantic_output_keys(rule, binding, bundle)? else {
+            semantic_keys_by_row.push(None);
+            continue;
+        };
+        for key in &keys {
+            let count = semantic_key_counts.entry(key.clone()).or_default();
+            *count = count.checked_add(1).ok_or_else(|| {
+                matcher_error(
+                    RecognizerErrorCode::MatchBudgetExceeded,
+                    "semantic competition group count overflowed",
+                )
+            })?;
+        }
+        semantic_keys_by_row.push(Some(keys));
+    }
+    let ambiguous_rows = semantic_keys_by_row
+        .iter()
+        .map(|keys| {
+            keys.as_ref().is_none_or(|keys| {
+                keys.iter()
+                    .any(|key| semantic_key_counts.get(key).is_some_and(|count| *count > 1))
+            })
+        })
+        .collect::<Vec<_>>();
     let maximum_matches = usize::try_from(plan.bounds().max_matches).map_err(|_| {
         matcher_error(
             RecognizerErrorCode::MatchBudgetExceeded,
@@ -575,7 +642,6 @@ fn evaluate_rule(
 
     let mut matches = Vec::new();
     let mut proposals = Vec::new();
-    let ambiguous = rows.len() > 1;
     let maximum_proposals = usize::try_from(plan.bounds().max_proposals).map_err(|_| {
         matcher_error(
             RecognizerErrorCode::ProposalBudgetExceeded,
@@ -583,7 +649,7 @@ fn evaluate_rule(
         )
     })?;
     let mut explanation_bytes = 0usize;
-    for binding in rows {
+    for (row_index, binding) in rows.into_iter().enumerate() {
         if cancelled.load(Ordering::Relaxed) {
             return Ok(terminal_outcome(
                 rule,
@@ -598,7 +664,7 @@ fn evaluate_rule(
             binding,
             bundle,
             &coverage.coverage_ids,
-            coverage.partial || ambiguous,
+            coverage.partial || ambiguous_rows[row_index],
         )?;
         explanation_bytes = explanation_bytes
             .checked_add(
@@ -732,16 +798,13 @@ fn rule_coverage(rule: &RecognizerRule, bundle: &RecognizerFactBundle) -> RuleCo
 fn evaluate_all(
     clauses: &[RecognizerClause],
     rows: Vec<Binding>,
-    bundle: &RecognizerFactBundle,
-    plan: &CompiledRecognizerRulePlan,
-    budget: &mut EvaluationBudget,
-    cancelled: &AtomicBool,
+    scope_path: &[u32],
+    execution: &mut ClauseExecution<'_>,
 ) -> Result<Vec<Binding>, EvaluationAbort> {
-    let mut order = (0..clauses.len()).collect::<Vec<_>>();
-    order.sort_by_key(|index| (clause_rank(&clauses[*index]), *index));
     let mut current = rows;
-    for index in order {
-        current = evaluate_clause(&clauses[index], current, bundle, plan, budget, cancelled)?;
+    for index in planned_clause_indices(clauses, scope_path, &execution.order_by_path)? {
+        let clause_path = append_clause_path(scope_path, index)?;
+        current = evaluate_clause(&clauses[index], current, &clause_path, execution)?;
         if current.is_empty() {
             break;
         }
@@ -749,20 +812,45 @@ fn evaluate_all(
     Ok(current)
 }
 
+fn planned_clause_indices(
+    clauses: &[RecognizerClause],
+    scope_path: &[u32],
+    order_by_path: &BTreeMap<Vec<u32>, usize>,
+) -> Result<Vec<usize>, EvaluationAbort> {
+    let mut ordered = Vec::with_capacity(clauses.len());
+    for index in 0..clauses.len() {
+        let path = append_clause_path(scope_path, index)?;
+        let Some(order) = order_by_path.get(&path).copied() else {
+            return Err(EvaluationAbort::NotEvaluated(vec![
+                "matcher.plan.path.missing".into(),
+            ]));
+        };
+        ordered.push((order, index));
+    }
+    ordered.sort_unstable();
+    Ok(ordered.into_iter().map(|(_, index)| index).collect())
+}
+
+fn append_clause_path(scope_path: &[u32], index: usize) -> Result<Vec<u32>, EvaluationAbort> {
+    let index = u32::try_from(index)
+        .map_err(|_| EvaluationAbort::NotEvaluated(vec!["matcher.plan.path.invalid".into()]))?;
+    let mut path = scope_path.to_vec();
+    path.push(index);
+    Ok(path)
+}
+
 fn evaluate_clause(
     clause: &RecognizerClause,
     rows: Vec<Binding>,
-    bundle: &RecognizerFactBundle,
-    plan: &CompiledRecognizerRulePlan,
-    budget: &mut EvaluationBudget,
-    cancelled: &AtomicBool,
+    clause_path: &[u32],
+    execution: &mut ClauseExecution<'_>,
 ) -> Result<Vec<Binding>, EvaluationAbort> {
-    if cancelled.load(Ordering::Relaxed) {
+    if execution.cancelled.load(Ordering::Relaxed) {
         return Err(EvaluationAbort::Cancelled);
     }
     match clause {
         RecognizerClause::Fact { alias, kind } => {
-            let facts = bundle.facts_by_kind(kind).collect::<Vec<_>>();
+            let facts = execution.bundle.facts_by_kind(kind).collect::<Vec<_>>();
             let mut output = Vec::new();
             for row in rows {
                 if let Some(bound) = row.0.get(alias) {
@@ -772,7 +860,7 @@ fn evaluate_clause(
                     continue;
                 }
                 for fact in &facts {
-                    consume_expansion(budget, plan)?;
+                    consume_expansion(execution.budget, execution.plan)?;
                     let mut expanded = row.clone();
                     expanded.0.insert(alias.clone(), fact.fact_id().clone());
                     output.push(expanded);
@@ -781,32 +869,33 @@ fn evaluate_clause(
             canonical_rows(output)
         }
         RecognizerClause::Join { left, right } => Ok(filter_rows(rows, |row| {
-            resolve_field(row, bundle, left) == resolve_field(row, bundle, right)
-                && resolve_field(row, bundle, left).is_some()
+            resolve_field(row, execution.bundle, left)
+                == resolve_field(row, execution.bundle, right)
+                && resolve_field(row, execution.bundle, left).is_some()
         })),
         RecognizerClause::FieldEq { field, value } => {
             let expected = literal(value);
             Ok(filter_rows(rows, |row| {
-                resolve_field(row, bundle, field) == Some(&expected)
+                resolve_field(row, execution.bundle, field) == Some(&expected)
             }))
         }
         RecognizerClause::FieldIn { field, values } => {
             let expected = values.iter().map(literal).collect::<BTreeSet<_>>();
             Ok(filter_rows(rows, |row| {
-                resolve_field(row, bundle, field).is_some_and(|value| expected.contains(value))
+                resolve_field(row, execution.bundle, field)
+                    .is_some_and(|value| expected.contains(value))
             }))
         }
         RecognizerClause::SameScope { left, right, scope } => Ok(filter_rows(rows, |row| {
-            same_scope(row, bundle, left, right, scope)
+            same_scope(row, execution.bundle, left, right, scope)
         })),
-        RecognizerClause::Exists { clauses } => {
-            evaluate_all(clauses, rows, bundle, plan, budget, cancelled)
-        }
+        RecognizerClause::Exists { clauses } => evaluate_all(clauses, rows, clause_path, execution),
         RecognizerClause::NotExists {
             clauses,
             required_complete_capability,
         } => {
-            let records = bundle
+            let records = execution
+                .bundle
                 .coverage()
                 .iter()
                 .filter(|record| record.capability_id() == required_complete_capability.as_ref())
@@ -823,8 +912,7 @@ fn evaluate_clause(
             }
             let mut output = Vec::new();
             for row in rows {
-                let matches =
-                    evaluate_all(clauses, vec![row.clone()], bundle, plan, budget, cancelled)?;
+                let matches = evaluate_all(clauses, vec![row.clone()], clause_path, execution)?;
                 if matches.is_empty() {
                     output.push(row);
                 }
@@ -836,28 +924,25 @@ fn evaluate_clause(
             right,
             relation,
         } => Ok(filter_rows(rows, |row| {
-            ordered_relation(row, bundle, left, right, relation)
+            ordered_relation(row, execution.bundle, left, right, relation)
         })),
         RecognizerClause::ControlFlowRelation {
             left,
             right,
             relation,
         } => Ok(filter_rows(rows, |row| {
-            supplied_relation(row, bundle, left, right, relation)
+            supplied_relation(row, execution.bundle, left, right, relation)
         })),
-        RecognizerClause::AllOf { clauses } => {
-            evaluate_all(clauses, rows, bundle, plan, budget, cancelled)
-        }
+        RecognizerClause::AllOf { clauses } => evaluate_all(clauses, rows, clause_path, execution),
         RecognizerClause::AnyOf { clauses } => {
             let mut output = Vec::new();
-            for clause in clauses {
+            for index in planned_clause_indices(clauses, clause_path, &execution.order_by_path)? {
+                let branch_path = append_clause_path(clause_path, index)?;
                 output.extend(evaluate_clause(
-                    clause,
+                    &clauses[index],
                     rows.clone(),
-                    bundle,
-                    plan,
-                    budget,
-                    cancelled,
+                    &branch_path,
+                    execution,
                 )?);
             }
             canonical_rows(output)
@@ -982,20 +1067,6 @@ fn supplied_relation(
     })
 }
 
-fn clause_rank(clause: &RecognizerClause) -> u8 {
-    match clause {
-        RecognizerClause::Fact { .. } => 0,
-        RecognizerClause::FieldEq { .. } | RecognizerClause::FieldIn { .. } => 1,
-        RecognizerClause::SameScope { .. } => 2,
-        RecognizerClause::OrderedRelation { .. } => 3,
-        RecognizerClause::ControlFlowRelation { .. } => 4,
-        RecognizerClause::Exists { .. } => 5,
-        RecognizerClause::NotExists { .. } => 6,
-        RecognizerClause::Join { .. } => 7,
-        RecognizerClause::AllOf { .. } | RecognizerClause::AnyOf { .. } => 8,
-    }
-}
-
 fn literal(value: &crate::RecognizerPackLiteral) -> RecognizerFactValue {
     match value {
         crate::RecognizerPackLiteral::Boolean(value) => RecognizerFactValue::Boolean(*value),
@@ -1013,12 +1084,7 @@ fn build_match(
     coverage_ids: &[CoverageId],
     force_possible: bool,
 ) -> RecognizerResult<RecognizerMatch> {
-    let mut captures = BTreeMap::new();
-    for capture in &rule.captures {
-        if let Some(value) = capture_value(capture, &binding, bundle)? {
-            captures.insert(capture.name.clone(), value);
-        }
-    }
+    let captures = captures_for_binding(rule, &binding, bundle)?;
     let mut decisive_fact_ids = binding.0.values().cloned().collect::<Vec<_>>();
     normalize(&mut decisive_fact_ids);
     let mut source_handle_ids = Vec::new();
@@ -1080,6 +1146,100 @@ fn build_match(
     };
     item.validate()?;
     Ok(item)
+}
+
+fn semantic_output_keys(
+    rule: &RecognizerRule,
+    binding: &Binding,
+    bundle: &RecognizerFactBundle,
+) -> RecognizerResult<Option<BTreeSet<Vec<u8>>>> {
+    let captures = match captures_for_binding(rule, binding, bundle) {
+        Ok(captures) => captures,
+        Err(error) if error.code() == RecognizerErrorCode::MatchInvalid => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let mut keys = BTreeSet::new();
+    for output in &rule.outputs {
+        let identity = match output {
+            RecognizerOutput::EntityAssertion {
+                output_id,
+                entity_kind_id,
+                semantic_key,
+                ..
+            } => {
+                let mut resolved = BTreeMap::new();
+                for (key, reference) in semantic_key {
+                    let value = match resolve_output_from_bindings(
+                        reference, &captures, &binding.0, bundle,
+                    ) {
+                        Ok(value) => value,
+                        Err(error) if error.code() == RecognizerErrorCode::ProposalInvalid => {
+                            return Ok(None);
+                        }
+                        Err(error) => return Err(error),
+                    };
+                    resolved.insert(key.clone(), value);
+                }
+                SemanticOutputIdentity::Entity {
+                    output_id,
+                    entity_kind_id,
+                    semantic_key: resolved,
+                }
+            }
+            RecognizerOutput::RelationAssertion {
+                output_id,
+                relation_kind_id,
+                source,
+                target,
+                ..
+            } => {
+                let source =
+                    match resolve_output_from_bindings(source, &captures, &binding.0, bundle) {
+                        Ok(value) => value,
+                        Err(error) if error.code() == RecognizerErrorCode::ProposalInvalid => {
+                            return Ok(None);
+                        }
+                        Err(error) => return Err(error),
+                    };
+                let target =
+                    match resolve_output_from_bindings(target, &captures, &binding.0, bundle) {
+                        Ok(value) => value,
+                        Err(error) if error.code() == RecognizerErrorCode::ProposalInvalid => {
+                            return Ok(None);
+                        }
+                        Err(error) => return Err(error),
+                    };
+                SemanticOutputIdentity::Relation {
+                    output_id,
+                    relation_kind_id,
+                    source,
+                    target,
+                }
+            }
+        };
+        let bytes = canonical_json_bytes(&identity).map_err(|_| {
+            matcher_error(
+                RecognizerErrorCode::MatchIdentityMismatch,
+                "semantic output identity cannot be canonicalized",
+            )
+        })?;
+        keys.insert(bytes);
+    }
+    Ok(Some(keys))
+}
+
+fn captures_for_binding(
+    rule: &RecognizerRule,
+    binding: &Binding,
+    bundle: &RecognizerFactBundle,
+) -> RecognizerResult<BTreeMap<Box<str>, RecognizerCapturedValue>> {
+    let mut captures = BTreeMap::new();
+    for capture in &rule.captures {
+        if let Some(value) = capture_value(capture, binding, bundle)? {
+            captures.insert(capture.name.clone(), value);
+        }
+    }
+    Ok(captures)
 }
 
 fn capture_value(
@@ -1213,7 +1373,16 @@ fn resolve_output_value(
     item: &RecognizerMatch,
     bundle: &RecognizerFactBundle,
 ) -> RecognizerResult<RecognizerFactValue> {
-    if let Some(value) = item.captures.get(reference) {
+    resolve_output_from_bindings(reference, &item.captures, &item.bindings, bundle)
+}
+
+fn resolve_output_from_bindings(
+    reference: &str,
+    captures: &BTreeMap<Box<str>, RecognizerCapturedValue>,
+    bindings: &BTreeMap<Box<str>, RecognizerFactId>,
+    bundle: &RecognizerFactBundle,
+) -> RecognizerResult<RecognizerFactValue> {
+    if let Some(value) = captures.get(reference) {
         return match value {
             RecognizerCapturedValue::One(value)
             | RecognizerCapturedValue::Optional(Some(value)) => Ok(value.clone()),
@@ -1234,7 +1403,7 @@ fn resolve_output_value(
             "recognizer output reference is not a capture or alias.field",
         )
     })?;
-    let fact_id = item.bindings.get(alias).ok_or_else(|| {
+    let fact_id = bindings.get(alias).ok_or_else(|| {
         matcher_error(
             RecognizerErrorCode::ProposalInvalid,
             "recognizer output alias is not bound",

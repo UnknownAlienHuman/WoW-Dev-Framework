@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -9,7 +9,7 @@ use crate::{
     RecognizerOutput, RecognizerPlanId, RecognizerResult,
 };
 
-pub const RECOGNIZER_PLAN_SCHEMA: &str = "wow-recognizers/semantic-plan/e2-b/1";
+pub const RECOGNIZER_PLAN_SCHEMA: &str = "wow-recognizers/semantic-plan/e2-b/2";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -312,9 +312,9 @@ impl RecognizerPlanBounds {
 
 /// Compiles a validated pack into a deterministic semantic evaluation plan.
 ///
-/// The plan contains no runtime statistics or physical indexes. Cost-class ordering is fixed by
-/// this schema and ties are resolved by the original clause path, so equivalent pack bytes produce
-/// the same plan independently of machine, worker count, or observed data distribution.
+/// The plan contains no runtime statistics or physical indexes. Binding dependencies are ordered
+/// only within their original conjunction scope; cost class and source path break ties between
+/// independent siblings. Equivalent pack bytes therefore produce the same plan on every runner.
 pub fn compile_recognizer_plan(
     pack: &CompiledRecognizerPack,
 ) -> RecognizerResult<CompiledRecognizerPlan> {
@@ -325,10 +325,6 @@ pub fn compile_recognizer_plan(
     for rule in &document.pack.rules {
         let mut steps = Vec::new();
         flatten_clauses(&rule.rule_id, rule.version, &rule.clauses, &[], &mut steps)?;
-        steps.sort_by(|left, right| {
-            (left.cost_class, left.clause_path.as_slice())
-                .cmp(&(right.cost_class, right.clause_path.as_slice()))
-        });
         let mut captures = rule
             .captures
             .iter()
@@ -387,32 +383,53 @@ fn flatten_clauses(
     parent: &[u32],
     output: &mut Vec<RecognizerPlanStep>,
 ) -> RecognizerResult<()> {
-    for (index, clause) in clauses.iter().enumerate() {
-        let mut path = parent.to_vec();
-        path.push(u32::try_from(index).map_err(|_| plan_overflow())?);
-        let (kind, cost_class, mut required_aliases, produced_alias, required_capabilities) =
-            step_fields(clause)?;
-        required_aliases.sort();
-        required_aliases.dedup();
-        let step_id = step_id(rule_id, rule_version, &path, kind)?;
-        output.push(RecognizerPlanStep {
-            step_id,
-            clause_path: path.clone(),
-            kind,
-            cost_class,
-            required_aliases,
-            produced_alias,
-            required_capabilities,
-        });
-        match clause {
-            RecognizerClause::Exists { clauses }
-            | RecognizerClause::NotExists { clauses, .. }
-            | RecognizerClause::AllOf { clauses }
-            | RecognizerClause::AnyOf { clauses } => {
-                flatten_clauses(rule_id, rule_version, clauses, &path, output)?;
-            }
-            _ => {}
+    for index in crate::pack::clause_scope_order(clauses)? {
+        flatten_clause(
+            rule_id,
+            rule_version,
+            &clauses[index],
+            index,
+            parent,
+            output,
+        )?;
+    }
+    Ok(())
+}
+
+fn flatten_clause(
+    rule_id: &str,
+    rule_version: u32,
+    clause: &RecognizerClause,
+    index: usize,
+    parent: &[u32],
+    output: &mut Vec<RecognizerPlanStep>,
+) -> RecognizerResult<()> {
+    let mut path = parent.to_vec();
+    path.push(u32::try_from(index).map_err(|_| plan_overflow())?);
+    let (kind, cost_class, required_aliases, produced_alias, required_capabilities) =
+        step_fields(clause)?;
+    let step_id = step_id(rule_id, rule_version, &path, kind)?;
+    output.push(RecognizerPlanStep {
+        step_id,
+        clause_path: path.clone(),
+        kind,
+        cost_class,
+        required_aliases,
+        produced_alias,
+        required_capabilities,
+    });
+    match clause {
+        RecognizerClause::Exists { clauses }
+        | RecognizerClause::NotExists { clauses, .. }
+        | RecognizerClause::AllOf { clauses } => {
+            flatten_clauses(rule_id, rule_version, clauses, &path, output)?;
         }
+        RecognizerClause::AnyOf { clauses } => {
+            for (branch, clause) in clauses.iter().enumerate() {
+                flatten_clause(rule_id, rule_version, clause, branch, &path, output)?;
+            }
+        }
+        _ => {}
     }
     Ok(())
 }
@@ -426,7 +443,7 @@ type StepFields = (
 );
 
 fn step_fields(clause: &RecognizerClause) -> RecognizerResult<StepFields> {
-    let fields = match clause {
+    let mut fields = match clause {
         RecognizerClause::Fact { alias, .. } => (
             RecognizerPlanStepKind::Fact,
             RecognizerPlanCostClass::FactScan,
@@ -508,6 +525,9 @@ fn step_fields(clause: &RecognizerClause) -> RecognizerResult<StepFields> {
             Vec::new(),
         ),
     };
+    fields.2 = crate::pack::clause_required_aliases(clause)?
+        .into_iter()
+        .collect();
     Ok(fields)
 }
 
@@ -593,12 +613,13 @@ fn validate_rule_plan(rule: &CompiledRecognizerRulePlan) -> RecognizerResult<()>
             "compiled recognizer rule plan header or counts are invalid",
         ));
     }
-    let mut paths = BTreeSet::new();
+    let mut paths = BTreeMap::<Vec<u32>, (usize, &RecognizerPlanStep)>::new();
     let mut ids = BTreeSet::new();
-    let mut previous = None;
-    for step in &rule.evaluation_order {
+    for (position, step) in rule.evaluation_order.iter().enumerate() {
         if step.clause_path.is_empty()
-            || !paths.insert(step.clause_path.clone())
+            || paths
+                .insert(step.clause_path.clone(), (position, step))
+                .is_some()
             || !ids.insert(step.step_id.as_ref())
         {
             return Err(RecognizerError::new(
@@ -606,14 +627,6 @@ fn validate_rule_plan(rule: &CompiledRecognizerRulePlan) -> RecognizerResult<()>
                 "recognizer plan contains duplicate or empty step identities",
             ));
         }
-        let key = (step.cost_class, step.clause_path.as_slice());
-        if previous.is_some_and(|previous| previous >= key) {
-            return Err(RecognizerError::new(
-                RecognizerErrorCode::PlanInvalid,
-                "recognizer plan steps are not in deterministic evaluation order",
-            ));
-        }
-        previous = Some(key);
         if step
             .required_aliases
             .windows(2)
@@ -640,7 +653,57 @@ fn validate_rule_plan(rule: &CompiledRecognizerRulePlan) -> RecognizerResult<()>
                 "recognizer plan step identity does not match",
             ));
         }
+        let valid_produced_alias = if step.kind == RecognizerPlanStepKind::Fact {
+            step.produced_alias
+                .as_deref()
+                .is_some_and(|alias| !alias.is_empty())
+        } else {
+            step.produced_alias.is_none()
+        };
+        if !valid_produced_alias {
+            return Err(RecognizerError::new(
+                RecognizerErrorCode::PlanInvalid,
+                "recognizer plan fact binding metadata is invalid",
+            ));
+        }
     }
+
+    let mut children_by_parent = BTreeMap::<Vec<u32>, BTreeSet<u32>>::new();
+    for (path, (position, _step)) in &paths {
+        let parent_path = path[..path.len() - 1].to_vec();
+        children_by_parent
+            .entry(parent_path.clone())
+            .or_default()
+            .insert(plan_path_index(path)?);
+        if path.len() == 1 {
+            continue;
+        }
+        let Some((parent_position, parent)) = paths.get(&parent_path) else {
+            return Err(RecognizerError::new(
+                RecognizerErrorCode::PlanInvalid,
+                "recognizer plan clause path has no parent step",
+            ));
+        };
+        if parent_position >= position || !plan_kind_is_composite(parent.kind) {
+            return Err(RecognizerError::new(
+                RecognizerErrorCode::PlanInvalid,
+                "recognizer plan children escape their ordered composite scope",
+            ));
+        }
+    }
+    for children in children_by_parent.values() {
+        if children
+            .iter()
+            .enumerate()
+            .any(|(expected, actual)| u32::try_from(expected).ok() != Some(*actual))
+        {
+            return Err(RecognizerError::new(
+                RecognizerErrorCode::PlanInvalid,
+                "recognizer plan clause path has a missing sibling step",
+            ));
+        }
+    }
+    validate_plan_scope(rule, &[], &BTreeSet::new(), &paths)?;
     if rule.capture_names.windows(2).any(|pair| pair[0] >= pair[1])
         || rule.output_ids.windows(2).any(|pair| pair[0] >= pair[1])
     {
@@ -650,6 +713,146 @@ fn validate_rule_plan(rule: &CompiledRecognizerRulePlan) -> RecognizerResult<()>
         ));
     }
     Ok(())
+}
+
+fn plan_kind_is_composite(kind: RecognizerPlanStepKind) -> bool {
+    matches!(
+        kind,
+        RecognizerPlanStepKind::Exists
+            | RecognizerPlanStepKind::NotExists
+            | RecognizerPlanStepKind::AllOf
+            | RecognizerPlanStepKind::AnyOf
+    )
+}
+
+fn validate_plan_scope(
+    rule: &CompiledRecognizerRulePlan,
+    prefix: &[u32],
+    inherited: &BTreeSet<Box<str>>,
+    paths: &BTreeMap<Vec<u32>, (usize, &RecognizerPlanStep)>,
+) -> RecognizerResult<BTreeSet<Box<str>>> {
+    let children = rule
+        .evaluation_order
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| {
+            step.clause_path.len() == prefix.len() + 1 && step.clause_path.starts_with(prefix)
+        })
+        .collect::<Vec<_>>();
+    let alternative_scope = paths
+        .get(prefix)
+        .is_some_and(|(_, parent)| parent.kind == RecognizerPlanStepKind::AnyOf);
+    if !prefix.is_empty() && children.is_empty() {
+        return Err(RecognizerError::new(
+            RecognizerErrorCode::PlanInvalid,
+            "recognizer plan composite scope has no child clauses",
+        ));
+    }
+
+    if alternative_scope {
+        let mut previous_branch = None;
+        let mut common_outputs: Option<BTreeSet<Box<str>>> = None;
+        for (_, child) in children {
+            let branch = plan_path_index(&child.clause_path)?;
+            if previous_branch.is_some_and(|previous| previous >= branch)
+                || !child
+                    .required_aliases
+                    .iter()
+                    .all(|alias| inherited.contains(alias))
+            {
+                return Err(RecognizerError::new(
+                    RecognizerErrorCode::PlanInvalid,
+                    "recognizer alternative branch reads outside its original scope",
+                ));
+            }
+            previous_branch = Some(branch);
+            let outputs = validate_plan_node(rule, child, inherited, paths)?;
+            if let Some(common) = &mut common_outputs {
+                common.retain(|alias| outputs.contains(alias));
+            } else {
+                common_outputs = Some(outputs);
+            }
+        }
+        return Ok(common_outputs.unwrap_or_default());
+    }
+
+    let mut available = inherited.clone();
+    for (position, (_, child)) in children.iter().enumerate() {
+        if !child
+            .required_aliases
+            .iter()
+            .all(|alias| available.contains(alias))
+        {
+            return Err(RecognizerError::new(
+                RecognizerErrorCode::PlanInvalid,
+                "recognizer plan clause executes before its binding dependencies",
+            ));
+        }
+        let key = (child.cost_class, plan_path_index(&child.clause_path)?);
+        for (_, later) in children.iter().skip(position + 1) {
+            if later
+                .required_aliases
+                .iter()
+                .all(|alias| available.contains(alias))
+                && (later.cost_class, plan_path_index(&later.clause_path)?) < key
+            {
+                return Err(RecognizerError::new(
+                    RecognizerErrorCode::PlanInvalid,
+                    "recognizer plan independent siblings are not canonically ordered",
+                ));
+            }
+        }
+        let produced = validate_plan_node(rule, child, &available, paths)?;
+        available.extend(produced);
+    }
+    Ok(available
+        .into_iter()
+        .filter(|alias| !inherited.contains(alias))
+        .collect())
+}
+
+fn validate_plan_node(
+    rule: &CompiledRecognizerRulePlan,
+    step: &RecognizerPlanStep,
+    inherited: &BTreeSet<Box<str>>,
+    paths: &BTreeMap<Vec<u32>, (usize, &RecognizerPlanStep)>,
+) -> RecognizerResult<BTreeSet<Box<str>>> {
+    match step.kind {
+        RecognizerPlanStepKind::Fact => {
+            let alias = step.produced_alias.as_ref().ok_or_else(|| {
+                RecognizerError::new(
+                    RecognizerErrorCode::PlanInvalid,
+                    "recognizer plan fact binding is missing",
+                )
+            })?;
+            Ok(BTreeSet::from([alias.clone()]))
+        }
+        RecognizerPlanStepKind::Exists | RecognizerPlanStepKind::AllOf => {
+            validate_plan_scope(rule, &step.clause_path, inherited, paths)
+        }
+        RecognizerPlanStepKind::AnyOf => {
+            validate_plan_scope(rule, &step.clause_path, inherited, paths)
+        }
+        RecognizerPlanStepKind::NotExists => {
+            validate_plan_scope(rule, &step.clause_path, inherited, paths)?;
+            Ok(BTreeSet::new())
+        }
+        RecognizerPlanStepKind::Join
+        | RecognizerPlanStepKind::FieldEq
+        | RecognizerPlanStepKind::FieldIn
+        | RecognizerPlanStepKind::SameScope
+        | RecognizerPlanStepKind::OrderedRelation
+        | RecognizerPlanStepKind::ControlFlowRelation => Ok(BTreeSet::new()),
+    }
+}
+
+fn plan_path_index(path: &[u32]) -> RecognizerResult<u32> {
+    path.last().copied().ok_or_else(|| {
+        RecognizerError::new(
+            RecognizerErrorCode::PlanInvalid,
+            "recognizer plan clause path is empty",
+        )
+    })
 }
 
 fn step_id(

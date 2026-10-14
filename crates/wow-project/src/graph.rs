@@ -474,6 +474,7 @@ fn registry_with_native_api(
     recipe: DirectRecipe,
     native_api: bool,
 ) -> ProjectResult<GraphRegistryBundle> {
+    let custom_signal_relations = !native_api && recipe.custom_signal_relations();
     let universe_class = match project_kind {
         ProjectKind::Fixture | ProjectKind::Repository => "project",
         ProjectKind::BlizzardUiPlatformSource => "blizzard_ui_source",
@@ -815,6 +816,29 @@ fn registry_with_native_api(
             )
             .map_err(|_| invalid())?,
         );
+    }
+    if custom_signal_relations {
+        for (id, relation) in [
+            (
+                "source_emits_custom_signal",
+                GraphRelationKind::EmitsCustomSignal,
+            ),
+            (
+                "source_subscribes_custom_signal",
+                GraphRelationKind::HandlesCustomSignal,
+            ),
+        ] {
+            relations.push(
+                GraphRelationKindDefinition::new(
+                    id,
+                    relation,
+                    vec!["lua_source_function".into()],
+                    vec!["custom_signal".into()],
+                    vec![GraphConfidence::Derived, GraphConfidence::Possible],
+                )
+                .map_err(|_| invalid())?,
+            );
+        }
     }
     let mut entities = vec![
         file,

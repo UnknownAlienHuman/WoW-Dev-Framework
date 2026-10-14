@@ -17,8 +17,8 @@ use wow_recognizers::{
     RecognizerFactLimits, RecognizerFactScope, RecognizerFactScopeKind, RecognizerFactValue,
     RecognizerOutput, RecognizerOutputConfidence, RecognizerPack, RecognizerPackBudgets,
     RecognizerPackDocument, RecognizerPackLiteral, RecognizerPackRollout, RecognizerPackTrustClass,
-    RecognizerRule, RecognizerRuleOutcomeState, compile_recognizer_plan, execute_recognizer_plan,
-    parse_recognizer_pack,
+    RecognizerProposedAssertion, RecognizerRule, RecognizerRuleOutcomeState,
+    compile_recognizer_plan, execute_recognizer_plan, parse_recognizer_pack,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -317,7 +317,7 @@ fn complete_no_match_is_distinct_from_partial_no_match() -> TestResult {
 }
 
 #[test]
-fn possible_input_and_ambiguity_cannot_produce_derived_output() -> TestResult {
+fn possible_input_does_not_downgrade_independent_exact_match() -> TestResult {
     let context = context()?;
     let (pack, plan) = compiled(direct_rule(Vec::new()), 100, 100)?;
     let facts = bundle(
@@ -337,6 +337,14 @@ fn possible_input_and_ambiguity_cannot_produce_derived_output() -> TestResult {
                 "Second",
                 "direct",
                 2,
+                GraphConfidence::Derived,
+            )?,
+            fact(
+                &context,
+                "emmy.member_call",
+                "Third",
+                "direct",
+                3,
                 GraphConfidence::Possible,
             )?,
         ],
@@ -354,13 +362,197 @@ fn possible_input_and_ambiguity_cannot_produce_derived_output() -> TestResult {
         RecognizerFactLimits::default(),
         &AtomicBool::new(false),
     )?;
-    assert_eq!(output.outcomes()[0].matches().len(), 2);
-    assert!(
+    assert_eq!(output.outcomes()[0].matches().len(), 3);
+    let confidence_for_member = |member: &str| {
         output.outcomes()[0]
             .proposals()
             .iter()
-            .all(|proposal| proposal.confidence() == RecognizerOutputConfidence::Possible)
+            .find_map(|proposal| match proposal {
+                RecognizerProposedAssertion::Entity { semantic_key, .. }
+                    if matches!(
+                        semantic_key.get("member"),
+                        Some(RecognizerFactValue::Identifier(value)) if value.as_ref() == member
+                    ) =>
+                {
+                    Some(proposal.confidence())
+                }
+                _ => None,
+            })
+    };
+    assert_eq!(
+        confidence_for_member("First"),
+        Some(RecognizerOutputConfidence::Derived)
     );
+    assert_eq!(
+        confidence_for_member("Second"),
+        Some(RecognizerOutputConfidence::Derived)
+    );
+    assert_eq!(
+        confidence_for_member("Third"),
+        Some(RecognizerOutputConfidence::Possible)
+    );
+    Ok(())
+}
+
+#[test]
+fn same_semantic_output_bindings_remain_competing_after_match_truncation() -> TestResult {
+    let context = context()?;
+    let mut rule = direct_rule(Vec::new());
+    let RecognizerOutput::EntityAssertion { semantic_key, .. } = &mut rule.outputs[0] else {
+        return Err("direct rule entity output".into());
+    };
+    semantic_key.remove("member");
+    let (pack, plan) = compiled(rule, 1, 1)?;
+    let facts = bundle(
+        &context,
+        vec![
+            fact(
+                &context,
+                "emmy.member_call",
+                "First",
+                "direct",
+                1,
+                GraphConfidence::Derived,
+            )?,
+            fact(
+                &context,
+                "emmy.member_call",
+                "Second",
+                "direct",
+                2,
+                GraphConfidence::Derived,
+            )?,
+        ],
+        vec![coverage(
+            &context,
+            "emmy.member_call.complete",
+            RecognizerFactCoverageState::Complete,
+        )?],
+    )?;
+    let output = execute_recognizer_plan(
+        &context,
+        &pack,
+        &plan,
+        &facts,
+        RecognizerFactLimits::default(),
+        &AtomicBool::new(false),
+    )?;
+    let outcome = &output.outcomes()[0];
+    assert_eq!(outcome.state(), RecognizerRuleOutcomeState::Partial);
+    assert!(outcome.truncated());
+    assert_eq!(outcome.matches().len(), 1);
+    assert_eq!(
+        outcome.matches()[0].confidence(),
+        RecognizerOutputConfidence::Possible
+    );
+    assert_eq!(
+        outcome.proposals()[0].confidence(),
+        RecognizerOutputConfidence::Possible
+    );
+    Ok(())
+}
+
+#[test]
+fn nested_all_of_plan_binds_before_filters_within_its_scope() -> TestResult {
+    let context = context()?;
+    let mut rule = direct_rule(Vec::new());
+    rule.clauses = vec![
+        RecognizerClause::FieldEq {
+            field: "call.call_kind".into(),
+            value: RecognizerPackLiteral::String("direct".into()),
+        },
+        RecognizerClause::AllOf {
+            clauses: vec![
+                RecognizerClause::FieldEq {
+                    field: "call.call_kind".into(),
+                    value: RecognizerPackLiteral::String("direct".into()),
+                },
+                RecognizerClause::Fact {
+                    alias: "call".into(),
+                    kind: "emmy.member_call".into(),
+                },
+            ],
+        },
+    ];
+    let (pack, plan) = compiled(rule, 100, 100)?;
+    let order = plan.rules()[0].evaluation_order();
+    assert_eq!(order[0].clause_path(), &[1]);
+    assert_eq!(order[1].clause_path(), &[1, 1]);
+    assert_eq!(order[2].clause_path(), &[1, 0]);
+    assert_eq!(order[3].clause_path(), &[0]);
+
+    let facts = bundle(
+        &context,
+        vec![
+            fact(
+                &context,
+                "emmy.member_call",
+                "First",
+                "direct",
+                1,
+                GraphConfidence::Derived,
+            )?,
+            fact(
+                &context,
+                "emmy.member_call",
+                "Second",
+                "direct",
+                2,
+                GraphConfidence::Derived,
+            )?,
+        ],
+        vec![coverage(
+            &context,
+            "emmy.member_call.complete",
+            RecognizerFactCoverageState::Complete,
+        )?],
+    )?;
+    let output = execute_recognizer_plan(
+        &context,
+        &pack,
+        &plan,
+        &facts,
+        RecognizerFactLimits::default(),
+        &AtomicBool::new(false),
+    )?;
+    assert_eq!(
+        output.outcomes()[0].state(),
+        RecognizerRuleOutcomeState::Matched
+    );
+    assert_eq!(output.outcomes()[0].matches().len(), 2);
+    assert!(
+        output.outcomes()[0]
+            .matches()
+            .iter()
+            .all(|item| item.confidence() == RecognizerOutputConfidence::Derived)
+    );
+    Ok(())
+}
+
+#[test]
+fn any_of_branch_bindings_do_not_escape_to_sibling_clauses() -> TestResult {
+    let mut rule = direct_rule(vec![
+        RecognizerClause::AnyOf {
+            clauses: vec![
+                RecognizerClause::AllOf {
+                    clauses: vec![RecognizerClause::Fact {
+                        alias: "branch_call".into(),
+                        kind: "emmy.member_call".into(),
+                    }],
+                },
+                RecognizerClause::FieldEq {
+                    field: "call.call_kind".into(),
+                    value: RecognizerPackLiteral::String("direct".into()),
+                },
+            ],
+        },
+        RecognizerClause::FieldEq {
+            field: "branch_call.call_kind".into(),
+            value: RecognizerPackLiteral::String("direct".into()),
+        },
+    ]);
+    rule.version = 2;
+    assert!(compiled(rule, 100, 100).is_err());
     Ok(())
 }
 
@@ -368,16 +560,18 @@ fn possible_input_and_ambiguity_cannot_produce_derived_output() -> TestResult {
 fn negative_clause_requires_complete_declared_coverage() -> TestResult {
     let context = context()?;
     let mut rule = direct_rule(vec![RecognizerClause::NotExists {
-        clauses: vec![
-            RecognizerClause::Fact {
-                alias: "removed".into(),
-                kind: "reference.api".into(),
-            },
-            RecognizerClause::FieldEq {
-                field: "removed.member".into(),
-                value: RecognizerPackLiteral::String("KnownApi".into()),
-            },
-        ],
+        clauses: vec![RecognizerClause::AllOf {
+            clauses: vec![
+                RecognizerClause::FieldEq {
+                    field: "removed.call_kind".into(),
+                    value: RecognizerPackLiteral::String("direct".into()),
+                },
+                RecognizerClause::Fact {
+                    alias: "removed".into(),
+                    kind: "reference.api".into(),
+                },
+            ],
+        }],
         required_complete_capability: "reference.api.complete".into(),
     }]);
     rule.required_capabilities
@@ -420,6 +614,44 @@ fn negative_clause_requires_complete_declared_coverage() -> TestResult {
         matched.outcomes()[0].state(),
         RecognizerRuleOutcomeState::Matched
     );
+
+    let known_api = fact(
+        &context,
+        "reference.api",
+        "KnownApi",
+        "direct",
+        2,
+        GraphConfidence::Derived,
+    )?;
+    let present = bundle(
+        &context,
+        vec![call.clone(), known_api],
+        vec![
+            coverage(
+                &context,
+                "emmy.member_call.complete",
+                RecognizerFactCoverageState::Complete,
+            )?,
+            coverage(
+                &context,
+                "reference.api.complete",
+                RecognizerFactCoverageState::Complete,
+            )?,
+        ],
+    )?;
+    let rejected_by_negative = execute_recognizer_plan(
+        &context,
+        &pack,
+        &plan,
+        &present,
+        RecognizerFactLimits::default(),
+        &AtomicBool::new(false),
+    )?;
+    assert_eq!(
+        rejected_by_negative.outcomes()[0].state(),
+        RecognizerRuleOutcomeState::EvaluatedNoMatch
+    );
+    assert!(rejected_by_negative.outcomes()[0].matches().is_empty());
 
     let partial = bundle(
         &context,
@@ -599,6 +831,14 @@ fn output_amplification_and_cancellation_are_explicit() -> TestResult {
     );
     assert!(output.outcomes()[0].truncated());
     assert_eq!(output.outcomes()[0].matches().len(), 1);
+    assert_eq!(
+        output.outcomes()[0].matches()[0].confidence(),
+        RecognizerOutputConfidence::Derived
+    );
+    assert_eq!(
+        output.outcomes()[0].proposals()[0].confidence(),
+        RecognizerOutputConfidence::Derived
+    );
 
     let cancelled = AtomicBool::new(true);
     let output = execute_recognizer_plan(

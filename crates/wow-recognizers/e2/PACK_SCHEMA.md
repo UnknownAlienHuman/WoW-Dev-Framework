@@ -87,7 +87,7 @@ Reference an exact supplied relation such as `dominates`; no CFG reconstruction.
 
 ### `all_of` / `any_of`
 
-Bounded acyclic composition. Nesting depth is profile-limited.
+Bounded acyclic composition. Nesting depth is profile-limited. Bindings are scoped to their original conjunction: dependent clauses are ordered after their producers, `any_of` branches do not share bindings, and `not_exists` bindings do not escape. A fact inside a composite is never hoisted into a sibling or alternative.
 
 ## Predicates
 

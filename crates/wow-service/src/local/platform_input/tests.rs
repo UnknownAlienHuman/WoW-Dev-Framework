@@ -1,6 +1,7 @@
 use super::*;
 mod builder_attempts;
 mod empty_packages;
+mod event_registry_keys;
 mod function_fingerprints;
 mod native_type_resolution;
 mod project_budgets;

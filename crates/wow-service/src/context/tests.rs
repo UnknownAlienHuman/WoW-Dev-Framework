@@ -2,6 +2,7 @@
 mod build;
 mod frozen_physical;
 mod inspect;
+mod registry_compat;
 mod source_excerpt;
 mod status;
 

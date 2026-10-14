@@ -39,6 +39,12 @@ One run does not mutate another rule or shared graph state.
 - Join order cannot change the logical result set.
 - A fact from another scope/partition is invisible unless the bundle explicitly declares it as a dependency.
 
+## Scoped bindings and execution order
+
+Compilation validates each field dependency against the bindings available in its original clause scope. Within one conjunction, it orders binding producers before dependent filters; cost class and source path order only clauses that are currently independent. The compiled plan records this order, and execution follows it.
+
+Nested `exists`, `all_of`, and `not_exists` clauses keep their own scopes. `any_of` alternatives start from the same incoming bindings, and only bindings guaranteed by every alternative may escape. Bindings created inside `not_exists` never escape its negative scope. Compilation rejects unavailable, cyclic, or escaping bindings; it never repairs them by hoisting a fact across a composite or alternative.
+
 ## Existence clauses
 
 ### Positive existence
@@ -85,6 +91,8 @@ When multiple bindings satisfy a rule:
 - group them in one ambiguity record when mutually competing;
 - do not choose by source order, name length, repository popularity, or first discovery;
 - output remains `Possible` unless the graph schema explicitly permits independent simultaneous relations.
+
+Competition is grouped by the resolved semantic output identity, not by total rows for the rule. Independent output identities retain their own fact-derived confidence. Determine competing rows before truncation so a cap cannot hide a real alternative; truncation still marks the partition `Partial` separately.
 
 ## Deduplication
 

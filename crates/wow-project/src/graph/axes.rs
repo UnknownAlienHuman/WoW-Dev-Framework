@@ -77,11 +77,14 @@ pub fn source_graph_axis_profile(
             ),
             (
                 GraphRelationKind::EmitsCustomSignal,
-                &["lua_emits_custom_signal"],
+                &["lua_emits_custom_signal", "source_emits_custom_signal"],
             ),
             (
                 GraphRelationKind::HandlesCustomSignal,
-                &["lua_handles_custom_signal"],
+                &[
+                    "lua_handles_custom_signal",
+                    "source_subscribes_custom_signal",
+                ],
             ),
             (
                 GraphRelationKind::RegistersCvarCallback,
@@ -147,17 +150,18 @@ pub fn source_graph_axis_profile(
 mod tests {
     use super::*;
     use crate::ProjectKind;
-    use crate::graph::{DirectRecipe, registry_for_recipe};
+    use crate::graph::{DirectRecipe, registry_for_recipe, registry_with_native_api};
     use wow_graph::{GraphConfidence, GraphDirection, GraphRelationKindDefinition};
     type ResultOf<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
     #[test]
     fn real_capability_registries_bind_exact_reviewed_definitions() -> ResultOf {
         use crate::{PlatformGraphCapabilities, PlatformGraphCapability::*};
-        for (capabilities, ownership_count) in [
+        for (capabilities, ownership_count, custom_signals) in [
             (
                 PlatformGraphCapabilities::new(&[InventorySpansV1, StructuralRolesV1])?,
                 9,
+                false,
             ),
             (
                 PlatformGraphCapabilities::new(&[
@@ -166,6 +170,17 @@ mod tests {
                     XmlSourceMapsV1,
                 ])?,
                 10,
+                false,
+            ),
+            (
+                PlatformGraphCapabilities::new(&[
+                    InventorySpansV1,
+                    StructuralRolesV1,
+                    XmlSourceMapsV1,
+                    CustomSignalRelationsV1,
+                ])?,
+                10,
+                true,
             ),
         ] {
             let recipe = DirectRecipe::Capabilities(capabilities);
@@ -230,6 +245,61 @@ mod tests {
                     assert!(loads.allows_confidence(GraphConfidence::Proven));
                     assert!(!loads.allows_confidence(GraphConfidence::Candidate));
                 }
+                if axis == GraphAxis::Registration {
+                    assert!(registry.relation_kind("lua_emits_custom_signal").is_some());
+                    assert!(
+                        registry
+                            .relation_kind("lua_handles_custom_signal")
+                            .is_some()
+                    );
+                    if custom_signals {
+                        let emitter = registry
+                            .relation_kind("source_emits_custom_signal")
+                            .ok_or("recognizer custom-signal emitter definition")?;
+                        assert_eq!(emitter.relation(), GraphRelationKind::EmitsCustomSignal);
+                        assert!(emitter.allows_source_kind("lua_source_function"));
+                        assert!(emitter.allows_target_kind("custom_signal"));
+                        assert!(emitter.allows_confidence(GraphConfidence::Derived));
+                        assert!(emitter.allows_confidence(GraphConfidence::Possible));
+                        let subscription = registry
+                            .relation_kind("source_subscribes_custom_signal")
+                            .ok_or("recognizer custom-signal subscription definition")?;
+                        assert_eq!(
+                            subscription.relation(),
+                            GraphRelationKind::HandlesCustomSignal
+                        );
+                        assert!(subscription.allows_source_kind("lua_source_function"));
+                        assert!(subscription.allows_target_kind("custom_signal"));
+                        assert!(subscription.allows_confidence(GraphConfidence::Derived));
+                        assert!(subscription.allows_confidence(GraphConfidence::Possible));
+                        assert!(
+                            profile
+                                .relations()
+                                .iter()
+                                .any(|step| { step.relation_id() == "source_emits_custom_signal" })
+                        );
+                        assert!(profile.relations().iter().any(|step| {
+                            step.relation_id() == "source_subscribes_custom_signal"
+                        }));
+                    } else {
+                        assert!(
+                            registry
+                                .relation_kind("source_emits_custom_signal")
+                                .is_none()
+                        );
+                        assert!(
+                            registry
+                                .relation_kind("source_subscribes_custom_signal")
+                                .is_none()
+                        );
+                        assert!(profile.relations().iter().all(|step| {
+                            !matches!(
+                                step.relation_id(),
+                                "source_emits_custom_signal" | "source_subscribes_custom_signal"
+                            )
+                        }));
+                    }
+                }
             }
             let mut definitions = registry.relation_kinds().to_vec();
             definitions.push(GraphRelationKindDefinition::new(
@@ -266,6 +336,31 @@ mod tests {
             )?;
             assert!(source_graph_axis_profile(&substituted, GraphAxis::Load).is_err());
         }
+        for (raw_inventory, version) in [(false, "15"), (true, "16")] {
+            let legacy = registry_for_recipe(
+                ProjectKind::BlizzardUiPlatformSource,
+                raw_inventory,
+                DirectRecipe::Original,
+            )?;
+            assert_eq!(legacy.version(), version);
+            assert!(legacy.relation_kind("lua_emits_custom_signal").is_some());
+            assert!(legacy.relation_kind("lua_handles_custom_signal").is_some());
+            assert!(legacy.relation_kind("source_emits_custom_signal").is_none());
+            assert!(
+                legacy
+                    .relation_kind("source_subscribes_custom_signal")
+                    .is_none()
+            );
+        }
+
+        let legacy_native_api =
+            registry_with_native_api(ProjectKind::Fixture, false, DirectRecipe::Original, true)?;
+        assert_eq!(legacy_native_api.version(), "native-api-uses-1");
+        assert!(
+            legacy_native_api
+                .relation_kind("source_emits_custom_signal")
+                .is_none()
+        );
         Ok(())
     }
 }

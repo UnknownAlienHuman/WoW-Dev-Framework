@@ -256,6 +256,7 @@ Missing, Partial, Failed, Unknown, or truncated capability state is propagated t
 ## Adapter rules
 
 - adapters are deterministic projections, not new parsers;
+- decoded EventRegistry string-literal keys remain exact values through facts and graph output; do not trim or otherwise normalize them;
 - no field inferred from comments/path/repository name;
 - no platform authority upgrade;
 - no silent lossy projection: unsupported source facts produce adapter coverage/loss records;

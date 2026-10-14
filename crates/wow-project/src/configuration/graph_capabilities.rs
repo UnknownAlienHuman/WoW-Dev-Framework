@@ -9,6 +9,7 @@ pub enum PlatformGraphCapability {
     StructuralRolesV1,
     XmlSourceMapsV1,
     XmlSchemaClassificationV1,
+    CustomSignalRelationsV1,
 }
 impl PlatformGraphCapability {
     #[must_use]
@@ -18,6 +19,7 @@ impl PlatformGraphCapability {
             Self::StructuralRolesV1 => "structural_roles_v1",
             Self::XmlSourceMapsV1 => "xml_source_maps_v1",
             Self::XmlSchemaClassificationV1 => "xml_schema_classification_v1",
+            Self::CustomSignalRelationsV1 => "custom_signal_relations_v1",
         }
     }
     #[must_use]
@@ -28,6 +30,7 @@ impl PlatformGraphCapability {
             Self::XmlSourceMapsV1 | Self::XmlSchemaClassificationV1 => {
                 &[Self::InventorySpansV1, Self::StructuralRolesV1]
             }
+            Self::CustomSignalRelationsV1 => &[],
         }
     }
 }
@@ -39,6 +42,7 @@ pub struct PlatformGraphCapabilities {
     structural_roles: bool,
     xml_source_maps: bool,
     xml_schema_classification: bool,
+    custom_signal_relations: bool,
 }
 impl PlatformGraphCapabilities {
     pub fn new(capabilities: &[PlatformGraphCapability]) -> ProjectResult<Self> {
@@ -49,7 +53,7 @@ impl PlatformGraphCapabilities {
                 "graph capability selection contains duplicate or missing dependencies",
             )
         };
-        if capabilities.len() > 4 {
+        if capabilities.len() > 5 {
             return Err(invalid());
         }
         let mut selected = Self::default();
@@ -63,6 +67,9 @@ impl PlatformGraphCapabilities {
                 PlatformGraphCapability::XmlSourceMapsV1 => selected.xml_source_maps = true,
                 PlatformGraphCapability::XmlSchemaClassificationV1 => {
                     selected.xml_schema_classification = true;
+                }
+                PlatformGraphCapability::CustomSignalRelationsV1 => {
+                    selected.custom_signal_relations = true;
                 }
             }
         }
@@ -84,6 +91,7 @@ impl PlatformGraphCapabilities {
             PlatformGraphCapability::StructuralRolesV1 => self.structural_roles,
             PlatformGraphCapability::XmlSourceMapsV1 => self.xml_source_maps,
             PlatformGraphCapability::XmlSchemaClassificationV1 => self.xml_schema_classification,
+            PlatformGraphCapability::CustomSignalRelationsV1 => self.custom_signal_relations,
         }
     }
     pub fn iter(self) -> impl Iterator<Item = PlatformGraphCapability> {
@@ -92,6 +100,7 @@ impl PlatformGraphCapabilities {
             PlatformGraphCapability::StructuralRolesV1,
             PlatformGraphCapability::XmlSourceMapsV1,
             PlatformGraphCapability::XmlSchemaClassificationV1,
+            PlatformGraphCapability::CustomSignalRelationsV1,
         ]
         .into_iter()
         .filter(move |&capability| self.contains(capability))
@@ -119,15 +128,15 @@ impl<'de> Deserialize<'de> for PlatformGraphCapabilities {
             type Value = PlatformGraphCapabilities;
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 formatter
-                    .write_str("at most four distinct graph capabilities with exact dependencies")
+                    .write_str("at most five distinct graph capabilities with exact dependencies")
             }
             fn visit_seq<A: serde::de::SeqAccess<'de>>(
                 self,
                 mut sequence: A,
             ) -> Result<Self::Value, A::Error> {
-                let mut capabilities = Vec::with_capacity(4);
+                let mut capabilities = Vec::with_capacity(5);
                 while let Some(capability) = sequence.next_element::<PlatformGraphCapability>()? {
-                    if capabilities.len() == 4 {
+                    if capabilities.len() == 5 {
                         return Err(serde::de::Error::custom("graph capability count exceeded"));
                     }
                     capabilities.push(capability);
@@ -164,12 +173,31 @@ mod tests {
             selected.version_id(),
             PlatformGraphCapabilities::new(&[InventorySpansV1, StructuralRolesV1])?.version_id()
         );
+        let custom_signals = PlatformGraphCapabilities::new(&[
+            InventorySpansV1,
+            StructuralRolesV1,
+            XmlSourceMapsV1,
+            CustomSignalRelationsV1,
+        ])?;
+        assert_eq!(
+            serde_json::to_string(&custom_signals)?,
+            r#"["inventory_spans_v1","structural_roles_v1","xml_source_maps_v1","custom_signal_relations_v1"]"#
+        );
+        assert_eq!(
+            custom_signals.version_id(),
+            "capabilities_v1:inventory_spans_v1:structural_roles_v1:xml_source_maps_v1:custom_signal_relations_v1"
+        );
+        assert_eq!(
+            custom_signals,
+            serde_json::from_str(&serde_json::to_string(&custom_signals)?)?
+        );
         for invalid in [
             r#"["structural_roles_v1"]"#,
             r#"["xml_source_maps_v1","inventory_spans_v1"]"#,
             r#"["inventory_spans_v1","inventory_spans_v1"]"#,
             r#"["inventory_spans_v2"]"#,
             r#"["inventory_spans_v1","structural_roles_v1","xml_source_maps_v1","inventory_spans_v1"]"#,
+            r#"["inventory_spans_v1","structural_roles_v1","xml_source_maps_v1","xml_schema_classification_v1","custom_signal_relations_v1","inventory_spans_v1"]"#,
             r#"{"inventory_spans_v1":true}"#,
         ] {
             assert!(

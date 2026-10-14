@@ -124,14 +124,28 @@ fn plan_is_content_addressed_ordered_and_resource_bounded() -> TestResult {
     assert_eq!(rule.capture_names()[0].as_ref(), "member");
     assert_eq!(rule.output_ids().len(), 1);
     assert_eq!(rule.output_ids()[0].as_ref(), "called_member");
-    let costs = rule
+    let root_steps = rule
         .evaluation_order()
+        .iter()
+        .filter(|step| step.clause_path().len() == 1)
+        .collect::<Vec<_>>();
+    let root_paths = root_steps
+        .iter()
+        .map(|step| step.clause_path().to_vec())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        root_paths,
+        vec![vec![0], vec![1], vec![3], vec![2], vec![4]]
+    );
+    let root_costs = root_steps
         .iter()
         .map(|step| step.cost_class())
         .collect::<Vec<_>>();
-    assert!(costs.windows(2).all(|pair| pair[0] <= pair[1]));
-    assert_eq!(costs[0], RecognizerPlanCostClass::FactScan);
-    assert_eq!(costs[1], RecognizerPlanCostClass::FactScan);
+    assert_eq!(root_costs[0], RecognizerPlanCostClass::FactScan);
+    assert_eq!(root_costs[1], RecognizerPlanCostClass::FactScan);
+    assert_eq!(root_costs[2], RecognizerPlanCostClass::ExactPredicate);
+    assert_eq!(root_costs[3], RecognizerPlanCostClass::EqualityJoin);
+    assert_eq!(root_costs[4], RecognizerPlanCostClass::BooleanComposite);
     assert_eq!(rule.bounds().fact_scans, 2);
     assert_eq!(rule.bounds().joins, 1);
     assert_eq!(rule.bounds().captures, 1);

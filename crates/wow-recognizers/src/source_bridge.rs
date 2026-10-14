@@ -37,9 +37,9 @@ use crate::{
 };
 
 pub const W2_PARTITION: &str = "wow-recognizers.lua-native-event-bridges";
-pub const W2_PROFILE: &str = "wow-recognizers/lua-native-event-bridges/4";
+pub const W2_PROFILE: &str = "wow-recognizers/lua-native-event-bridges/5";
 const W2_FACT_PARTITION: &str = "wow-recognizers.lua-native-event-bridge-facts";
-const W2_FACT_PROFILE: &str = "wow-recognizers-lua-native-event-bridge-facts-4";
+const W2_FACT_PROFILE: &str = "wow-recognizers-lua-native-event-bridge-facts-5";
 const W2_BRIDGE_RULE: &str = "core.signal.native_event_registry_bridge";
 const W2_FACT_KIND: &str = "lua_native_event_bridge";
 const W2_NATIVE_EVENT_ENTITY: &str = "native_event";
@@ -94,7 +94,9 @@ pub struct W2BridgeMatch {
     pub event_ordinal: usize,
     pub registers_native_event: bool,
     pub registry_declaration_proposal_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub frame_declaration_proposal_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub callback_declaration_proposal_id: Option<String>,
     pub event_entity_proposal_id: String,
     pub registers_relation_proposal_id: String,
@@ -382,7 +384,8 @@ pub fn w2_recognize_native_event_bridges(
         else {
             continue;
         };
-        let event_key = literal_key.trim().to_owned();
+        // String literals are already decoded here; their exact value is the key.
+        let event_key = literal_key.to_owned();
         if event_key.is_empty() || event_key.len() > MAX_EVENT_KEY_BYTES {
             return Err(w2_failure(RecognizerErrorCode::BudgetExceeded));
         }

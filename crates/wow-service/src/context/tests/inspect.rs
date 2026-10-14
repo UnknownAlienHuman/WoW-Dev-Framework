@@ -861,7 +861,10 @@ const STATE_TOC: &str = include_str!("../../../tests/data/state-core-pipeline/St
 const STATE_LUA: &str = include_str!("../../../tests/data/state-core-pipeline/state.lua");
 const STATE_L0_PROFILE: &str = "wow-context/primary-state-root-l0/1";
 
-fn state_consumer_bundle(input: &Path, stop: &AtomicBool) -> TestResult<ProjectInputBundle> {
+pub(super) fn state_consumer_bundle(
+    input: &Path,
+    stop: &AtomicBool,
+) -> TestResult<ProjectInputBundle> {
     use wow_project::disk::{ProjectDiskFile, ProjectInputDirectory};
     use wow_project::load::TocLoadContext;
     std::fs::create_dir(input)?;

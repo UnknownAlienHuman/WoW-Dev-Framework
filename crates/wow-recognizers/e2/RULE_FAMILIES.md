@@ -129,10 +129,14 @@ Match exact `EventRegistry:TriggerEvent` with exact event key. Emit a custom sig
 
 ### `core.signal.custom_registry_subscription@1`
 
-Match exact `EventRegistry:RegisterCallback` with exact event key and callback/owner.
+Match an exact `EventRegistry:RegisterCallback` call with the exact Main
+`EventRegistry` receiver and literal event key. The emitted relation describes
+the enclosing function's registration site for that key; it does not identify
+the callback or owner argument and emits no callback-handler endpoint.
 
-- If a compatible exact producer exists in the declared closed scope, emit `subscribes_callback`/producer-consumer relations as `Derived`.
-- If producer lookup is incomplete, absent under partial coverage, dynamic, or ambiguous, emit only an unresolved/Possible subscription proposal and explicit blocker.
+- If a compatible exact producer exists in the declared closed scope, emit the registration-site relation as `Derived`.
+- If producer lookup is incomplete, absent under partial coverage, dynamic, or ambiguous, emit only an unresolved/Possible registration-site proposal and explicit blocker.
+- An unresolved callback/owner value remains unbound; it does not fabricate a handler identity or callback-specific relation.
 - Never reinterpret `PLAYER_LOGIN`, `UNIT_AURA`, or another plausible native name as a custom producer without `TriggerEvent` evidence.
 
 ### `core.signal.cvar_callback@1`

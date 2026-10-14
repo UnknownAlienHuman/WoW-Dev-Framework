@@ -1073,9 +1073,8 @@ pub fn recognize_source_library(
                     "reference"
                 }
                 (None, Some(SourceCallLiteral::String(value))) => {
-                    if value.len() > W6_MAX_LIBRARY_KEY_BYTES {
-                        return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
-                    }
+                    // Library-key bounds belong to the reviewed LibStub shape,
+                    // not every unrelated string argument in the source graph.
                     if ordinal == 0 {
                         argument_0_value = Some(value.clone());
                     } else if ordinal == 1 {

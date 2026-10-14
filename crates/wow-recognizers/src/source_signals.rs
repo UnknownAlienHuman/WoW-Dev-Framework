@@ -876,9 +876,9 @@ fn w1_validate_support(
 // ===== BEGIN WORKER 3: custom registry producer and subscription =====
 
 pub const W3_SIGNAL_PARTITION: &str = "wow-recognizers.lua-custom-signals";
-pub const W3_SIGNAL_PROFILE: &str = "wow-recognizers/lua-custom-signals/4";
+pub const W3_SIGNAL_PROFILE: &str = "wow-recognizers/lua-custom-signals/5";
 const W3_FACT_PARTITION: &str = "wow-recognizers.lua-custom-signal-facts";
-const W3_FACT_PROFILE: &str = "wow-recognizers-lua-custom-signal-facts-2";
+const W3_FACT_PROFILE: &str = "wow-recognizers-lua-custom-signal-facts-3";
 const W3_PRODUCER_RULE: &str = "core.signal.custom_registry_producer";
 const W3_SUBSCRIPTION_RULE: &str = "core.signal.custom_registry_subscription";
 const W3_TRIGGER_EVENT_CALLABLE: &str = "EventRegistry.TriggerEvent";
@@ -909,11 +909,14 @@ pub struct W3ProducerMatch {
 
 /// One resolved subscription site. confirmed is true only when an exact
 /// compatible producer exists in this same report and revision.
+/// One exact EventRegistry registration site and key; callback/owner targets are
+/// not represented or inferred by this match.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct W3SubscriptionMatch {
     pub call_id: String,
     pub event_key: String,
     pub receiver_declaration_proposal_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub producer_call_id: Option<String>,
     pub relation_proposal_id: String,
     pub confirmed: bool,
@@ -1267,9 +1270,8 @@ impl W3SignalSide {
     }
 }
 
-/// One exact call site: resolved receiver node/support, literal event key and its
-/// retained argument descriptors. Both sides REQUIRE a resolved receiver and a
-/// literal event key; otherwise the site never becomes a fact.
+/// One exact EventRegistry call site with resolved receiver support and a literal
+/// event key. Callback and owner values are not relation endpoints here.
 struct W3Site {
     fact_id: String,
     call_id: String,
@@ -1282,7 +1284,6 @@ struct W3Site {
     event_key: String,
     event_ordinal: usize,
     argument_count: usize,
-    exact: bool,
     handle: StableHandleId,
     evidence: EvidenceId,
 }
@@ -1502,7 +1503,6 @@ pub fn w3_recognize_signals(
         let Some(site) = w3_build_site(
             &input,
             call,
-            side,
             &declarations,
             &declaration_keys,
             &function_nodes,
@@ -1859,7 +1859,6 @@ fn w3_side(call: &wow_emmy::function_calls::SourceCallFact) -> Option<W3SignalSi
 fn w3_build_site(
     input: &W3Input<'_>,
     call: &wow_emmy::function_calls::SourceCallFact,
-    _side: W3SignalSide,
     declarations: &BTreeMap<(String, SourceSpan), W3Binding>,
     declaration_keys: &BTreeMap<String, W3ReceiverTarget>,
     function_nodes: &BTreeMap<String, GraphNodeId>,
@@ -1885,7 +1884,8 @@ fn w3_build_site(
     let Some(literal_key) = event else {
         return Ok(None);
     };
-    let event_key = literal_key.trim().to_owned();
+    // String literals are already decoded here; their exact value is the key.
+    let event_key = literal_key.to_owned();
     if event_key.is_empty() || event_key.len() > W3_MAX_EVENT_KEY_BYTES {
         return Ok(None);
     }
@@ -1914,16 +1914,14 @@ fn w3_build_site(
         declaration_keys,
     )?;
 
-    let mut exact = true;
     for argument in arguments {
         if argument.span().byte_start().is_none() || argument.span().byte_end().is_none() {
             return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
         }
-        if argument.literal().is_none() && argument.reference_key().is_none() {
-            exact = false;
-        }
     }
-
+    // This fact asserts only the exact EventRegistry callsite and decoded key.
+    // The emitted graph endpoints are caller and signal key; callback and owner
+    // identities are not represented by this producer.
     let function_proposals = function_proposals_of(input);
     let caller_proposal = function_proposals
         .get(call.caller_function_id())
@@ -1945,7 +1943,6 @@ fn w3_build_site(
         event_key,
         event_ordinal: ordinal,
         argument_count: arguments.len(),
-        exact,
         handle,
         evidence,
     }))
@@ -2064,11 +2061,7 @@ fn w3_signal_fact(
             )?,
             producer_id: "wow.emmy".into(),
             producer_version: W3_FACT_PROFILE.into(),
-            confidence: if site.exact {
-                GraphConfidence::Derived
-            } else {
-                GraphConfidence::Possible
-            },
+            confidence: GraphConfidence::Derived,
             fields,
             source_handle_ids: BTreeSet::from([site.handle, site.receiver_handle])
                 .into_iter()

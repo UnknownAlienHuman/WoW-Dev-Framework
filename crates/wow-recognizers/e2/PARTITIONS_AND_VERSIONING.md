@@ -72,6 +72,14 @@ old complete output partition
 
 On failure/partial/cancel, the target complete partition is not published. Prior partition may remain last-known-good under its old identity but cannot satisfy a request for the new generation.
 
+## Exact decoded EventRegistry keys
+
+The W2 native bridge and W3 custom-signal adapters preserve the decoded string literal as the event key. W3 producer/subscription matching and graph entity identity use that exact value, including leading or trailing whitespace. A W3 subscription relation describes the exact registration site from its enclosing source function to that event key; it does not identify the callback or owner argument. Unresolved callback/owner values remain unbound and produce no handler-specific edge. Empty and over-limit inputs retain each adapter's existing conservative handling: W3 omits the unsupported site, while W2 fails closed with its budget error.
+
+This interpretation change is identified by W2 profile wow-recognizers/lua-native-event-bridges/5 and fact profile wow-recognizers-lua-native-event-bridge-facts-5, plus W3 profile wow-recognizers/lua-custom-signals/5 and fact profile wow-recognizers-lua-custom-signal-facts-3. The typed rules and graph registry are unchanged, so their versions do not change. The real replacement consumer is wow-service::graph::build::signals::publish_signals: it replaces the stable W2 and W3 graph partitions from the new exact facts. Existing snapshots keep their recorded identities; this adds no legacy alias or reinterpretation path.
+
+The E2-B plan schema `wow-recognizers/semantic-plan/e2-b/2` records dependency-correct order within each original clause scope. Its plan identity changes because clause interpretation and execution order now agree; old `/1` plans are not reinterpreted. The native Service witness consumes the rebuilt plan through `wow-service::graph::build::signals::publish_signals`, which replaces the W3 producer partition under its current profile. Other recognizer-backed producers likewise replace only their own output partitions when rebuilt against the new plan.
+
 ## Pack enable/disable
 
 Activation is explicit configuration against exact pack/trust/profile compatibility.
