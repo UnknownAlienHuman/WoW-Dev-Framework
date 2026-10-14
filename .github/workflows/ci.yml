@@ -20,6 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       - name: Install current stable Rust
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
@@ -27,36 +28,66 @@ jobs:
         run: |
           git rev-parse HEAD
           rustc +stable -Vv
+      - name: Archive exact source under test
+        if: runner.os == 'Linux'
+        run: |
+          git archive --format=tar --output="$RUNNER_TEMP/source-under-test.tar" HEAD
+          git rev-parse HEAD > "$RUNNER_TEMP/COMMIT_SHA"
+          sha256sum "$RUNNER_TEMP/source-under-test.tar" > "$RUNNER_TEMP/SHA256SUMS"
+      - name: Retain source under test
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: source-under-test-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/source-under-test.tar
+            ${{ runner.temp }}/COMMIT_SHA
+            ${{ runner.temp }}/SHA256SUMS
+          retention-days: 3
+          if-no-files-found: error
       - name: Native repository policy and skill checks
         run: cargo +stable xtask check
       - run: cargo +stable fmt --all --check
       - run: cargo +stable check --locked --workspace --all-targets --all-features
       - run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
-      - run: cargo +stable test --locked --workspace --all-targets --all-features
-      - run: cargo +stable test --release --locked --workspace --all-targets --all-features
+  locked-acceptance:
+    needs: checks
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        gate: [debug, release, rustdoc]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Record tested inputs
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse HEAD
+          rustc +stable -Vv
+      - name: Full locked debug tests
+        if: matrix.gate == 'debug'
+        run: cargo +stable test --locked --workspace --all-targets --all-features
+      - name: Full locked release tests
+        if: matrix.gate == 'release'
+        run: cargo +stable test --release --locked --workspace --all-targets --all-features
       - name: Check documentation
+        if: matrix.gate == 'rustdoc'
         env:
           RUSTDOCFLAGS: -D warnings
         run: cargo +stable doc --locked --workspace --all-features --no-deps
-      - name: Verify tests did not rewrite tracked files
+      - name: Verify gate did not rewrite tracked files
+        if: always()
         run: git diff --exit-code
-      - name: Archive exact tested source
-        if: runner.os == 'Linux'
-        run: |
-          git archive --format=tar --output="$RUNNER_TEMP/tested-source.tar" HEAD
-          git rev-parse HEAD > "$RUNNER_TEMP/COMMIT_SHA"
-          sha256sum "$RUNNER_TEMP/tested-source.tar" > "$RUNNER_TEMP/SHA256SUMS"
-      - name: Retain tested source
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v7
-        with:
-          name: tested-source-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/tested-source.tar
-            ${{ runner.temp }}/COMMIT_SHA
-            ${{ runner.temp }}/SHA256SUMS
-          retention-days: 3
-          if-no-files-found: error
   updated-dependencies:
     runs-on: ubuntu-latest
     timeout-minutes: 20
