@@ -1,9 +1,9 @@
 {
-  "schema_version": 1,
-  "manifest_id": "wow-recognizers-e2-b-checksums-v1",
+  "schema_version": 2,
+  "manifest_id": "wow-recognizers-e2-b-pending-acceptance-v2",
+  "contract_id": "wow-recognizers/e2-b/core-structural-rules",
   "algorithm": "sha256",
-  "state": "pending-byte-freeze-before-first-rust-implementation",
-  "implementation_state": "not-started",
+  "state": "pending-acceptance-freeze",
   "prerequisite_pins": {
     "wow_core_implementation_commit": null,
     "wow_core_fixture_bundle_sha256": null,
@@ -65,10 +65,26 @@
   ],
   "member_sha256": {},
   "bundle_sha256": null,
-  "freeze_rules": [
-    "null values are allowed only while implementation_state is not-started",
-    "all prerequisite pack fact graph evaluation output replacement mutation and checksum values freeze before the first E2-B Rust commit",
-    "tests verify committed fixture bytes and never rewrite them automatically",
-    "changing a semantic rule vector requires a versioned contract fixture and checksum update"
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "canonical_issue": 103,
+  "preimplementation_freeze": {
+    "status": "missed",
+    "evaluation": "NotEvaluated"
+  },
+  "historical_preimplementation_requirements": [
+    "wow-core wow-emmy and wow-graph implementation commits and fixture digests",
+    "wow-project TOC XML fact adapter profile needed by real integration",
+    "core pack rule fact graph evaluation and budget profiles",
+    "all fact match ambiguity proposal partition replacement evaluation and mutation vectors",
+    "all member and bundle SHA-256 values"
+  ],
+  "acceptance_rules": [
+    "all prerequisite pins remain null until exact prerequisite and fixture evidence is reviewed",
+    "profile and frozen-vector pins remain null until exact probes and evaluation results are reviewed",
+    "Shadow packs may leave fixture categories empty and their IDs are not acceptance evidence",
+    "Default requires nonempty IDs in every fixture category but ID presence alone is not executed evaluation or read-back",
+    "member_sha256 remains empty and bundle_sha256 remains null while acceptance is pending",
+    "no automatic pin or fixture promotion from code presence"
   ]
 }

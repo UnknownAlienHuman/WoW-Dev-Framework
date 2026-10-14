@@ -1,7 +1,7 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract_id": "wow-recognizers/e2-b/core-structural-rules",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
   "work_package": "E2-B",
   "crate": "wow-recognizers",
   "direct_framework_dependencies": [
@@ -173,14 +173,936 @@
     "crates/wow-recognizers/e2/examples/graph-output.json",
     "crates/wow-recognizers/e2/examples/CHECKSUMS.json"
   ],
-  "freeze_gate": {
-    "implementation_state": "not-started",
-    "required_before_first_rust_implementation": [
-      "wow-core wow-emmy and wow-graph implementation commits and fixture digests",
-      "wow-project TOC XML fact adapter profile needed by real integration",
-      "core pack rule fact graph evaluation and budget profiles",
-      "all fact match ambiguity proposal partition replacement evaluation and mutation vectors",
-      "all member and bundle SHA-256 values"
-    ]
-  }
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "canonical_issue": 103,
+  "preimplementation_freeze": {
+    "status": "missed",
+    "evaluation": "NotEvaluated"
+  },
+  "functional_checkpoint": {
+    "commit": "ac0ab4599e9dc8ccac369bf17c3f80f1ebe5a2f8",
+    "quick_run": 38583132065
+  },
+  "historical_preimplementation_requirements": [
+    "wow-core wow-emmy and wow-graph implementation commits and fixture digests",
+    "wow-project TOC XML fact adapter profile needed by real integration",
+    "core pack rule fact graph evaluation and budget profiles",
+    "all fact match ambiguity proposal partition replacement evaluation and mutation vectors",
+    "all member and bundle SHA-256 values"
+  ],
+  "checksum_contract": {
+    "state": "pending-acceptance-freeze",
+    "manifest": "crates/wow-recognizers/e2/examples/CHECKSUMS.json",
+    "rule": "prerequisite, profile, vector, member, and bundle evidence remains unpinned while Issue #103 acceptance is pending; code presence and Shadow fixture IDs do not auto-bless acceptance"
+  },
+  "application_selection": "application-selected",
+  "capability_routing": [
+    {
+      "capability": "core.toc.package@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_toc.rs",
+          "symbol": "recognize_source_toc"
+        },
+        {
+          "path": "crates/wow-recognizers/src/source_toc.rs",
+          "symbol": "recognize_source_toc_assertions"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/toc.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.toc.file_order@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_toc.rs",
+          "symbol": "recognize_source_toc"
+        },
+        {
+          "path": "crates/wow-recognizers/src/source_toc.rs",
+          "symbol": "recognize_source_toc_assertions"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/toc.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.toc.dependencies@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_toc.rs",
+          "symbol": "recognize_source_toc"
+        },
+        {
+          "path": "crates/wow-recognizers/src/source_toc.rs",
+          "symbol": "recognize_source_toc_assertions"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/toc.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.toc.load_on_demand@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_toc.rs",
+          "symbol": "recognize_source_toc"
+        },
+        {
+          "path": "crates/wow-recognizers/src/source_toc.rs",
+          "symbol": "recognize_source_toc_assertions"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/toc.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.toc.saved_variables@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_toc.rs",
+          "symbol": "recognize_source_toc"
+        },
+        {
+          "path": "crates/wow-recognizers/src/source_toc.rs",
+          "symbol": "recognize_source_toc_assertions"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/toc.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.xml.template@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_xml.rs",
+          "symbol": "recognize_source_xml"
+        },
+        {
+          "path": "crates/wow-recognizers/src/source_xml.rs",
+          "symbol": "recognize_source_xml_assertions"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/xml.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.xml.object@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_xml.rs",
+          "symbol": "recognize_source_xml"
+        },
+        {
+          "path": "crates/wow-recognizers/src/source_xml.rs",
+          "symbol": "recognize_source_xml_assertions"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/xml.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.xml.inherits@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_xml.rs",
+          "symbol": "recognize_source_xml"
+        },
+        {
+          "path": "crates/wow-recognizers/src/source_xml.rs",
+          "symbol": "recognize_source_xml_assertions"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/xml.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.xml.script@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_xml.rs",
+          "symbol": "recognize_source_xml"
+        },
+        {
+          "path": "crates/wow-recognizers/src/source_xml.rs",
+          "symbol": "recognize_source_xml_assertions"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/xml.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.lua.create_frame@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_construction.rs",
+          "symbol": "recognize_source_construction"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/construction.rs",
+          "symbol": "publish"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.lua.create_from_mixins@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_mixins.rs",
+          "symbol": "recognize_source_mixins"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/lua_mixins.rs",
+          "symbol": "publish"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.lua.mixin_assignment@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_mixins.rs",
+          "symbol": "recognize_source_mixin_assignments"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/lua_mixins.rs",
+          "symbol": "publish"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.signal.native_frame_event@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_signals.rs",
+          "symbol": "w1_recognize_native_frame_events"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/signals.rs",
+          "symbol": "publish_signals"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.signal.native_event_registry_bridge@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_bridge.rs",
+          "symbol": "w2_recognize_native_event_bridges"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/signals.rs",
+          "symbol": "publish_signals"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.signal.custom_registry_producer@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_signals.rs",
+          "symbol": "w3_recognize_signals"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/signals.rs",
+          "symbol": "publish_signals"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.signal.custom_registry_subscription@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_signals.rs",
+          "symbol": "w3_recognize_signals"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/signals.rs",
+          "symbol": "publish_signals"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.signal.cvar_callback@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_signals.rs",
+          "symbol": "recognize_source_cvar_callbacks"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/signals.rs",
+          "symbol": "publish_signals"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.hook.set_script@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_scripts.rs",
+          "symbol": "recognize_source_hooks"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/signals.rs",
+          "symbol": "publish_signals"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.hook.hook_script@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_scripts.rs",
+          "symbol": "recognize_source_hooks"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/signals.rs",
+          "symbol": "publish_signals"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.hook.secure_posthook@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_scripts.rs",
+          "symbol": "recognize_source_hooks"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/signals.rs",
+          "symbol": "publish_signals"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.library.libstub_require@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_state.rs",
+          "symbol": "recognize_source_library"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/signals.rs",
+          "symbol": "publish_signals"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.library.libstub_new@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_state.rs",
+          "symbol": "recognize_source_library"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/signals.rs",
+          "symbol": "publish_signals"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.library.embed@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_state.rs",
+          "symbol": "recognize_source_library"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/signals.rs",
+          "symbol": "publish_signals"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.state.saved_variable_root@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_toc.rs",
+          "symbol": "recognize_source_toc"
+        },
+        {
+          "path": "crates/wow-recognizers/src/source_toc.rs",
+          "symbol": "recognize_source_toc_assertions"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/toc.rs",
+          "symbol": "publish_state_root_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.state.literal_path_read@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_state_core.rs",
+          "symbol": "recognize_source_state_core"
+        },
+        {
+          "path": "crates/wow-recognizers/src/source_state_core.rs",
+          "symbol": "recognize_source_state_core_assertions"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/state_core.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    },
+    {
+      "capability": "core.state.literal_path_write@1",
+      "status": "partial-functional",
+      "owners": [
+        {
+          "path": "crates/wow-recognizers/src/source_state_core.rs",
+          "symbol": "recognize_source_state_core"
+        },
+        {
+          "path": "crates/wow-recognizers/src/source_state_core.rs",
+          "symbol": "recognize_source_state_core_assertions"
+        }
+      ],
+      "application_routes": [
+        {
+          "path": "crates/wow-service/src/graph/build.rs",
+          "symbol": "execute_graph_build_diagnosed"
+        },
+        {
+          "path": "crates/wow-service/src/graph/build/state_core.rs",
+          "symbol": "publish_bound"
+        },
+        {
+          "path": "apps/wow/src/graph.rs",
+          "symbol": "run"
+        },
+        {
+          "path": "apps/wow/src/graph_build.rs",
+          "symbol": "run"
+        }
+      ],
+      "acceptance_status": "pending",
+      "blocking_issues": [
+        103,
+        120
+      ]
+    }
+  ]
 }

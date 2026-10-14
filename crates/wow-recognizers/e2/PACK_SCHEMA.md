@@ -39,9 +39,11 @@ confidence policy
 ambiguity policy
 coverage/no-match policy
 budgets
-fixture/evaluation IDs
+fixture/evaluation IDs (rollout-dependent)
 rollout state
 ```
+
+`Shadow` packs may leave any fixture category empty. `Default` requires a nonempty positive, near-negative, partial, and mutation ID list for every rule. Pack validation checks list shape, ID syntax, and canonical order; it does not resolve IDs to executable fixtures or prove that an evaluation ran. ID presence alone never satisfies acceptance.
 
 ## Clause primitives
 
@@ -195,5 +197,5 @@ Reject packs with:
 - undeclared literals or repository conditions;
 - invalid graph endpoints/attributes;
 - negative clause without complete-coverage contract;
-- missing positive/negative/partial/mutation fixture IDs;
+- `Default` rollout with a missing positive/near-negative/partial/mutation fixture ID list;
 - default rollout without evaluation gate.

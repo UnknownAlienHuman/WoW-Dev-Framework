@@ -16,6 +16,8 @@ const ANNOTATION_CONTRACT: &str = "crates/wow-annotations/e1/CONTRACT.json";
 const ANNOTATION_MANIFEST: &str = "crates/wow-annotations/e1/examples/CHECKSUMS.json";
 const PROJECT_CONTRACT: &str = "crates/wow-project/CONTRACT.json";
 const PROJECT_MANIFEST: &str = "crates/wow-project/examples/CHECKSUMS.json";
+const RECOGNIZER_CONTRACT: &str = "crates/wow-recognizers/e2/CONTRACT.json";
+const RECOGNIZER_MANIFEST: &str = "crates/wow-recognizers/e2/examples/CHECKSUMS.json";
 
 struct CapabilitySpec {
     name: &'static str,
@@ -34,6 +36,9 @@ struct OwnerSpec {
     manifest_history_is_object: bool,
     application_selection: Option<&'static str>,
     operation_matrix_matches_capabilities: bool,
+    capability_matrix_field: Option<&'static str>,
+    canonical_issue: Option<u64>,
+    required_blocking_issues: &'static [u64],
 }
 
 const PROJECT_CAPABILITIES: &[CapabilitySpec] = &[
@@ -526,6 +531,337 @@ const STORE_E2_CAPABILITIES: &[CapabilitySpec] = &[
     },
 ];
 
+const RECOGNIZER_TOC_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/graph/build.rs",
+        "execute_graph_build_diagnosed",
+    ),
+    ("crates/wow-service/src/graph/build/toc.rs", "publish_bound"),
+    ("apps/wow/src/graph.rs", "run"),
+    ("apps/wow/src/graph_build.rs", "run"),
+];
+const RECOGNIZER_STATE_ROOT_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/graph/build.rs",
+        "execute_graph_build_diagnosed",
+    ),
+    (
+        "crates/wow-service/src/graph/build/toc.rs",
+        "publish_state_root_bound",
+    ),
+    ("apps/wow/src/graph.rs", "run"),
+    ("apps/wow/src/graph_build.rs", "run"),
+];
+const RECOGNIZER_XML_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/graph/build.rs",
+        "execute_graph_build_diagnosed",
+    ),
+    ("crates/wow-service/src/graph/build/xml.rs", "publish_bound"),
+    ("apps/wow/src/graph.rs", "run"),
+    ("apps/wow/src/graph_build.rs", "run"),
+];
+const RECOGNIZER_CONSTRUCTION_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/graph/build.rs",
+        "execute_graph_build_diagnosed",
+    ),
+    (
+        "crates/wow-service/src/graph/build/construction.rs",
+        "publish",
+    ),
+    ("apps/wow/src/graph.rs", "run"),
+    ("apps/wow/src/graph_build.rs", "run"),
+];
+const RECOGNIZER_MIXIN_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/graph/build.rs",
+        "execute_graph_build_diagnosed",
+    ),
+    (
+        "crates/wow-service/src/graph/build/lua_mixins.rs",
+        "publish",
+    ),
+    ("apps/wow/src/graph.rs", "run"),
+    ("apps/wow/src/graph_build.rs", "run"),
+];
+const RECOGNIZER_SIGNAL_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/graph/build.rs",
+        "execute_graph_build_diagnosed",
+    ),
+    (
+        "crates/wow-service/src/graph/build/signals.rs",
+        "publish_signals",
+    ),
+    ("apps/wow/src/graph.rs", "run"),
+    ("apps/wow/src/graph_build.rs", "run"),
+];
+const RECOGNIZER_STATE_CORE_ROUTES: &[(&str, &str)] = &[
+    (
+        "crates/wow-service/src/graph/build.rs",
+        "execute_graph_build_diagnosed",
+    ),
+    (
+        "crates/wow-service/src/graph/build/state_core.rs",
+        "publish_bound",
+    ),
+    ("apps/wow/src/graph.rs", "run"),
+    ("apps/wow/src/graph_build.rs", "run"),
+];
+
+const RECOGNIZER_TOC_OWNERS: &[(&str, &str)] = &[
+    (
+        "crates/wow-recognizers/src/source_toc.rs",
+        "recognize_source_toc",
+    ),
+    (
+        "crates/wow-recognizers/src/source_toc.rs",
+        "recognize_source_toc_assertions",
+    ),
+];
+const RECOGNIZER_XML_OWNERS: &[(&str, &str)] = &[
+    (
+        "crates/wow-recognizers/src/source_xml.rs",
+        "recognize_source_xml",
+    ),
+    (
+        "crates/wow-recognizers/src/source_xml.rs",
+        "recognize_source_xml_assertions",
+    ),
+];
+const RECOGNIZER_CONSTRUCTION_OWNERS: &[(&str, &str)] = &[(
+    "crates/wow-recognizers/src/source_construction.rs",
+    "recognize_source_construction",
+)];
+const RECOGNIZER_MIXIN_OWNERS: &[(&str, &str)] = &[(
+    "crates/wow-recognizers/src/source_mixins.rs",
+    "recognize_source_mixins",
+)];
+const RECOGNIZER_MIXIN_ASSIGNMENT_OWNERS: &[(&str, &str)] = &[(
+    "crates/wow-recognizers/src/source_mixins.rs",
+    "recognize_source_mixin_assignments",
+)];
+const RECOGNIZER_FRAME_EVENT_OWNERS: &[(&str, &str)] = &[(
+    "crates/wow-recognizers/src/source_signals.rs",
+    "w1_recognize_native_frame_events",
+)];
+const RECOGNIZER_EVENT_BRIDGE_OWNERS: &[(&str, &str)] = &[(
+    "crates/wow-recognizers/src/source_bridge.rs",
+    "w2_recognize_native_event_bridges",
+)];
+const RECOGNIZER_CUSTOM_SIGNAL_OWNERS: &[(&str, &str)] = &[(
+    "crates/wow-recognizers/src/source_signals.rs",
+    "w3_recognize_signals",
+)];
+const RECOGNIZER_CVAR_OWNERS: &[(&str, &str)] = &[(
+    "crates/wow-recognizers/src/source_signals.rs",
+    "recognize_source_cvar_callbacks",
+)];
+const RECOGNIZER_HOOK_OWNERS: &[(&str, &str)] = &[(
+    "crates/wow-recognizers/src/source_scripts.rs",
+    "recognize_source_hooks",
+)];
+const RECOGNIZER_LIBRARY_OWNERS: &[(&str, &str)] = &[(
+    "crates/wow-recognizers/src/source_state.rs",
+    "recognize_source_library",
+)];
+const RECOGNIZER_STATE_CORE_OWNERS: &[(&str, &str)] = &[
+    (
+        "crates/wow-recognizers/src/source_state_core.rs",
+        "recognize_source_state_core",
+    ),
+    (
+        "crates/wow-recognizers/src/source_state_core.rs",
+        "recognize_source_state_core_assertions",
+    ),
+];
+
+const RECOGNIZER_CAPABILITIES: &[CapabilitySpec] = &[
+    CapabilitySpec {
+        name: "core.toc.package@1",
+        owners: RECOGNIZER_TOC_OWNERS,
+        application_routes: RECOGNIZER_TOC_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.toc.file_order@1",
+        owners: RECOGNIZER_TOC_OWNERS,
+        application_routes: RECOGNIZER_TOC_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.toc.dependencies@1",
+        owners: RECOGNIZER_TOC_OWNERS,
+        application_routes: RECOGNIZER_TOC_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.toc.load_on_demand@1",
+        owners: RECOGNIZER_TOC_OWNERS,
+        application_routes: RECOGNIZER_TOC_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.toc.saved_variables@1",
+        owners: RECOGNIZER_TOC_OWNERS,
+        application_routes: RECOGNIZER_TOC_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.xml.template@1",
+        owners: RECOGNIZER_XML_OWNERS,
+        application_routes: RECOGNIZER_XML_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.xml.object@1",
+        owners: RECOGNIZER_XML_OWNERS,
+        application_routes: RECOGNIZER_XML_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.xml.inherits@1",
+        owners: RECOGNIZER_XML_OWNERS,
+        application_routes: RECOGNIZER_XML_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.xml.script@1",
+        owners: RECOGNIZER_XML_OWNERS,
+        application_routes: RECOGNIZER_XML_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.lua.create_frame@1",
+        owners: RECOGNIZER_CONSTRUCTION_OWNERS,
+        application_routes: RECOGNIZER_CONSTRUCTION_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.lua.create_from_mixins@1",
+        owners: RECOGNIZER_MIXIN_OWNERS,
+        application_routes: RECOGNIZER_MIXIN_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.lua.mixin_assignment@1",
+        owners: RECOGNIZER_MIXIN_ASSIGNMENT_OWNERS,
+        application_routes: RECOGNIZER_MIXIN_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.signal.native_frame_event@1",
+        owners: RECOGNIZER_FRAME_EVENT_OWNERS,
+        application_routes: RECOGNIZER_SIGNAL_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.signal.native_event_registry_bridge@1",
+        owners: RECOGNIZER_EVENT_BRIDGE_OWNERS,
+        application_routes: RECOGNIZER_SIGNAL_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.signal.custom_registry_producer@1",
+        owners: RECOGNIZER_CUSTOM_SIGNAL_OWNERS,
+        application_routes: RECOGNIZER_SIGNAL_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.signal.custom_registry_subscription@1",
+        owners: RECOGNIZER_CUSTOM_SIGNAL_OWNERS,
+        application_routes: RECOGNIZER_SIGNAL_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.signal.cvar_callback@1",
+        owners: RECOGNIZER_CVAR_OWNERS,
+        application_routes: RECOGNIZER_SIGNAL_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.hook.set_script@1",
+        owners: RECOGNIZER_HOOK_OWNERS,
+        application_routes: RECOGNIZER_SIGNAL_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.hook.hook_script@1",
+        owners: RECOGNIZER_HOOK_OWNERS,
+        application_routes: RECOGNIZER_SIGNAL_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.hook.secure_posthook@1",
+        owners: RECOGNIZER_HOOK_OWNERS,
+        application_routes: RECOGNIZER_SIGNAL_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.library.libstub_require@1",
+        owners: RECOGNIZER_LIBRARY_OWNERS,
+        application_routes: RECOGNIZER_SIGNAL_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.library.libstub_new@1",
+        owners: RECOGNIZER_LIBRARY_OWNERS,
+        application_routes: RECOGNIZER_SIGNAL_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.library.embed@1",
+        owners: RECOGNIZER_LIBRARY_OWNERS,
+        application_routes: RECOGNIZER_SIGNAL_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.state.saved_variable_root@1",
+        owners: RECOGNIZER_TOC_OWNERS,
+        application_routes: RECOGNIZER_STATE_ROOT_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.state.literal_path_read@1",
+        owners: RECOGNIZER_STATE_CORE_OWNERS,
+        application_routes: RECOGNIZER_STATE_CORE_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
+        name: "core.state.literal_path_write@1",
+        owners: RECOGNIZER_STATE_CORE_OWNERS,
+        application_routes: RECOGNIZER_STATE_CORE_ROUTES,
+        service_routes: None,
+        application_selection: None,
+    },
+];
+
 const OWNERS: &[OwnerSpec] = &[
     OwnerSpec {
         id: "wow-annotations/e1-projection-and-parity",
@@ -536,6 +872,9 @@ const OWNERS: &[OwnerSpec] = &[
         manifest_history_is_object: false,
         application_selection: None,
         operation_matrix_matches_capabilities: false,
+        capability_matrix_field: None,
+        canonical_issue: None,
+        required_blocking_issues: &[],
     },
     OwnerSpec {
         id: "wow-project/e0-d/1",
@@ -546,6 +885,9 @@ const OWNERS: &[OwnerSpec] = &[
         manifest_history_is_object: true,
         application_selection: None,
         operation_matrix_matches_capabilities: false,
+        capability_matrix_field: None,
+        canonical_issue: None,
+        required_blocking_issues: &[],
     },
     OwnerSpec {
         id: "wow-graph/e2-a/typed-assertion-partition-query-core",
@@ -556,6 +898,9 @@ const OWNERS: &[OwnerSpec] = &[
         manifest_history_is_object: false,
         application_selection: None,
         operation_matrix_matches_capabilities: false,
+        capability_matrix_field: None,
+        canonical_issue: None,
+        required_blocking_issues: &[],
     },
     OwnerSpec {
         id: "wow-service/e1-d-reference-pack-build-validation",
@@ -566,6 +911,9 @@ const OWNERS: &[OwnerSpec] = &[
         manifest_history_is_object: false,
         application_selection: Some("application-selected"),
         operation_matrix_matches_capabilities: false,
+        capability_matrix_field: None,
+        canonical_issue: None,
+        required_blocking_issues: &[],
     },
     OwnerSpec {
         id: "wow-store/e2-d/projectstore-coherent-publication",
@@ -576,6 +924,22 @@ const OWNERS: &[OwnerSpec] = &[
         manifest_history_is_object: false,
         application_selection: None,
         operation_matrix_matches_capabilities: true,
+        capability_matrix_field: None,
+        canonical_issue: None,
+        required_blocking_issues: &[],
+    },
+    OwnerSpec {
+        id: "wow-recognizers/e2-b/core-structural-rules",
+        contract_path: RECOGNIZER_CONTRACT,
+        manifest_path: RECOGNIZER_MANIFEST,
+        manifest_id: "wow-recognizers-e2-b-pending-acceptance-v2",
+        capabilities: RECOGNIZER_CAPABILITIES,
+        manifest_history_is_object: false,
+        application_selection: Some("application-selected"),
+        operation_matrix_matches_capabilities: false,
+        capability_matrix_field: Some("active_rule_ids"),
+        canonical_issue: Some(103),
+        required_blocking_issues: &[103, 120],
     },
 ];
 
@@ -700,9 +1064,19 @@ impl Scope {
 }
 
 fn validate_contract(owner: &OwnerSpec, value: &Value, files: &BTreeSet<&str>) -> Result<()> {
-    common_state(value, "partial-functional-freeze-open")?;
+    common_state(
+        value,
+        "partial-functional-freeze-open",
+        owner.canonical_issue.unwrap_or(120),
+    )?;
     if value["schema_version"].as_u64() != Some(2) || text(value, "contract_id")? != owner.id {
         return Err("machine-state contract identity/schema mismatch".into());
+    }
+    if owner
+        .canonical_issue
+        .is_some_and(|issue| value["canonical_issue"].as_u64() != Some(issue))
+    {
+        return Err("machine-state canonical Issue differs from the explicit owner map".into());
     }
     match owner.application_selection {
         Some(expected) if text(value, "application_selection")? != expected => {
@@ -742,12 +1116,24 @@ fn validate_contract(owner: &OwnerSpec, value: &Value, files: &BTreeSet<&str>) -
 }
 
 fn validate_manifest(owner: &OwnerSpec, value: &Value) -> Result<()> {
-    common_state(value, "pending-acceptance-freeze")?;
+    common_state(
+        value,
+        "pending-acceptance-freeze",
+        owner.canonical_issue.unwrap_or(120),
+    )?;
     if value["schema_version"].as_u64() != Some(2)
         || text(value, "manifest_id")? != owner.manifest_id
         || text(value, "contract_id")? != owner.id
     {
         return Err("machine-state manifest identity/schema mismatch".into());
+    }
+    if owner
+        .canonical_issue
+        .is_some_and(|issue| value["canonical_issue"].as_u64() != Some(issue))
+    {
+        return Err(
+            "machine-state manifest canonical Issue differs from the explicit owner map".into(),
+        );
     }
     let historical = value
         .get("historical_preimplementation_requirements")
@@ -782,15 +1168,16 @@ fn validate_manifest(owner: &OwnerSpec, value: &Value) -> Result<()> {
     Ok(())
 }
 
-fn common_state(value: &Value, expected_state: &str) -> Result<()> {
+fn common_state(value: &Value, expected_state: &str, canonical_issue: u64) -> Result<()> {
     if text(value, "state")? != expected_state
         || text(value, "implementation_status")? != "partial-functional"
         || text(value, "acceptance_status")? != "pending"
-        || value["canonical_issue"].as_u64() != Some(120)
+        || value["canonical_issue"].as_u64() != Some(canonical_issue)
         || value.get("implementation_state").is_some()
     {
         return Err(
-            "machine state must remain partial-functional and pending on Issue #120".into(),
+            "machine state must remain partial-functional and pending on its canonical Issue"
+                .into(),
         );
     }
     let freeze = value
@@ -843,6 +1230,22 @@ fn validate_capabilities(
     contract: &Value,
     files: &BTreeSet<&str>,
 ) -> Result<()> {
+    if let Some(field) = owner.capability_matrix_field {
+        let matrix = contract
+            .get(field)
+            .and_then(Value::as_array)
+            .ok_or("explicit capability identity matrix must be an array")?;
+        if matrix.len() != owner.capabilities.len()
+            || matrix
+                .iter()
+                .zip(owner.capabilities)
+                .any(|(identity, capability)| identity.as_str() != Some(capability.name))
+        {
+            return Err(
+                "explicit capability identity matrix differs from the owner mapping".into(),
+            );
+        }
+    }
     let rows = contract
         .get("capability_routing")
         .and_then(Value::as_array)
@@ -903,8 +1306,15 @@ fn validate_capabilities(
         }
         text(row, "status")?;
         text(row, "acceptance_status")?;
-        if !row["blocking_issues"].is_array() {
-            return Err("blocking_issues must be an array".into());
+        let blockers = row["blocking_issues"]
+            .as_array()
+            .ok_or("blocking_issues must be an array")?;
+        if owner.required_blocking_issues.iter().any(|required| {
+            !blockers
+                .iter()
+                .any(|issue| issue.as_u64() == Some(*required))
+        }) {
+            return Err("capability is missing an explicit acceptance blocker".into());
         }
         routes(row.get("owners").ok_or("owners are absent")?, files)?;
         routes(
@@ -1021,8 +1431,14 @@ mod tests {
                     json!({"path":path,"symbol":symbol})
                 })
                 .collect::<Vec<_>>();
+            let mut blockers = vec![120, 122];
+            for required in spec.required_blocking_issues {
+                if !blockers.contains(required) {
+                    blockers.push(*required);
+                }
+            }
             let mut row = json!({"capability":capability.name,"status":"partial-functional",
-                "owners":owners,"application_routes":routes,"acceptance_status":"pending","blocking_issues":[120,122]});
+                "owners":owners,"application_routes":routes,"acceptance_status":"pending","blocking_issues":blockers});
             if let Some(selection) = capability.application_selection {
                 row["application_selection"] = json!(selection);
             }
@@ -1045,7 +1461,7 @@ mod tests {
             .map(|capability| capability.name)
             .collect::<Vec<_>>();
         let mut contract = json!({"schema_version":2,"contract_id":spec.id,"state":"partial-functional-freeze-open",
-            "implementation_status":"partial-functional","acceptance_status":"pending","canonical_issue":120,
+            "implementation_status":"partial-functional","acceptance_status":"pending","canonical_issue":spec.canonical_issue.unwrap_or(120),
             "preimplementation_freeze":{"status":"missed","evaluation":"NotEvaluated"},
             "functional_checkpoint":{"commit":"abcdefabcdefabcdefabcdefabcdefabcdefabcd","quick_run":7},
             "historical_preimplementation_requirements":[],
@@ -1054,6 +1470,14 @@ mod tests {
         if let Some(selection) = spec.application_selection {
             contract["application_selection"] = json!(selection);
         }
+        if let Some(field) = spec.capability_matrix_field {
+            contract[field] = json!(
+                spec.capabilities
+                    .iter()
+                    .map(|capability| capability.name)
+                    .collect::<Vec<_>>()
+            );
+        }
         let history = if spec.manifest_history_is_object {
             json!({})
         } else {
@@ -1061,7 +1485,7 @@ mod tests {
         };
         let mut manifest = json!({"schema_version":2,"manifest_id":spec.manifest_id,"contract_id":spec.id,
             "state":"pending-acceptance-freeze","implementation_status":"partial-functional",
-            "acceptance_status":"pending","canonical_issue":120,
+            "acceptance_status":"pending","canonical_issue":spec.canonical_issue.unwrap_or(120),
             "preimplementation_freeze":{"status":"missed","evaluation":"NotEvaluated"},
             "historical_preimplementation_requirements":history,
             "acceptance_rules":["pending"]});
@@ -1416,6 +1840,145 @@ mod tests {
         let mut misclassified = contract;
         misclassified["capability_routing"][0]["application_selection"] = json!("library-only");
         assert!(validate_contract(spec, &misclassified, &files).is_err());
+        Ok(())
+    }
+
+    fn recognizer_e2_records() -> Result<(&'static OwnerSpec, Value, Value, BTreeSet<&'static str>)>
+    {
+        let spec = OWNERS
+            .iter()
+            .find(|owner| owner.id == "wow-recognizers/e2-b/core-structural-rules")
+            .ok_or("Recognizer E2-B owner mapping is absent")?;
+        let contract = serde_json::from_str(include_str!(
+            "../../../../crates/wow-recognizers/e2/CONTRACT.json"
+        ))?;
+        let manifest = serde_json::from_str(include_str!(
+            "../../../../crates/wow-recognizers/e2/examples/CHECKSUMS.json"
+        ))?;
+        let mut files = BTreeSet::from([spec.contract_path, spec.manifest_path]);
+        for capability in spec.capabilities {
+            for (path, _) in capability
+                .owners
+                .iter()
+                .chain(capability.application_routes)
+            {
+                files.insert(*path);
+            }
+        }
+        Ok((spec, contract, manifest, files))
+    }
+
+    #[test]
+    fn recognizer_e2_maps_all_26_rules_and_keeps_acceptance_pending() -> Result<()> {
+        let (spec, contract, manifest, files) = recognizer_e2_records()?;
+        check(spec, contract.clone(), manifest.clone(), &files)?;
+        assert!(manifest.get("implementation_state").is_none());
+
+        let active = contract["active_rule_ids"]
+            .as_array()
+            .ok_or("active_rule_ids must be an array")?;
+        let routes = contract["capability_routing"]
+            .as_array()
+            .ok_or("capability_routing must be an array")?;
+        assert_eq!(active.len(), 26);
+        assert_eq!(routes.len(), active.len());
+        assert_eq!(
+            text(&contract, "application_selection")?,
+            "application-selected"
+        );
+        assert_eq!(
+            text(&contract, "implementation_status")?,
+            "partial-functional"
+        );
+        assert_eq!(text(&contract, "acceptance_status")?, "pending");
+        assert_eq!(contract["canonical_issue"].as_u64(), Some(103));
+        assert_eq!(text(&manifest, "contract_id")?, spec.id);
+        assert_eq!(manifest["canonical_issue"].as_u64(), Some(103));
+        assert_eq!(
+            text(&contract["preimplementation_freeze"], "status")?,
+            "missed"
+        );
+        assert_eq!(
+            text(&contract["preimplementation_freeze"], "evaluation")?,
+            "NotEvaluated"
+        );
+        for (identity, route) in active.iter().zip(routes) {
+            assert_eq!(identity.as_str(), route["capability"].as_str());
+            assert_eq!(text(route, "status")?, "partial-functional");
+            assert_eq!(text(route, "acceptance_status")?, "pending");
+            let blockers = route["blocking_issues"]
+                .as_array()
+                .ok_or("blocking_issues must be an array")?;
+            assert!(blockers.iter().any(|issue| issue.as_u64() == Some(103)));
+            assert!(blockers.iter().any(|issue| issue.as_u64() == Some(120)));
+        }
+
+        let prerequisites = manifest["prerequisite_pins"]
+            .as_object()
+            .ok_or("prerequisite_pins must be an object")?;
+        assert!(prerequisites.values().all(Value::is_null));
+        let profiles = manifest["profile_pins"]
+            .as_object()
+            .ok_or("profile_pins must be an object")?;
+        for (key, value) in profiles {
+            if matches!(
+                key.as_str(),
+                "recognizer_contract_id" | "core_pack_id" | "core_pack_version"
+            ) {
+                assert!(value.is_string());
+            } else {
+                assert!(value.is_null(), "profile pin {key} must remain null");
+            }
+        }
+        assert!(
+            manifest["frozen_vectors"]
+                .as_object()
+                .is_some_and(|pins| pins.values().all(Value::is_null))
+        );
+        assert!(
+            manifest["member_sha256"]
+                .as_object()
+                .is_some_and(serde_json::Map::is_empty)
+        );
+        assert!(manifest["bundle_sha256"].is_null());
+
+        let mut stale_contract = contract.clone();
+        stale_contract["state"] = json!("implementation-ready-documentation-no-rust-code");
+        stale_contract["implementation_status"] = json!("not-started");
+        assert!(validate_contract(spec, &stale_contract, &files).is_err());
+
+        let mut stale_manifest = manifest.clone();
+        stale_manifest["state"] = json!("pending-byte-freeze-before-first-rust-implementation");
+        stale_manifest["implementation_status"] = json!("not-started");
+        assert!(validate_manifest(spec, &stale_manifest).is_err());
+
+        let mut legacy_manifest = manifest.clone();
+        legacy_manifest["implementation_state"] = json!("partial-functional");
+        assert!(validate_manifest(spec, &legacy_manifest).is_err());
+
+        let mut accepted_contract = contract.clone();
+        accepted_contract["acceptance_status"] = json!("accepted");
+        assert!(validate_contract(spec, &accepted_contract, &files).is_err());
+
+        let mut accepted_manifest = manifest.clone();
+        accepted_manifest["acceptance_status"] = json!("accepted");
+        assert!(validate_manifest(spec, &accepted_manifest).is_err());
+
+        let mut stale_rule_matrix = contract.clone();
+        stale_rule_matrix["active_rule_ids"][25] = json!("core.future.rule@1");
+        assert!(validate_contract(spec, &stale_rule_matrix, &files).is_err());
+
+        let mut type_only_owner = contract.clone();
+        type_only_owner["capability_routing"][0]["owners"][0]["symbol"] = json!("SourceTocFamily");
+        assert!(validate_contract(spec, &type_only_owner, &files).is_err());
+
+        let mut missing_app_route = contract.clone();
+        missing_app_route["capability_routing"][0]["application_routes"] = json!([]);
+        assert!(validate_contract(spec, &missing_app_route, &files).is_err());
+
+        let mut missing_acceptance_issue = contract;
+        missing_acceptance_issue["capability_routing"][0]["blocking_issues"] = json!([120]);
+        assert!(validate_contract(spec, &missing_acceptance_issue, &files).is_err());
         Ok(())
     }
 }
