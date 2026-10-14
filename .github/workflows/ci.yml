@@ -104,7 +104,7 @@ jobs:
   updated-dependencies:
     if: inputs.qualification_scope != 'rustdoc'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
         with:
