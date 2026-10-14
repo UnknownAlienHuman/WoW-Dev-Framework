@@ -645,7 +645,7 @@ pub struct XmlFingerprintRecord {
     type_shape_index: Option<usize>,
 }
 /// Serialize-only observation result: it cannot be reopened as native authority.
-/// components[i] belongs exactly to records[i]; neither list is a source universe.
+/// `components[i]` belongs exactly to `records[i]`; neither list is a source universe.
 #[derive(Debug, Serialize)]
 pub struct XmlFingerprintManifest {
     schema: &'static str,
