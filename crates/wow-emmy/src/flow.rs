@@ -519,7 +519,11 @@ struct OperationInternal {
     uses: Vec<EmmyLocalUseFact>,
     binding_indices: Vec<usize>,
     function_scope: Option<rowan::TextRange>,
+    loop_regions: Vec<LoopRegionKey>,
+    loop_context_complete: bool,
 }
+
+type LoopRegionKey = (usize, usize);
 
 /// Exact reaching-write evidence for one file.
 ///
@@ -531,6 +535,10 @@ struct WriteModel {
     writes: HashMap<LuaSemanticDeclId, Vec<SourceSpan>>,
     /// Declarations referenced from a different enclosing function.
     captured: HashSet<LuaSemanticDeclId>,
+    /// Declarations assigned within each enclosing repeated loop region.
+    loop_writes: HashMap<LoopRegionKey, HashSet<LuaSemanticDeclId>>,
+    /// True when the bounded loop-write census could not retain every pair.
+    loop_write_overflow: bool,
 }
 
 impl WriteModel {
@@ -550,6 +558,49 @@ impl WriteModel {
                         .is_none_or(|start| start >= declaration_end && start < operation_start)
                 })
             })
+    }
+
+    fn has_loop_carried_write(
+        &self,
+        binding: &BindingInternal,
+        operation: &OperationInternal,
+    ) -> bool {
+        if !operation.loop_context_complete {
+            return true;
+        }
+        if operation.loop_regions.is_empty() {
+            return false;
+        }
+        if self.loop_write_overflow {
+            return true;
+        }
+        operation.loop_regions.iter().any(|region| {
+            self.loop_writes
+                .get(region)
+                .is_some_and(|bindings| bindings.contains(&binding.semantic_decl))
+        })
+    }
+}
+
+fn is_repeated_loop(node: &LuaAst) -> bool {
+    matches!(
+        node,
+        LuaAst::LuaWhileStat(_)
+            | LuaAst::LuaRepeatStat(_)
+            | LuaAst::LuaForStat(_)
+            | LuaAst::LuaForRangeStat(_)
+    )
+}
+
+/// Keep the active loop ancestry while walking the syntax tree in source order.
+fn advance_loop_regions(node: &LuaAst, active: &mut Vec<LoopRegionKey>) {
+    let range = node.syntax().text_range();
+    let start = usize::from(range.start());
+    while active.last().is_some_and(|(_, end)| *end <= start) {
+        active.pop();
+    }
+    if is_repeated_loop(node) {
+        active.push((start, usize::from(range.end())));
     }
 }
 
@@ -864,9 +915,14 @@ fn collect_write_model(
     let mut writes: HashMap<LuaSemanticDeclId, Vec<SourceSpan>> =
         HashMap::with_capacity(bindings.len());
     let mut captured = HashSet::with_capacity(bindings.len());
+    let mut loop_writes: HashMap<LoopRegionKey, HashSet<LuaSemanticDeclId>> = HashMap::new();
+    let mut loop_write_count = 0_usize;
+    let mut loop_write_overflow = false;
+    let mut active_loop_regions = Vec::new();
     let mut write_count = 0_usize;
     for node in root.descendants::<LuaAst>() {
         flow_checkpoint(stop, file)?;
+        advance_loop_regions(&node, &mut active_loop_regions);
         match node {
             LuaAst::LuaAssignStat(stat) => {
                 let (vars, _) = stat.get_var_and_expr_list();
@@ -888,6 +944,23 @@ fn collect_write_model(
                         return Err(fact_budget(file));
                     }
                     write_count += 1;
+                    for region in active_loop_regions.iter().copied() {
+                        if loop_write_overflow {
+                            break;
+                        }
+                        let already_recorded = loop_writes
+                            .get(&region)
+                            .is_some_and(|region_writes| region_writes.contains(&decl));
+                        if already_recorded {
+                            continue;
+                        }
+                        if loop_write_count >= MAX_FACTS {
+                            loop_write_overflow = true;
+                            break;
+                        }
+                        loop_writes.entry(region).or_default().insert(decl.clone());
+                        loop_write_count += 1;
+                    }
                     writes
                         .entry(decl)
                         .or_default()
@@ -910,7 +983,12 @@ fn collect_write_model(
             _ => {}
         }
     }
-    Ok(WriteModel { writes, captured })
+    Ok(WriteModel {
+        writes,
+        captured,
+        loop_writes,
+        loop_write_overflow,
+    })
 }
 
 fn flow_checkpoint(stop: &AtomicBool, file: &LuaWorkspaceFile) -> EmmyLocalFlowResult<()> {
@@ -958,6 +1036,7 @@ fn operation_flow_is_unresolved(
             binding.function_scope != operation.function_scope
                 || write_model.captured.contains(&binding.semantic_decl)
                 || write_model.has_write_before(binding, operation.fact.operation_span)
+                || write_model.has_loop_carried_write(binding, operation)
         })
     })
 }
@@ -1088,7 +1167,11 @@ fn collect_operations(
     semantic_bindings: &HashMap<LuaSemanticDeclId, usize>,
 ) -> EmmyLocalFlowResult<Vec<OperationInternal>> {
     let mut result = Vec::new();
+    let mut active_loop_regions = Vec::new();
+    let mut loop_region_count = 0_usize;
+    let mut loop_context_overflow = false;
     for node in root.descendants::<LuaAst>() {
+        advance_loop_regions(&node, &mut active_loop_regions);
         let LuaAst::LuaBinaryExpr(binary) = node else {
             continue;
         };
@@ -1127,6 +1210,20 @@ fn collect_operations(
         if operand_occurrences.is_empty() {
             continue;
         }
+        let (operation_loop_regions, loop_context_complete) = if active_loop_regions.is_empty() {
+            (Vec::new(), true)
+        } else if loop_context_overflow {
+            (Vec::new(), false)
+        } else if let Some(total) = loop_region_count
+            .checked_add(active_loop_regions.len())
+            .filter(|total| *total <= MAX_FACTS)
+        {
+            loop_region_count = total;
+            (active_loop_regions.clone(), true)
+        } else {
+            loop_context_overflow = true;
+            (Vec::new(), false)
+        };
         let mut binding_indices = operand_occurrences
             .iter()
             .map(|(index, _)| *index)
@@ -1210,6 +1307,8 @@ fn collect_operations(
             uses: operation_uses,
             binding_indices,
             function_scope: enclosing_closure(binary.syntax()),
+            loop_regions: operation_loop_regions,
+            loop_context_complete,
         });
     }
     result.sort_by(|left, right| left.fact.cmp(&right.fact));
@@ -1292,7 +1391,8 @@ fn collect_guards(
                 && !write_model
                     .captured
                     .contains(&binding_internal.semantic_decl)
-                && !write_model.has_write_before(binding_internal, operation.fact.operation_span);
+                && !write_model.has_write_before(binding_internal, operation.fact.operation_span)
+                && !write_model.has_loop_carried_write(binding_internal, operation);
             if !exact_value_proven {
                 unresolved_flow = true;
                 continue;

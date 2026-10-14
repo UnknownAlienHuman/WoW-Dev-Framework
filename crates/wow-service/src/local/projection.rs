@@ -18,6 +18,18 @@ use wow_rules::{
     RuleFixturePolicy, RuleProductionPolicy, RuleRegistry, RuleScope,
 };
 
+fn map_rule_error_code(code: wow_rules::RuleErrorCode, owner: &'static str) -> ServiceError {
+    if code == wow_rules::RuleErrorCode::RuleCancelled {
+        ServiceError::new(ServiceErrorCode::Cancelled, "rule execution cancelled")
+    } else {
+        owner_error(owner)
+    }
+}
+
+fn map_rule_execution_error(error: wow_rules::RuleError, owner: &'static str) -> ServiceError {
+    map_rule_error_code(error.code(), owner)
+}
+
 /// Exact owner receipts retained alongside service presentation. These contain
 /// normalized metadata and findings, never Main/Library source bodies.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -527,15 +539,16 @@ pub(super) fn check_context(
             let context =
                 RuleExecutionContext::new(registry, &policy, project, reference, budget, stop);
             wow_rules::execute_e0(&context, &scope)
-                .map_err(|_| owner_error("fixture rule execution failed"))?
+                .map_err(|error| map_rule_execution_error(error, "fixture rule execution failed"))?
         } else {
             let policy = RuleProductionPolicy::native_api(identity.profile_id())
                 .map_err(|_| owner_error("production rule policy failed"))?;
             let context = RuleExecutionContext::production(
                 registry, &policy, project, reference, budget, stop,
             );
-            wow_rules::execute(&context, &scope)
-                .map_err(|_| owner_error("production rule execution failed"))?
+            wow_rules::execute(&context, &scope).map_err(|error| {
+                map_rule_execution_error(error, "production rule execution failed")
+            })?
         };
         cancelled(stop)?;
         for evaluation in report.evaluations() {
@@ -801,5 +814,20 @@ fn project_evaluation(
             ServiceErrorCode::Cancelled,
             "rule execution cancelled",
         )),
+    }
+}
+
+#[cfg(test)]
+mod cancellation_tests {
+    use super::map_rule_error_code;
+    use crate::ServiceErrorCode;
+
+    #[test]
+    fn mid_request_cancellation_maps_to_service_cancelled() {
+        let error = map_rule_error_code(
+            wow_rules::RuleErrorCode::RuleCancelled,
+            "rule execution failed",
+        );
+        assert_eq!(error.code(), ServiceErrorCode::Cancelled);
     }
 }

@@ -45,7 +45,7 @@ const FIXTURE_SECRET_ENTITY: &str = "function:C_E0Fixture.SecretText";
 const PRODUCER_ID: &str = "wow.rules";
 const PRODUCER_VERSION: &str = "1.0.0";
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Construction {
     Evaluation,
     Lookup,
@@ -53,7 +53,10 @@ enum Construction {
     Evidence,
     Root,
     Finding,
+    Clean,
     Report,
+    ApiProviderComplete,
+    SecretOperationComplete,
 }
 
 #[cfg(test)]
@@ -65,28 +68,115 @@ struct ConstructionCounts {
     evidence: usize,
     roots: usize,
     findings: usize,
+    cleans: usize,
     reports: usize,
+    api_provider_completions: usize,
+    secret_operations: usize,
 }
 #[cfg(test)]
 thread_local! { static CONSTRUCTIONS: std::cell::Cell<ConstructionCounts> = std::cell::Cell::new(ConstructionCounts::default()); }
 #[cfg(test)]
+type CancellationHook = (
+    Construction,
+    usize,
+    std::sync::Arc<std::sync::atomic::AtomicBool>,
+);
+#[cfg(test)]
+thread_local! {
+    static CANCELLATION_HOOK: std::cell::RefCell<Option<CancellationHook>> = const { std::cell::RefCell::new(None) };
+    static CANCELLATION_COUNTS: std::cell::Cell<Option<ConstructionCounts>> = const { std::cell::Cell::new(None) };
+}
+#[cfg(test)]
 fn observe(construction: Construction) {
-    CONSTRUCTIONS.with(|cell| {
+    let counts = CONSTRUCTIONS.with(|cell| {
         let mut counts = cell.get();
-        match construction {
-            Construction::Evaluation => counts.evaluations += 1,
-            Construction::Lookup => counts.lookups += 1,
-            Construction::Handle => counts.handles += 1,
-            Construction::Evidence => counts.evidence += 1,
-            Construction::Root => counts.roots += 1,
-            Construction::Finding => counts.findings += 1,
-            Construction::Report => counts.reports += 1,
-        }
+        let count = match construction {
+            Construction::Evaluation => {
+                counts.evaluations += 1;
+                counts.evaluations
+            }
+            Construction::Lookup => {
+                counts.lookups += 1;
+                counts.lookups
+            }
+            Construction::Handle => {
+                counts.handles += 1;
+                counts.handles
+            }
+            Construction::Evidence => {
+                counts.evidence += 1;
+                counts.evidence
+            }
+            Construction::Root => {
+                counts.roots += 1;
+                counts.roots
+            }
+            Construction::Finding => {
+                counts.findings += 1;
+                counts.findings
+            }
+            Construction::Clean => {
+                counts.cleans += 1;
+                counts.cleans
+            }
+            Construction::Report => {
+                counts.reports += 1;
+                counts.reports
+            }
+            Construction::ApiProviderComplete => {
+                counts.api_provider_completions += 1;
+                counts.api_provider_completions
+            }
+            Construction::SecretOperationComplete => {
+                counts.secret_operations += 1;
+                counts.secret_operations
+            }
+        };
         cell.set(counts);
+        (counts, count)
+    });
+    CANCELLATION_HOOK.with(|cell| {
+        let hook = cell.borrow();
+        match hook.as_ref() {
+            Some((target, occurrence, stop))
+                if *target == construction && counts.1 == *occurrence =>
+            {
+                CANCELLATION_COUNTS.with(|snapshot| snapshot.set(Some(counts.0)));
+                stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            _ => {}
+        }
     });
 }
 #[cfg(not(test))]
 fn observe(_: Construction) {}
+
+#[cfg(test)]
+struct CancellationHookGuard;
+
+#[cfg(test)]
+impl Drop for CancellationHookGuard {
+    fn drop(&mut self) {
+        CANCELLATION_HOOK.with(|cell| *cell.borrow_mut() = None);
+        CANCELLATION_COUNTS.with(|cell| cell.set(None));
+    }
+}
+
+#[cfg(test)]
+fn cancel_on_construction(
+    construction: Construction,
+    occurrence: usize,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+) -> CancellationHookGuard {
+    CANCELLATION_COUNTS.with(|cell| cell.set(None));
+    CANCELLATION_HOOK.with(|cell| *cell.borrow_mut() = Some((construction, occurrence, stop)));
+    CancellationHookGuard
+}
+
+#[cfg(test)]
+fn cancellation_snapshot() -> Option<ConstructionCounts> {
+    CANCELLATION_COUNTS.with(std::cell::Cell::take)
+}
 
 struct ApiFindingInput<'a> {
     file: &'a ProjectFileRecord,
@@ -160,8 +250,11 @@ fn run_providers(
     let mut evaluations = Vec::new();
     let mut api_evaluations = evaluate_api(context, scope, api, &mut admission)?;
     evaluations.append(&mut api_evaluations);
+    observe(Construction::ApiProviderComplete);
+    ensure_not_cancelled(context, API_EXISTS_RULE, "api:secret-provider-handoff")?;
     let mut secret_evaluations = evaluate_secret(context, scope, secret, &mut admission)?;
     evaluations.append(&mut secret_evaluations);
+    ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:report-handoff")?;
     build_report(context, evaluations, &admission)
 }
 
@@ -190,11 +283,33 @@ fn cancelled_report(context: &RuleExecutionContext<'_>) -> RuleResult<RuleExecut
     build_report(context, evaluations, &admission)
 }
 
+fn ensure_not_cancelled(
+    context: &RuleExecutionContext<'_>,
+    rule_id: &str,
+    scope_id: &str,
+) -> RuleResult<()> {
+    if context.is_cancelled() {
+        return Err(
+            RuleError::new(RuleErrorCode::RuleCancelled, "rule execution cancelled")
+                .with_rule(rule_id)
+                .with_scope(scope_id),
+        );
+    }
+    Ok(())
+}
+
 fn build_report(
     context: &RuleExecutionContext<'_>,
     evaluations: Vec<RuleEvaluationRecord>,
     admission: &Admission,
 ) -> RuleResult<RuleExecutionReport> {
+    let cancellation_report = !evaluations.is_empty()
+        && evaluations
+            .iter()
+            .all(|evaluation| matches!(evaluation.outcome(), RuleEvaluationOutcome::Cancelled));
+    if !cancellation_report {
+        ensure_not_cancelled(context, "wow.rules", "report:preflight")?;
+    }
     let usage = admission.usage();
     let registry_id = context.registry().registry_id();
     let context_id = context
@@ -221,6 +336,9 @@ fn build_report(
     };
     let expected_bytes = preflight_report(&material, max_bytes)?;
     admission.verify_report_plan(&material, expected_bytes)?;
+    if !cancellation_report {
+        ensure_not_cancelled(context, "wow.rules", "report:construction")?;
+    }
     observe(Construction::Report);
     let report = RuleExecutionReport::build(
         registry_id,
@@ -234,6 +352,9 @@ fn build_report(
         usage,
     )?;
     verify_canonical_output(&report, expected_bytes, max_bytes)?;
+    if !cancellation_report {
+        ensure_not_cancelled(context, "wow.rules", "report:delivery")?;
+    }
     Ok(report)
 }
 
@@ -749,6 +870,7 @@ fn evaluate_secret(
     descriptor: &crate::RuleDescriptor,
     admission: &mut Admission,
 ) -> RuleResult<Vec<RuleEvaluationRecord>> {
+    ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:provider")?;
     if !context.supports_secret_policy() {
         admission.admit_evaluation()?;
         return Ok(vec![not_evaluated(
@@ -791,6 +913,7 @@ fn evaluate_secret(
         .iter()
         .map(|fact| (fact.fact_id(), fact))
         .collect::<BTreeMap<_, _>>();
+    ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:references")?;
     let calls = context
         .project()
         .member_call_report()
@@ -798,15 +921,17 @@ fn evaluate_secret(
         .iter()
         .map(|fact| (fact.fact_id(), fact))
         .collect::<BTreeMap<_, _>>();
+    ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:calls")?;
     let flow = context.project().local_flow_report();
-    let all_bindings = flow
-        .bindings()
-        .iter()
-        .map(|binding| (binding.fact_id(), binding))
-        .collect::<BTreeMap<_, _>>();
-    let uses_by_operation = group_uses(flow.uses());
+    let mut all_bindings = BTreeMap::new();
+    for binding in flow.bindings() {
+        ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:bindings")?;
+        all_bindings.insert(binding.fact_id(), binding);
+    }
+    let uses_by_operation = group_uses(context, flow.uses())?;
 
     for binding in flow.bindings() {
+        ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:binding")?;
         let (Some(receiver), Some(member)) =
             (binding.initializer_receiver(), binding.initializer_member())
         else {
@@ -817,9 +942,14 @@ fn evaluate_secret(
             if producer_entity != FIXTURE_SECRET_ENTITY {
                 continue;
             }
-        } else if !restriction_key_relevant(context, &producer_entity) {
-            continue;
+        } else {
+            let relevant = restriction_key_relevant(context, &producer_entity);
+            ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:binding:relevance")?;
+            if !relevant {
+                continue;
+            }
         }
+        ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:binding")?;
 
         let file = context
             .project()
@@ -877,20 +1007,22 @@ fn evaluate_secret(
                 "Secret producer binding/member/call identities are inconsistent",
             ));
         }
-        let operations = flow
-            .operations()
-            .iter()
-            .filter(|operation| {
-                operation.path() == binding.path()
-                    && operation
-                        .operand_binding_fact_ids()
-                        .any(|id| id == binding.fact_id())
-            })
-            .collect::<Vec<_>>();
+        let mut operations = Vec::new();
+        for operation in flow.operations() {
+            ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:operation-scan")?;
+            if operation.path() == binding.path()
+                && operation
+                    .operand_binding_fact_ids()
+                    .any(|id| id == binding.fact_id())
+            {
+                operations.push(operation);
+            }
+        }
         if operations.is_empty() {
             continue;
         }
         for operation in operations {
+            ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:operation")?;
             admission.admit_evaluation()?;
             let scope_id = format!("secret:{}:{}", file.file_id(), operation.fact_id());
             let gate = capability_gate(context, file, descriptor.required_capabilities())?;
@@ -900,14 +1032,19 @@ fn evaluate_secret(
                 call.fact_id().into(),
                 operation.fact_id().into(),
             ];
-            let uses = uses_by_operation
-                .get(operation.fact_id())
-                .cloned()
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|fact| fact.binding_fact_id() == binding.fact_id())
-                .collect::<Vec<_>>();
-            fact_ids.extend(uses.iter().map(|fact| fact.fact_id().into()));
+            let mut uses = Vec::new();
+            if let Some(operation_uses) = uses_by_operation.get(operation.fact_id()) {
+                for fact in operation_uses {
+                    ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:use")?;
+                    if fact.binding_fact_id() == binding.fact_id() {
+                        uses.push(*fact);
+                    }
+                }
+            }
+            for fact in &uses {
+                ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:use")?;
+                fact_ids.push(fact.fact_id().into());
+            }
             if !gate.blockers.is_empty() {
                 output.push(not_evaluated(
                     context,
@@ -920,6 +1057,7 @@ fn evaluate_secret(
                     fact_ids,
                     None,
                 )?);
+                observe(Construction::SecretOperationComplete);
                 continue;
             }
             if operation.kind() != EmmyOperationKind::Concatenation {
@@ -934,6 +1072,7 @@ fn evaluate_secret(
                     fact_ids,
                     None,
                 )?);
+                observe(Construction::SecretOperationComplete);
                 continue;
             }
             if uses.is_empty() {
@@ -948,14 +1087,17 @@ fn evaluate_secret(
                     fact_ids,
                     None,
                 )?);
+                observe(Construction::SecretOperationComplete);
                 continue;
             }
+            ensure_not_cancelled(context, SECRET_LOCAL_RULE, &scope_id)?;
             let (lookup, found) = exact_lookup(
                 context,
                 admission,
                 context.secret_partition_id(),
                 &producer_entity,
             )?;
+            ensure_not_cancelled(context, SECRET_LOCAL_RULE, &scope_id)?;
             match lookup.outcome() {
                 RuleReferenceOutcome::Found => {
                     let record = found.ok_or_else(|| {
@@ -979,6 +1121,7 @@ fn evaluate_secret(
                                     guard: None,
                                 },
                             )?);
+                            observe(Construction::SecretOperationComplete);
                             continue;
                         }
                         SecretFacetDecision::Unsupported => {
@@ -993,18 +1136,21 @@ fn evaluate_secret(
                                 fact_ids,
                                 Some(&lookup),
                             )?);
+                            observe(Construction::SecretOperationComplete);
                             continue;
                         }
                         SecretFacetDecision::Restricted => {}
                     }
 
                     if !context.is_fixture_policy() {
+                        ensure_not_cancelled(context, SECRET_LOCAL_RULE, &scope_id)?;
                         let (guard_lookup, guard_record) = exact_lookup(
                             context,
                             admission,
                             context.secret_partition_id(),
                             context.guard_entity(),
                         )?;
+                        ensure_not_cancelled(context, SECRET_LOCAL_RULE, &scope_id)?;
                         let guard_supported = guard_record
                             .map(|record| classify_guard_record(context, record))
                             .transpose()?
@@ -1037,6 +1183,7 @@ fn evaluate_secret(
                                 fact_ids,
                                 Some(&guard_lookup),
                             )?);
+                            observe(Construction::SecretOperationComplete);
                             continue;
                         }
                         fact_ids.push(guard_lookup.lookup_id().into());
@@ -1075,6 +1222,7 @@ fn evaluate_secret(
                                 guard: Some(guard),
                             },
                         )?);
+                        observe(Construction::SecretOperationComplete);
                     } else {
                         output.push(secret_finding(
                             context,
@@ -1093,6 +1241,7 @@ fn evaluate_secret(
                             lookup,
                             gate.coverage_ids,
                         )?);
+                        observe(Construction::SecretOperationComplete);
                     }
                 }
                 RuleReferenceOutcome::AuthoritativeAbsent => {
@@ -1109,6 +1258,7 @@ fn evaluate_secret(
                             guard: None,
                         },
                     )?);
+                    observe(Construction::SecretOperationComplete);
                 }
                 RuleReferenceOutcome::Conflict => {
                     output.push(not_evaluated(
@@ -1122,6 +1272,7 @@ fn evaluate_secret(
                         fact_ids,
                         Some(&lookup),
                     )?);
+                    observe(Construction::SecretOperationComplete);
                 }
                 RuleReferenceOutcome::PartialCoverage
                 | RuleReferenceOutcome::NotEvaluated
@@ -1137,6 +1288,7 @@ fn evaluate_secret(
                         fact_ids,
                         Some(&lookup),
                     )?);
+                    observe(Construction::SecretOperationComplete);
                 }
             }
         }
@@ -1921,6 +2073,7 @@ fn clean(
             ..RuleBudgetUsage::default()
         },
     )?;
+    observe(Construction::Clean);
     observe(Construction::Evaluation);
     Ok(RuleEvaluationRecord::new(
         descriptor.rule_id().clone(),
@@ -2267,6 +2420,7 @@ fn exact_lookup<'a>(
     partition: &str,
     key: &str,
 ) -> RuleResult<(RuleReferenceLookupRecord, Option<&'a ReferenceRecord>)> {
+    ensure_not_cancelled(context, "wow.rules", "reference:lookup")?;
     let result = context.reference().lookup(partition, key);
     let outcome = match &result {
         LookupResult::Found(_) => RuleReferenceOutcome::Found,
@@ -2290,6 +2444,7 @@ fn exact_lookup<'a>(
         }
         _ => {}
     }
+    ensure_not_cancelled(context, "wow.rules", "reference:lookup-record")?;
     observe(Construction::Lookup);
     match result {
         LookupResult::Found(record) => Ok((
@@ -2696,16 +2851,18 @@ fn canonicalize_sources(sources: &mut Vec<SourceHandle>) {
 }
 
 fn group_uses<'a>(
+    context: &RuleExecutionContext<'_>,
     uses: &'a [wow_emmy::EmmyLocalUseFact],
-) -> BTreeMap<&'a str, Vec<&'a wow_emmy::EmmyLocalUseFact>> {
+) -> RuleResult<BTreeMap<&'a str, Vec<&'a wow_emmy::EmmyLocalUseFact>>> {
     let mut grouped = BTreeMap::<&'a str, Vec<&'a wow_emmy::EmmyLocalUseFact>>::new();
     for use_fact in uses {
+        ensure_not_cancelled(context, SECRET_LOCAL_RULE, "secret:use-index")?;
         grouped
             .entry(use_fact.operation_fact_id())
             .or_default()
             .push(use_fact);
     }
-    grouped
+    Ok(grouped)
 }
 
 fn api_fact_ids(
@@ -2795,7 +2952,10 @@ fn reference_error(error: wow_reference::ReferenceViewError) -> RuleError {
 
 #[cfg(test)]
 mod budget_tests {
-    use super::{CONSTRUCTIONS, ConstructionCounts};
+    use super::{
+        CONSTRUCTIONS, CancellationHookGuard, Construction, ConstructionCounts,
+        cancel_on_construction, cancellation_snapshot,
+    };
     use crate as wow_rules;
 
     // Reuse the existing real native fixture, without adding source members.
@@ -2961,6 +3121,86 @@ mod budget_tests {
         assert_eq!(admitted, first);
         assert_eq!(wow_core::canonical_json_bytes(&admitted)?, first_bytes);
         assert_eq!(observed(), first_counts);
+        Ok(())
+    }
+
+    #[test]
+    fn mid_request_cancellation_stops_secret_after_first_operation() -> TestResult {
+        let project = project()?;
+        let reference = reference(
+            &project,
+            ReferenceCoverageStatus::Complete,
+            ReferenceCoverageStatus::Complete,
+            true,
+            false,
+        )?;
+        let budget = RuleExecutionBudget::fixture_e0()?;
+        let reset = || CONSTRUCTIONS.with(|cell| cell.set(ConstructionCounts::default()));
+        let observed = || CONSTRUCTIONS.with(std::cell::Cell::get);
+
+        let handoff_stop = std::sync::Arc::new(AtomicBool::new(false));
+        reset();
+        {
+            let _hook: CancellationHookGuard = cancel_on_construction(
+                Construction::ApiProviderComplete,
+                1,
+                std::sync::Arc::clone(&handoff_stop),
+            );
+            let error = run_with_budget(
+                &project,
+                &reference,
+                handoff_stop.as_ref(),
+                budget,
+                &RuleScope::all(),
+            )
+            .err()
+            .ok_or("API-to-Secret handoff cancellation")?;
+            assert_eq!(error.code(), wow_rules::RuleErrorCode::RuleCancelled);
+            assert!(handoff_stop.load(std::sync::atomic::Ordering::Relaxed));
+            let counts = observed();
+            assert_eq!(
+                counts,
+                cancellation_snapshot().ok_or("handoff stop snapshot")?
+            );
+            assert_eq!(counts.api_provider_completions, 1);
+            assert_eq!(counts.lookups, 1);
+            assert_eq!(counts.secret_operations, 0);
+            assert_eq!(counts.reports, 0);
+        }
+
+        let secret_stop = std::sync::Arc::new(AtomicBool::new(false));
+        let secret_budget = RuleExecutionBudget::fixture_e0()?;
+        reset();
+        {
+            let _hook: CancellationHookGuard = cancel_on_construction(
+                Construction::SecretOperationComplete,
+                1,
+                std::sync::Arc::clone(&secret_stop),
+            );
+            let error = run_with_budget(
+                &project,
+                &reference,
+                secret_stop.as_ref(),
+                secret_budget,
+                &RuleScope::all(),
+            )
+            .err()
+            .ok_or("Secret operation cancellation")?;
+            assert_eq!(error.code(), wow_rules::RuleErrorCode::RuleCancelled);
+            assert!(secret_stop.load(std::sync::atomic::Ordering::Relaxed));
+            let counts = observed();
+            // The hook snapshots the exact first-operation boundary when it
+            // sets stop. Equality proves no later lookup or Core result
+            // constructor ran, including a clean record or final report.
+            assert_eq!(
+                counts,
+                cancellation_snapshot().ok_or("Secret stop snapshot")?
+            );
+            assert_eq!(counts.api_provider_completions, 1);
+            assert_eq!(counts.lookups, 2);
+            assert_eq!(counts.secret_operations, 1);
+            assert_eq!(counts.reports, 0);
+        }
         Ok(())
     }
 }

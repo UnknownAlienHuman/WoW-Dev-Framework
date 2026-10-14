@@ -526,6 +526,10 @@ fn native_service_does_not_clean_a_reassigned_guard_value() -> TestResult {
     for source in [
         "local function changed_after_guard()\n    local text = C_E0Fixture.SecretText()\n    if canaccessvalue(text) then\n        text = C_E0Fixture.SecretText()\n        return text .. \"!\"\n    end\nend\n",
         "local function make_renderer()\n    local text = C_E0Fixture.SecretText()\n    local render\n    if canaccessvalue(text) then\n        render = function() return text .. \"!\" end\n    end\n    text = C_E0Fixture.SecretText()\n    return render\nend\n",
+        "local function render_for()\n    local text = C_E0Fixture.SecretText()\n    local rendered\n    if canaccessvalue(text) then\n        for i = 1, 2 do\n            rendered = text .. \"!\"\n            text = C_E0Fixture.SecretText()\n        end\n    end\n    return rendered\nend\n",
+        "local function render_generic_for()\n    local text = C_E0Fixture.SecretText()\n    local rendered\n    if canaccessvalue(text) then\n        for _, value in ipairs({ 1, 2 }) do\n            rendered = text .. \"!\"\n            text = C_E0Fixture.SecretText()\n        end\n    end\n    return rendered\nend\n",
+        "local function render_while()\n    local text = C_E0Fixture.SecretText()\n    local rendered\n    local i = 0\n    if canaccessvalue(text) then\n        while i < 2 do\n            rendered = text .. \"!\"\n            text = C_E0Fixture.SecretText()\n            i = i + 1\n        end\n    end\n    return rendered\nend\n",
+        "local function render_repeat()\n    local text = C_E0Fixture.SecretText()\n    local rendered\n    local i = 0\n    if canaccessvalue(text) then\n        repeat\n            rendered = text .. \"!\"\n            text = C_E0Fixture.SecretText()\n            i = i + 1\n        until i >= 2\n    end\n    return rendered\nend\n",
     ] {
         let service = native_flow_service(source)?;
         let result = service.check(

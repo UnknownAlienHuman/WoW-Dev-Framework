@@ -225,6 +225,86 @@ fn captured_operation_is_partial_without_cross_function_dominance() -> TestResul
 }
 
 #[test]
+fn loop_carried_reassignment_is_partial_for_each_loop_form() -> TestResult {
+    let sources = [
+        concat!(
+            "local function render_for()\n",
+            "    local text = C_E0Fixture.SecretText()\n",
+            "    local rendered\n",
+            "    if canaccessvalue(text) then\n",
+            "        for i = 1, 2 do\n",
+            "            rendered = text .. \"!\"\n",
+            "            text = C_E0Fixture.SecretText()\n",
+            "        end\n",
+            "    end\n",
+            "    return rendered\n",
+            "end\n",
+        ),
+        concat!(
+            "local function render_generic_for()\n",
+            "    local text = C_E0Fixture.SecretText()\n",
+            "    local rendered\n",
+            "    if canaccessvalue(text) then\n",
+            "        for _, value in ipairs({ 1, 2 }) do\n",
+            "            rendered = text .. \"!\"\n",
+            "            text = C_E0Fixture.SecretText()\n",
+            "        end\n",
+            "    end\n",
+            "    return rendered\n",
+            "end\n",
+        ),
+        concat!(
+            "local function render_while()\n",
+            "    local text = C_E0Fixture.SecretText()\n",
+            "    local rendered\n",
+            "    local i = 0\n",
+            "    if canaccessvalue(text) then\n",
+            "        while i < 2 do\n",
+            "            rendered = text .. \"!\"\n",
+            "            text = C_E0Fixture.SecretText()\n",
+            "            i = i + 1\n",
+            "        end\n",
+            "    end\n",
+            "    return rendered\n",
+            "end\n",
+        ),
+        concat!(
+            "local function render_repeat()\n",
+            "    local text = C_E0Fixture.SecretText()\n",
+            "    local rendered\n",
+            "    local i = 0\n",
+            "    if canaccessvalue(text) then\n",
+            "        repeat\n",
+            "            rendered = text .. \"!\"\n",
+            "            text = C_E0Fixture.SecretText()\n",
+            "            i = i + 1\n",
+            "        until i >= 2\n",
+            "    end\n",
+            "    return rendered\n",
+            "end\n",
+        ),
+    ];
+    let library = library()?;
+
+    for source in sources {
+        let main = snapshot(
+            LuaWorkspaceUniverse::Fixture,
+            vec![LuaWorkspaceFileInput::new("main/loop-carried.lua", source)],
+        )?;
+        let report = analyze_local_flow(&main, &[&library])?;
+
+        assert_eq!(
+            report.files()[0].status(),
+            EmmyLocalFlowFileStatus::PartialUnresolvedFlow
+        );
+        assert_eq!(report.files()[0].operation_count(), 1);
+        assert_eq!(report.files()[0].guard_count(), 1);
+        assert!(report.control_flow().is_empty());
+    }
+    Ok(())
+}
+
+#[test]
 fn locally_shadowed_predicate_is_not_a_guard() -> TestResult {
     let source = concat!(
         "local function shadowed_guard()\n",
