@@ -54,8 +54,9 @@ pub fn analyze_member_call_session_with_local_flow(
             main,
             &registered.main_root,
             &session.member_calls,
+            stop,
         )
-        .map_err(|_| error(AnalyzerSessionErrorCode::NativeFailure))?;
+        .map_err(map_local_flow_error)?;
         checkpoint(stop)?;
         Ok((session, local_flow))
     }))
@@ -217,6 +218,14 @@ fn map_syntax_error(source: crate::EmmySyntaxError) -> AnalyzerSessionError {
         return error(AnalyzerSessionErrorCode::Cancelled);
     }
     error(AnalyzerSessionErrorCode::NativeFailure)
+}
+
+fn map_local_flow_error(source: crate::EmmyLocalFlowError) -> AnalyzerSessionError {
+    if source.code() == crate::EmmyLocalFlowErrorCode::Cancelled {
+        error(AnalyzerSessionErrorCode::Cancelled)
+    } else {
+        error(AnalyzerSessionErrorCode::NativeFailure)
+    }
 }
 
 /// Synchronous cancellation checkpoint for operation boundaries.
@@ -431,8 +440,9 @@ impl AnalyzerSession {
             &self.main,
             &self.semantic.main_root,
             &session.member_calls,
+            stop,
         )
-        .map_err(|_| error(AnalyzerSessionErrorCode::NativeFailure))?;
+        .map_err(map_local_flow_error)?;
         checkpoint(stop)?;
         Ok(AnalyzerSessionReports {
             syntax,

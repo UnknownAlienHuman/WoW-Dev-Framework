@@ -164,6 +164,95 @@ fn exact_local_flow_distinguishes_dominating_and_non_dominating_guards() -> Test
 }
 
 #[test]
+fn reassignment_after_guard_is_partial_without_dominance() -> TestResult {
+    let source = concat!(
+        "local function changed_after_guard()\n",
+        "    local text = C_E0Fixture.SecretText()\n",
+        "    if canaccessvalue(text) then\n",
+        "        text = C_E0Fixture.SecretText()\n",
+        "        return text .. \"!\"\n",
+        "    end\n",
+        "end\n",
+    );
+    let main = snapshot(
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new("main/reassigned.lua", source)],
+    )?;
+    let library = library()?;
+    let report = analyze_local_flow(&main, &[&library])?;
+
+    assert_eq!(
+        report.files()[0].status(),
+        EmmyLocalFlowFileStatus::PartialUnresolvedFlow
+    );
+    assert_eq!(report.files()[0].operation_count(), 1);
+    assert_eq!(report.files()[0].guard_count(), 1);
+    assert!(report.control_flow().is_empty());
+    assert_eq!(report.guards()[0].kind(), EmmyGuardKind::AccessSingle);
+    Ok(())
+}
+
+#[test]
+fn captured_operation_is_partial_without_cross_function_dominance() -> TestResult {
+    let source = concat!(
+        "local function make_renderer()\n",
+        "    local text = C_E0Fixture.SecretText()\n",
+        "    local render\n",
+        "    if canaccessvalue(text) then\n",
+        "        render = function()\n",
+        "            return text .. \"!\"\n",
+        "        end\n",
+        "    end\n",
+        "    text = C_E0Fixture.SecretText()\n",
+        "    return render\n",
+        "end\n",
+    );
+    let main = snapshot(
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new("main/captured.lua", source)],
+    )?;
+    let library = library()?;
+    let report = analyze_local_flow(&main, &[&library])?;
+
+    assert_eq!(
+        report.files()[0].status(),
+        EmmyLocalFlowFileStatus::PartialUnresolvedFlow
+    );
+    assert_eq!(report.files()[0].operation_count(), 1);
+    assert_eq!(report.files()[0].guard_count(), 1);
+    assert!(report.control_flow().is_empty());
+    Ok(())
+}
+
+#[test]
+fn locally_shadowed_predicate_is_not_a_guard() -> TestResult {
+    let source = concat!(
+        "local function shadowed_guard()\n",
+        "    local text = C_E0Fixture.SecretText()\n",
+        "    local canaccessvalue = function(value) return true end\n",
+        "    if canaccessvalue(text) then\n",
+        "        return text .. \"!\"\n",
+        "    end\n",
+        "end\n",
+    );
+    let main = snapshot(
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new("main/shadowed.lua", source)],
+    )?;
+    let library = library()?;
+    let report = analyze_local_flow(&main, &[&library])?;
+
+    assert_eq!(
+        report.files()[0].status(),
+        EmmyLocalFlowFileStatus::Complete
+    );
+    assert_eq!(report.files()[0].operation_count(), 1);
+    assert_eq!(report.files()[0].guard_count(), 0);
+    assert!(report.control_flow().is_empty());
+    Ok(())
+}
+
+#[test]
 fn local_flow_is_independent_of_library_input_order() -> TestResult {
     let main = snapshot(
         LuaWorkspaceUniverse::Fixture,

@@ -4,10 +4,10 @@ use std::sync::atomic::AtomicBool;
 use wow_service::{
     BlockerKind, CapabilityState, CausalRelation, CheckContext, CheckRequest, CheckScope,
     CleanEvaluation, ComponentHealth, ComponentSnapshot, ContextIdentity, DeferredOperation,
-    ExactSourceLocation, GenerationSelector, GenericFinding, OperationId, OwnedServiceBackend,
-    PresentationRelationKind, RawFinding, RuleBlocker, RuleEvaluation, RuleFinding, Service,
-    ServiceBackendStatus, ServiceConfiguration, ServiceErrorCode, ServiceSemanticStatus,
-    StatusRequest,
+    ExactSourceLocation, GenerationSelector, GenericFinding, LocalProjectBackend,
+    LocalProjectInput, OperationId, OwnedServiceBackend, PresentationRelationKind, RawFinding,
+    RuleBlocker, RuleEvaluation, RuleEvaluationState, RuleFinding, Service, ServiceBackendStatus,
+    ServiceConfiguration, ServiceErrorCode, ServiceSemanticStatus, StatusRequest,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
@@ -179,6 +179,124 @@ fn service_with_context(
         configuration,
         OwnedServiceBackend::new(status, vec![context])?,
     )?)
+}
+
+fn native_flow_service(source: &str) -> TestResult<Service<LocalProjectBackend>> {
+    use wow_core::{
+        CanonicalResult, ContentDigest, ProfileId, ProfileIdentityBuilder, ProfileKind,
+        ReferenceGenerationId, SchemaId, SchemaVersionEntry, SourceKind, SourceLogicalSnapshot,
+        ToolVersion,
+    };
+    use wow_emmy::{
+        EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyBackendIdentity,
+        LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
+    };
+    use wow_project::{
+        AnalyzerBindingDeclaration, ProjectBudgetPolicy, ProjectCapabilityPolicy,
+        ProjectConfigurationBuilder, ProjectId, ProjectInputBundle, ProjectInputFile, ProjectKind,
+        ProjectSourceOriginId, ProjectWorkspaceId,
+    };
+    use wow_reference::{
+        CoverageStatus, ReferencePartition, ReferenceRecord, ReferenceRecordKind, ReferenceView,
+        RestrictionFacet, RestrictionState,
+    };
+
+    const LIBRARY_SOURCE: &str = "---@meta _\n---@class C_E0Fixture\n---@field SecretText fun(): string\nC_E0Fixture = {}\n\n---@param value any\n---@return boolean accessible\nfunction canaccessvalue(value) end\n";
+
+    let profile_id: ProfileId = "profile:fixture:retail-120100-e0-v1".parse()?;
+    let schema_id: SchemaId = "schema:wow:fixture-e0".parse()?;
+    let schema_version: ToolVersion = "1.0.0".parse()?;
+    let profile = ProfileIdentityBuilder::new(
+        profile_id,
+        ProfileKind::Fixture,
+        "retail",
+        120_100,
+        SourceKind::SyntheticFixture,
+        "027d26c3406d3de2cbd2b1f67d468fe033a1bcd4",
+        ContentDigest::<SourceLogicalSnapshot>::from_bytes([7_u8; 32]),
+    )
+    .schema_versions(vec![SchemaVersionEntry::new(schema_id, schema_version)])
+    .fixture_scope("wow-service-e0-flow-fixture")
+    .build()?;
+    let backend = EmmyBackendIdentity::new(
+        "emmylua_code_analysis",
+        Some(EMMYLUA_CODE_ANALYSIS_VERSION),
+        EMMYLUA_REVISION,
+        EMMYLUA_TREE,
+        sha('1'),
+        sha('2'),
+    )?;
+    let analyzer = AnalyzerBindingDeclaration::new(
+        "wow-emmy/e0-c/1",
+        format!("emmy-pin:{EMMYLUA_REVISION}"),
+        backend.compatibility_report_sha256().to_owned(),
+        ContentDigest::<CanonicalResult>::from_bytes([3_u8; 32]),
+        "wow-emmy/e0-c/1",
+        "wow-emmy-e0-c-library-v1",
+        backend.clone(),
+    )?;
+    let reference_generation = ReferenceGenerationId::derive(&"fixture-service-flow-e0")?;
+    let reference_generation_text = reference_generation.to_string();
+    let configuration = ProjectConfigurationBuilder::new(
+        ProjectId::new("fixture-service-flow-e0-v1")?,
+        ProjectKind::Fixture,
+        profile,
+        reference_generation,
+        analyzer,
+    )
+    .workspace_id(ProjectWorkspaceId::new("workspace:main:service-flow-e0")?)
+    .source_origin_id(ProjectSourceOriginId::new(
+        "project-origin:service-flow-e0",
+    )?)
+    .logical_root("fixtures/e0/service-flow/main")
+    .capability_policy(ProjectCapabilityPolicy::degraded_e0()?)
+    .budget_policy(ProjectBudgetPolicy::fixture_e0()?)
+    .build()?;
+    let library = LuaWorkspaceSnapshot::build(
+        backend,
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "library/C_E0Fixture.lua",
+            LIBRARY_SOURCE,
+        )],
+        LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
+    )?;
+    let main_files = vec![ProjectInputFile::new("main/secret-local.lua", source)?];
+    let bundle = ProjectInputBundle::closed(configuration, main_files, vec![library])?;
+    let api = ReferencePartition::new(
+        "reference.fixture.apidoc.system:C_E0Fixture",
+        CoverageStatus::Complete,
+        vec![ReferenceRecord::new(
+            "function:C_E0Fixture.SecretText",
+            ReferenceRecordKind::Api,
+            "fixture-api-contract",
+            vec!["source:fixture:api".to_owned()],
+            Vec::new(),
+        )?],
+    )?;
+    let restriction = ReferencePartition::new(
+        "reference.fixture.restriction:C_E0Fixture.SecretText",
+        CoverageStatus::Complete,
+        vec![ReferenceRecord::new(
+            "function:C_E0Fixture.SecretText",
+            ReferenceRecordKind::Restriction,
+            "return_position:1;applicability:unconditional_fixture",
+            vec!["source:fixture:restriction".to_owned()],
+            vec![RestrictionFacet::new(
+                "secret.return",
+                RestrictionState::Restricted,
+                vec!["evidence:fixture:secret-return".to_owned()],
+            )?],
+        )?],
+    )?;
+    let reference = ReferenceView::new(
+        reference_generation_text,
+        vec![api, restriction],
+        Vec::new(),
+    )?;
+    let input = LocalProjectInput::new(bundle, reference)?;
+    let backend = LocalProjectBackend::new(input)?;
+    Ok(Service::new(backend.configuration().clone(), backend)?)
 }
 
 #[test]
@@ -400,6 +518,42 @@ fn canonical_result_is_invariant_to_owner_input_order() -> TestResult {
         serde_json::to_vec(&*left_result)?,
         serde_json::to_vec(&*right_result)?
     );
+    Ok(())
+}
+
+#[test]
+fn native_service_does_not_clean_a_reassigned_guard_value() -> TestResult {
+    for source in [
+        "local function changed_after_guard()\n    local text = C_E0Fixture.SecretText()\n    if canaccessvalue(text) then\n        text = C_E0Fixture.SecretText()\n        return text .. \"!\"\n    end\nend\n",
+        "local function make_renderer()\n    local text = C_E0Fixture.SecretText()\n    local render\n    if canaccessvalue(text) then\n        render = function() return text .. \"!\" end\n    end\n    text = C_E0Fixture.SecretText()\n    return render\nend\n",
+    ] {
+        let service = native_flow_service(source)?;
+        let result = service.check(
+            &CheckRequest::new(
+                OperationId::new("operation:check:native-flow-soundness")?,
+                GenerationSelector::current_published("fixture-service-flow-e0-v1")?,
+                CheckScope::WholeProject,
+            ),
+            &AtomicBool::new(false),
+        )?;
+
+        assert_eq!(result.semantic_status(), ServiceSemanticStatus::Partial);
+        let secret_evaluations = result
+            .rule_evaluations()
+            .iter()
+            .filter(|evaluation| evaluation.rule_id() == "wow.secret.local_operation@1")
+            .collect::<Vec<_>>();
+        assert!(
+            secret_evaluations
+                .iter()
+                .any(|evaluation| evaluation.state() == RuleEvaluationState::NotEvaluated)
+        );
+        assert!(
+            !secret_evaluations
+                .iter()
+                .any(|evaluation| evaluation.state() == RuleEvaluationState::Findings)
+        );
+    }
     Ok(())
 }
 

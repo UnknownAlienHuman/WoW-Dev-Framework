@@ -1023,7 +1023,7 @@ fn build_capability_records(
                 .with_file_id(file.file_id().as_str())
             })?;
         let parsed = member_file.status() == EmmyFactFileStatus::Complete
-            && flow_file.status() == EmmyLocalFlowFileStatus::Complete;
+            && flow_file.parse_error_count() == 0;
         records.push(file_capability(
             file.file_id(),
             "emmy.file.parsed",

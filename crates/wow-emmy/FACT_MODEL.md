@@ -251,6 +251,19 @@ unknown_guard_call
 
 The selected profile/reference contract determines whether a guard kind is accepted for a rule. `wow-emmy` only reports the call/arguments/control-flow relationship.
 
+The native local-flow collector qualifies
+`Dominates` only for the declaration, guard and operation in the same enclosing
+function, with no resolved assignment to that declaration before the operation.
+Cross-function captures and unsupported reaching-value mutations produce
+`partial_unresolved_flow`; retained facts remain data, not a complete flow proof.
+Project's flow/guard capabilities then remain partial and the Rules consumer
+returns `NotEvaluated`. Parse completeness stays a separate capability. Reports
+with that new uncertainty vocabulary use `wow-emmy/local-flow-facts/2`; complete
+and parse-failed reports keep `/1` and their unchanged bytes/IDs for exact retained
+Project reconstruction. Previously unqualified mutation/capture reports cannot
+replay as unchanged complete facts. Source, binding and operation identities
+remain unchanged where their inputs are unchanged.
+
 ## 11. Control-flow region
 
 ```text

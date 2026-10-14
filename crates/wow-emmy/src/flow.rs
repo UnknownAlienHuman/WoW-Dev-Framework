@@ -1,21 +1,26 @@
-//! Exact local binding, use, operation, guard, and dominance facts from the
+//! Exact local binding, use, operation, guard, and provenance facts from the
 //! pinned EmmyLua semantic model.
 //!
 //! These facts describe source structure and analyzer-observable declaration
-//! links only. They do not classify a value as a WoW Secret, prove a guard is
+//! links only. A declaration identity is not a reaching-value identity, so a
+//! guard relation is emitted only where the exact value proof holds: one
+//! declaration, one resolved initializer write, and one shared enclosing
+//! function. They do not classify a value as a WoW Secret, prove a guard is
 //! sufficient for a live client, or authorize an operation.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use emmylua_code_analysis::{
     EmmyLuaAnalysis, Emmyrc, EmmyrcLuaVersion, LuaSemanticDeclId, SemanticDeclLevel, SemanticModel,
     WorkspaceFolder, file_path_to_uri,
 };
 use emmylua_parser::{
-    BinaryOperator, LuaAst, LuaAstNode, LuaAstToken, LuaExpr, LuaIfStat, LuaLocalName, LuaNameExpr,
+    BinaryOperator, LuaAst, LuaAstNode, LuaAstToken, LuaClosureExpr, LuaExpr, LuaIfStat,
+    LuaLocalName, LuaNameExpr, LuaVarExpr,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -28,7 +33,9 @@ use crate::syntax::{EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TRE
 use crate::{LuaWorkspaceFile, LuaWorkspaceSnapshot};
 
 const REPORT_SCHEMA: &str = "wow-emmy/local-flow-facts/1";
+const PARTIAL_REPORT_SCHEMA: &str = "wow-emmy/local-flow-facts/2";
 const MAX_FACTS: usize = 65_536;
+const MAX_FLOW_CENSUS_NODES: usize = MAX_FACTS * 2;
 const MAX_NAME_BYTES: usize = 1_024;
 
 /// Stable local-flow analysis failure class.
@@ -42,6 +49,7 @@ pub enum EmmyLocalFlowErrorCode {
     SemanticModelUnavailable,
     LibraryHealthFailed,
     MemberCallAnalysisFailed,
+    Cancelled,
     CoordinateConversionFailed,
     FactBudgetExceeded,
     CanonicalizationFailed,
@@ -103,6 +111,11 @@ pub type EmmyLocalFlowResult<T> = Result<T, EmmyLocalFlowError>;
 pub enum EmmyLocalFlowFileStatus {
     Complete,
     FailedParse,
+
+    /// Flow facts were collected, but an operation binding has unsupported
+    /// assignment/capture flow or a candidate guard cannot be qualified.
+    /// Qualitative conclusions are unavailable rather than silently omitted.
+    PartialUnresolvedFlow,
 }
 
 /// Supported operation kinds in the first bounded local-flow slice.
@@ -496,6 +509,7 @@ impl EmmyLocalFlowReport {
 #[derive(Clone)]
 struct BindingInternal {
     semantic_decl: LuaSemanticDeclId,
+    function_scope: Option<rowan::TextRange>,
     fact: EmmyLocalBindingFact,
 }
 
@@ -503,6 +517,40 @@ struct BindingInternal {
 struct OperationInternal {
     fact: EmmyOperationFact,
     uses: Vec<EmmyLocalUseFact>,
+    binding_indices: Vec<usize>,
+    function_scope: Option<rowan::TextRange>,
+}
+
+/// Exact reaching-write evidence for one file.
+///
+/// A local declaration identity is not a reaching-value identity. This census
+/// retains semantically resolved assignments to collected bindings and records
+/// cross-function uses, without re-parsing source text.
+struct WriteModel {
+    /// Resolved assignment targets after each declaration's initializer.
+    writes: HashMap<LuaSemanticDeclId, Vec<SourceSpan>>,
+    /// Declarations referenced from a different enclosing function.
+    captured: HashSet<LuaSemanticDeclId>,
+}
+
+impl WriteModel {
+    fn has_write_before(&self, binding: &BindingInternal, operation_span: SourceSpan) -> bool {
+        let Some(declaration_end) = binding.fact.declaration_span.byte_end() else {
+            return true;
+        };
+        let Some(operation_start) = operation_span.byte_start() else {
+            return true;
+        };
+        self.writes
+            .get(&binding.semantic_decl)
+            .is_some_and(|writes| {
+                writes.iter().any(|write| {
+                    write
+                        .byte_start()
+                        .is_none_or(|start| start >= declaration_end && start < operation_start)
+                })
+            })
+    }
 }
 
 /// Extracts the first bounded local-flow fact surface from exact Main and
@@ -583,7 +631,8 @@ pub fn analyze_local_flow(
         }
     }
 
-    collect_registered(&analysis, main, &main_root, &member_report)
+    let stop = AtomicBool::new(false);
+    collect_registered(&analysis, main, &main_root, &member_report, &stop)
 }
 
 /// Collect local-flow facts from an already registered native semantic session.
@@ -598,6 +647,7 @@ pub(crate) fn collect_registered(
     main: &LuaWorkspaceSnapshot,
     main_root: &Path,
     member_report: &EmmyMemberCallReport,
+    stop: &AtomicBool,
 ) -> EmmyLocalFlowResult<EmmyLocalFlowReport> {
     // A stale or foreign member report must never silently authorize flow facts.
     if member_report.main_snapshot_id() != main.snapshot_id() {
@@ -618,6 +668,7 @@ pub(crate) fn collect_registered(
     let mut control_flow = Vec::new();
 
     for file in main.files() {
+        flow_checkpoint(stop, file)?;
         let model = semantic_model(analysis, main_root, file)?;
         let parse_errors = model.get_file_parse_error().unwrap_or_default();
         if !parse_errors.is_empty() {
@@ -642,6 +693,7 @@ pub(crate) fn collect_registered(
         let control_start = control_flow.len();
 
         let root = model.get_root().clone();
+
         let mut file_bindings =
             collect_bindings(main, file, &model, &root, member_calls, member_references)?;
         let semantic_bindings = file_bindings
@@ -649,6 +701,17 @@ pub(crate) fn collect_registered(
             .enumerate()
             .map(|(index, binding)| (binding.semantic_decl.clone(), index))
             .collect::<HashMap<_, _>>();
+        // Bound the AST census before allocating its write and capture indexes.
+        // Analyzer-session callers checkpoint cancellation immediately before
+        // entering this collector and again before publishing its report.
+        let write_model = collect_write_model(
+            file,
+            &model,
+            &root,
+            &file_bindings,
+            &semantic_bindings,
+            stop,
+        )?;
 
         let mut file_operations = collect_operations(
             main,
@@ -658,7 +721,9 @@ pub(crate) fn collect_registered(
             &file_bindings,
             &semantic_bindings,
         )?;
-        let (mut file_guards, mut file_control) = collect_guards(
+        let mut unresolved_flow =
+            operation_flow_is_unresolved(&file_bindings, &file_operations, &write_model);
+        let (mut file_guards, mut file_control, unresolved_guard_flow) = collect_guards(
             main,
             file,
             &model,
@@ -666,7 +731,9 @@ pub(crate) fn collect_registered(
             &file_bindings,
             &semantic_bindings,
             &file_operations,
+            &write_model,
         )?;
+        unresolved_flow |= unresolved_guard_flow;
 
         bindings.extend(file_bindings.drain(..).map(|binding| binding.fact));
         for operation in file_operations.drain(..) {
@@ -679,7 +746,11 @@ pub(crate) fn collect_registered(
         files.push(EmmyLocalFlowFileReport {
             path: file.path().into(),
             content_sha256: file.content_sha256().into(),
-            status: EmmyLocalFlowFileStatus::Complete,
+            status: if unresolved_flow {
+                EmmyLocalFlowFileStatus::PartialUnresolvedFlow
+            } else {
+                EmmyLocalFlowFileStatus::Complete
+            },
             parse_error_count: 0,
             binding_count: to_u64(bindings.len() - binding_start, file.path())?,
             use_count: to_u64(uses.len() - use_start, file.path())?,
@@ -717,8 +788,18 @@ pub(crate) fn collect_registered(
         guards: &'a [EmmyGuardFact],
         control_flow: &'a [EmmyControlFlowFact],
     }
+    // Preserve byte identity for already qualified complete/parse-failed reports.
+    // Only the new uncertainty vocabulary needs a new serialized interpretation.
+    let schema = if files
+        .iter()
+        .any(|file| file.status == EmmyLocalFlowFileStatus::PartialUnresolvedFlow)
+    {
+        PARTIAL_REPORT_SCHEMA
+    } else {
+        REPORT_SCHEMA
+    };
     let identity = ReportIdentity {
-        schema: REPORT_SCHEMA,
+        schema,
         upstream_revision: EMMYLUA_REVISION,
         upstream_tree: EMMYLUA_TREE,
         upstream_crate_version: EMMYLUA_CODE_ANALYSIS_VERSION,
@@ -735,7 +816,7 @@ pub(crate) fn collect_registered(
     let analysis_id = canonical_id("emmy-local-flow:sha256:", &identity)?;
 
     Ok(EmmyLocalFlowReport {
-        schema: REPORT_SCHEMA,
+        schema,
         analysis_id: analysis_id.into_boxed_str(),
         upstream_revision: EMMYLUA_REVISION,
         upstream_tree: EMMYLUA_TREE,
@@ -749,6 +830,135 @@ pub(crate) fn collect_registered(
         operations,
         guards,
         control_flow,
+    })
+}
+
+/// Exact resolved-write and capture evidence for collected local bindings.
+///
+/// The AST is counted against a fixed ceiling before the write/capture maps are
+/// allocated. The retained analyzer session checks cancellation immediately
+/// before entering this collector and before publishing its result.
+fn collect_write_model(
+    file: &LuaWorkspaceFile,
+    model: &SemanticModel<'_>,
+    root: &emmylua_parser::LuaChunk,
+    bindings: &[BindingInternal],
+    semantic_bindings: &HashMap<LuaSemanticDeclId, usize>,
+    stop: &AtomicBool,
+) -> EmmyLocalFlowResult<WriteModel> {
+    flow_checkpoint(stop, file)?;
+    let mut census_nodes = 0_usize;
+    for _ in root.descendants::<LuaAst>() {
+        flow_checkpoint(stop, file)?;
+        census_nodes = census_nodes
+            .checked_add(1)
+            .filter(|count| *count <= MAX_FLOW_CENSUS_NODES)
+            .ok_or_else(|| fact_budget(file))?;
+    }
+    flow_checkpoint(stop, file)?;
+    if bindings.len() > MAX_FACTS {
+        return Err(fact_budget(file));
+    }
+
+    flow_checkpoint(stop, file)?;
+    let mut writes: HashMap<LuaSemanticDeclId, Vec<SourceSpan>> =
+        HashMap::with_capacity(bindings.len());
+    let mut captured = HashSet::with_capacity(bindings.len());
+    let mut write_count = 0_usize;
+    for node in root.descendants::<LuaAst>() {
+        flow_checkpoint(stop, file)?;
+        match node {
+            LuaAst::LuaAssignStat(stat) => {
+                let (vars, _) = stat.get_var_and_expr_list();
+                for var in vars {
+                    // Only a plain name target mutates the binding; indexed
+                    // assignment changes a field and is outside this proof.
+                    let LuaVarExpr::NameExpr(name) = var else {
+                        continue;
+                    };
+                    let Some(decl) =
+                        model.find_decl(name.syntax().clone().into(), SemanticDeclLevel::default())
+                    else {
+                        continue;
+                    };
+                    if !semantic_bindings.contains_key(&decl) {
+                        continue;
+                    }
+                    if write_count >= MAX_FACTS {
+                        return Err(fact_budget(file));
+                    }
+                    write_count += 1;
+                    writes
+                        .entry(decl)
+                        .or_default()
+                        .push(ast_span(file, name.syntax().text_range())?);
+                }
+            }
+            LuaAst::LuaNameExpr(name) => {
+                let Some(decl) =
+                    model.find_decl(name.syntax().clone().into(), SemanticDeclLevel::default())
+                else {
+                    continue;
+                };
+                let Some(binding_index) = semantic_bindings.get(&decl).copied() else {
+                    continue;
+                };
+                if is_captured_upvalue(name.syntax(), bindings[binding_index].function_scope) {
+                    captured.insert(decl);
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(WriteModel { writes, captured })
+}
+
+fn flow_checkpoint(stop: &AtomicBool, file: &LuaWorkspaceFile) -> EmmyLocalFlowResult<()> {
+    if stop.load(Ordering::Acquire) {
+        Err(EmmyLocalFlowError::new(
+            EmmyLocalFlowErrorCode::Cancelled,
+            "local-flow analysis cancelled",
+            Some(file.path()),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+/// The innermost closure that contains a node, or the chunk when none does.
+///
+/// A local use inside its own function and a cross-scope upvalue reference
+/// differ only by which closure encloses them, so the enclosing closure is the
+/// unit of comparison.
+fn enclosing_closure(node: &emmylua_parser::LuaSyntaxNode) -> Option<rowan::TextRange> {
+    node.ancestors().skip(1).find_map(|ancestor| {
+        LuaClosureExpr::cast(ancestor).map(|closure| closure.syntax().text_range())
+    })
+}
+
+/// True when a use references a declaration from a different closure, so the
+/// declaration is an upvalue whose execution time the source cannot bound.
+fn is_captured_upvalue(
+    use_node: &emmylua_parser::LuaSyntaxNode,
+    declaration_scope: Option<rowan::TextRange>,
+) -> bool {
+    enclosing_closure(use_node) != declaration_scope
+}
+
+fn operation_flow_is_unresolved(
+    bindings: &[BindingInternal],
+    operations: &[OperationInternal],
+    write_model: &WriteModel,
+) -> bool {
+    operations.iter().any(|operation| {
+        operation.binding_indices.iter().any(|binding_index| {
+            let Some(binding) = bindings.get(*binding_index) else {
+                return true;
+            };
+            binding.function_scope != operation.function_scope
+                || write_model.captured.contains(&binding.semantic_decl)
+                || write_model.has_write_before(binding, operation.fact.operation_span)
+        })
     })
 }
 
@@ -828,6 +1038,7 @@ fn collect_bindings(
             )?;
             result.push(BindingInternal {
                 semantic_decl,
+                function_scope: enclosing_closure(name.syntax()),
                 fact: EmmyLocalBindingFact {
                     fact_id: fact_id.into_boxed_str(),
                     path: file.path().into(),
@@ -916,6 +1127,12 @@ fn collect_operations(
         if operand_occurrences.is_empty() {
             continue;
         }
+        let mut binding_indices = operand_occurrences
+            .iter()
+            .map(|(index, _)| *index)
+            .collect::<Vec<_>>();
+        binding_indices.sort_unstable();
+        binding_indices.dedup();
         let mut operand_binding_fact_ids = operand_occurrences
             .iter()
             .map(|(index, _)| Box::<str>::from(bindings[*index].fact.fact_id()))
@@ -991,12 +1208,15 @@ fn collect_operations(
                 operand_names,
             },
             uses: operation_uses,
+            binding_indices,
+            function_scope: enclosing_closure(binary.syntax()),
         });
     }
     result.sort_by(|left, right| left.fact.cmp(&right.fact));
     Ok(result)
 }
 
+#[allow(clippy::too_many_arguments)] // Explicit semantic facts and exact-value proof inputs.
 fn collect_guards(
     main: &LuaWorkspaceSnapshot,
     file: &LuaWorkspaceFile,
@@ -1005,9 +1225,11 @@ fn collect_guards(
     bindings: &[BindingInternal],
     semantic_bindings: &HashMap<LuaSemanticDeclId, usize>,
     operations: &[OperationInternal],
-) -> EmmyLocalFlowResult<(Vec<EmmyGuardFact>, Vec<EmmyControlFlowFact>)> {
+    write_model: &WriteModel,
+) -> EmmyLocalFlowResult<(Vec<EmmyGuardFact>, Vec<EmmyControlFlowFact>, bool)> {
     let mut guards = Vec::new();
     let mut control_flow = Vec::new();
+    let mut unresolved_flow = false;
     for node in root.descendants::<LuaAst>() {
         let LuaAst::LuaIfStat(if_stat) = node else {
             continue;
@@ -1017,10 +1239,12 @@ fn collect_guards(
         else {
             continue;
         };
+        let guard_function_scope = enclosing_closure(if_stat.syntax());
         if guards.len() >= MAX_FACTS {
             return Err(fact_budget(file));
         }
-        let binding = &bindings[binding_index].fact;
+        let binding_internal = &bindings[binding_index];
+        let binding = &binding_internal.fact;
         #[derive(Serialize)]
         struct GuardIdentity<'a> {
             schema: &'static str,
@@ -1063,6 +1287,16 @@ fn collect_guards(
             {
                 continue;
             }
+            let exact_value_proven = guard_function_scope == operation.function_scope
+                && guard_function_scope == binding_internal.function_scope
+                && !write_model
+                    .captured
+                    .contains(&binding_internal.semantic_decl)
+                && !write_model.has_write_before(binding_internal, operation.fact.operation_span);
+            if !exact_value_proven {
+                unresolved_flow = true;
+                continue;
+            }
             if control_flow.len() >= MAX_FACTS {
                 return Err(fact_budget(file));
             }
@@ -1098,7 +1332,7 @@ fn collect_guards(
     }
     guards.sort();
     control_flow.sort();
-    Ok((guards, control_flow))
+    Ok((guards, control_flow, unresolved_flow))
 }
 
 fn access_guard(
@@ -1325,7 +1559,7 @@ fn to_u64(value: usize, path: &str) -> EmmyLocalFlowResult<u64> {
 fn fact_budget(file: &LuaWorkspaceFile) -> EmmyLocalFlowError {
     EmmyLocalFlowError::new(
         EmmyLocalFlowErrorCode::FactBudgetExceeded,
-        "local-flow fact count or normalized name exceeds the adapter budget",
+        "local-flow facts, AST census, writes, or names exceed the adapter budget",
         Some(file.path()),
     )
 }
