@@ -4,6 +4,13 @@
 
 ## Mission
 
+Diagnostic collection observes the operation stop before and after each native
+file call and during diagnostic conversion. `AnalyzerSession` preserves typed
+`Cancelled` outcomes. The standalone `analyze_syntax` signature is unchanged;
+`analyze_syntax_with_stop` exposes the same collector with a caller stop state.
+One already running upstream diagnostic call is synchronous and completes before
+the stop is observed; no polling thread or per-file preemption is promised.
+
 `wow-emmy` is the single adapter around upstream EmmyLua Rust analysis. It owns analyzer-session lifecycle, main/library workspace assembly, file updates, generic diagnostic normalization, and the smallest normalized syntax/semantic fact surface required by E0 rules.
 
 It does not own WoW platform truth. API existence and restriction facets come from `wow-reference`; project generation and repository structure come from `wow-project`; rule algorithms come from `wow-rules`; cross-component orchestration comes from `wow-service`.

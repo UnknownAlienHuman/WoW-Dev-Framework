@@ -439,3 +439,55 @@ fn selected_query_limit_preserves_session_lifecycle_and_default_refusals() -> Te
     );
     Ok(())
 }
+
+/// The real multi-file native witness for the Issue #135 collector gap.
+///
+/// The stop is armed through the deterministic after-first-native-call seam, so
+/// one native file is diagnosed and the run stops before the next file enters
+/// the collector. No timer, sleep, or polling thread is involved, and no extra
+/// source callback runs in production.
+///
+/// This proves cancellation reaches the diagnostic collector and that the
+/// between-file stop is typed `Cancelled` rather than a native failure or
+/// unavailable diagnostics.
+#[test]
+fn cancelled_collection_stops_between_native_files() -> TestResult {
+    use crate::syntax::analyzer::{
+        arm_stop_after_diagnostic_call, diagnostic_calls, reset_diagnostic_calls,
+    };
+    use std::sync::atomic::AtomicBool;
+
+    let main = snapshot(&[
+        ("main/a.lua", "local value = 1\n"),
+        ("main/b.lua", "local text = 'x\n"),
+        ("main/c.lua", "return 1\n"),
+    ])?;
+    reset_diagnostic_calls();
+    arm_stop_after_diagnostic_call(1);
+    let stop = AtomicBool::new(false);
+    let error = crate::analyze_syntax_with_stop(&main, &stop)
+        .err()
+        .ok_or("cancelled collection published a report")?;
+    assert_eq!(error.code(), crate::EmmySyntaxErrorCode::Cancelled);
+    // The first file entered upstream, and the stop prevented every later file.
+    assert_eq!(diagnostic_calls(), 1);
+    reset_diagnostic_calls();
+
+    // An operation cancelled before entry never reaches the native collector.
+    let stopped = AtomicBool::new(true);
+    let error = crate::analyze_syntax_with_stop(&main, &stopped)
+        .err()
+        .ok_or("pre-cancelled collection published a report")?;
+    assert_eq!(error.code(), crate::EmmySyntaxErrorCode::Cancelled);
+
+    // The uncancelled canonical path is unchanged and still reaches every file.
+    let running = AtomicBool::new(false);
+    let report = crate::analyze_syntax_with_stop(&main, &running)?;
+    assert_eq!(report.files().len(), 3);
+    assert!(report.files().iter().all(|f| f.status() == "complete"));
+    assert_eq!(
+        report.analysis_id(),
+        crate::analyze_syntax(&main)?.analysis_id()
+    );
+    Ok(())
+}

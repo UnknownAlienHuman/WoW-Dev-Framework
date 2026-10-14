@@ -829,7 +829,7 @@ impl RegisteredMemberAnalysis {
             (Some(snapshot), Some(root), Some(project_generation)) => {
                 crate::bindings::checkpoint(stop)?;
                 let syntax_report =
-                    crate::syntax::analyzer::collect_registered(analysis, snapshot, root)
+                    crate::syntax::analyzer::collect_registered(analysis, snapshot, root, stop)
                         .map_err(map_virtual_syntax_error)?;
                 let virtual_member_calls = collect_member_call_report(
                     analysis,
@@ -1160,6 +1160,7 @@ fn map_virtual_syntax_error(error: crate::syntax::EmmySyntaxError) -> EmmyMember
         crate::syntax::EmmySyntaxErrorCode::IncompatibleBackend => {
             EmmyMemberCallErrorCode::IncompatibleBackend
         }
+        crate::syntax::EmmySyntaxErrorCode::Cancelled => EmmyMemberCallErrorCode::Cancelled,
         crate::syntax::EmmySyntaxErrorCode::DiagnosticsUnavailable
         | crate::syntax::EmmySyntaxErrorCode::CanonicalizationFailed => {
             EmmyMemberCallErrorCode::SemanticModelUnavailable

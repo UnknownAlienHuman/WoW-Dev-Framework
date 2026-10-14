@@ -38,7 +38,7 @@ pub use syntax::{
     EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyDiagnosticClassification,
     EmmyDiagnosticRollout, EmmyDiagnosticSeverity, EmmySyntaxDiagnostic, EmmySyntaxDiagnosticKind,
     EmmySyntaxError, EmmySyntaxErrorCode, EmmySyntaxFileReport, EmmySyntaxReport, EmmySyntaxResult,
-    analyze_syntax,
+    analyze_syntax, analyze_syntax_with_stop,
 };
 pub use virtual_semantics::{VIRTUAL_SEMANTIC_PROFILE, VirtualSemanticReport};
 pub use workspace::{

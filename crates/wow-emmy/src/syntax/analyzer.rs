@@ -1,6 +1,7 @@
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use emmylua_code_analysis::{
@@ -26,10 +27,74 @@ pub(super) fn analyze(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmyS
     validate_backend(snapshot)?;
     let root = virtual_root(snapshot.snapshot_id());
     let analysis = build_registered(snapshot, &root)?;
-    collect_registered(&analysis, snapshot, &root)
+    collect_registered(&analysis, snapshot, &root, &AtomicBool::new(false))
 }
 
-/// Register exact supplied bytes under the existing physical diagnostic policy.
+/// Same collection under an operation stop state.
+pub(super) fn analyze_with_stop(
+    snapshot: &LuaWorkspaceSnapshot,
+    stop: &AtomicBool,
+) -> EmmySyntaxResult<EmmySyntaxReport> {
+    validate_backend(snapshot)?;
+    let root = virtual_root(snapshot.snapshot_id());
+    let analysis = build_registered(snapshot, &root)?;
+    collect_registered(&analysis, snapshot, &root, stop)
+}
+
+// The counter and the seam exist only in test builds, so production carries
+// no per-call bookkeeping and never observes a test-only stop arming.
+#[cfg(test)]
+thread_local! {
+    static DIAGNOSTIC_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static STOP_AFTER_CALL: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Test-only reset of the observed upstream diagnostic call count.
+///
+/// A test resets before its own run so a parallel test cannot make the
+/// expected call count ambiguous, and clears the armed bound so no
+/// unrelated run observes a stale seam.
+#[cfg(test)]
+pub(crate) fn reset_diagnostic_calls() {
+    DIAGNOSTIC_CALLS.set(0);
+    STOP_AFTER_CALL.set(0);
+}
+
+/// Test-only observed upstream diagnostic call count.
+#[cfg(test)]
+pub(crate) fn diagnostic_calls() -> usize {
+    DIAGNOSTIC_CALLS.get()
+}
+
+/// Report one completed upstream diagnostic call and apply any armed stop.
+///
+/// The seam runs after a native diagnostic call has completed, so the first
+/// file is fully diagnosed and only a later file is prevented from starting.
+/// A test arms a finite one-based bound. Without a test arming the seam this
+/// only reads a counter, so production never polls, spins, waits, or observes
+/// an extra source callback.
+#[cfg(test)]
+fn observe_diagnostic_call(stop: &AtomicBool) -> usize {
+    let calls = DIAGNOSTIC_CALLS.get() + 1;
+    DIAGNOSTIC_CALLS.set(calls);
+    let armed = STOP_AFTER_CALL.get();
+    if armed != 0 && calls >= armed {
+        stop.store(true, Ordering::Release);
+    }
+    calls
+}
+
+/// Test-only arming of the deterministic after-first-native-call seam.
+///
+/// `calls` is the one-based number of completed native diagnostic calls after
+/// which the stop state must become visible. Zero disarms the seam. The bound
+/// is finite and chosen by the test, and `reset_diagnostic_calls` clears it, so
+/// no unrelated run can observe a stale arming.
+#[cfg(test)]
+pub(crate) fn arm_stop_after_diagnostic_call(calls: usize) {
+    STOP_AFTER_CALL.set(calls);
+}
+
 pub(crate) fn build_registered(
     snapshot: &LuaWorkspaceSnapshot,
     root: &Path,
@@ -73,11 +138,13 @@ pub(crate) fn collect_registered(
     analysis: &EmmyLuaAnalysis,
     snapshot: &LuaWorkspaceSnapshot,
     root: &Path,
+    stop: &AtomicBool,
 ) -> EmmySyntaxResult<EmmySyntaxReport> {
     validate_backend(snapshot)?;
     let mut diagnostics = Vec::new();
     let mut files = Vec::with_capacity(snapshot.files().len());
     for file in snapshot.files() {
+        cancel(stop, file.path())?;
         let uri = file_path_to_uri(&root.join(file.path())).ok_or_else(|| {
             EmmySyntaxError::new(
                 EmmySyntaxErrorCode::AnalyzerFileRegistrationFailed,
@@ -92,17 +159,38 @@ pub(crate) fn collect_registered(
                 Some(file.path()),
             )
         })?;
-        let upstream = analysis
-            .diagnose_file(file_id, CancellationToken::new())
-            .ok_or_else(|| {
-                EmmySyntaxError::new(
-                    EmmySyntaxErrorCode::DiagnosticsUnavailable,
-                    "upstream diagnostics are unavailable for a registered file",
-                    Some(file.path()),
-                )
-            })?;
+        // One upstream diagnostic call per file. The call receives the shared
+        // stop token so an already cancelled entry is refused on entry
+        // instead of running checkers under a dead operation.
+        let upstream = analysis.diagnose_file(file_id, shared_token(stop));
+        // Deterministic after-first-native-call boundary. This call has
+        // completed, so the stop state can now become visible before any later
+        // file enters the native collector. The seam is test-only, so
+        // production never polls, spins, or observes an extra source callback.
+        #[cfg(test)]
+        observe_diagnostic_call(stop);
+        // The between-file checkpoint follows the completed native call. An
+        // armed stop is visible here, so the next file never enters upstream.
+        cancel(stop, file.path())?;
         let before = diagnostics.len();
+        // Upstream returns `None` both for a refused cancelled entry and for
+        // a file it cannot diagnose. Only the shared stop state names this
+        // operation's cancellation; any other refusal keeps the
+        // unavailable-diagnostics reading, so a healthy analyzer is never
+        // reported as cancelled.
+        let upstream = upstream.ok_or_else(|| {
+            EmmySyntaxError::new(
+                if stop.load(Ordering::Acquire) {
+                    EmmySyntaxErrorCode::Cancelled
+                } else {
+                    EmmySyntaxErrorCode::DiagnosticsUnavailable
+                },
+                "upstream diagnostics are unavailable for a registered file",
+                Some(file.path()),
+            )
+        })?;
         for diagnostic in upstream {
+            cancel(stop, file.path())?;
             let Some((kind, code)) = accepted_code(diagnostic.code.as_ref()) else {
                 continue;
             };
@@ -149,7 +237,9 @@ pub(crate) fn collect_registered(
             })?,
         });
     }
+    cancel(stop, "")?;
     diagnostics.sort();
+    cancel(stop, "")?;
 
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -181,6 +271,7 @@ pub(crate) fn collect_registered(
             None,
         )
     })?;
+    cancel(stop, "")?;
     Ok(EmmySyntaxReport {
         schema: REPORT_SCHEMA,
         analysis_id: format!("emmy-diagnostics:sha256:{:x}", Sha256::digest(canonical))
@@ -209,6 +300,38 @@ fn validate_backend(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<()> {
         ));
     }
     Ok(())
+}
+
+/// Stop this collection when the caller asked to stop.
+///
+/// Typed cancellation stays distinct from `DiagnosticsUnavailable` and from a
+/// native failure, so the session keeps an operator cancellation separate from
+/// a lost analyzer.
+fn cancel(stop: &AtomicBool, path: &str) -> EmmySyntaxResult<()> {
+    if stop.load(Ordering::Acquire) {
+        return Err(EmmySyntaxError::new(
+            EmmySyntaxErrorCode::Cancelled,
+            "diagnostic collection cancelled by the caller",
+            Some(path),
+        ));
+    }
+    Ok(())
+}
+
+/// Carry the operation stop state into the upstream diagnostic call.
+///
+/// Upstream `diagnose_file` checks its token on entry and then runs `check_file`
+/// synchronously without polling it. One shared token therefore decides
+/// whether the next file is diagnosed at all, and the between-file checkpoint
+/// above returns a typed cancellation before that file starts. Sharing the
+/// token does not make one file of synchronous work preemptible, and no
+/// polling thread, spin loop, or second parser is introduced here.
+fn shared_token(stop: &AtomicBool) -> CancellationToken {
+    let token = CancellationToken::new();
+    if stop.load(Ordering::Acquire) {
+        token.cancel();
+    }
+    token
 }
 
 pub(crate) fn virtual_root(snapshot_id: &str) -> PathBuf {

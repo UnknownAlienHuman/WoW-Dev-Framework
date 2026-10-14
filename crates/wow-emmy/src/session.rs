@@ -210,6 +210,16 @@ fn error(code: AnalyzerSessionErrorCode) -> AnalyzerSessionError {
         member_failure: None,
     }
 }
+/// Map a typed collector failure so cancellation never masquerades as an
+/// analyzer failure or unavailable diagnostics.
+fn map_syntax_error(source: crate::EmmySyntaxError) -> AnalyzerSessionError {
+    if source.code() == crate::EmmySyntaxErrorCode::Cancelled {
+        return error(AnalyzerSessionErrorCode::Cancelled);
+    }
+    error(AnalyzerSessionErrorCode::NativeFailure)
+}
+
+/// Synchronous cancellation checkpoint for operation boundaries.
 fn checkpoint(stop: &AtomicBool) -> Result<(), AnalyzerSessionError> {
     if stop.load(Ordering::Relaxed) {
         Err(error(AnalyzerSessionErrorCode::Cancelled))
@@ -407,8 +417,9 @@ impl AnalyzerSession {
             &self.syntax,
             &self.main,
             &self.syntax_root,
+            stop,
         )
-        .map_err(|_| error(AnalyzerSessionErrorCode::NativeFailure))?;
+        .map_err(map_syntax_error)?;
         checkpoint(stop)?;
         let session = self
             .semantic

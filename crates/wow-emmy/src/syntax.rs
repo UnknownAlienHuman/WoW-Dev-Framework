@@ -28,6 +28,7 @@ pub enum EmmySyntaxErrorCode {
     IncompatibleBackend,
     AnalyzerFileRegistrationFailed,
     DiagnosticsUnavailable,
+    Cancelled,
     DiagnosticBudgetExceeded,
     CoordinateConversionFailed,
     CanonicalizationFailed,
@@ -229,4 +230,20 @@ impl EmmySyntaxReport {
 /// accepted Lua syntax, documentation syntax, and frozen E0 generic families. No source file is read or executed.
 pub fn analyze_syntax(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmySyntaxReport> {
     analyzer::analyze(snapshot)
+}
+
+/// Collect accepted diagnostics under an operation stop state.
+///
+/// The standalone entry point has no operation, so `analyze_syntax` keeps its
+/// no-stop signature and calls the same collector with a never-cancelled stop.
+/// This form carries the caller stop state so cancellation is checked between
+/// files and ends as a typed `Cancelled` result.
+/// A synchronous upstream call already in progress completes before the stop is
+/// observed. Registration is a separate phase; this API does not promise its
+/// preemption or introduce a background cancellation poller.
+pub fn analyze_syntax_with_stop(
+    snapshot: &LuaWorkspaceSnapshot,
+    stop: &std::sync::atomic::AtomicBool,
+) -> EmmySyntaxResult<EmmySyntaxReport> {
+    analyzer::analyze_with_stop(snapshot, stop)
 }
