@@ -1,5 +1,6 @@
 //! One small synthetic retained native service lifecycle, not live/Ketho evidence.
 mod build;
+mod frozen_physical;
 mod inspect;
 mod source_excerpt;
 mod status;
@@ -991,13 +992,17 @@ fn retained_native_primary_map_is_exact_repeatable_and_refuses_mixed_or_missing_
     assert_eq!(exported.current, selected.current);
     let frozen = execute_context_map(&host, &request, &stop)?;
     assert_map(&frozen, &exported, &first.generation_id, &scratch.root)?;
-    assert_eq!(
-        frozen.canonical_bytes(),
-        include_bytes!("../../e3/native-primary-map/envelope.json")
-    );
+    let (expected_envelope, expected_request) = frozen_physical::runtime_bound_fixture(
+        include_bytes!("../../e3/native-primary-map/envelope.json"),
+        include_bytes!("../../e3/native-primary-map/request.json"),
+        &first.generation_id,
+        &exported.current,
+        &host_json,
+    )?;
+    assert_eq!(frozen.canonical_bytes(), expected_envelope);
     assert_eq!(
         wow_core::canonical_json_bytes(&request)?.as_slice(),
-        include_bytes!("../../e3/native-primary-map/request.json")
+        expected_request
     );
     assert_eq!(
         wow_context::PRIMARY_MAP_PROFILE_BYTES,
@@ -1552,14 +1557,16 @@ fn retained_project_root_enumerates_both_files_and_refuses_required_aggregate_bu
         "closed",
         &stop,
     )?;
-    assert_eq!(
-        first.canonical_bytes(),
-        include_bytes!("../../e3/native-primary-project-map/envelope.json")
-    );
-    assert_eq!(
-        wow_core::canonical_json_bytes(&request)?,
-        include_bytes!("../../e3/native-primary-project-map/request.json")
-    );
+    let prepared_current: CurrentPublication = serde_json::from_value(expected["current"].clone())?;
+    let (expected_envelope, expected_request) = frozen_physical::runtime_bound_fixture(
+        include_bytes!("../../e3/native-primary-project-map/envelope.json"),
+        include_bytes!("../../e3/native-primary-project-map/request.json"),
+        &published.generation_id,
+        &prepared_current,
+        &host_json,
+    )?;
+    assert_eq!(first.canonical_bytes(), expected_envelope);
+    assert_eq!(wow_core::canonical_json_bytes(&request)?, expected_request);
     assert_eq!(
         wow_context::PRIMARY_PROJECT_MAP_PROFILE_BYTES,
         include_bytes!("../../e3/native-primary-project-map/profile.json")

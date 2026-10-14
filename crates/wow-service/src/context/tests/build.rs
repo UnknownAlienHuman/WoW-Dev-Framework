@@ -867,13 +867,18 @@ fn retained_native_pack_is_lossless_across_renderers_and_keeps_one_budget() -> T
         "--output",
         "envelope-json"
     ]);
-    assert_eq!(
-        results[3].canonical_bytes(),
-        include_bytes!("../../../e3/native-primary-pack/envelope.json")
-    );
+    let prepared_current: CurrentPublication = serde_json::from_value(expected["current"].clone())?;
+    let (expected_envelope, expected_request) = frozen_physical::runtime_bound_fixture(
+        include_bytes!("../../../e3/native-primary-pack/envelope.json"),
+        include_bytes!("../../../e3/native-primary-pack/request.json"),
+        &first.generation_id,
+        &prepared_current,
+        &host_json,
+    )?;
+    assert_eq!(results[3].canonical_bytes(), expected_envelope);
     assert_eq!(
         wow_core::canonical_json_bytes(&requests[3])?,
-        include_bytes!("../../../e3/native-primary-pack/request.json")
+        expected_request
     );
     assert_eq!(
         bytes,

@@ -799,14 +799,15 @@ fn retained_native_inspect_projects_exact_file_and_closure_without_losing_custod
         original["skeletons"], final_payload["skeletons"],
         "the exact retained semantic skeleton does not change when Current advances"
     );
-    assert_eq!(
-        exported.canonical_bytes(),
-        include_bytes!("../../../e3/native-primary-inspect/envelope.json")
-    );
-    assert_eq!(
-        wow_core::canonical_json_bytes(&both)?,
-        include_bytes!("../../../e3/native-primary-inspect/request.json")
-    );
+    let (expected_envelope, expected_request) = frozen_physical::runtime_bound_fixture(
+        include_bytes!("../../../e3/native-primary-inspect/envelope.json"),
+        include_bytes!("../../../e3/native-primary-inspect/request.json"),
+        &first.generation_id,
+        &expected.current,
+        &host_json,
+    )?;
+    assert_eq!(exported.canonical_bytes(), expected_envelope);
+    assert_eq!(wow_core::canonical_json_bytes(&both)?, expected_request);
     let frozen_profiles = json!({
         "l0": final_payload["skeletons"]["l0"]["core"]["profile_descriptor"],
         "l1": final_payload["skeletons"]["l1"]["core"]["profile_descriptor"],
