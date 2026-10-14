@@ -16,8 +16,16 @@ cargo xtask materialize-source /path/to/request.json
 cargo xtask materialize-source-api /path/to/request.json
 ```
 
-`check-source` stays read-only. `update-source` is a separately authorized write:
-the caller explicitly supplies the local HEAD it observed. No startup check or
+`check-source` stays read-only.
+Both paths admit a regular local Git configuration without includes before any
+worktree status. Source queries ignore inherited global/system configuration and
+attributes. Filters, configuration includes, credential/rewrite overrides, hidden
+index flags and submodule worktrees are refused; no configured command is run.
+Supported clean and dirty checkouts remain observable without modifying their
+files or index. A missing remote observation remains `unverified_current`.
+
+`update-source` is a separately authorized write: the caller explicitly supplies
+the local HEAD it observed. No startup check or
 background mutation is introduced. An automation may invoke this command under
 its operator-approved update policy; interactive clients should propose it first.
 The same command supports any explicitly selected branch of a compatible public

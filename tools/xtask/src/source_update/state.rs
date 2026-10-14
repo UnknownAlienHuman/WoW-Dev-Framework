@@ -45,50 +45,7 @@ pub(super) fn inspect(root: &Path) -> Result<State> {
             Err(error) => return Err(error.into()),
         }
     }
-    let metadata = fs::symlink_metadata(root.join(".git/config"))?;
-    if !metadata.is_file() || metadata.file_type().is_symlink() {
-        return Err("source config is not a regular file".into());
-    }
-    let config = git::isolated_run(
-        root,
-        &["config", "--local", "--no-includes", "--null", "--list"],
-        None,
-        1024 * 1024,
-    )?;
-    for record in config.split(|b| *b == 0).filter(|r| !r.is_empty()) {
-        let key = record
-            .split(|b| *b == b'\n')
-            .next()
-            .ok_or("invalid Git config")?;
-        let key = std::str::from_utf8(key)?.to_ascii_lowercase();
-        if key.starts_with("filter.")
-            || key.starts_with("include.")
-            || key.starts_with("includeif.")
-            || key.starts_with("url.")
-            || key.starts_with("credential.")
-            || key == "core.sparsecheckout"
-            || key == "core.sparsecheckoutcone"
-            || key == "core.askpass"
-            || (key.starts_with("branch.") && key.ends_with(".mergeoptions"))
-            || key == "extensions.worktreeconfig"
-            || key == "core.attributesfile"
-            || (key.starts_with("http.") && key.ends_with("extraheader"))
-        {
-            return Err(
-                "source update refuses filters, includes, rewrites, credentials or sparse config"
-                    .into(),
-            );
-        }
-    }
-    // These index flags can hide edited worktree bytes from ordinary status.
-    let index = git::isolated_run(root, &["ls-files", "-v", "-z"], None, 16 * 1024 * 1024)?;
-    if index
-        .split(|b| *b == 0)
-        .filter(|e| !e.is_empty())
-        .any(|e| e[0].is_ascii_lowercase() || e[0] == b'S')
-    {
-        return Err("source index contains assume-unchanged or skip-worktree entries".into());
-    }
+    let config = git::admit_source_config(root)?;
     let status = git::isolated_run(
         root,
         &[

@@ -1,4 +1,5 @@
 use crate::Result;
+use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -26,6 +27,62 @@ pub fn isolated_text(root: &Path, args: &[&str]) -> Result<String> {
             .trim()
             .to_owned(),
     )
+}
+/// Admit source configuration before any command can inspect worktree contents.
+/// Shared by advisory freshness and the existing managed-update prerequisite.
+pub(crate) fn admit_source_config(root: &Path) -> Result<Vec<u8>> {
+    let metadata = fs::symlink_metadata(root.join(".git/config"))?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err("source config is not a regular file".into());
+    }
+    let config = isolated_run(
+        root,
+        &["config", "--local", "--no-includes", "--null", "--list"],
+        None,
+        1024 * 1024,
+    )?;
+    for record in config.split(|b| *b == 0).filter(|r| !r.is_empty()) {
+        let key = record
+            .split(|b| *b == b'\n')
+            .next()
+            .ok_or("invalid Git config")?;
+        let key = std::str::from_utf8(key)?.to_ascii_lowercase();
+        if key.starts_with("filter.")
+            || key.starts_with("include.")
+            || key.starts_with("includeif.")
+            || key.starts_with("url.")
+            || key.starts_with("credential.")
+            || key == "core.sparsecheckout"
+            || key == "core.sparsecheckoutcone"
+            || key == "core.askpass"
+            || (key.starts_with("branch.") && key.ends_with(".mergeoptions"))
+            || key == "extensions.worktreeconfig"
+            || key == "core.attributesfile"
+            || (key.starts_with("http.") && key.ends_with("extraheader"))
+        {
+            return Err(
+                "source admission refuses filters, includes, rewrites, credentials or sparse config"
+                    .into(),
+            );
+        }
+    }
+    let index = isolated_run(root, &["ls-files", "-v", "-z"], None, 16 * 1024 * 1024)?;
+    if index
+        .split(|b| *b == 0)
+        .filter(|e| !e.is_empty())
+        .any(|e| e[0].is_ascii_lowercase() || e[0] == b'S')
+    {
+        return Err("source index contains assume-unchanged or skip-worktree entries".into());
+    }
+    // A recursive submodule status would enter another checkout's configuration.
+    let entries = isolated_run(root, &["ls-files", "--stage", "-z"], None, 16 * 1024 * 1024)?;
+    if entries
+        .split(|b| *b == 0)
+        .any(|entry| entry.starts_with(b"160000 "))
+    {
+        return Err("source admission refuses submodule worktrees".into());
+    }
+    Ok(config)
 }
 fn execute(
     root: &Path,
@@ -163,21 +220,14 @@ pub fn resolve(root: &Path, selector: &str) -> Result<String> {
 /// Advisory freshness check only: never fetch, reset, stash or change branches.
 /// Explicit local roots and public HTTPS remotes only; no provider discovery.
 pub fn check_source(root: &Path, branch: &str) -> Result<u8> {
-    text(root, &["check-ref-format", &format!("refs/heads/{branch}")])?;
-    let revision = resolve(root, "HEAD")?;
-    let dirty = !text(root, &["status", "--porcelain", "--untracked-files=normal"])?.is_empty();
-    let current_branch = text(root, &["symbolic-ref", "--quiet", "--short", "HEAD"]).ok();
-    let origin = text(root, &["remote", "get-url", "origin"])?;
-    if !origin.starts_with("https://")
-        || origin[8..].contains(['@', '?', '#'])
-        || origin.chars().any(char::is_control)
-    {
-        return Err(
-            "freshness checks require a public HTTPS origin without embedded credentials".into(),
-        );
-    }
+    let LocalSourceState {
+        revision,
+        dirty,
+        current_branch,
+        origin,
+    } = inspect_source_local(root, branch)?;
     let reference = format!("refs/heads/{branch}");
-    let remote = text(
+    let remote = isolated_text(
         root,
         &[
             "-c",
@@ -213,6 +263,41 @@ pub fn check_source(root: &Path, branch: &str) -> Result<u8> {
         serde_json::json!({"status":status,"local_revision":revision,"remote_revision":remote,"branch":current_branch,"requested_branch":branch,"dirty":dirty,"next_action":if status=="current" {"none"} else {"review local state, fetch the configured branch and offer a fast-forward update; do not reset"}})
     );
     Ok(if status == "current" { 0 } else { 3 })
+}
+
+pub(crate) struct LocalSourceState {
+    pub revision: String,
+    pub dirty: bool,
+    current_branch: Option<String>,
+    origin: String,
+}
+
+/// The exact local freshness phase, separately observable without remote I/O.
+pub(crate) fn inspect_source_local(root: &Path, branch: &str) -> Result<LocalSourceState> {
+    admit_source_config(root)?;
+    isolated_text(root, &["check-ref-format", &format!("refs/heads/{branch}")])?;
+    let revision = isolated_text(root, &["rev-parse", "--verify", "HEAD^{commit}"])?;
+    if !oid(&revision) {
+        return Err("noncanonical commit identifier".into());
+    }
+    let current_branch = isolated_text(root, &["symbolic-ref", "--quiet", "--short", "HEAD"]).ok();
+    let origin = isolated_text(root, &["remote", "get-url", "origin"])?;
+    if !origin.starts_with("https://")
+        || origin[8..].contains(['@', '?', '#'])
+        || origin.chars().any(char::is_control)
+    {
+        return Err(
+            "freshness checks require a public HTTPS origin without embedded credentials".into(),
+        );
+    }
+    let dirty =
+        !isolated_text(root, &["status", "--porcelain", "--untracked-files=normal"])?.is_empty();
+    Ok(LocalSourceState {
+        revision,
+        dirty,
+        current_branch,
+        origin,
+    })
 }
 pub fn parse_remote(text: &str, reference: &str) -> Result<String> {
     let lines = text.lines().collect::<Vec<_>>();

@@ -112,6 +112,10 @@ fn filters_includes_rewrites_credentials_and_sparse_config_are_not_used() -> Res
     ] {
         let f = Fixture::new("sha1", false)?;
         git::isolated_text(&f.checkout, &["config", key, value])?;
+        assert!(
+            git::check_source(&f.checkout, "live").is_err(),
+            "advisory {key}"
+        );
         let remote = f.remote();
         assert!(
             update(&f.checkout, "live", &f.initial, &remote).is_err(),
@@ -122,6 +126,65 @@ fn filters_includes_rewrites_credentials_and_sparse_config_are_not_used() -> Res
     }
     Ok(())
 }
+#[test]
+fn advisory_source_admits_clean_and_dirty_without_mutation_or_network() -> Result<()> {
+    let f = Fixture::new("sha1", false)?;
+    let clean = git::inspect_source_local(&f.checkout, "live")?;
+    assert!(!clean.dirty);
+    assert_eq!(clean.revision, f.initial);
+    put(&f.checkout, "data.txt", "different dirty source bytes\n")?;
+    let index = fs::read(f.checkout.join(".git/index"))?;
+    let dirty = git::inspect_source_local(&f.checkout, "live")?;
+    assert!(dirty.dirty);
+    assert_eq!(dirty.revision, f.initial);
+    assert_eq!(index, fs::read(f.checkout.join(".git/index"))?);
+    assert_eq!(
+        fs::read_to_string(f.checkout.join("data.txt"))?,
+        "different dirty source bytes\n"
+    );
+    Ok(())
+}
+
+#[test]
+fn advisory_source_refuses_clean_filter_before_marker_execution() -> Result<()> {
+    let f = Fixture::new("sha1", false)?;
+    put(
+        &f.checkout,
+        ".gitattributes",
+        "data.txt filter=source_probe\n",
+    )?;
+    super::support::commit(&f.checkout)?;
+    let marker = f.root.join("filter-ran");
+    let marker_arg = marker
+        .to_str()
+        .ok_or("marker UTF-8")?
+        .replace('\\', "/")
+        .replace('\'', "'\\''");
+    git::isolated_text(
+        &f.checkout,
+        &[
+            "config",
+            "filter.source_probe.clean",
+            &format!("printf ran > '{marker_arg}'; cat"),
+        ],
+    )?;
+    put(
+        &f.checkout,
+        "data.txt",
+        "long changed content requiring examination\n",
+    )?;
+    let config = fs::read(f.checkout.join(".git/config"))?;
+    let index = fs::read(f.checkout.join(".git/index"))?;
+    let error = git::check_source(&f.checkout, "live")
+        .err()
+        .ok_or("configured filter accepted")?;
+    assert!(error.to_string().contains("source admission refuses"));
+    assert!(!marker.exists());
+    assert_eq!(config, fs::read(f.checkout.join(".git/config"))?);
+    assert_eq!(index, fs::read(f.checkout.join(".git/index"))?);
+    Ok(())
+}
+
 #[test]
 fn origin_must_be_explicit_https_without_embedded_credentials() {
     for origin in [
