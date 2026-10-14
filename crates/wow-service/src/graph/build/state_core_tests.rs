@@ -154,8 +154,10 @@ fn state_core_pipeline_publishes_roots_and_literal_paths() -> Result<(), Box<dyn
                 && root.scope == wow_project::load::TocSavedVariableScope::Character)
     );
     // Legacy state recognition joins the analyzer global-slot accesses.
-    let (after_state, legacy) = state::publish(source.candidate(), &provenance, &stop)
-        .map_err(|error| std::io::Error::other(format!("state publication: {error}")))?;
+    let (after_state, legacy) = state::publish_diagnosed(source.candidate(), &provenance, &stop)
+        .map_err(|failure| {
+            std::io::Error::other(format!("state publication diagnostic: {failure:?}"))
+        })?;
     rejects_changed_access_handles(&after_state, &provenance, &legacy, &stop)?;
     // TOC publication supplies the materialized variant owner that Template-style
     // roots reference, then the TOC state-root phase runs.
@@ -299,26 +301,124 @@ fn state_core_pipeline_publishes_roots_and_literal_paths() -> Result<(), Box<dyn
                 .any(|edge| edge.fact_ids.contains(&binding.access_id))),
         "an admitted alias read must retain its exact access witness"
     );
-    let dynamic = provenance
+    let dynamic_sites: Vec<_> = provenance
         .state_sites()
         .iter()
-        .find(|site| {
+        .filter(|site| {
             site.outcome == wow_project::graph::ProjectGraphStateOutcome::DynamicOrUnsupportedKey
         })
-        .ok_or("missing explicit dynamic-key omission")?;
+        .collect();
+    assert_eq!(dynamic_sites.len(), 3);
     assert!(
-        topology
+        report
+            .global_accesses()
+            .iter()
+            .filter(|access| dynamic_sites
+                .iter()
+                .any(|site| site.access_id == access.fact_id()))
+            .any(|access| access.kind() == wow_emmy::global_access::GlobalAccessKind::Read)
+    );
+    assert!(
+        report
+            .global_accesses()
+            .iter()
+            .filter(|access| dynamic_sites
+                .iter()
+                .any(|site| site.access_id == access.fact_id()))
+            .any(|access| access.kind() == wow_emmy::global_access::GlobalAccessKind::Write)
+    );
+    for site in dynamic_sites {
+        let access = report
+            .global_accesses()
+            .iter()
+            .find(|access| access.fact_id() == site.access_id)
+            .ok_or("missing retained dynamic access")?;
+        assert!(!access.path_complete());
+        let binding = provenance
+            .state_bindings()
+            .iter()
+            .find(|binding| binding.access_id == site.access_id)
+            .ok_or("missing Possible binding for dynamic access")?;
+        assert_eq!(binding.confidence, wow_graph::GraphConfidence::Possible);
+        let edge = topology
             .edges
             .iter()
-            .all(|edge| !edge.fact_ids.contains(&dynamic.access_id)),
-        "dynamic keys cannot manufacture an exact path relation"
+            .find(|edge| edge.fact_ids.contains(&site.access_id))
+            .ok_or("dynamic access did not reach the core state graph")?;
+        assert_eq!(edge.confidence, wow_graph::GraphConfidence::Possible);
+        assert_eq!(
+            edge.relation,
+            match access.kind() {
+                wow_emmy::global_access::GlobalAccessKind::Read => {
+                    wow_graph::GraphRelationKind::ReadsState
+                }
+                wow_emmy::global_access::GlobalAccessKind::Write => {
+                    wow_graph::GraphRelationKind::WritesState
+                }
+                wow_emmy::global_access::GlobalAccessKind::UnsupportedAssignment => {
+                    return Err("unsupported assignment became a dynamic state relation".into());
+                }
+            }
+        );
+        assert!(final_snapshot.snapshot().edge(&edge.edge_id).is_some());
+        if access.keys().is_empty() {
+            assert_eq!(binding.target_proposal_id, binding.root_id);
+        } else {
+            assert_eq!(access.keys().len(), 1);
+            assert!(matches!(
+                access.keys().first(),
+                Some(wow_emmy::global_access::GlobalAccessKey::String(key)) if key == "profile"
+            ));
+            let prefix = provenance
+                .state_paths()
+                .iter()
+                .find(|path| path.proposal_id == binding.target_proposal_id)
+                .ok_or("exact literal prefix path was not retained")?;
+            assert_eq!(prefix.root_id, binding.root_id);
+            assert_eq!(prefix.keys, access.keys());
+        }
+    }
+    assert!(
+        provenance
+            .state_paths()
+            .iter()
+            .all(|path| path.keys.iter().all(
+                |key| !matches!(key, wow_emmy::global_access::GlobalAccessKey::String(value)
+            if value == "character_key" || value == "enabled")
+            ))
     );
+    for (rule_id, relation) in [
+        (
+            "core.state.literal_path_read",
+            wow_graph::GraphRelationKind::ReadsState,
+        ),
+        (
+            "core.state.literal_path_write",
+            wow_graph::GraphRelationKind::WritesState,
+        ),
+    ] {
+        let recognition = core_recognition
+            .iter()
+            .find(|recognition| recognition.family.rule_id() == rule_id)
+            .ok_or("missing core state family")?;
+        let coverage = final_snapshot
+            .partition(recognition.family.partition_id())
+            .ok_or("missing dynamic state partition")?
+            .coverage();
+        assert!(coverage.iter().any(|record| {
+            record.relation() == relation
+                && record
+                    .blocker_ids()
+                    .iter()
+                    .any(|blocker| blocker.as_ref() == "state.dynamic_suffix_unresolved")
+        }));
+    }
     let text = include_str!("../../../tests/data/state-core-pipeline/state.lua");
     let shadow_start = text
         .find("local function shadowed_local()")
         .ok_or("missing shadow fixture")?;
     let shadow_end = text
-        .find("-- Dynamic key:")
+        .find("-- Dynamic keys")
         .ok_or("missing shadow boundary")?;
     let shadow = report.functions().iter().find(|function| matches!(
         (function.span().byte_start(), function.span().byte_end()),

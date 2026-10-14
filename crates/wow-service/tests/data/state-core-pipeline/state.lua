@@ -31,8 +31,15 @@ local function shadowed_local()
   return StateCoreAccountDB.profile
 end
 
--- Dynamic key: the resolved prefix is retained but the whole path stays
--- unresolved, so no exact path entity is created.
+-- Dynamic keys retain only the exact root/literal prefix and stay Possible.
 local function dynamic_key(key)
   StateCoreAccountDB[key] = 1
+end
+
+local function dynamic_prefix_read(character_key)
+  return StateCoreAccountDB.profile[character_key].enabled
+end
+
+local function dynamic_prefix_write(character_key)
+  StateCoreAccountDB.profile[character_key].enabled = true
 end

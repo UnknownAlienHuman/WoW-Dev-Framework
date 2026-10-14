@@ -3,10 +3,16 @@
 use super::source_addresses::SourceGraphAddressCrosswalk;
 use super::state::StateRecognition;
 use super::*;
+use wow_emmy::global_access::GlobalAccessKind;
+use wow_recognizers::source_state::{
+    SourceStateAssertionEndpoints, SourceStateAssertionFact, SourceStateAssertionInput,
+    SourceStateFact, SourceStateInput,
+};
 use wow_recognizers::source_state_core::{
     SourceStateCoreAssertionInput, SourceStateCoreFamily, SourceStateCoreInput,
     SourceStateCoreRecognition, recognize_source_state_core,
-    recognize_source_state_core_assertions,
+    recognize_source_state_core_assertions, recognize_source_state_core_assertions_with_incomplete,
+    recognize_source_state_core_with_incomplete,
 };
 
 #[derive(Debug, Default, Serialize)]
@@ -45,19 +51,42 @@ pub(super) fn publish(
     if recognition.analyzer_report_id() != report.analysis_id() {
         return Err(error(ServiceErrorCode::InternalContractViolation));
     }
+    let incomplete = super::state::incomplete_state_facts(provenance, report, stop)?;
     let mut snapshot = source.clone();
     let mut recognitions = Vec::new();
     for family in SourceStateCoreFamily::ALL {
         checkpoint(stop)?;
-        let proposals = recognize_source_state_core(
-            SourceStateCoreInput {
-                owner: &snapshot,
-                context: provenance.context(),
-                recognition,
-            },
-            family,
-            stop,
-        )
+        let family_facts = incomplete
+            .iter()
+            .copied()
+            .filter(|fact| match family {
+                SourceStateCoreFamily::Read => fact.kind == GlobalAccessKind::Read,
+                SourceStateCoreFamily::Write => fact.kind == GlobalAccessKind::Write,
+            })
+            .collect::<Vec<SourceStateFact<'_>>>();
+        let core_input = SourceStateCoreInput {
+            owner: &snapshot,
+            context: provenance.context(),
+            recognition,
+        };
+        let proposals = if family_facts.is_empty() {
+            recognize_source_state_core(core_input, family, stop)
+        } else {
+            recognize_source_state_core_with_incomplete(
+                core_input,
+                SourceStateInput {
+                    owner: &snapshot,
+                    source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
+                    report,
+                    context: provenance.context(),
+                    facts: family_facts,
+                    source_handles: provenance.source_handles(),
+                    evidence: provenance.evidence(),
+                },
+                family,
+                stop,
+            )
+        }
         .map_err(|failure| {
             ServiceError::new(
                 match failure.code() {
@@ -187,20 +216,73 @@ pub(super) fn publish_bound(
     };
     state::validate_assertion_bindings(addresses, recognition, stop)?;
     addresses.analyzer_partition(current, stop)?;
+    let provenance = addresses.source();
+    let report = provenance
+        .function_call_report()
+        .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+    let incomplete = super::state::incomplete_state_facts(provenance, report, stop)?;
     let mut snapshot = current.clone();
     checkpoint(stop)?;
     let mut recognitions = Vec::new();
     for family in SourceStateCoreFamily::ALL {
         checkpoint(stop)?;
-        let proposals = recognize_source_state_core_assertions(
-            SourceStateCoreAssertionInput {
-                owner: &snapshot,
-                context: addresses.source().context(),
-                recognition,
-            },
-            family,
-            stop,
-        )
+        let family_facts = incomplete
+            .iter()
+            .copied()
+            .filter(|fact| match family {
+                SourceStateCoreFamily::Read => fact.kind == GlobalAccessKind::Read,
+                SourceStateCoreFamily::Write => fact.kind == GlobalAccessKind::Write,
+            })
+            .collect::<Vec<SourceStateFact<'_>>>();
+        let core_input = SourceStateCoreAssertionInput {
+            owner: &snapshot,
+            context: provenance.context(),
+            recognition,
+        };
+        let proposals = if family_facts.is_empty() {
+            recognize_source_state_core_assertions(core_input, family, stop)
+        } else {
+            let facts = family_facts
+                .into_iter()
+                .map(|fact| {
+                    checkpoint(stop)?;
+                    Ok(SourceStateAssertionFact {
+                        fact,
+                        endpoints: SourceStateAssertionEndpoints {
+                            root: addresses.copied_assertion(
+                                wow_graph::GraphAssertionKind::Entity,
+                                fact.root_proposal_id,
+                                stop,
+                            )?,
+                            caller: addresses.copied_assertion(
+                                wow_graph::GraphAssertionKind::Entity,
+                                fact.caller_proposal_id,
+                                stop,
+                            )?,
+                            target: addresses.copied_assertion(
+                                wow_graph::GraphAssertionKind::Entity,
+                                fact.target_proposal_id,
+                                stop,
+                            )?,
+                        },
+                    })
+                })
+                .collect::<ServiceResult<Vec<_>>>()?;
+            recognize_source_state_core_assertions_with_incomplete(
+                core_input,
+                SourceStateAssertionInput {
+                    owner: &snapshot,
+                    scope: addresses.scope(),
+                    report,
+                    context: provenance.context(),
+                    facts,
+                    source_handles: provenance.source_handles(),
+                    evidence: provenance.evidence(),
+                },
+                family,
+                stop,
+            )
+        }
         .map_err(|failure| {
             ServiceError::new(
                 match failure.code() {

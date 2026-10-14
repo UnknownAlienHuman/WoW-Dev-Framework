@@ -6,7 +6,8 @@ mod project;
 mod records;
 
 use crate::source_state::{
-    SOURCE_STATE_PARTITION, SourceStateAssertionRecognition, SourceStateRecognition,
+    SOURCE_STATE_PARTITION, SourceStateAssertionInput, SourceStateAssertionRecognition,
+    SourceStateInput, SourceStateRecognition,
 };
 use crate::{
     RecognizerError, RecognizerErrorCode, RecognizerFact, RecognizerFactBundle,
@@ -90,6 +91,11 @@ struct CoreInput<'a> {
     owner: &'a GraphPartitionSnapshot,
     context: &'a GenerationContext,
     recognition: CoreRecognition<'a>,
+    incomplete: Option<IncompleteInput<'a>>,
+}
+enum IncompleteInput<'a> {
+    Legacy(SourceStateInput<'a>),
+    Assertions(SourceStateAssertionInput<'a>),
 }
 #[derive(Clone, Copy)]
 enum CoreRecognition<'a> {
@@ -156,11 +162,43 @@ pub fn recognize_source_state_core(
     family: SourceStateCoreFamily,
     stop: &AtomicBool,
 ) -> RecognizerResult<SourceStateCoreProposals> {
-    let input = CoreInput {
-        owner: input.owner,
-        context: input.context,
-        recognition: CoreRecognition::Legacy(input.recognition),
-    };
+    execute(
+        CoreInput {
+            owner: input.owner,
+            context: input.context,
+            recognition: CoreRecognition::Legacy(input.recognition),
+            incomplete: None,
+        },
+        family,
+        stop,
+    )
+}
+
+/// Adds the exact Project-classified incomplete accesses without passing them
+/// through the complete-path-only legacy source-state recognizer.
+pub fn recognize_source_state_core_with_incomplete<'a>(
+    input: SourceStateCoreInput<'a>,
+    incomplete: SourceStateInput<'a>,
+    family: SourceStateCoreFamily,
+    stop: &AtomicBool,
+) -> RecognizerResult<SourceStateCoreProposals> {
+    execute(
+        CoreInput {
+            owner: input.owner,
+            context: input.context,
+            recognition: CoreRecognition::Legacy(input.recognition),
+            incomplete: Some(IncompleteInput::Legacy(incomplete)),
+        },
+        family,
+        stop,
+    )
+}
+
+fn execute(
+    input: CoreInput<'_>,
+    family: SourceStateCoreFamily,
+    stop: &AtomicBool,
+) -> RecognizerResult<SourceStateCoreProposals> {
     let admitted = adapt::normalize(&input, family, stop)?;
     project::execute(&input, family, admitted, stop)
 }
@@ -174,9 +212,36 @@ pub fn recognize_source_state_core_assertions(
         owner: input.owner,
         context: input.context,
         recognition: CoreRecognition::Assertions(input.recognition),
+        incomplete: None,
     };
-    let admitted = adapt::normalize(&input, family, stop)?;
-    let output = project::execute(&input, family, admitted, stop)?;
+    let output = execute(input, family, stop)?;
+    crate::source_assertions::preflight(
+        &CoreOutputMetadata {
+            batch: &output.batch,
+            coverage: &output.coverage,
+            recognition: &output.recognition,
+        },
+        stop,
+    )?;
+    checkpoint(stop)?;
+    Ok(output)
+}
+
+/// Assertion-addressed variant of `recognize_source_state_core_with_incomplete`.
+pub fn recognize_source_state_core_assertions_with_incomplete<'a>(
+    input: SourceStateCoreAssertionInput<'a>,
+    incomplete: SourceStateAssertionInput<'a>,
+    family: SourceStateCoreFamily,
+    stop: &AtomicBool,
+) -> RecognizerResult<SourceStateCoreProposals> {
+    crate::source_assertions::preflight(input.recognition, stop)?;
+    let input = CoreInput {
+        owner: input.owner,
+        context: input.context,
+        recognition: CoreRecognition::Assertions(input.recognition),
+        incomplete: Some(IncompleteInput::Assertions(incomplete)),
+    };
+    let output = execute(input, family, stop)?;
     crate::source_assertions::preflight(
         &CoreOutputMetadata {
             batch: &output.batch,

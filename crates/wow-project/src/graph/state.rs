@@ -50,6 +50,7 @@ pub enum ProjectGraphStateOutcome {
     UnresolvedGlobal,
     LibraryGlobal,
     DeclarationSourceIncomplete,
+    /// An unresolved suffix remains explicit; any binding targets only the exact prefix/root.
     DynamicOrUnsupportedKey,
     ReassignedAlias,
     LocalAliasRebinding,
@@ -286,8 +287,6 @@ pub(super) fn project(
                     ProjectGraphStateOutcome::LocalAliasRebinding
                 }
             })
-        } else if !access.path_complete() {
-            Some(ProjectGraphStateOutcome::DynamicOrUnsupportedKey)
         } else if access.kind() == GlobalAccessKind::UnsupportedAssignment {
             Some(ProjectGraphStateOutcome::UnsupportedAssignment)
         } else {
@@ -302,13 +301,18 @@ pub(super) fn project(
                     let target = access.declaration().ok_or_else(invalid)?;
                     if source_health.get(target.path.as_str()) != Some(&true) {
                         Some(ProjectGraphStateOutcome::DeclarationSourceIncomplete)
+                    } else if !access.path_complete() {
+                        Some(ProjectGraphStateOutcome::DynamicOrUnsupportedKey)
                     } else {
                         None
                     }
                 }
             }
         };
-        if let Some(outcome) = outcome {
+        let incomplete_suffix = outcome == Some(ProjectGraphStateOutcome::DynamicOrUnsupportedKey);
+        if let Some(outcome) = outcome
+            && !incomplete_suffix
+        {
             provenance.state_sites.push(ProjectGraphStateSite {
                 access_id: access.fact_id().into(),
                 outcome,
@@ -414,7 +418,7 @@ pub(super) fn project(
             }
             path_id
         };
-        let confidence = if access.is_alias() {
+        let confidence = if access.is_alias() || incomplete_suffix {
             GraphConfidence::Possible
         } else {
             GraphConfidence::Derived
@@ -446,7 +450,11 @@ pub(super) fn project(
         });
         provenance.state_sites.push(ProjectGraphStateSite {
             access_id: access.fact_id().into(),
-            outcome: ProjectGraphStateOutcome::Projected,
+            outcome: if incomplete_suffix {
+                ProjectGraphStateOutcome::DynamicOrUnsupportedKey
+            } else {
+                ProjectGraphStateOutcome::Projected
+            },
         });
     }
     provenance.state_paths = paths.into_values().collect();

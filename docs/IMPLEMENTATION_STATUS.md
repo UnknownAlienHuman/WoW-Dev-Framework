@@ -249,8 +249,9 @@ and SavedVariables read/write recognizer partitions. The v16 receipt retains exa
 outcomes and final node/edge crosswalks. Inline XML handlers reuse existing syntax
 units; named handlers use concrete Emmy signatures. Method and inherited handler
 associations are Possible, not effective dispatch. The selected TOC seeds
-account/character state roots; exact unshadowed Main global-slot accesses feed
-the existing state recognizers and State axis. Typed string/integer/boolean
+account/character state roots; exact unshadowed Main global-slot accesses and
+Possible root/prefix accesses with dynamic suffixes feed the existing state
+recognizers and State axis. Typed string/integer/boolean
 keys and transparent parentheses preserve distinct slot identities. Exact lexical
 alias chains retain initializer evidence and Possible edges; any local rebinding
 blocks the chain. Paths remain symbolic, not runtime values; ambiguous declarations
@@ -369,8 +370,8 @@ associations remain Partial/Possible; empty target shapes are NotEvaluated.
 
 Fresh whole-workspace build, check, strict Clippy, rustdoc, format, native policy
 and tests passed on 2026-10-09 (838 passed, 1 ignored, 102 targets). The integration
-fixture verifies exact account/character roots, alias support, dynamic omissions,
-local shadowing, merged paths and rejection of a substituted source handle at
+fixture verifies exact account/character roots, alias support, Possible dynamic
+root/prefix accesses with unresolved suffixes, local shadowing, merged paths and rejection of a substituted source handle at
 unchanged endpoints/evidence. No runtime persistence, public CLI acceptance,
 per-rule fixture freeze or full E2-B acceptance follows.
 

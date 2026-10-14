@@ -12,6 +12,8 @@ pub(super) fn execute(
         origins,
         limits,
         admission_partition_digest,
+        producer_partitions,
+        incomplete_access_ids,
         endpoints,
         prerequisites,
     } = admitted;
@@ -27,6 +29,17 @@ pub(super) fn execute(
             .filter(|fact| fact.fields().get("has_path") == Some(&Value::Boolean(has_path)))
             .cloned()
             .collect();
+        let has_incomplete_access = selected.iter().any(|fact| {
+            origins.get(fact.fact_id()).is_some_and(|origins| {
+                origins
+                    .iter()
+                    .any(|origin| incomplete_access_ids.contains(origin))
+            })
+        });
+        let mut blocker_ids = vec!["state.admitted_slots_no_complete_or_runtime_authority".into()];
+        if has_incomplete_access {
+            blocker_ids.push("state.dynamic_suffix_unresolved".into());
+        }
         let coverage = RecognizerFactCoverage::new(
             RecognizerFactCoverageInput {
                 context_id: input.context.context_id(),
@@ -39,14 +52,17 @@ pub(super) fn execute(
                 } else {
                     RecognizerFactCoverageState::Partial
                 },
-                blocker_ids: vec!["state.admitted_slots_no_complete_or_runtime_authority".into()],
+                blocker_ids,
             },
             limits,
         )?;
         let bundle = RecognizerFactBundle::build(
             input.context,
             family.partition_id(),
-            vec![SOURCE_STATE_PARTITION.into()],
+            producer_partitions
+                .iter()
+                .map(|partition| partition.as_str().into())
+                .collect(),
             selected,
             vec![coverage],
             limits,
@@ -219,6 +235,13 @@ pub(super) fn execute(
             output,
         });
     }
+    let has_incomplete_access = facts.iter().any(|fact| {
+        origins.get(fact.fact_id()).is_some_and(|origins| {
+            origins
+                .iter()
+                .any(|origin| incomplete_access_ids.contains(origin))
+        })
+    });
     let coverage = input
         .owner
         .registry()
@@ -228,6 +251,10 @@ pub(super) fn execute(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .map(|relation| {
+            let mut blockers = vec!["state.admitted_slots_no_complete_or_runtime_authority".into()];
+            if relation == family.relation() && has_incomplete_access {
+                blockers.push("state.dynamic_suffix_unresolved".into());
+            }
             GraphCoverageRecord::new(
                 relation,
                 if relation == family.relation() && !facts.is_empty() {
@@ -236,7 +263,7 @@ pub(super) fn execute(
                     GraphCoverageState::NotEvaluated
                 },
                 false,
-                vec!["state.admitted_slots_no_complete_or_runtime_authority".into()],
+                blockers,
                 graph.limits(),
             )
             .map_err(graph_error)

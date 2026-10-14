@@ -1,7 +1,7 @@
 //! State namespace/access composition, with maps bound only after all producers.
 use super::source_addresses::SourceGraphAddressCrosswalk;
 use super::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use wow_emmy::global_access::GlobalAccessKind;
 use wow_graph::{
     GraphAssertionKind, GraphProducerLookup, GraphProposalEndpoint, GraphRelationProposal,
@@ -19,6 +19,31 @@ pub(super) enum StateRecognition {
     Legacy(SourceStateRecognition),
     Assertions(SourceStateAssertionRecognition),
 }
+
+#[derive(Debug)]
+pub(super) enum StatePublishFailure {
+    Service(ServiceError),
+    Classification(ServiceError),
+    Recognition(wow_recognizers::RecognizerError),
+    Graph(wow_graph::GraphError),
+}
+
+impl StatePublishFailure {
+    fn into_service_error(self) -> ServiceError {
+        match self {
+            Self::Service(error) | Self::Classification(error) => error,
+            Self::Recognition(failure) => error(match failure.code() {
+                wow_recognizers::RecognizerErrorCode::Cancelled => ServiceErrorCode::Cancelled,
+                wow_recognizers::RecognizerErrorCode::BudgetExceeded => {
+                    ServiceErrorCode::BudgetExceeded
+                }
+                _ => ServiceErrorCode::InternalContractViolation,
+            }),
+            Self::Graph(failure) => graph_error(failure),
+        }
+    }
+}
+
 impl StateRecognition {
     pub(super) fn into_parts(
         self,
@@ -31,6 +56,102 @@ impl StateRecognition {
             Self::Assertions(recognition) => (None, Some(recognition)),
         }
     }
+}
+
+fn classify_state_bindings<'a>(
+    provenance: &'a ProjectGraphProvenance,
+    report: &wow_emmy::function_calls::FunctionCallReport,
+    stop: &AtomicBool,
+) -> ServiceResult<(
+    Vec<&'a wow_project::graph::ProjectGraphStateBinding>,
+    Vec<&'a wow_project::graph::ProjectGraphStateBinding>,
+)> {
+    let mut access_completeness = BTreeMap::new();
+    for access in report.global_accesses() {
+        checkpoint(stop)?;
+        if access_completeness
+            .insert(access.fact_id(), access.path_complete())
+            .is_some()
+        {
+            return Err(error(ServiceErrorCode::InternalContractViolation));
+        }
+    }
+    let mut outcomes = BTreeMap::new();
+    for site in provenance.state_sites() {
+        checkpoint(stop)?;
+        if outcomes
+            .insert(site.access_id.as_str(), site.outcome)
+            .is_some()
+        {
+            return Err(error(ServiceErrorCode::InternalContractViolation));
+        }
+    }
+
+    let mut complete = Vec::new();
+    let mut incomplete = Vec::new();
+    let mut binding_access_ids = BTreeSet::new();
+    for binding in provenance.state_bindings() {
+        checkpoint(stop)?;
+        if !binding_access_ids.insert(binding.access_id.as_str()) {
+            return Err(error(ServiceErrorCode::InternalContractViolation));
+        }
+        let access_complete = *access_completeness
+            .get(binding.access_id.as_str())
+            .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+        let outcome = outcomes
+            .get(binding.access_id.as_str())
+            .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+        match (access_complete, *outcome) {
+            (true, wow_project::graph::ProjectGraphStateOutcome::Projected) => {
+                complete.push(binding);
+            }
+            (false, wow_project::graph::ProjectGraphStateOutcome::DynamicOrUnsupportedKey)
+                if binding.confidence == wow_graph::GraphConfidence::Possible
+                    && matches!(
+                        binding.kind,
+                        GlobalAccessKind::Read | GlobalAccessKind::Write
+                    ) =>
+            {
+                incomplete.push(binding);
+            }
+            _ => return Err(error(ServiceErrorCode::InternalContractViolation)),
+        }
+    }
+    for (access_id, outcome) in &outcomes {
+        checkpoint(stop)?;
+        if matches!(
+            *outcome,
+            wow_project::graph::ProjectGraphStateOutcome::Projected
+                | wow_project::graph::ProjectGraphStateOutcome::DynamicOrUnsupportedKey
+        ) && !binding_access_ids.contains(access_id)
+        {
+            return Err(error(ServiceErrorCode::InternalContractViolation));
+        }
+    }
+    Ok((complete, incomplete))
+}
+
+pub(super) fn incomplete_state_facts<'a>(
+    provenance: &'a ProjectGraphProvenance,
+    report: &wow_emmy::function_calls::FunctionCallReport,
+    stop: &AtomicBool,
+) -> ServiceResult<Vec<SourceStateFact<'a>>> {
+    let (_, incomplete) = classify_state_bindings(provenance, report, stop)?;
+    checkpoint(stop)?;
+    Ok(incomplete
+        .into_iter()
+        .map(|binding| SourceStateFact {
+            fact_id: &binding.binding_id,
+            access_id: &binding.access_id,
+            root_proposal_id: &binding.root_id,
+            caller_proposal_id: &binding.caller_proposal_id,
+            target_proposal_id: &binding.target_proposal_id,
+            kind: binding.kind,
+            confidence: binding.confidence,
+            source_handle_ids: &binding.source_handle_ids,
+            evidence_ids: &binding.evidence_ids,
+        })
+        .collect())
 }
 
 #[derive(Debug, Serialize)]
@@ -79,17 +200,26 @@ pub(super) fn publish(
     provenance: &ProjectGraphProvenance,
     stop: &AtomicBool,
 ) -> ServiceResult<(GraphPartitionSnapshot, SourceStateRecognition)> {
-    let report = provenance
-        .function_call_report()
-        .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+    publish_diagnosed(source, provenance, stop).map_err(StatePublishFailure::into_service_error)
+}
+
+pub(super) fn publish_diagnosed(
+    source: &GraphPartitionSnapshot,
+    provenance: &ProjectGraphProvenance,
+    stop: &AtomicBool,
+) -> Result<(GraphPartitionSnapshot, SourceStateRecognition), StatePublishFailure> {
+    let report = provenance.function_call_report().ok_or_else(|| {
+        StatePublishFailure::Service(error(ServiceErrorCode::InternalContractViolation))
+    })?;
+    let (complete, _) = classify_state_bindings(provenance, report, stop)
+        .map_err(StatePublishFailure::Classification)?;
     let result = recognize_source_state(
         SourceStateInput {
             owner: source,
             source_partition: wow_project::graph::SOURCE_GRAPH_PARTITION,
             context: provenance.context(),
             report,
-            facts: provenance
-                .state_bindings()
+            facts: complete
                 .iter()
                 .map(|b| SourceStateFact {
                     fact_id: &b.binding_id,
@@ -108,16 +238,8 @@ pub(super) fn publish(
         },
         stop,
     )
-    .map_err(|e| {
-        error(match e.code() {
-            wow_recognizers::RecognizerErrorCode::Cancelled => ServiceErrorCode::Cancelled,
-            wow_recognizers::RecognizerErrorCode::BudgetExceeded => {
-                ServiceErrorCode::BudgetExceeded
-            }
-            _ => ServiceErrorCode::InternalContractViolation,
-        })
-    })?;
-    checkpoint(stop)?;
+    .map_err(StatePublishFailure::Recognition)?;
+    checkpoint(stop).map_err(StatePublishFailure::Service)?;
     let prepared = source
         .prepare_replacement(
             GraphPartitionReplacement {
@@ -129,7 +251,7 @@ pub(super) fn publish(
             },
             stop,
         )
-        .map_err(graph_error)?;
+        .map_err(StatePublishFailure::Graph)?;
     Ok((prepared.into_candidate(), result.recognition))
 }
 
@@ -242,8 +364,8 @@ pub(super) fn publish_bound(
     let report = provenance
         .function_call_report()
         .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
-    let facts = provenance
-        .state_bindings()
+    let (complete, _) = classify_state_bindings(provenance, report, stop)?;
+    let facts = complete
         .iter()
         .map(|binding| {
             checkpoint(stop)?;
@@ -339,14 +461,12 @@ pub(super) fn validate_assertion_bindings(
     {
         return Err(error(ServiceErrorCode::IdentityMismatch));
     }
-    let bindings = provenance
-        .state_bindings()
+    let (complete, _) = classify_state_bindings(provenance, report, stop)?;
+    let bindings = complete
         .iter()
         .map(|binding| (binding.binding_id.as_str(), binding))
         .collect::<BTreeMap<_, _>>();
-    if recognition.receipts().len() != bindings.len()
-        || bindings.len() != provenance.state_bindings().len()
-    {
+    if recognition.receipts().len() != bindings.len() {
         return Err(error(ServiceErrorCode::InternalContractViolation));
     }
     for receipt in recognition.receipts() {
@@ -394,8 +514,11 @@ pub(super) fn maps_bound(
     }
     let (result, mut nodes) = bound_nodes(snapshot, addresses, &lookup, stop)?;
     let provenance = addresses.source();
-    let bindings = provenance
-        .state_bindings()
+    let report = provenance
+        .function_call_report()
+        .ok_or_else(|| error(ServiceErrorCode::InternalContractViolation))?;
+    let (complete, _) = classify_state_bindings(provenance, report, stop)?;
+    let bindings = complete
         .iter()
         .map(|binding| (binding.binding_id.as_str(), binding))
         .collect::<BTreeMap<_, _>>();
