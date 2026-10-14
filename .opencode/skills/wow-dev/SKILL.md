@@ -29,9 +29,12 @@ lease expiry and heartbeat
 ```
 
 Use a finite lease, normally no more than two hours, and refresh it at publication
-or every 60–90 minutes. On chat/host loss, assume unpublished state is gone. A new
-manager rereads remote `main`, the latest quick result, and the Issue log, then
-posts takeover before writing.
+or every 60–90 minutes. On chat/host loss, missing chat context does not prove that
+worktree state was lost. Inspect and preserve surviving dirty, stashed, or private
+work before any reconciliation; never reset, clean, stash, or erase it. A named patch
+or artifact is read in full before use. Classify unpublished work as unverified until
+it has been checked. A new manager rereads remote `main`, the latest quick result, and
+the Issue log, then posts takeover before writing.
 
 ## Current source only when needed
 

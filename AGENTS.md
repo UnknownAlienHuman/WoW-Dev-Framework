@@ -51,9 +51,13 @@ lease expiry and heartbeat cadence
 A claim is not permanent. Refresh it on publication or at least every 60–90
 minutes; use a finite lease, normally no more than two hours. Release it explicitly
 when stopping. If a chat, host, or tool session dies, a replacement manager must
-reread remote `main`, the latest quick check, and the Issue log. Unpublished local
-state is presumed lost unless an exact retained patch/artifact is named and read
-back. Post takeover before writing.
+reread remote `main`, the latest quick check, and the Issue log. Inspect and
+preserve any surviving work instead of assuming it was lost. Missing chat context
+or an absent session log does not prove that local work is gone: check the worktree
+for dirty, stashed, or private work and keep its diff before any reconciliation. Do
+not reset, clean, stash, switch an unexpected branch, or erase that state. Read a
+named patch or artifact in full before using it, and classify any unpublished work
+as unverified until it has been checked. Post takeover before writing.
 
 Until protected PR publication is enabled, direct-to-main is transitional
 single-writer mode. Use exact expected-head/CAS publication and never force-push.
