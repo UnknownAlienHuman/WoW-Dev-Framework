@@ -107,17 +107,24 @@ pub(crate) fn validate(
                 ));
             }
             let mut inputs = Vec::new();
-            for reference in record.inputs.iter().chain(&record.rebuttals) {
+            for reference in &record.inputs {
                 crate::partition::check_cancelled(stop)?;
                 charge(&mut references)?;
                 let (producer, assertion) =
                     resolve(partitions, partition.partition_id(), reference)?;
-                // Rebuttal evidence does not lend confidence to the conclusion.
-                if record.inputs.contains(reference)
-                    && output_confidence < confidence(producer, &assertion)?
-                {
+                if output_confidence < confidence(producer, &assertion)? {
                     return Err(invalid("derivation promotes a lower-confidence input"));
                 }
+                inputs.push((producer.partition_id().into(), assertion));
+            }
+            // Rebuttals remain in the dependency/cycle graph but do not lend
+            // confidence to the conclusion. Separate iteration avoids rescanning
+            // every input for each rebuttal under the shared reference budget.
+            for reference in &record.rebuttals {
+                crate::partition::check_cancelled(stop)?;
+                charge(&mut references)?;
+                let (producer, assertion) =
+                    resolve(partitions, partition.partition_id(), reference)?;
                 inputs.push((producer.partition_id().into(), assertion));
             }
             if !record.missing.is_empty() && output_confidence < GraphConfidence::Possible {

@@ -290,6 +290,42 @@ fn publication_rejects_cycles_and_confidence_promotion() -> ResultOf {
 }
 
 #[test]
+fn maximum_derivation_reference_fanout_publishes_and_explains_all_roles() -> ResultOf {
+    let base = initial()?;
+    let mut proposals = Vec::new();
+    let mut inputs = Vec::new();
+    for index in 0..63 {
+        let id = format!("input-{index:02}");
+        proposals.push(entity(&id, &id, GraphConfidence::Proven)?);
+        inputs.push(reference(&id));
+    }
+    proposals.push(entity("rebuttal", "rebuttal", GraphConfidence::Proven)?);
+    proposals.push(entity("output", "output", GraphConfidence::Derived)?);
+    let mut derivation = derive("output", inputs);
+    derivation.rebuttals.push(reference("rebuttal"));
+
+    let current = publish(
+        &base,
+        with_records(
+            batch(&base, "fanout", proposals)?,
+            vec![derivation],
+            Vec::new(),
+        )?,
+    )?;
+    let subject = GraphExplainSubject::Entity(node(&current, "fanout", "output")?);
+    let explanation = GraphExplainQuery::new(
+        current.snapshot().snapshot_id().clone(),
+        subject,
+        GraphExplainLimits::default(),
+    )?
+    .execute(&current, &AtomicBool::new(false))?;
+    assert!(explanation.derivation_complete());
+    assert_eq!(explanation.derivations().len(), 1);
+    assert_eq!(explanation.assertion_supports().len(), 64);
+    Ok(())
+}
+
+#[test]
 fn conflicts_keep_both_sides_and_downgrade_incident_relation_coverage() -> ResultOf {
     let base = initial()?;
     let one = batch(
