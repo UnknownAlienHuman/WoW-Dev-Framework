@@ -726,8 +726,7 @@ pub(crate) fn collect_registered(
             None,
         ));
     }
-    let library_root_storage =
-        registered_library_roots(main_root, main.snapshot_id(), member_report)?;
+    let library_root_storage = registered_library_roots(main_root, member_report)?;
     let library_roots = library_root_storage
         .iter()
         .map(PathBuf::as_path)
@@ -1784,7 +1783,6 @@ fn snapshot_path_component(snapshot_id: &str) -> String {
 
 fn registered_library_roots(
     main_root: &Path,
-    main_snapshot_id: &str,
     member_report: &EmmyMemberCallReport,
 ) -> EmmyLocalFlowResult<Vec<PathBuf>> {
     let invalid_root = || {
@@ -1795,10 +1793,10 @@ fn registered_library_roots(
         )
     };
     let role_root = main_root.parent().ok_or_else(invalid_root)?;
-    if role_root.file_name().and_then(|name| name.to_str()) != Some("main")
-        || main_root.file_name().and_then(|name| name.to_str())
-            != Some(snapshot_path_component(main_snapshot_id).as_str())
-    {
+    // Incremental sessions retain their registered physical Main root while
+    // advancing logical snapshots. The caller checks the report's current
+    // Main identity; Library roots stay under this physical session parent.
+    if role_root.file_name().and_then(|name| name.to_str()) != Some("main") {
         return Err(invalid_root());
     }
     let workspace_root = role_root.parent().ok_or_else(invalid_root)?;
