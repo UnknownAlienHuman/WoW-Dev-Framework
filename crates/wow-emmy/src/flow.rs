@@ -916,9 +916,9 @@ pub(crate) fn collect_registered(
 
 /// Exact resolved-write and capture evidence for collected local bindings.
 ///
-/// The AST is counted against a fixed ceiling before the write/capture maps are
-/// allocated. The retained analyzer session checks cancellation immediately
-/// before entering this collector and before publishing its result.
+/// Referenced bindings require the bounded AST write/capture census. The exact
+/// analyzer reference index can prove that unused bindings need no such model.
+/// The retained session checks cancellation before collection and publication.
 fn collect_write_model(
     file: &LuaWorkspaceFile,
     model: &SemanticModel<'_>,
@@ -933,6 +933,12 @@ fn collect_write_model(
     if bindings.is_empty() {
         return Ok(WriteModel::default());
     }
+    if bindings.len() > MAX_FACTS {
+        return Err(fact_budget(file));
+    }
+    if bindings_have_no_references(file, model, bindings, stop)? {
+        return Ok(WriteModel::default());
+    }
     let mut census_nodes = 0_usize;
     for _ in root.descendants::<LuaAst>() {
         flow_checkpoint(stop, file)?;
@@ -942,10 +948,6 @@ fn collect_write_model(
             .ok_or_else(|| fact_budget(file))?;
     }
     flow_checkpoint(stop, file)?;
-    if bindings.len() > MAX_FACTS {
-        return Err(fact_budget(file));
-    }
-
     flow_checkpoint(stop, file)?;
     let mut writes: HashMap<LuaSemanticDeclId, Vec<SourceSpan>> =
         HashMap::with_capacity(bindings.len());
@@ -1028,6 +1030,36 @@ fn collect_write_model(
         loop_writes,
         loop_write_overflow,
     })
+}
+
+fn bindings_have_no_references(
+    file: &LuaWorkspaceFile,
+    model: &SemanticModel<'_>,
+    bindings: &[BindingInternal],
+    stop: &AtomicBool,
+) -> EmmyLocalFlowResult<bool> {
+    let file_id = model.get_file_id();
+    let Some(references) = model
+        .get_db()
+        .get_reference_index()
+        .get_local_reference(&file_id)
+    else {
+        return Ok(false);
+    };
+    for binding in bindings {
+        flow_checkpoint(stop, file)?;
+        let LuaSemanticDeclId::LuaDecl(id) = &binding.semantic_decl else {
+            return Ok(false);
+        };
+        if id.file_id != file_id
+            || references
+                .get_decl_references(id)
+                .is_some_and(|references| !references.cells.is_empty())
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 fn flow_checkpoint(stop: &AtomicBool, file: &LuaWorkspaceFile) -> EmmyLocalFlowResult<()> {
