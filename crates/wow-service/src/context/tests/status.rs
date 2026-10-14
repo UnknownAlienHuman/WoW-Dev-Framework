@@ -103,7 +103,7 @@ fn assert_status(
     assert!(payload["graph_edge_count"].as_u64().is_some());
     assert_eq!(payload["context_generation"], "NotEvaluated");
     assert_eq!(payload["evaluation"], "NotEvaluated");
-    assert_eq!(payload["continuation_retention"], "not_implemented");
+    assert_eq!(payload["continuation_retention"], "not_configured");
     assert_eq!(payload["optional_platform_status"], "not_selected");
     assert_eq!(payload["last_known_good"], "NotEvaluated");
     assert_eq!(payload["failed_targets"], "NotEvaluated");
@@ -381,7 +381,8 @@ fn retained_context_status_reports_exact_generations_details_and_closes_without_
                 .as_array()
                 .ok_or("capabilities")?;
             assert!(capabilities.iter().any(|row| {
-                row["operation"] == "context_continue" && row["availability"] == "not_implemented"
+                row["operation"] == "context_continue"
+                    && row["availability"] == "partial_functional"
             }));
             assert!(capabilities.iter().any(|row| {
                 row["operation"] == "context_validate"

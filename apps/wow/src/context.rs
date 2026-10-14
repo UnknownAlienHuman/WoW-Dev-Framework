@@ -1,4 +1,4 @@
-//! Closed E3 context status/map/inspect/build projections. Semantics are service-owned.
+//! Closed E3 context status/map/inspect/build/continue projections. Semantics are service-owned.
 //! The native host document is a separate transport input, never an E3 semantic selector.
 mod build;
 mod combined;
@@ -20,11 +20,12 @@ use wow_service::{
     ServiceErrorCode,
     context::{
         CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_ID_MAX_BYTES, CONTEXT_MAP_RESULT_MAX_BYTES,
-        ContextBuildRequest, ContextInspectRequest, ContextMapCurrentGuard, ContextMapHostInput,
-        ContextMapPublication, ContextMapReferenceGuard, ContextMapRequest, ContextMapResult,
-        ContextMapRoot, ContextMapStatus, ContextStatusRequest, PRIMARY_NAVIGATION_MAP_PROFILE_ID,
-        PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID, execute_context_build_with_source,
-        execute_context_inspect, execute_context_map, execute_context_status,
+        ContextBuildRequest, ContextContinueRequest, ContextInspectRequest, ContextMapCurrentGuard,
+        ContextMapHostInput, ContextMapPublication, ContextMapReferenceGuard, ContextMapRequest,
+        ContextMapResult, ContextMapRoot, ContextMapStatus, ContextStatusRequest,
+        PRIMARY_NAVIGATION_MAP_PROFILE_ID, PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
+        execute_context_build_with_source, execute_context_continue, execute_context_inspect,
+        execute_context_map, execute_context_status,
     },
 };
 
@@ -101,6 +102,10 @@ const HELP: &str = concat!(
     "  The policy records declared local project-source labels and permission for local use. ",
     "It grants no external transmission permission. Only the selected root's original physical ",
     "byte span is read after whole-file verification; expansion and other L1 recipes refuse.\n",
+    "wow context continue --native-host-config <host.json> ",
+    "--continuation context-continuation:sha256:<digest> ",
+    "[--expect-request <ContextRequestId>] [--expect-pack <ContextSemanticPackId>] ",
+    "[--output envelope-json]\n",
     "wow context map|inspect --platform native --native-host-config <host.json> ",
     "--platform-request-input <request.json> [--output envelope-json|text]\n",
     "  Native map/inspect use a bounded explicit service host and request document. ",
@@ -122,6 +127,7 @@ const HELP: &str = concat!(
 
 fn progressive_help() -> String {
     use wow_service::context::{
+        CONTEXT_CONTINUATION_RETENTION_PROFILE_ID,
         PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID,
         PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
         PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID, PRIMARY_PROGRESSIVE_EXPANSION_PROFILE_ID,
@@ -132,7 +138,9 @@ fn progressive_help() -> String {
          Progressive build: --context-profile-id {PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID}\n\
            [--renderer-profile-id {PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID}]\n\
            [--renderer-profile-id {PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID}]\n\
-         Progressive pack/renderers require the matching progressive rounds family.\n"
+         Progressive pack/renderers require the matching progressive rounds family.\n\
+         Persisted continuation: --continuation-retention-profile-id {CONTEXT_CONTINUATION_RETENTION_PROFILE_ID} \
+         requires 2..4 explicit rounds.\n"
     )
 }
 
@@ -152,6 +160,7 @@ enum Request {
     Map(ContextMapRequest),
     Inspect(ContextInspectRequest),
     Build(ContextBuildRequest),
+    Continue(ContextContinueRequest),
     Status(ContextStatusRequest),
     CombinedStatus(combined_status::Request),
     PlatformStatus(platform_status::Request),
@@ -174,6 +183,7 @@ pub fn run(values: Vec<OsString>) -> u8 {
                         || value == "map"
                         || value == "inspect"
                         || value == "build"
+                        || value == "continue"
                         || value == "render"
                 })))
         && values
@@ -258,6 +268,7 @@ pub fn run(values: Vec<OsString>) -> u8 {
             arguments.source_root.as_deref(),
             &stop,
         ),
+        Request::Continue(request) => execute_context_continue(&host, request, &stop),
         Request::Status(request) => execute_context_status(&host, request, &stop),
         Request::CombinedStatus(_) => {
             crate::diagnostic("combined status dispatch invariant failed");
@@ -350,6 +361,9 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     }
     if let Some(arguments) = platform::parse(&values)? {
         return Ok(arguments);
+    }
+    if values.get(1).is_some_and(|value| value == "continue") {
+        return parse_continue(values);
     }
     let mut values = values.into_iter();
     if values.next().as_deref() != Some(OsStr::new("context")) {
@@ -506,7 +520,8 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
             "--context-profile-id"
             | "--renderer-profile-id"
             | "--source-excerpt-handle"
-            | "--source-policy" => {
+            | "--source-policy"
+            | "--continuation-retention-profile-id" => {
                 build_options.option(option, &value)?;
             }
             _ => {
@@ -582,6 +597,86 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
         host_config,
         request,
         source_root,
+    })
+}
+
+fn parse_continue(values: Vec<OsString>) -> Result<Arguments, &'static str> {
+    let mut values = values.into_iter();
+    if values.next().as_deref() != Some(OsStr::new("context"))
+        || values.next().as_deref() != Some(OsStr::new("continue"))
+    {
+        return Err("expected context continue");
+    }
+    let mut host_config = None;
+    let mut continuation = None;
+    let mut expected_request = None;
+    let mut expected_pack = None;
+    let mut output_seen = false;
+    while let Some(option) = values.next() {
+        let option = option
+            .to_str()
+            .ok_or("invalid context continue option encoding")?;
+        let value = values
+            .next()
+            .ok_or("missing context continue option value")?;
+        if value.is_empty() || value.len() > MAX_VALUE_BYTES {
+            return Err("invalid context continue option length");
+        }
+        if option == "--native-host-config" {
+            if host_config.is_some() {
+                return Err("duplicate context continue option");
+            }
+            host_config = Some(PathBuf::from(value));
+            continue;
+        }
+        let value = value
+            .into_string()
+            .map_err(|_| "invalid context continue value encoding")?;
+        if value.chars().any(char::is_control) || value.trim() != value {
+            return Err("invalid context continue option value");
+        }
+        match option {
+            "--continuation" => {
+                if continuation.replace(value).is_some() {
+                    return Err("duplicate context continue option");
+                }
+            }
+            "--expect-request" => {
+                id_syntax(&value)?;
+                if expected_request.replace(value).is_some() {
+                    return Err("duplicate context continue option");
+                }
+            }
+            "--expect-pack" => {
+                id_syntax(&value)?;
+                if expected_pack.replace(value).is_some() {
+                    return Err("duplicate context continue option");
+                }
+            }
+            "--output" => {
+                if output_seen {
+                    return Err("duplicate context continue option");
+                }
+                if value != "envelope-json" {
+                    return Err("context continue supports envelope-json output only");
+                }
+                output_seen = true;
+            }
+            _ => return Err("unknown context continue option"),
+        }
+    }
+    let host_config = host_config.ok_or("context continue requires explicit native host input")?;
+    let continuation = continuation.ok_or("context continue requires --continuation")?;
+    let request = ContextContinueRequest::new(
+        &continuation,
+        expected_request.as_deref(),
+        expected_pack.as_deref(),
+    )
+    .map_err(|_| "invalid exact context continuation ID or guard")?;
+    Ok(Arguments {
+        host_config,
+        request: Request::Continue(request),
+        source_root: None,
     })
 }
 
@@ -791,6 +886,7 @@ mod tests {
             Request::Map(request) => serde_json::to_value(request),
             Request::Inspect(request) => serde_json::to_value(request),
             Request::Build(request) => serde_json::to_value(request),
+            Request::Continue(request) => serde_json::to_value(request),
             Request::Status(request) => serde_json::to_value(request),
             Request::CombinedStatus(_)
             | Request::PlatformStatus(_)
@@ -800,6 +896,68 @@ mod tests {
             }
         }
         .map_err(|_| "request serialization failed")
+    }
+
+    #[test]
+    fn context_continue_grammar_is_exact_and_single_request() -> Result<(), &'static str> {
+        let token = "context-continuation:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let values = [
+            "context",
+            "continue",
+            "--native-host-config",
+            "host.json",
+            "--continuation",
+            token,
+            "--expect-request",
+            "request-id",
+            "--expect-pack",
+            "pack-id",
+            "--output",
+            "envelope-json",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect();
+        let request = request_json(values)?;
+        assert_eq!(request["schema"], "wow-service/context-continue-request/1");
+        assert_eq!(request["continuation_id"], token);
+        assert_eq!(request["expected_original_request_id"], "request-id");
+        assert_eq!(request["expected_original_semantic_pack_id"], "pack-id");
+
+        let mut extra_selector = vec![
+            "context",
+            "continue",
+            "--native-host-config",
+            "host.json",
+            "--continuation",
+            token,
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect::<Vec<_>>();
+        push(&mut extra_selector, "--publication", "current");
+        assert!(matches!(
+            parse(extra_selector),
+            Err("unknown context continue option")
+        ));
+
+        let mut duplicate = vec![
+            "context",
+            "continue",
+            "--native-host-config",
+            "host.json",
+            "--continuation",
+            token,
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect::<Vec<_>>();
+        push(&mut duplicate, "--continuation", token);
+        assert!(matches!(
+            parse(duplicate),
+            Err("duplicate context continue option")
+        ));
+        Ok(())
     }
 
     #[test]

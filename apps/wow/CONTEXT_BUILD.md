@@ -24,6 +24,7 @@ wow context build --native-host-config <host.json>
    --frontier graph-entity@<base64url-id> ...]
   [--expansion-profile-id wow-context/primary-native-progressive/1
    --frontier-round '<token>[,<token>...]' ...]
+  [--continuation-retention-profile-id wow-service/context-continuation-retention/1]
   [--renderer-profile-id wow-context/primary-pack-json/1|wow-context/primary-frontier-pack-json/1|wow-context/primary-progressive-pack-json/1]
   [--renderer-profile-id wow-context/primary-pack-markdown/1|wow-context/primary-frontier-pack-markdown/1|wow-context/primary-progressive-pack-markdown/1]
   [--platform omitted] [--output envelope-json]
@@ -271,15 +272,26 @@ JSON is the exact canonical selected pack. Markdown preserves its semantic field
 and round history through the existing escaped metadata boundary and exact trace.
 Renderer choice does not change semantic pack bytes/identity.
 
-One acquisition and one build service call execute the explicit native rounds,
-then consume the genuine history and actual private Budget into the pack.
-Construction, validation, rendering and final delivery continue that same ledger;
-there is no inspect-envelope import, fresh per-round allowance or reconstruction
-from scalar counters. Mandatory overflow/cancellation suppresses delivery and
-checked close still precedes output. Partial/Truncated and nonauthoritative
-absence persist at the final explicit batch/profile bound. No automatic frontier,
-inferred NoNewEvidence or retained cross-request continuation is supplied.
-Unselected/default/frontier/state/Reference family IDs remain in use.
+Without a continuation retention profile, one build operation executes all
+explicit progressive rounds and returns the existing one-operation result. With
+`wow-service/context-continuation-retention/1`, Build issues only the first
+explicit round and stores the remaining caller-selected rounds. The native host
+uses schema `wow-service/context-map-native-host/2` and includes an absolute
+`continuation_store_file` alongside its registered ProjectStore. The result
+carries a stable continuation ID only after the exact
+generation retention root and completed Store operation are read back.
+
+`wow context continue` reopens that exact generation, verifies the completed
+issuer and retention root, then replays each previously delivered native prefix
+through the existing progressive owner. Each replay checks the exact pack and
+rendered bytes before creating a non-serializable Context Budget receipt from
+the closed Service envelope. Those owner receipts are conservatively carried
+into the next round; the service never accepts a scalar allowance or decoded
+native step. The selected round count stays within the existing four-round
+profile. Current is never resolved during continuation, and the final round
+releases the exact retention root after its result operation is complete.
+Incomplete, stale, cancelled, unknown-issuer and over-budget paths return no
+continuation token. Default progressive request and pack bytes remain unchanged.
 
 ## Selected combined native build
 
@@ -462,10 +474,12 @@ output failure 4; argument/host transport failure 64; cancellation 130.
 unknown native closure is not treated as success.
 
 Every returned pack is Partial or Truncated with `absence_authoritative=false`.
-Original producer omissions remain scoped to their embedded maps/layers. Native
-additional recipe admission, broader Reference/type enrichment, excerpts/tokens,
-automatic expansion/retained cross-request continuation, broader platform/combined
-facets and complete-corpus/runtime qualification remain open. The [default-profile synthetic fixture](../../crates/wow-service/e3/native-primary-pack/README.md)
+Original producer omissions remain scoped to their embedded maps/layers. The
+selected retained continuation route preserves the existing four-round profile
+through exact Service issuance and native replay. Additional recipe admission,
+broader Reference/type enrichment, excerpts/tokens, automatic frontier selection,
+broader platform/combined facets and complete-corpus/runtime qualification remain
+open. The [default-profile synthetic fixture](../../crates/wow-service/e3/native-primary-pack/README.md)
 freezes the actual pack/render bytes; broad E3/Tier A/X acceptance remains open.
 Executed gate evidence belongs to the canonical #122 milestone.
 

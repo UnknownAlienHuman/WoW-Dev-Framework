@@ -9,6 +9,7 @@ use super::{CONTEXT_MAP_RESULT_MAX_BYTES, checkpoint, failure, request};
 use crate::{ServiceErrorCode, ServiceResult};
 
 pub const CONTEXT_MAP_HOST_SCHEMA: &str = "wow-service/context-map-native-host/1";
+pub const CONTEXT_MAP_CONTINUATION_HOST_SCHEMA: &str = "wow-service/context-map-native-host/2";
 pub const CONTEXT_MAP_HOST_INPUT_MAX_BYTES: usize = 16 * 1024 * 1024;
 
 /// Strict inert host registration. Never serialized into a semantic request/result.
@@ -18,6 +19,8 @@ pub struct ContextMapHostInput {
     schema: Box<str>,
     pub(super) project_store_id: Box<str>,
     pub(super) project_store_root: PathBuf,
+    #[serde(default)]
+    pub(super) continuation_store_file: Option<PathBuf>,
     pub(super) project_id: ProjectId,
     pub(super) reference_profile: ProfileIdentity,
     pub(super) reference: ReferenceView,
@@ -69,9 +72,19 @@ impl ContextMapHostInput {
     }
     pub(super) fn validate(&self, stop: &AtomicBool) -> ServiceResult<()> {
         checkpoint(stop)?;
-        if self.schema.as_ref() != CONTEXT_MAP_HOST_SCHEMA
+        let schema_valid = matches!(
+            self.schema.as_ref(),
+            CONTEXT_MAP_HOST_SCHEMA | CONTEXT_MAP_CONTINUATION_HOST_SCHEMA
+        ) && (self.continuation_store_file.is_none()
+            || self.schema.as_ref() == CONTEXT_MAP_CONTINUATION_HOST_SCHEMA);
+        if !schema_valid
             || !self.project_store_root.is_absolute()
             || self.project_store_root.as_os_str().len() > 32768
+            || self.continuation_store_file.as_ref().is_some_and(|path| {
+                !path.is_absolute()
+                    || path.as_os_str().len() > 32768
+                    || path == &self.project_store_root
+            })
         {
             return Err(failure(ServiceErrorCode::InvalidConfiguration));
         }
@@ -81,5 +94,11 @@ impl ContextMapHostInput {
             .map_err(|_| failure(ServiceErrorCode::InvalidConfiguration))?;
         self.limits.owner_limits()?;
         checkpoint(stop)
+    }
+
+    pub(super) fn continuation_store_file(&self) -> ServiceResult<&std::path::Path> {
+        self.continuation_store_file
+            .as_deref()
+            .ok_or_else(|| failure(ServiceErrorCode::InvalidConfiguration))
     }
 }

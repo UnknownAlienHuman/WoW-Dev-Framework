@@ -601,6 +601,23 @@ pub(crate) struct ContextExpansionArtifact<'a> {
     canonical_bytes: Box<[u8]>,
 }
 impl<'a> ContextExpansionArtifact<'a> {
+    pub(crate) fn into_step<'m>(
+        self,
+        skeletons: PrimarySkeletons<'m, 'a>,
+        budget: Budget,
+    ) -> ContextExpansionStep<'m>
+    where
+        'a: 'm,
+    {
+        ContextExpansionStep {
+            expansion_id: self.expansion_id,
+            core: self.core,
+            skeletons,
+            canonical_bytes: self.canonical_bytes,
+            budget,
+        }
+    }
+
     pub(crate) fn expansion_profile_id(&self) -> &'static str {
         self.core.profile.profile_id
     }
@@ -618,6 +635,29 @@ impl<'a> ContextExpansionArtifact<'a> {
     }
     pub(crate) fn canonical_bytes(&self) -> &[u8] {
         &self.canonical_bytes
+    }
+    pub(crate) fn progression_round(&self) -> Option<u8> {
+        self.core
+            .progression
+            .as_ref()
+            .map(|progression| progression.round)
+    }
+    pub(crate) fn previous_expansion_ids(&self) -> Vec<Box<str>> {
+        let mut result = Vec::new();
+        let mut previous = self
+            .core
+            .progression
+            .as_ref()
+            .and_then(|progression| progression.previous.as_deref());
+        while let Some(artifact) = previous {
+            result.push(artifact.expansion_id.clone());
+            previous = artifact
+                .core
+                .progression
+                .as_ref()
+                .and_then(|progression| progression.previous.as_deref());
+        }
+        result
     }
 }
 

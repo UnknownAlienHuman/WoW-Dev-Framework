@@ -1,11 +1,11 @@
 //! Closed build-only grammar. Shared transport, level/root parsing and output stay in the parent.
 use super::{Command, inspect::Selection, set};
 use wow_service::context::{
-    ContextBuildRequest, ContextL1Profile, ContextMapCurrentGuard, ContextMapPublication,
-    ContextMapReferenceGuard, ContextRenderSelection, ContextSourceExcerptPolicy,
-    ContextSourceExcerptSelection, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
-    PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_PACK_PROFILE_ID,
-    PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
+    CONTEXT_CONTINUATION_RETENTION_PROFILE_ID, ContextBuildRequest, ContextL1Profile,
+    ContextMapCurrentGuard, ContextMapPublication, ContextMapReferenceGuard,
+    ContextRenderSelection, ContextSourceExcerptPolicy, ContextSourceExcerptSelection,
+    PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+    PRIMARY_CONTEXT_PACK_PROFILE_ID, PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID, PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
@@ -28,6 +28,7 @@ pub(super) struct Options {
     markdown_renderer: Option<Family>,
     source_handle: Option<String>,
     source_policy: Option<ContextSourceExcerptPolicy>,
+    continuation_retention_profile: Option<&'static str>,
 }
 
 impl Options {
@@ -38,6 +39,7 @@ impl Options {
                 | "--renderer-profile-id"
                 | "--source-excerpt-handle"
                 | "--source-policy"
+                | "--continuation-retention-profile-id"
         )
     }
 
@@ -107,6 +109,16 @@ impl Options {
                     Command::Build,
                 )
             }
+            "--continuation-retention-profile-id" => {
+                if value != CONTEXT_CONTINUATION_RETENTION_PROFILE_ID {
+                    return Err("unsupported exact context continuation retention profile");
+                }
+                set(
+                    &mut self.continuation_retention_profile,
+                    CONTEXT_CONTINUATION_RETENTION_PROFILE_ID,
+                    Command::Build,
+                )
+            }
             _ => Err("unknown context build option"),
         }
     }
@@ -119,6 +131,10 @@ impl Options {
         current: Option<ContextMapCurrentGuard>,
         reference: Option<ContextMapReferenceGuard>,
     ) -> Result<ContextBuildRequest, &'static str> {
+        let continuation_retention_profile = self.continuation_retention_profile;
+        if continuation_retention_profile.is_some() && self.has_source_excerpt() {
+            return Err("source excerpts cannot be combined with continuation retention");
+        }
         let family = self
             .context_profile
             .ok_or("context build requires --context-profile-id")?;
@@ -205,16 +221,62 @@ impl Options {
                 .with_source_excerpt(selection, policy)
                 .map_err(|_| "invalid context source excerpt selection");
         }
-        if let Some(rounds) = progressive {
-            return request
+        let request = if let Some(rounds) = progressive {
+            request
                 .with_progressive_expansion(rounds)
-                .map_err(|_| "invalid context build progressive expansion syntax");
-        }
-        match frontier {
-            Some(frontier) => request
-                .with_frontier_expansion(frontier)
-                .map_err(|_| "invalid context build expansion syntax"),
+                .map_err(|_| "invalid context build progressive expansion syntax")?
+        } else {
+            match frontier {
+                Some(frontier) => request
+                    .with_frontier_expansion(frontier)
+                    .map_err(|_| "invalid context build expansion syntax")?,
+                None => request,
+            }
+        };
+        match continuation_retention_profile {
+            Some(profile) => request
+                .with_continuation_retention_profile(profile)
+                .map_err(|_| "continuation retention requires at least two progressive rounds"),
             None => Ok(request),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wow_service::context::{ContextInspectLevel, ContextMapRoot};
+
+    #[test]
+    fn source_excerpt_and_continuation_retention_are_rejected_explicitly()
+    -> Result<(), &'static str> {
+        let options = Options {
+            source_handle: Some("unparsed-source-handle".into()),
+            continuation_retention_profile: Some(CONTEXT_CONTINUATION_RETENTION_PROFILE_ID),
+            ..Options::default()
+        };
+        let selection = Selection {
+            level: ContextInspectLevel::L1,
+            root: ContextMapRoot::graph_entity(
+                "graph-node:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            )
+            .map_err(|_| "fixture root was invalid")?,
+            l0_profile: None,
+            l1_profile: None,
+            frontier: None,
+            progressive: None,
+        };
+
+        assert!(matches!(
+            options.request(
+                "fixture-store",
+                ContextMapPublication::Current,
+                selection,
+                None,
+                None,
+            ),
+            Err("source excerpts cannot be combined with continuation retention")
+        ));
+        Ok(())
     }
 }

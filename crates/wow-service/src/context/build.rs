@@ -18,10 +18,14 @@ use serde::Serialize;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use wow_core::{CanonicalResult, ContentDigest};
-use wow_store::project::ReadSelector;
+use wow_store::project::{CurrentPublication, ReadSelector};
 
 pub const CONTEXT_BUILD_REQUEST_SCHEMA: &str = "wow-service/context-build-request/1";
 pub const CONTEXT_BUILD_RESULT_SCHEMA: &str = "wow-service/context-build-result/1";
+pub const CONTEXT_BUILD_CONTINUATION_REQUEST_SCHEMA: &str = "wow-service/context-build-request/2";
+pub const CONTEXT_BUILD_CONTINUATION_RESULT_SCHEMA: &str = "wow-service/context-build-result/2";
+pub const CONTEXT_CONTINUATION_RETENTION_PROFILE_ID: &str =
+    "wow-service/context-continuation-retention/1";
 pub const PRIMARY_CONTEXT_PACK_PROFILE_ID: &str = wow_context::PRIMARY_CONTEXT_PACK_PROFILE;
 pub const PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID: &str =
     wow_context::PRIMARY_CONTEXT_JSON_RENDERER_PROFILE;
@@ -39,6 +43,15 @@ pub const PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID: &str =
     wow_context::PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE;
 pub const PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID: &str =
     wow_context::PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE;
+
+struct BuildExecution<'a> {
+    profiles: (ContextL0Profile, ContextL1Profile),
+    source_root: Option<&'a Path>,
+    continuation_id: Option<&'a str>,
+    progressive_round_limit: Option<usize>,
+    current_at_selection: Option<&'a CurrentPublication>,
+    current_guard_checked: bool,
+}
 
 const JSON_RENDERER_PROFILE_IDS: &[&str] = &[PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID];
 const MARKDOWN_RENDERER_PROFILE_IDS: &[&str] = &[PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID];
@@ -86,31 +99,37 @@ struct SourceExcerptRequest {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ContextBuildRequest {
-    schema: &'static str,
-    project_store_id: Box<str>,
-    publication: ContextMapPublication,
-    platform: &'static str,
-    level: ContextInspectLevel,
-    root: ContextMapRoot,
-    render: ContextRenderSelection,
-    context_profile_id: &'static str,
-    renderer_profile_ids: &'static [&'static str],
+    pub(super) schema: &'static str,
+    pub(super) project_store_id: Box<str>,
+    pub(super) publication: ContextMapPublication,
+    pub(super) platform: &'static str,
+    pub(super) level: ContextInspectLevel,
+    pub(super) root: ContextMapRoot,
+    pub(super) render: ContextRenderSelection,
+    pub(super) context_profile_id: &'static str,
+    pub(super) renderer_profile_ids: &'static [&'static str],
     #[serde(skip_serializing_if = "Option::is_none")]
-    l0_profile_id: Option<&'static str>,
+    pub(super) l0_profile_id: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    l1_profile_id: Option<&'static str>,
+    pub(super) l1_profile_id: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    expansion: Option<FrontierExpansion>,
+    pub(super) expansion: Option<FrontierExpansion>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    progressive: Option<ProgressiveExpansion>,
+    pub(super) progressive: Option<ProgressiveExpansion>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    current: Option<ContextMapCurrentGuard>,
+    pub(super) current: Option<ContextMapCurrentGuard>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    reference: Option<ContextMapReferenceGuard>,
+    pub(super) reference: Option<ContextMapReferenceGuard>,
     #[serde(skip_serializing_if = "Option::is_none")]
     source_excerpt: Option<SourceExcerptRequest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) continuation_retention_profile_id: Option<&'static str>,
 }
 impl ContextBuildRequest {
+    pub(super) fn has_source_excerpt(&self) -> bool {
+        self.source_excerpt.is_some()
+    }
+
     pub fn primary(
         store: &str,
         publication: ContextMapPublication,
@@ -149,6 +168,7 @@ impl ContextBuildRequest {
             current,
             reference,
             source_excerpt: None,
+            continuation_retention_profile_id: None,
         })
     }
 
@@ -252,6 +272,45 @@ impl ContextBuildRequest {
         };
         Ok(self)
     }
+
+    pub fn with_continuation_retention_profile(mut self, profile_id: &str) -> ServiceResult<Self> {
+        if profile_id != CONTEXT_CONTINUATION_RETENTION_PROFILE_ID
+            || self
+                .progressive
+                .as_ref()
+                .is_none_or(|progressive| progressive.rounds.len() < 2)
+            || self.source_excerpt.is_some()
+            || self.expansion.is_some()
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        self.schema = CONTEXT_BUILD_CONTINUATION_REQUEST_SCHEMA;
+        self.continuation_retention_profile_id = Some(CONTEXT_CONTINUATION_RETENTION_PROFILE_ID);
+        Ok(self)
+    }
+
+    pub(super) fn validate_current_guard(
+        &self,
+        current: Option<&CurrentPublication>,
+    ) -> ServiceResult<()> {
+        if let Some(guard) = &self.current {
+            let actual =
+                current.ok_or_else(|| failure(ServiceErrorCode::CurrentGenerationUnavailable))?;
+            let digest = Some(current_record_digest(actual)?);
+            if guard
+                .record
+                .as_ref()
+                .is_some_and(|expected| expected != &actual.record_id)
+                || guard
+                    .digest
+                    .as_ref()
+                    .is_some_and(|expected| Some(expected) != digest.as_ref())
+            {
+                return Err(failure(ServiceErrorCode::StoreCurrentConflict));
+            }
+        }
+        Ok(())
+    }
 }
 
 pub fn execute_context_build(
@@ -270,12 +329,15 @@ pub fn execute_context_build_with_source(
     source_root: Option<&Path>,
     stop: &AtomicBool,
 ) -> ServiceResult<ContextMapResult> {
+    if request.continuation_retention_profile_id.is_some() {
+        return super::continuation::execute_context_build_with_continuation(host, request, stop);
+    }
     if request.source_excerpt.is_some() != source_root.is_some() {
         return Err(failure(ServiceErrorCode::InvalidRequest));
     }
     let l0_profile = super::l0_profile_from_id(request.l0_profile_id)?;
     let l1_profile = super::l1_profile_from_id(request.l1_profile_id)?;
-    let digest = wow_core::domain_separated_digest(CONTEXT_BUILD_REQUEST_SCHEMA, request)
+    let digest = wow_core::domain_separated_digest(request.schema, request)
         .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
     let id = format!(
         "context-build-request:{}",
@@ -292,8 +354,14 @@ pub fn execute_context_build_with_source(
                 host,
                 request,
                 &id,
-                (l0_profile, l1_profile),
-                source_root,
+                BuildExecution {
+                    profiles: (l0_profile, l1_profile),
+                    source_root,
+                    continuation_id: None,
+                    progressive_round_limit: None,
+                    current_at_selection: None,
+                    current_guard_checked: false,
+                },
                 stop,
             )
         });
@@ -333,6 +401,8 @@ struct Payload<'a, 'm, 'view> {
     rendered_artifacts: &'a [wow_context::RenderedContextArtifact],
     operation_budget_usage: wow_context::ContextOperationBudgetUsage,
     validation: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    continuation_id: Option<&'a str>,
 }
 
 fn build(
@@ -340,19 +410,26 @@ fn build(
     host: &ContextMapHostInput,
     request: &ContextBuildRequest,
     request_id: &str,
-    profiles: (ContextL0Profile, ContextL1Profile),
-    source_root: Option<&Path>,
+    execution: BuildExecution<'_>,
     stop: &AtomicBool,
 ) -> ServiceResult<(Vec<u8>, ContextMapStatus)> {
+    let BuildExecution {
+        profiles,
+        source_root,
+        continuation_id,
+        progressive_round_limit,
+        current_at_selection,
+        current_guard_checked,
+    } = execution;
     let (l0_profile, l1_profile) = profiles;
     checkpoint(stop)?;
     let project = read.project();
     if project.configuration().project_id() != &host.project_id {
         return Err(failure(ServiceErrorCode::IdentityMismatch));
     }
-    let current = read.current_at_acquisition();
+    let current = current_at_selection.or_else(|| read.current_at_acquisition());
     let current_digest = current.map(current_record_digest).transpose()?;
-    if let Some(guard) = &request.current {
+    if !current_guard_checked && let Some(guard) = &request.current {
         let actual =
             current.ok_or_else(|| failure(ServiceErrorCode::CurrentGenerationUnavailable))?;
         if guard
@@ -401,23 +478,8 @@ fn build(
     } else {
         None
     };
-    let resolved = wow_core::domain_separated_digest(
-        "wow-service/context-build-resolved-request/1",
-        &(
-            request_id,
-            read.publication_set_id(),
-            read.store_generation_id(),
-            universe.universe_set_id(),
-            &request.root,
-            &host.limits,
-        ),
-    )
-    .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
-    let resolved_request_id = format!(
-        "context-build-resolved-request:{}",
-        ContentDigest::<CanonicalResult>::from_bytes(resolved)
-    )
-    .into_boxed_str();
+    let resolved_request_id =
+        resolved_request_id(read, host, request_id, &request.root, &universe)?;
     let deliver = |mut pack: wow_context::ContextSemanticPack<'_, '_>| {
         wow_context::validate_context_semantic_pack(&universe, &mut pack, stop)
             .map_err(context_error)?;
@@ -463,9 +525,14 @@ fn build(
             rendered_artifacts: &rendered_artifacts,
             operation_budget_usage,
             validation: "exact_native_binding_and_canonical_bytes",
+            continuation_id,
         };
         let envelope = Envelope {
-            schema: CONTEXT_BUILD_RESULT_SCHEMA,
+            schema: if continuation_id.is_some() {
+                CONTEXT_BUILD_CONTINUATION_RESULT_SCHEMA
+            } else {
+                CONTEXT_BUILD_RESULT_SCHEMA
+            },
             operation: "context_build",
             request_id,
             request,
@@ -487,7 +554,14 @@ fn build(
         };
         let limit =
             usize::try_from(remaining).map_err(|_| failure(ServiceErrorCode::BudgetExceeded))?;
-        Ok((encode(&envelope, limit, stop)?, status))
+        let bytes = encode(&envelope, limit, stop)?;
+        if continuation_id.is_some() {
+            let delivered = pack
+                .into_progressive_step_after_delivery(&bytes, stop)
+                .map_err(context_error)?;
+            drop(delivered);
+        }
+        Ok((bytes, status))
     };
     if let Some(excerpt_selection) = &request.source_excerpt {
         let root = source_root.ok_or_else(|| failure(ServiceErrorCode::InvalidRequest))?;
@@ -547,12 +621,16 @@ fn build(
         );
     }
     if let Some(progressive) = &request.progressive {
+        let rounds = progressive_round_limit
+            .map(|count| progressive.rounds.get(..count))
+            .unwrap_or(Some(progressive.rounds.as_slice()))
+            .ok_or_else(|| failure(ServiceErrorCode::InvalidRequest))?;
         with_native_progressive(
             &universe,
             read,
             host,
             request.root.clone(),
-            &progressive.rounds,
+            rounds,
             stop,
             |step| {
                 let pack = wow_context::build_context_semantic_pack_from_expansion(
@@ -633,4 +711,59 @@ fn build(
             },
         )
     }
+}
+
+pub(super) fn build_continuation_prefix(
+    read: &LiveProjectRead,
+    host: &ContextMapHostInput,
+    request: &ContextBuildRequest,
+    request_id: &str,
+    continuation_id: &str,
+    current_at_selection: Option<&CurrentPublication>,
+    stop: &AtomicBool,
+) -> ServiceResult<(Vec<u8>, ContextMapStatus)> {
+    build(
+        read,
+        host,
+        request,
+        request_id,
+        BuildExecution {
+            profiles: (
+                super::l0_profile_from_id(request.l0_profile_id)?,
+                super::l1_profile_from_id(request.l1_profile_id)?,
+            ),
+            source_root: None,
+            continuation_id: Some(continuation_id),
+            progressive_round_limit: Some(1),
+            current_at_selection,
+            current_guard_checked: true,
+        },
+        stop,
+    )
+}
+
+pub(super) fn resolved_request_id(
+    read: &LiveProjectRead,
+    host: &ContextMapHostInput,
+    request_id: &str,
+    root: &ContextMapRoot,
+    universe: &wow_context::ContextUniverseSet<'_>,
+) -> ServiceResult<Box<str>> {
+    let resolved = wow_core::domain_separated_digest(
+        "wow-service/context-build-resolved-request/1",
+        &(
+            request_id,
+            read.publication_set_id(),
+            read.store_generation_id(),
+            universe.universe_set_id(),
+            root,
+            &host.limits,
+        ),
+    )
+    .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
+    Ok(format!(
+        "context-build-resolved-request:{}",
+        ContentDigest::<CanonicalResult>::from_bytes(resolved)
+    )
+    .into_boxed_str())
 }

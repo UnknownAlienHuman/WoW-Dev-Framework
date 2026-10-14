@@ -305,11 +305,20 @@ pub struct ContextSemanticPack<'m, 'a> {
     #[serde(skip)]
     universe: &'m ContextUniverseSet<'a>,
 }
-#[derive(Serialize)]
+#[derive(Clone, Copy, Serialize)]
 pub struct ContextOperationBudgetUsage {
     reservation_basis: &'static str,
     work_reserved: u64,
     bytes_reserved: u64,
+}
+impl ContextOperationBudgetUsage {
+    pub(crate) const fn work_reserved(self) -> u64 {
+        self.work_reserved
+    }
+
+    pub(crate) const fn bytes_reserved(self) -> u64 {
+        self.bytes_reserved
+    }
 }
 impl<'m, 'a> ContextSemanticPack<'m, 'a> {
     pub fn semantic_pack_id(&self) -> &str {
@@ -351,6 +360,181 @@ impl<'m, 'a> ContextSemanticPack<'m, 'a> {
             &self.canonical_bytes,
             &mut self.budget,
         )
+    }
+}
+
+impl<'m, 'a: 'm> ContextSemanticPack<'m, 'a> {
+    /// Consume genuine native custody after validation/rendering, preserving the
+    /// complete operation ledger. Decoded artifacts cannot enter this handoff.
+    pub fn into_progressive_step_after_delivery(
+        mut self,
+        delivered_envelope: &[u8],
+        stop: &AtomicBool,
+    ) -> ContextResult<crate::ContextExpansionStep<'m>> {
+        checkpoint(stop)?;
+        frontier::validate_expansion(&self, stop)?;
+        if self.core.source_excerpt.is_some()
+            || self.core.profile.profile_id != PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE
+        {
+            return Err(encoding());
+        }
+        // Service encoded this immutable envelope within the remaining allowance.
+        // Retain its actual bytes and conservative UTF-8-byte work before moving
+        // the ledger. No serialized usage or caller remaining scalar is admitted.
+        self.budget.work(delivered_envelope.len(), stop)?;
+        self.budget.retain_encoded(delivered_envelope.len(), stop)?;
+        let expansion = self.core.expansion.ok_or_else(encoding)?;
+        Ok(expansion.into_step(self.core.skeletons, self.budget))
+    }
+
+    /// Record the verified cumulative history and this replay's actual native
+    /// work against a genuine native pack and its exact closed envelope. `replay_usage`
+    /// is the private ledger snapshot before historical carry; Service separately
+    /// proves that the envelope belongs to a completed persisted issuance.
+    pub fn into_budget_receipt_after_delivery(
+        &mut self,
+        delivered_envelope: &[u8],
+        replay_usage: ContextOperationBudgetUsage,
+        stop: &AtomicBool,
+    ) -> ContextResult<crate::ContextBudgetReceipt> {
+        checkpoint(stop)?;
+        frontier::validate_expansion(self, stop)?;
+        if self.core.source_excerpt.is_some()
+            || self.core.profile.profile_id != PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE
+        {
+            return Err(encoding());
+        }
+        let expansion = self.core.expansion.as_ref().ok_or_else(encoding)?;
+        let round = expansion.progression_round().ok_or_else(encoding)?;
+        let value: serde_json::Value =
+            serde_json::from_slice(delivered_envelope).map_err(|_| encoding())?;
+        if value
+            .get("resource_closure")
+            .and_then(serde_json::Value::as_str)
+            != Some("closed")
+            || value
+                .pointer("/payload/semantic_pack/semantic_pack_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(self.semantic_pack_id())
+            || value
+                .pointer("/payload/semantic_pack/core/expansion/expansion_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(expansion.expansion_id())
+            || value
+                .pointer("/payload/semantic_pack/core/universe_set_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(self.universe.universe_set_id())
+        {
+            return Err(encoding());
+        }
+        let continuation_id = value
+            .pointer("/payload/continuation_id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| !id.is_empty() && *id != self.semantic_pack_id())
+            .ok_or_else(encoding)?;
+        let request_id = value
+            .pointer("/payload/original_request_id")
+            .and_then(serde_json::Value::as_str)
+            .or_else(|| value.get("request_id").and_then(serde_json::Value::as_str))
+            .filter(|id| !id.is_empty())
+            .ok_or_else(encoding)?;
+
+        let envelope_bytes = u64::try_from(delivered_envelope.len()).map_err(|_| exhausted())?;
+        self.budget.work(delivered_envelope.len(), stop)?;
+        self.budget.retain_encoded(delivered_envelope.len(), stop)?;
+        let replay_work_reserved = replay_usage
+            .work_reserved()
+            .checked_add(envelope_bytes)
+            .filter(|value| *value <= self.universe.limits.max_context_work)
+            .ok_or_else(exhausted)?;
+        let replay_bytes_reserved = replay_usage
+            .bytes_reserved()
+            .checked_add(envelope_bytes)
+            .filter(|value| *value <= self.universe.limits.max_metadata_bytes)
+            .ok_or_else(exhausted)?;
+        Ok(crate::ContextBudgetReceipt::from_verified_pack(
+            request_id.into(),
+            continuation_id.into(),
+            self.semantic_pack_id().into(),
+            expansion.expansion_id().into(),
+            self.universe.universe_set_id().into(),
+            self.core.profile.profile_id.into(),
+            round,
+            self.universe.limits.max_context_work,
+            self.universe.limits.max_metadata_bytes,
+            self.budget.work,
+            self.budget.retained_bytes,
+            replay_work_reserved,
+            replay_bytes_reserved,
+        ))
+    }
+
+    /// Carry the latest verified cumulative history once, plus this request's
+    /// actual native replay charge for every completed prefix. Serialized budget
+    /// usage is compared with the reconstructed private ledger before admission;
+    /// it never supplies an allowance or remaining-budget scalar.
+    pub fn carry_verified_prior_budgets(
+        &mut self,
+        receipts: &[crate::ContextBudgetReceipt],
+        original_request_id: &str,
+        stop: &AtomicBool,
+    ) -> ContextResult<()> {
+        checkpoint(stop)?;
+        frontier::validate_expansion(self, stop)?;
+        if receipts.is_empty() {
+            return Ok(());
+        }
+        let expansion = self.core.expansion.as_ref().ok_or_else(encoding)?;
+        let current_round = expansion.progression_round().ok_or_else(encoding)?;
+        let previous_ids = expansion.previous_expansion_ids();
+        if receipts.len() > 3
+            || usize::from(current_round) != receipts.len() + 1
+            || previous_ids.len() != receipts.len()
+        {
+            return Err(encoding());
+        }
+        let mut seen_tokens = std::collections::BTreeSet::new();
+        let mut previous_history_work = 0u64;
+        let mut previous_history_bytes = 0u64;
+        let mut replay_work = 0u64;
+        let mut replay_bytes = 0u64;
+        for (index, receipt) in receipts.iter().enumerate() {
+            checkpoint(stop)?;
+            let expected_expansion = &previous_ids[receipts.len() - index - 1];
+            if receipt.request_id() != original_request_id
+                || receipt.universe_set_id() != self.universe.universe_set_id()
+                || receipt.profile_id() != PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE
+                || receipt.round() != u8::try_from(index + 1).map_err(|_| exhausted())?
+                || receipt.expansion_id() != expected_expansion.as_ref()
+                || receipt.semantic_pack_id() == self.semantic_pack_id()
+                || receipt.continuation_id() == receipt.semantic_pack_id()
+                || !seen_tokens.insert(receipt.continuation_id())
+                || receipt.max_context_work() != self.universe.limits.max_context_work
+                || receipt.max_metadata_bytes() != self.universe.limits.max_metadata_bytes
+                || receipt.historical_cumulative_work_reserved() < previous_history_work
+                || receipt.historical_cumulative_bytes_reserved() < previous_history_bytes
+            {
+                return Err(encoding());
+            }
+            previous_history_work = receipt.historical_cumulative_work_reserved();
+            previous_history_bytes = receipt.historical_cumulative_bytes_reserved();
+            replay_work = replay_work
+                .checked_add(receipt.replay_work_reserved())
+                .ok_or_else(exhausted)?;
+            replay_bytes = replay_bytes
+                .checked_add(receipt.replay_bytes_reserved())
+                .ok_or_else(exhausted)?;
+        }
+        let work = previous_history_work
+            .checked_add(replay_work)
+            .ok_or_else(exhausted)?;
+        let bytes = previous_history_bytes
+            .checked_add(replay_bytes)
+            .ok_or_else(exhausted)?;
+        self.budget
+            .work(usize::try_from(work).map_err(|_| exhausted())?, stop)?;
+        self.budget
+            .retain_encoded(usize::try_from(bytes).map_err(|_| exhausted())?, stop)
     }
 }
 fn encoding() -> ContextError {

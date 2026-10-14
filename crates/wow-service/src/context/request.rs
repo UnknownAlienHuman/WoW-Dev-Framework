@@ -132,7 +132,8 @@ impl ContextMapCurrentGuard {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ContextMapReferenceGuard {
     pub(super) profile: ProfileId,
     pub(super) generation: ReferenceGenerationId,

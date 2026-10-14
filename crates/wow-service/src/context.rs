@@ -2,6 +2,7 @@
 //! Host registration and filesystem locations are separate from semantic requests.
 mod build;
 mod combined;
+mod continuation;
 mod host;
 mod inspect;
 mod operation;
@@ -15,9 +16,9 @@ mod tests;
 mod validate;
 
 pub use build::{
-    ContextBuildRequest, PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID,
-    PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_PACK_PROFILE_ID,
-    PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
+    CONTEXT_CONTINUATION_RETENTION_PROFILE_ID, ContextBuildRequest,
+    PRIMARY_CONTEXT_JSON_RENDERER_PROFILE_ID, PRIMARY_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
+    PRIMARY_CONTEXT_PACK_PROFILE_ID, PRIMARY_FRONTIER_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
     PRIMARY_FRONTIER_CONTEXT_PACK_PROFILE_ID, PRIMARY_PROGRESSIVE_CONTEXT_JSON_RENDERER_PROFILE_ID,
     PRIMARY_PROGRESSIVE_CONTEXT_MARKDOWN_RENDERER_PROFILE_ID,
@@ -35,7 +36,14 @@ pub use combined::{
     ContextCombinedRequest, ContextCombinedStatusRequest, execute_context_combined,
     execute_context_combined_status,
 };
-pub use host::{CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_HOST_SCHEMA, ContextMapHostInput};
+pub use continuation::{
+    CONTEXT_CONTINUE_REQUEST_SCHEMA, CONTEXT_CONTINUE_RESULT_SCHEMA, ContextContinueRequest,
+    execute_context_continue,
+};
+pub use host::{
+    CONTEXT_MAP_CONTINUATION_HOST_SCHEMA, CONTEXT_MAP_HOST_INPUT_MAX_BYTES,
+    CONTEXT_MAP_HOST_SCHEMA, ContextMapHostInput,
+};
 pub use inspect::{ContextInspectRequest, execute_context_inspect};
 pub use operation::{ContextMapResult, ContextMapStatus, execute_context_map};
 pub use platform::{

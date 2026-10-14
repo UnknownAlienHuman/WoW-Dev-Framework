@@ -31,8 +31,8 @@ pub(super) const CAPABILITIES: &[Capability] = &[
     },
     Capability {
         operation: "context_continue",
-        availability: "not_implemented",
-        scope: "retained_continuation",
+        availability: "partial_functional",
+        scope: "primary_progressive_exact_generation_store_issued_replay",
     },
     Capability {
         operation: "context_validate",

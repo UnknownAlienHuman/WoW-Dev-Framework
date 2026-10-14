@@ -203,7 +203,7 @@ wow context build
   [--source-profile-id|alias]
   [--boundary-profile-id|alias]
   [--renderer-profile-id|alias ...]
-  [--continuation-retention-profile-id|alias]
+  [--continuation-retention-profile-id wow-service/context-continuation-retention/1]
   [operation/budget/privacy profiles]
   [--output envelope-json|text|artifact]
 ```
@@ -214,10 +214,11 @@ wow context build
 
 ```text
 wow context continue
-  (--continuation <base64url> | --continuation-input <PATH|->)
+  --native-host-config <host.json>
+  --continuation <ContextContinuationId>
   [--expect-request <ContextRequestId>]
   [--expect-pack <ContextSemanticPackId>]
-  [--output envelope-json|text|artifact]
+  [--output envelope-json]
 ```
 
 Forbidden:
@@ -227,6 +228,13 @@ publication selectors
 new roots
 profile/budget/privacy/renderer overrides
 ```
+
+The exact token has the form `context-continuation:sha256:<64-lowercase-hex>`.
+It identifies a persisted issuance record; it is not a bearer authorization
+claim. `--native-host-config` supplies the registered ProjectStore and the
+separate continuation Store file under `wow-service/context-map-native-host/2`.
+The command invokes one Service operation and never resolves Current. The only current E3-C CLI output is the finalized
+Service envelope followed by one LF.
 
 Artifact mode requires exactly one eligible returned artifact from the original renderer chain.
 

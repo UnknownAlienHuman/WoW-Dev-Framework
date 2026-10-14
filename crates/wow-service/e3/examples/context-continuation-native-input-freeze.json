@@ -1,0 +1,178 @@
+{
+  "schema": "wow-service/context-continuation-native-input-freeze/1",
+  "state": "preimplementation_input_checkpoint_not_issued",
+  "source_scope": "synthetic_native_source_absent_exact_retained",
+  "fixture_files": {
+    "host.json": {
+      "bytes": 1431,
+      "sha256": "4a74df894e803883338491465ec543718c667eb6c57c20f045ad6eb0f204cc07"
+    },
+    "seed-input.json": {
+      "bytes": 2730,
+      "sha256": "40a7e7739648c46be258851267b9c0aff3c3bcb7b4ec7d9d9fb81bbc32ba2956"
+    },
+    "prefix-envelope.json": {
+      "bytes": 386662,
+      "sha256": "0b2e23b32d9079aec0a17df03e689cf23095d04668eae75827c8db32c6924911"
+    }
+  },
+  "native_store": {
+    "epoch_id": "618130195ac439298cf2ce474755483e8bae53e31331a1481eeca09016f17f7e",
+    "registry_sha256": "dad9cafa98e572e1e6bacef1a71093e76004783328e36e0a6ce02089df63b5d4",
+    "epoch_manifest_sha256": "dad9cafa98e572e1e6bacef1a71093e76004783328e36e0a6ce02089df63b5d4",
+    "project_sqlite_sha256": "89f85e6ba2ab7d51e809102a6222884b7e8511949d696f11599e77d50f7b8606"
+  },
+  "selected_prefix": {
+    "request_id": "context-build-request:sha256:390f19d4c069f39c13b3ac72b585379a0330c4ade5ffba775b2754ebb95cc78e",
+    "result_schema": "wow-service/context-build-result/1",
+    "operation": "context_build",
+    "status": "partial",
+    "resource_closure": "closed",
+    "store_generation_id": "project-store-generation:sha256:8bb56e1a142df7bf917ad4a9e204dacb55ba2924c195940697731906014dcf51",
+    "publication_set_id": "project-publication-set:sha256:f76722ce75ed5a7c51fad79a2734eb167950df0856d64dfa704fa8aebd452d42",
+    "universe_set_id": "context-universe:sha256:4b1d27b7ee8c9369c5ab7dd0fe1467f164f124a1229bacd2aff3ba22187da4a3",
+    "initial_root": "graph-node:sha256:886b61aa1f63d19aa25d635a11d4b9a9887f6367e7dac7fa109c156f312a4337",
+    "completed_frontier": [
+      "graph-node:sha256:32b2e637b9f44c742ac7cc43243f7dd38783ad01be0a6b7a803e0b2597fc3c2e"
+    ],
+    "next_frontier": [
+      "graph-node:sha256:970e4b8a29114b0d3583b9d4f524b4a798fb1bab51e5aeb277baa32581f4008e"
+    ],
+    "semantic_pack_id": "context-pack:sha256:98d80864814a557ea69e19f55f4c76d4841b0d17cdcdb3c19ea8c27d0e484774",
+    "semantic_pack_schema": "wow-context/semantic-pack/primary-progressive/1",
+    "expansion_id": "context-expansion:sha256:3106375057e5b8c42cf5bd2c1effa9fa27bc01111f031a5dd440a00c94765c02",
+    "absence_authoritative": false,
+    "omissions": [
+      "reference_fact_enrichment",
+      "declaration_signature_qualification",
+      "control_effect_projection",
+      "source_excerpts_and_tokens",
+      "unselected_further_rounds_and_continuation",
+      "optional_platform_universe",
+      "complete_corpus_and_runtime"
+    ],
+    "budget": {
+      "max_context_work": 32000000,
+      "max_metadata_bytes": 16777216,
+      "before_delivery_work_reserved": 5892,
+      "before_delivery_bytes_reserved": 1484365,
+      "service_envelope_bytes": 386662,
+      "through_delivery_bytes_reserved": 1871027
+    },
+    "service_envelope_sha256": "0b2e23b32d9079aec0a17df03e689cf23095d04668eae75827c8db32c6924911"
+  },
+  "selected_request": {
+    "schema": "wow-service/context-build-request/1",
+    "project_store_id": "project-store:fixture-context-primary",
+    "publication": {
+      "kind": "store_generation",
+      "id": "project-store-generation:sha256:8bb56e1a142df7bf917ad4a9e204dacb55ba2924c195940697731906014dcf51"
+    },
+    "platform": "omitted",
+    "root": {
+      "kind": "graph_entity",
+      "id": "graph-node:sha256:886b61aa1f63d19aa25d635a11d4b9a9887f6367e7dac7fa109c156f312a4337"
+    },
+    "level": "l1",
+    "l1_profile_id": "wow-context/primary-l1/1",
+    "context_profile_id": "wow-context/primary-progressive-pack/1",
+    "expansion_profile_id": "wow-context/primary-native-progressive/1",
+    "frontier_rounds": [
+      [
+        "graph-node:sha256:32b2e637b9f44c742ac7cc43243f7dd38783ad01be0a6b7a803e0b2597fc3c2e"
+      ]
+    ],
+    "renderer_profile_ids": [],
+    "render": "none",
+    "reference": {
+      "profile": "profile:fixture:context-primary-map",
+      "generation": "generation:reference:sha256:d1c2f7e1f8cd869106306087060eaf141ea9fdbb11a96501d99292f7a8917792",
+      "view": "sha256:2c5d1e799c9839b9e0ba1a366778c81fe41bb114b291da387fcaad4281acc6c8"
+    }
+  },
+  "selected_profiles": {
+    "pack_sha256": "9904799bc51cfedd57c2fffc526b86f4f819e16ca50c390beb34935ae2383860",
+    "pack": {
+      "authority": "preserve_original_native_confidence_coverage_conflicts",
+      "boundary": "untrusted_native_metadata_is_data",
+      "budgets": "continued_cumulative_work_and_encoded_reservations",
+      "continuation": "not_evaluated",
+      "deduplication": "original_native_node_or_edge_id_with_all_embedded_expansion_reasons",
+      "item_kinds": [
+        "entity",
+        "relation"
+      ],
+      "layer_order": [
+        "l1",
+        "expansion"
+      ],
+      "license": "source_inclusion_not_permitted",
+      "ordering": "original_progressive_expansion_item_order_with_retained_prior_rounds",
+      "privacy": "local_metadata_only",
+      "profile_id": "wow-context/primary-progressive-pack/1",
+      "selection": "mandatory_exact_root_and_original_progressive_expansion_items",
+      "source_bodies": "excluded",
+      "tokens": "unavailable"
+    },
+    "expansion_sha256": "b120c6359f68881d7ee74932f6faa7eb93e026cab1dfbf5e939ef436a48ca468",
+    "expansion": {
+      "confidence": "include_candidate",
+      "direction": "both",
+      "max_depth": 5,
+      "max_frontier": 32,
+      "ordering": "frontier_node_id_then_native_node_id_then_native_edge_id",
+      "profile_id": "wow-context/primary-native-progressive/1",
+      "relations": [
+        "calls",
+        "reads_state",
+        "writes_state",
+        "registers_native_event",
+        "handles_native_event",
+        "bridges_native_event",
+        "emits_custom_signal",
+        "handles_custom_signal",
+        "registers_cvar_callback",
+        "sets_script",
+        "hooks_script",
+        "secure_hooks_function",
+        "contains",
+        "defines",
+        "depends_on",
+        "optional_depends_on",
+        "owns",
+        "loads",
+        "loads_before",
+        "inherits",
+        "parent_of",
+        "references_template",
+        "mixes_in",
+        "instantiates",
+        "factory_creates",
+        "uses_api",
+        "has_schema_class"
+      ],
+      "rounds": 4,
+      "selection": "explicit_retained_native_endpoints_excluding_initial_and_queried_roots",
+      "source_bodies": "excluded",
+      "stopping": "explicit_batch_or_progressive_round_profile_bound"
+    },
+    "reference_sha256": "47f5b60b57a0f66b244028f1ee36cb6fb94e69d03da440d8685ddc9c5251895e",
+    "reference": {
+      "fixture_scope": "synthetic native primary navigation map",
+      "flavor_id": "retail",
+      "interface": 120100,
+      "profile_id": "profile:fixture:context-primary-map",
+      "profile_kind": "fixture",
+      "schema_versions": [
+        {
+          "schema_id": "schema:wow:fixture-e0",
+          "version": "1.0.0"
+        }
+      ],
+      "source_kind": "synthetic_fixture",
+      "source_logical_digest": "sha256:0707070707070707070707070707070707070707070707070707070707070707",
+      "source_revision": "fixture:context-primary-map"
+    }
+  },
+  "new_continuation_issuer": "not_present_in_this_checkpoint"
+}

@@ -1,5 +1,6 @@
 //! One small synthetic retained native service lifecycle, not live/Ketho evidence.
 mod build;
+mod continuation_fixture;
 mod frozen_physical;
 mod inspect;
 mod registry_compat;

@@ -404,7 +404,11 @@ fn build(
         graph_edge_count: graph.snapshot().edges().len(),
         context_generation: "NotEvaluated",
         evaluation: "NotEvaluated",
-        continuation_retention: "not_implemented",
+        continuation_retention: if host.continuation_store_file.is_some() {
+            "registered"
+        } else {
+            "not_configured"
+        },
         optional_platform_status: "not_selected",
         last_known_good: "NotEvaluated",
         failed_targets: "NotEvaluated",

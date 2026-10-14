@@ -70,9 +70,11 @@ ID, and analyzer snapshot ID.
 
 For this Primary-only implementation, `context_generation`, `evaluation`,
 `last_known_good`, and `failed_targets` are `NotEvaluated`; continuation
-retention is `not_implemented`; optional platform status is `not_selected`.
-Capability entries mark the implemented operations and the deferred
-continuation/validate/render operations separately. Profile availability means
+retention is `registered` only when the native host names a continuation Store
+file, otherwise `not_configured`; optional platform status is `not_selected`.
+Capability entries mark the selected progressive continuation as partial
+functional and scope it to a configured continuation Store. Validate/render
+remain separately reported. Profile availability means
 the profile is registered for a selected operation. Platform and combined
 profiles report `requires_platform_selection` for this Primary-only request.
 Availability does not establish
@@ -196,6 +198,17 @@ Behavior:
 8. close ordinary resources;
 9. return `ContextBuildPayload`.
 
+The selected retention policy is
+`wow-service/context-continuation-retention/1`. It requires the existing
+Primary progressive pack and 2..4 explicit frontier batches. Build executes and
+returns the first batch, persisting a stable continuation ID only after the
+exact generation hold, response object, catalog mapping and completed Store
+operation are verified. Without the policy, existing progressive Build executes
+the full requested batch sequence and keeps its original result bytes. A selected
+continuation requires host schema
+`wow-service/context-map-native-host/2` with an absolute
+`continuation_store_file`; host schema /1 remains unchanged for existing routes.
+
 Renderer failure cannot mutate or relabel the semantic pack. Policy decides whether a validated semantic pack with a failed optional renderer yields `partial` or service failure; the exact decision is frozen per renderer request class.
 
 ### Selected combined native inspect/build
@@ -285,7 +298,7 @@ Purpose: continue one previously returned exact E3-B frontier/page chain.
 Request:
 
 ```text
-bounded ServiceContextContinuation bytes/object
+exact ServiceContextContinuation ID issued by a completed Store operation
 expected original request/pack IDs: optional exact guard
 no publication current selector
 no changed semantic profiles/roots/privacy/renderer/total budget
@@ -294,16 +307,35 @@ cancellation
 
 Behavior:
 
-- validate continuation schema/digest/size;
-- resolve exact retained generations from the continuation and retention receipts;
+- validate the token syntax, catalog record and matching completed issuer operation;
+- on exact operation retry, verify the stored host owner-limits/Reference binding and return the original response bytes; a changed guard conflicts before native replay;
+- resolve the exact generation and verify its exact ProjectStore Policy retention root;
 - acquire exact views directly, never current;
-- validate the same `ContextUniverseSet`, profiles, roots, frontier, selected/omitted manifests, and total budget chain;
-- call `continue_context_semantic_pack`;
+- replay every already issued progressive prefix through the existing native planner;
+- compare original semantic-pack, renderer and pre-delivery budget-usage bytes; carry the latest verified historical cumulative ledger once, plus this request's actual native replay charge for each prior prefix and the exact prior Service-envelope bytes;
+- execute exactly the next caller-selected frontier batch under the original profiles and limits;
 - validate new page/pack and requested original renderers;
-- replace/release continuation retention receipts according to returned state;
+- atomically commit response/receipt/catalog mutations (including consumed-token retirement), then transition the operation record to completed; release the exact root after the final round;
 - close resources and return exact continuation outcome.
 
 If a generation or receipt is unavailable, fail. No automatic restart against current or reconstruction from names.
+
+The response/receipt/catalog batch and the Store operation transition are separate
+transactions. A process interruption after `begin_operation` but before the batch
+leaves the journal in `prepared`; a retry returns `StoreOutcomeUnknown` and does
+not resume it. An interruption after the batch commit but before
+`complete_operation`
+can leave the response and token/catalog mutations committed while the issuer is
+still incomplete. The consumed token may already be retired, and a new receipt
+cannot pass issuer validation. This state is not repaired automatically; it
+requires operator reconciliation, and the retained generation hold remains.
+If the completed operation is durable but its response is lost, an exact retry
+returns the same stored bytes and rechecks or idempotently finishes retention
+cleanup. The initial ProjectStore hold is also written before issuance; a crash
+there can leave an unassociated hold, with no automatic expiry or sweep.
+The owner-binding fields use receipt/outcome schema `/2` and continuation Store
+profile `.2`; a prior `/1` continuation Store fails exact profile admission and
+has no in-place migration.
 
 ## `context_validate`
 

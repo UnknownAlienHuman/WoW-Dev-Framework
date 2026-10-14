@@ -122,6 +122,17 @@ impl Budget {
     pub(crate) fn remaining_context_work(&self) -> u64 {
         self.work_limit - self.work
     }
+
+    pub(crate) fn retain_encoded(&mut self, bytes: usize, stop: &AtomicBool) -> ContextResult<()> {
+        checkpoint(stop)?;
+        let bytes = u64::try_from(bytes).map_err(|_| exhausted())?;
+        self.retained_bytes = self
+            .retained_bytes
+            .checked_add(bytes)
+            .filter(|value| *value <= self.metadata_limit)
+            .ok_or_else(exhausted)?;
+        Ok(())
+    }
     pub(crate) fn work(&mut self, amount: usize, stop: &AtomicBool) -> ContextResult<()> {
         checkpoint(stop)?;
         self.work = self

@@ -115,7 +115,8 @@ Mandatory close failure means:
 
 A context continuation across service invocations requires exact retained roots for every referenced store generation/object according to E2-D policy.
 
-Service records:
+Service records a service-owned continuation object in the configured generic
+Store catalog and links it to the exact completed operation that issued it:
 
 ```text
 continuation ID/request/universe/profile
@@ -124,6 +125,7 @@ retention reason/reference
 owner receipt IDs
 admission state
 release/expiry semantics
+exact response object and completed operation/request digest
 ```
 
 It does not implement store GC or lease tables.
@@ -132,20 +134,22 @@ It does not implement store GC or lease tables.
 
 `context_continue`:
 
-1. validates the bounded continuation object and original IDs;
-2. reopens exact retained generations directly;
-3. validates retention receipts/current owner state;
+1. validates the token's catalog record and its matching completed Store operation;
+2. verifies the exact ProjectStore retention root and reopens that generation directly;
+3. replays each issued prefix through the original native progressive owner and checks the retained pack/render bytes;
 4. never resolves current;
-5. binds the same ContextUniverseSet/profiles/total budget chain;
-6. invokes E3-B continuation;
-7. replaces/releases retention according to the returned continuation state;
+5. binds the same `ContextUniverseSet`, profiles, roots, and limits, and carries owner-created budget receipts plus actual prior Service-envelope bytes;
+6. invokes the existing next-batch native progression;
+7. records the exact response and next completed issuer operation, or releases the root after the final round;
 8. closes ordinary resources before success.
 
 Unavailable retained generation returns typed failure; no restart on current.
 
 ## Retention release
 
-When continuation completes, is explicitly abandoned, expires under owner policy, or becomes invalid, service requests release through owner ports. Release is idempotent by exact continuation/receipt ID.
+The selected four-round route releases its exact retention root after the final
+round. Release is idempotent by exact root ID and pin digest. Explicit abandon
+and expiry operations are outside this selected route.
 
 No context semantic artifact ID depends on operational expiration time.
 

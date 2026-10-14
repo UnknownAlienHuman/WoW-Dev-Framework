@@ -100,6 +100,15 @@ are omitted when unselected. No Project/Reference producer, registry, persistenc
 or replay change is introduced by this context query.
 
 This finite selected route does not settle broader facets, automatic selection,
-cross-request continuation, source excerpts/privacy/token fit, platform/combined
-views, complete-corpus or runtime qualification. Rendering and additional native
-queries do not upgrade evidence or make absence authoritative.
+source excerpts/privacy/token fit, platform/combined views, complete-corpus or
+runtime qualification. Cross-request continuation is Service-owned: it reopens
+the exact retained generation and reconstructs each issued prefix through this
+same native planner. Context persists no serialized step. Its in-process
+`ContextBudgetReceipt` comes from a validated native pack and exact closed
+Service envelope; it cannot create or deserialize a `ContextExpansionStep`.
+For each resume, the latest verified cumulative historical ledger is carried
+once, and the freshly replayed native cost of every prior prefix is charged
+separately. The saved pre-delivery usage must equal that reconstructed private
+ledger; the exact delivered envelope bytes are then charged as well. No saved
+counter grants a remaining allowance, and overflow refuses the next round.
+Rendering and additional native queries do not upgrade evidence or make absence authoritative.

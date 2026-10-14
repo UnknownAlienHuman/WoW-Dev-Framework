@@ -4,6 +4,7 @@
 //! No source acquisition, parser, storage, or runtime authority.
 mod budget;
 mod combined;
+mod continuation;
 mod error;
 mod map;
 mod pack;
@@ -24,6 +25,7 @@ pub use combined::{
     build_combined_state_detail_inspect, build_combined_state_detail_inspect_with_level,
     build_combined_state_root_l0_inspect,
 };
+pub use continuation::ContextBudgetReceipt;
 pub use error::{ContextError, ContextErrorCode, ContextResult};
 pub use map::{
     ContextExpansionPlan, ContextExpansionPreparation, ContextExpansionStep,
