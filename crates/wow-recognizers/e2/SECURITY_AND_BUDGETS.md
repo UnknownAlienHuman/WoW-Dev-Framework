@@ -70,6 +70,12 @@ Budgets are validated against system maxima. Unlimited/negative/overflowing valu
 - duplicate fact amplification is canonicalized before joins where semantics permit;
 - no recursive graph/source traversal inside matcher.
 
+Branch-local proof witnesses remain retained after `any_of` projects visible
+aliases. The matcher charges retained alias/witness references before copying a
+row and uses the selected rule's expansion ceiling as a separate copy ceiling.
+Crossing either ceiling returns Partial/truncated without a complete output;
+canonical proof merging does not grant uncharged copies in a later join.
+
 ## Strings and literals
 
 - bounded UTF-8 and normalized identifiers/tags only;

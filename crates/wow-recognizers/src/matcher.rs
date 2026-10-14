@@ -381,6 +381,26 @@ impl RecognizerOutputPartition {
     }
 
     #[must_use]
+    pub fn source_pack_digest(&self) -> &str {
+        &self.source_pack_digest
+    }
+
+    #[must_use]
+    pub fn plan_id(&self) -> &RecognizerPlanId {
+        &self.plan_id
+    }
+
+    #[must_use]
+    pub fn fact_bundle_id(&self) -> &crate::RecognizerFactBundleId {
+        &self.fact_bundle_id
+    }
+
+    #[must_use]
+    pub fn producer_partition_id(&self) -> &str {
+        &self.producer_partition_id
+    }
+
+    #[must_use]
     pub fn outcomes(&self) -> &[RecognizerRuleOutcome] {
         &self.outcomes
     }
@@ -421,8 +441,27 @@ impl RecognizerOutputPartition {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-struct Binding(BTreeMap<Box<str>, RecognizerFactId>);
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Binding {
+    aliases: BTreeMap<Box<str>, RecognizerFactId>,
+    // Includes branch-local facts so their evidence survives alias projection.
+    witness_fact_ids: BTreeSet<RecognizerFactId>,
+    // Union of facts participating in at least one fully exact proof path.
+    exact_proof_fact_ids: BTreeSet<RecognizerFactId>,
+    // Proof alternatives combine with OR; required fact clauses combine with AND.
+    has_exact_proof: bool,
+}
+
+impl Default for Binding {
+    fn default() -> Self {
+        Self {
+            aliases: BTreeMap::new(),
+            witness_fact_ids: BTreeSet::new(),
+            exact_proof_fact_ids: BTreeSet::new(),
+            has_exact_proof: true,
+        }
+    }
+}
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -443,6 +482,7 @@ enum SemanticOutputIdentity<'a> {
 #[derive(Default)]
 struct EvaluationBudget {
     expansions: u64,
+    proof_copies: u64,
     truncated: bool,
 }
 
@@ -573,7 +613,7 @@ fn evaluate_rule(
         Err(EvaluationAbort::NotEvaluated(mut blockers)) => {
             blockers.extend(coverage.blockers);
             normalize(&mut blockers);
-            return Ok(terminal_outcome(
+            let mut outcome = terminal_outcome(
                 rule,
                 if coverage.partial || budget.truncated {
                     RecognizerRuleOutcomeState::Partial
@@ -581,7 +621,9 @@ fn evaluate_rule(
                     RecognizerRuleOutcomeState::NotEvaluated
                 },
                 blockers,
-            ));
+            );
+            outcome.truncated = budget.truncated;
+            return Ok(outcome);
         }
         Err(EvaluationAbort::Cancelled) => {
             return Ok(terminal_outcome(
@@ -592,9 +634,7 @@ fn evaluate_rule(
         }
     };
 
-    let mut rows = rows;
-    rows.sort();
-    rows.dedup();
+    let mut rows = canonical_rows(rows);
     let mut semantic_keys_by_row = Vec::with_capacity(rows.len());
     let mut semantic_key_counts = BTreeMap::<Vec<u8>, usize>::new();
     for binding in &rows {
@@ -853,7 +893,7 @@ fn evaluate_clause(
             let facts = execution.bundle.facts_by_kind(kind).collect::<Vec<_>>();
             let mut output = Vec::new();
             for row in rows {
-                if let Some(bound) = row.0.get(alias) {
+                if let Some(bound) = row.aliases.get(alias) {
                     if facts.iter().any(|fact| fact.fact_id() == bound) {
                         output.push(row);
                     }
@@ -861,12 +901,24 @@ fn evaluate_clause(
                 }
                 for fact in &facts {
                     consume_expansion(execution.budget, execution.plan)?;
+                    consume_binding_copy(&row, execution)?;
                     let mut expanded = row.clone();
-                    expanded.0.insert(alias.clone(), fact.fact_id().clone());
+                    let fact_id = fact.fact_id().clone();
+                    expanded.aliases.insert(alias.clone(), fact_id.clone());
+                    expanded.witness_fact_ids.insert(fact_id.clone());
+                    if matches!(
+                        fact.confidence(),
+                        GraphConfidence::Possible | GraphConfidence::Candidate
+                    ) {
+                        expanded.has_exact_proof = false;
+                        expanded.exact_proof_fact_ids.clear();
+                    } else if expanded.has_exact_proof {
+                        expanded.exact_proof_fact_ids.insert(fact_id);
+                    }
                     output.push(expanded);
                 }
             }
-            canonical_rows(output)
+            Ok(canonical_rows(output))
         }
         RecognizerClause::Join { left, right } => Ok(filter_rows(rows, |row| {
             resolve_field(row, execution.bundle, left)
@@ -912,6 +964,7 @@ fn evaluate_clause(
             }
             let mut output = Vec::new();
             for row in rows {
+                consume_binding_copy(&row, execution)?;
                 let matches = evaluate_all(clauses, vec![row.clone()], clause_path, execution)?;
                 if matches.is_empty() {
                     output.push(row);
@@ -935,17 +988,31 @@ fn evaluate_clause(
         })),
         RecognizerClause::AllOf { clauses } => evaluate_all(clauses, rows, clause_path, execution),
         RecognizerClause::AnyOf { clauses } => {
+            let mut inherited_aliases = rows
+                .first()
+                .map(|row| row.aliases.keys().cloned().collect::<BTreeSet<_>>())
+                .unwrap_or_default();
+            for row in rows.iter().skip(1) {
+                inherited_aliases.retain(|alias| row.aliases.contains_key(alias));
+            }
+            let mut escaping_aliases = common_clause_output_aliases(clauses);
+            escaping_aliases.extend(inherited_aliases);
             let mut output = Vec::new();
             for index in planned_clause_indices(clauses, clause_path, &execution.order_by_path)? {
                 let branch_path = append_clause_path(clause_path, index)?;
-                output.extend(evaluate_clause(
-                    &clauses[index],
-                    rows.clone(),
-                    &branch_path,
-                    execution,
-                )?);
+                for row in &rows {
+                    consume_binding_copy(row, execution)?;
+                }
+                let mut branch_rows =
+                    evaluate_clause(&clauses[index], rows.clone(), &branch_path, execution)?;
+                for branch_row in &mut branch_rows {
+                    branch_row
+                        .aliases
+                        .retain(|alias, _| escaping_aliases.contains(alias));
+                }
+                output.extend(branch_rows);
             }
-            canonical_rows(output)
+            Ok(canonical_rows(output))
         }
     }
 }
@@ -965,10 +1032,76 @@ fn consume_expansion(
     }
 }
 
-fn canonical_rows(mut rows: Vec<Binding>) -> Result<Vec<Binding>, EvaluationAbort> {
-    rows.sort();
-    rows.dedup();
-    Ok(rows)
+fn consume_binding_copy(
+    row: &Binding,
+    execution: &mut ClauseExecution<'_>,
+) -> Result<(), EvaluationAbort> {
+    if execution.cancelled.load(Ordering::Relaxed) {
+        return Err(EvaluationAbort::Cancelled);
+    }
+    // A projected row can retain many branch-local witnesses. Bound those
+    // copies before cloning, independently of the number of expanded rows.
+    let copies = row.aliases.len() as u64
+        + row.witness_fact_ids.len() as u64
+        + row.exact_proof_fact_ids.len() as u64;
+    execution.budget.proof_copies = execution.budget.proof_copies.saturating_add(copies);
+    if execution.budget.proof_copies > execution.plan.bounds().max_join_expansions {
+        execution.budget.truncated = true;
+        return Err(EvaluationAbort::NotEvaluated(vec![
+            "matcher.proof-copy.truncated".into(),
+        ]));
+    }
+    Ok(())
+}
+
+fn canonical_rows(mut rows: Vec<Binding>) -> Vec<Binding> {
+    rows.sort_by(|left, right| left.aliases.cmp(&right.aliases));
+    let mut canonical = Vec::<Binding>::with_capacity(rows.len());
+    for row in rows {
+        match canonical.last_mut() {
+            Some(existing) if existing.aliases == row.aliases => {
+                // One visible environment may have several corroborating proof paths.
+                existing.witness_fact_ids.extend(row.witness_fact_ids);
+                if row.has_exact_proof {
+                    existing.has_exact_proof = true;
+                    existing
+                        .exact_proof_fact_ids
+                        .extend(row.exact_proof_fact_ids);
+                }
+            }
+            _ => canonical.push(row),
+        }
+    }
+    canonical
+}
+
+fn common_clause_output_aliases(clauses: &[RecognizerClause]) -> BTreeSet<Box<str>> {
+    let Some((first, rest)) = clauses.split_first() else {
+        return BTreeSet::new();
+    };
+    let mut common = clause_output_aliases(first);
+    for clause in rest {
+        let output = clause_output_aliases(clause);
+        common.retain(|alias| output.contains(alias));
+    }
+    common
+}
+
+fn clause_output_aliases(clause: &RecognizerClause) -> BTreeSet<Box<str>> {
+    match clause {
+        RecognizerClause::Fact { alias, .. } => BTreeSet::from([alias.clone()]),
+        RecognizerClause::Exists { clauses } | RecognizerClause::AllOf { clauses } => {
+            clauses.iter().flat_map(clause_output_aliases).collect()
+        }
+        RecognizerClause::AnyOf { clauses } => common_clause_output_aliases(clauses),
+        RecognizerClause::NotExists { .. }
+        | RecognizerClause::Join { .. }
+        | RecognizerClause::FieldEq { .. }
+        | RecognizerClause::FieldIn { .. }
+        | RecognizerClause::SameScope { .. }
+        | RecognizerClause::OrderedRelation { .. }
+        | RecognizerClause::ControlFlowRelation { .. } => BTreeSet::new(),
+    }
 }
 
 fn filter_rows(rows: Vec<Binding>, predicate: impl Fn(&Binding) -> bool) -> Vec<Binding> {
@@ -981,7 +1114,7 @@ fn resolve_field<'a>(
     reference: &str,
 ) -> Option<&'a RecognizerFactValue> {
     let (alias, field) = reference.split_once('.')?;
-    let fact_id = row.0.get(alias)?;
+    let fact_id = row.aliases.get(alias)?;
     bundle.fact_by_id(fact_id)?.field(field)
 }
 
@@ -991,7 +1124,7 @@ fn fact_for_reference<'a>(
     reference: &str,
 ) -> Option<&'a RecognizerFact> {
     let (alias, _) = reference.split_once('.')?;
-    bundle.fact_by_id(row.0.get(alias)?)
+    bundle.fact_by_id(row.aliases.get(alias)?)
 }
 
 fn same_scope(
@@ -1085,12 +1218,19 @@ fn build_match(
     force_possible: bool,
 ) -> RecognizerResult<RecognizerMatch> {
     let captures = captures_for_binding(rule, &binding, bundle)?;
-    let mut decisive_fact_ids = binding.0.values().cloned().collect::<Vec<_>>();
+    let mut decisive_fact_ids = if binding.has_exact_proof {
+        binding
+            .exact_proof_fact_ids
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+    } else {
+        binding.witness_fact_ids.iter().cloned().collect::<Vec<_>>()
+    };
     normalize(&mut decisive_fact_ids);
     let mut source_handle_ids = Vec::new();
     let mut evidence_ids = Vec::new();
-    let mut possible = force_possible;
-    for fact_id in &decisive_fact_ids {
+    for fact_id in &binding.witness_fact_ids {
         let fact = bundle.fact_by_id(fact_id).ok_or_else(|| {
             matcher_error(
                 RecognizerErrorCode::MatchInvalid,
@@ -1099,16 +1239,13 @@ fn build_match(
         })?;
         source_handle_ids.extend_from_slice(fact.source_handle_ids());
         evidence_ids.extend_from_slice(fact.evidence_ids());
-        possible |= matches!(
-            fact.confidence(),
-            GraphConfidence::Possible | GraphConfidence::Candidate
-        );
     }
     normalize(&mut source_handle_ids);
     normalize(&mut evidence_ids);
     let mut coverage_ids = coverage_ids.to_vec();
     normalize(&mut coverage_ids);
-    let confidence = if possible {
+    // An exact proof path is sufficient for an AnyOf even if another branch is Possible.
+    let confidence = if force_possible || !binding.has_exact_proof {
         RecognizerOutputConfidence::Possible
     } else {
         RecognizerOutputConfidence::Derived
@@ -1120,7 +1257,7 @@ fn build_match(
         rule_id: &rule.rule_id,
         rule_version: rule.version,
         partition_id: bundle.primary_partition_id(),
-        bindings: &binding.0,
+        bindings: &binding.aliases,
         captures: &captures,
         decisive_fact_ids: &decisive_fact_ids,
         source_handle_ids: &source_handle_ids,
@@ -1136,7 +1273,7 @@ fn build_match(
         rule_id: rule.rule_id.clone(),
         rule_version: rule.version,
         partition_id: bundle.primary_partition_id().into(),
-        bindings: binding.0,
+        bindings: binding.aliases,
         captures,
         decisive_fact_ids,
         source_handle_ids,
@@ -1170,7 +1307,10 @@ fn semantic_output_keys(
                 let mut resolved = BTreeMap::new();
                 for (key, reference) in semantic_key {
                     let value = match resolve_output_from_bindings(
-                        reference, &captures, &binding.0, bundle,
+                        reference,
+                        &captures,
+                        &binding.aliases,
+                        bundle,
                     ) {
                         Ok(value) => value,
                         Err(error) if error.code() == RecognizerErrorCode::ProposalInvalid => {
@@ -1194,7 +1334,8 @@ fn semantic_output_keys(
                 ..
             } => {
                 let source =
-                    match resolve_output_from_bindings(source, &captures, &binding.0, bundle) {
+                    match resolve_output_from_bindings(source, &captures, &binding.aliases, bundle)
+                    {
                         Ok(value) => value,
                         Err(error) if error.code() == RecognizerErrorCode::ProposalInvalid => {
                             return Ok(None);
@@ -1202,7 +1343,8 @@ fn semantic_output_keys(
                         Err(error) => return Err(error),
                     };
                 let target =
-                    match resolve_output_from_bindings(target, &captures, &binding.0, bundle) {
+                    match resolve_output_from_bindings(target, &captures, &binding.aliases, bundle)
+                    {
                         Ok(value) => value,
                         Err(error) if error.code() == RecognizerErrorCode::ProposalInvalid => {
                             return Ok(None);

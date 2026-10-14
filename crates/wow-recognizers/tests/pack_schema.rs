@@ -260,6 +260,142 @@ fn undeclared_alias_invalid_output_and_clause_depth_fail_closed() -> TestResult 
 }
 
 #[test]
+fn any_of_aliases_escape_only_when_all_branches_bind_compatible_facts() -> TestResult {
+    let with_any_of = |branches: Vec<RecognizerClause>| {
+        let mut document = valid_document();
+        document.pack.rules[0]
+            .clauses
+            .push(RecognizerClause::AnyOf { clauses: branches });
+        document.pack.rules[0]
+            .clauses
+            .push(RecognizerClause::FieldEq {
+                field: "shared.status".into(),
+                value: RecognizerPackLiteral::String("known".into()),
+            });
+        document
+    };
+
+    let positive = with_any_of(vec![
+        RecognizerClause::AllOf {
+            clauses: vec![
+                RecognizerClause::Fact {
+                    alias: "shared".into(),
+                    kind: "reference.api".into(),
+                },
+                RecognizerClause::FieldEq {
+                    field: "shared.status".into(),
+                    value: RecognizerPackLiteral::String("known".into()),
+                },
+            ],
+        },
+        RecognizerClause::Fact {
+            alias: "shared".into(),
+            kind: "reference.api".into(),
+        },
+    ]);
+    parse_recognizer_pack(&canonical(&positive)?)?;
+
+    let missing_from_branch = with_any_of(vec![
+        RecognizerClause::Fact {
+            alias: "shared".into(),
+            kind: "reference.api".into(),
+        },
+        RecognizerClause::FieldEq {
+            field: "call.call_kind".into(),
+            value: RecognizerPackLiteral::String("direct".into()),
+        },
+    ]);
+    assert_eq!(
+        parse_recognizer_pack(&canonical(&missing_from_branch)?)
+            .err()
+            .ok_or("an alias missing from one branch must not escape")?
+            .code(),
+        RecognizerErrorCode::PackClauseInvalid
+    );
+
+    let mut incompatible_kind = valid_document();
+    incompatible_kind.pack.rules[0]
+        .clauses
+        .push(RecognizerClause::AnyOf {
+            clauses: vec![
+                RecognizerClause::Fact {
+                    alias: "shared".into(),
+                    kind: "reference.api".into(),
+                },
+                RecognizerClause::Fact {
+                    alias: "shared".into(),
+                    kind: "emmy.member_call".into(),
+                },
+            ],
+        });
+    assert_eq!(
+        parse_recognizer_pack(&canonical(&incompatible_kind)?)
+            .err()
+            .ok_or("common aliases with different fact kinds must fail")?
+            .code(),
+        RecognizerErrorCode::PackClauseInvalid
+    );
+
+    let mut duplicate_in_branch = valid_document();
+    duplicate_in_branch.pack.rules[0]
+        .clauses
+        .push(RecognizerClause::AnyOf {
+            clauses: vec![
+                RecognizerClause::AllOf {
+                    clauses: vec![
+                        RecognizerClause::Fact {
+                            alias: "shared".into(),
+                            kind: "reference.api".into(),
+                        },
+                        RecognizerClause::Fact {
+                            alias: "shared".into(),
+                            kind: "reference.api".into(),
+                        },
+                    ],
+                },
+                RecognizerClause::FieldEq {
+                    field: "call.call_kind".into(),
+                    value: RecognizerPackLiteral::String("direct".into()),
+                },
+            ],
+        });
+    assert_eq!(
+        parse_recognizer_pack(&canonical(&duplicate_in_branch)?)
+            .err()
+            .ok_or("duplicate aliases in one branch must fail")?
+            .code(),
+        RecognizerErrorCode::PackClauseInvalid
+    );
+
+    let mut inherited_collision = valid_document();
+    inherited_collision.pack.rules[0]
+        .clauses
+        .push(RecognizerClause::AnyOf {
+            clauses: vec![
+                RecognizerClause::Fact {
+                    alias: "call".into(),
+                    kind: "emmy.member_call".into(),
+                },
+                RecognizerClause::AllOf {
+                    clauses: vec![RecognizerClause::Fact {
+                        alias: "call".into(),
+                        kind: "emmy.member_call".into(),
+                    }],
+                },
+            ],
+        });
+    assert_eq!(
+        parse_recognizer_pack(&canonical(&inherited_collision)?)
+            .err()
+            .ok_or("branch declarations cannot shadow an inherited alias")?
+            .code(),
+        RecognizerErrorCode::PackClauseInvalid
+    );
+
+    Ok(())
+}
+
+#[test]
 fn noncore_pack_cannot_request_default_rollout() -> TestResult {
     let mut document = valid_document();
     document.pack.trust_class = RecognizerPackTrustClass::Experimental;

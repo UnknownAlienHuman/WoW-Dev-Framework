@@ -357,7 +357,18 @@ fn validate_rule(
 
     let mut aliases = BTreeSet::new();
     let mut clause_count = 0usize;
-    collect_aliases(&rule.clauses, 1, budgets, &mut aliases, &mut clause_count)?;
+    let _alias_kinds = collect_aliases(
+        &rule.clauses,
+        1,
+        budgets,
+        &BTreeSet::new(),
+        &mut aliases,
+        &mut clause_count,
+    )?;
+    let aliases = aliases
+        .iter()
+        .map(|alias| alias.as_ref())
+        .collect::<BTreeSet<_>>();
     validate_clauses(
         &rule.clauses,
         1,
@@ -428,19 +439,22 @@ fn validate_rule(
     Ok(())
 }
 
-fn collect_aliases<'a>(
-    clauses: &'a [RecognizerClause],
+fn collect_aliases(
+    clauses: &[RecognizerClause],
     depth: u32,
     budgets: &RecognizerPackBudgets,
-    aliases: &mut BTreeSet<&'a str>,
+    inherited: &BTreeSet<Box<str>>,
+    aliases: &mut BTreeSet<Box<str>>,
     count: &mut usize,
-) -> RecognizerResult<()> {
+) -> RecognizerResult<BTreeMap<Box<str>, Box<str>>> {
     if depth > budgets.max_clause_depth {
         return Err(RecognizerError::new(
             RecognizerErrorCode::PackClauseInvalid,
             "recognizer clause nesting exceeds the rule budget",
         ));
     }
+    let mut available = inherited.clone();
+    let mut output_aliases = BTreeMap::new();
     for clause in clauses {
         *count += 1;
         if *count > budgets.max_clauses_per_rule as usize {
@@ -453,29 +467,95 @@ fn collect_aliases<'a>(
             RecognizerClause::Fact { alias, kind } => {
                 validate_component(alias, RecognizerErrorCode::PackClauseInvalid)?;
                 validate_component(kind, RecognizerErrorCode::PackClauseInvalid)?;
-                if !aliases.insert(alias) {
+                if !available.insert(alias.clone()) {
                     return Err(RecognizerError::new(
                         RecognizerErrorCode::PackClauseInvalid,
                         "recognizer rule contains a duplicate fact alias",
                     ));
                 }
+                aliases.insert(alias.clone());
+                output_aliases.insert(alias.clone(), kind.clone());
             }
-            RecognizerClause::Exists { clauses }
-            | RecognizerClause::NotExists { clauses, .. }
-            | RecognizerClause::AllOf { clauses }
-            | RecognizerClause::AnyOf { clauses } => {
+            RecognizerClause::Exists { clauses } | RecognizerClause::AllOf { clauses } => {
                 if clauses.is_empty() {
                     return Err(RecognizerError::new(
                         RecognizerErrorCode::PackClauseInvalid,
                         "recognizer composite clause is empty",
                     ));
                 }
-                collect_aliases(clauses, depth + 1, budgets, aliases, count)?;
+                let nested_aliases =
+                    collect_aliases(clauses, depth + 1, budgets, &available, aliases, count)?;
+                for (alias, kind) in nested_aliases {
+                    if !available.insert(alias.clone()) {
+                        return Err(RecognizerError::new(
+                            RecognizerErrorCode::PackClauseInvalid,
+                            "recognizer rule contains a duplicate fact alias",
+                        ));
+                    }
+                    output_aliases.insert(alias, kind);
+                }
+            }
+            RecognizerClause::AnyOf { clauses } => {
+                if clauses.is_empty() {
+                    return Err(RecognizerError::new(
+                        RecognizerErrorCode::PackClauseInvalid,
+                        "recognizer composite clause is empty",
+                    ));
+                }
+                let mut branch_aliases = Vec::with_capacity(clauses.len());
+                for branch in clauses {
+                    branch_aliases.push(collect_aliases(
+                        std::slice::from_ref(branch),
+                        depth + 1,
+                        budgets,
+                        &available,
+                        aliases,
+                        count,
+                    )?);
+                }
+                if let Some(first) = branch_aliases.first() {
+                    for (alias, kind) in first {
+                        if !branch_aliases
+                            .iter()
+                            .skip(1)
+                            .all(|branch| branch.contains_key(alias))
+                        {
+                            continue;
+                        }
+                        if branch_aliases
+                            .iter()
+                            .skip(1)
+                            .any(|branch| branch.get(alias) != Some(kind))
+                        {
+                            return Err(RecognizerError::new(
+                                RecognizerErrorCode::PackClauseInvalid,
+                                "any_of alternatives bind a common alias to incompatible fact kinds",
+                            ));
+                        }
+                        if !available.insert(alias.clone()) {
+                            return Err(RecognizerError::new(
+                                RecognizerErrorCode::PackClauseInvalid,
+                                "recognizer rule contains a duplicate fact alias",
+                            ));
+                        }
+                        output_aliases.insert(alias.clone(), kind.clone());
+                    }
+                }
+            }
+            RecognizerClause::NotExists { clauses, .. } => {
+                if clauses.is_empty() {
+                    return Err(RecognizerError::new(
+                        RecognizerErrorCode::PackClauseInvalid,
+                        "recognizer composite clause is empty",
+                    ));
+                }
+                let _inner_aliases =
+                    collect_aliases(clauses, depth + 1, budgets, &available, aliases, count)?;
             }
             _ => {}
         }
     }
-    Ok(())
+    Ok(output_aliases)
 }
 
 fn validate_clauses(

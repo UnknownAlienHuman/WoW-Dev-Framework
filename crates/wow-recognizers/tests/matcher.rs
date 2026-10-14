@@ -437,6 +437,10 @@ fn same_semantic_output_bindings_remain_competing_after_match_truncation() -> Te
         RecognizerFactLimits::default(),
         &AtomicBool::new(false),
     )?;
+    assert_eq!(output.source_pack_digest(), pack.pack_digest());
+    assert_eq!(output.plan_id(), plan.plan_id());
+    assert_eq!(output.fact_bundle_id(), facts.bundle_id());
+    assert_eq!(output.producer_partition_id(), facts.primary_partition_id());
     let outcome = &output.outcomes()[0];
     assert_eq!(outcome.state(), RecognizerRuleOutcomeState::Partial);
     assert!(outcome.truncated());
@@ -553,6 +557,194 @@ fn any_of_branch_bindings_do_not_escape_to_sibling_clauses() -> TestResult {
     ]);
     rule.version = 2;
     assert!(compiled(rule, 100, 100).is_err());
+    Ok(())
+}
+
+#[test]
+fn any_of_keeps_branch_evidence_without_leaking_alias_or_downgrading_exact_proof() -> TestResult {
+    let context = context()?;
+    let rule = direct_rule(vec![
+        RecognizerClause::AnyOf {
+            clauses: vec![
+                RecognizerClause::AllOf {
+                    clauses: vec![
+                        RecognizerClause::Fact {
+                            alias: "support".into(),
+                            kind: "reference.api".into(),
+                        },
+                        RecognizerClause::FieldEq {
+                            field: "support.call_kind".into(),
+                            value: RecognizerPackLiteral::String("direct".into()),
+                        },
+                    ],
+                },
+                RecognizerClause::FieldEq {
+                    field: "call.call_kind".into(),
+                    value: RecognizerPackLiteral::String("direct".into()),
+                },
+            ],
+        },
+        RecognizerClause::AnyOf {
+            clauses: vec![
+                RecognizerClause::Fact {
+                    alias: "shared_call".into(),
+                    kind: "emmy.member_call".into(),
+                },
+                RecognizerClause::AllOf {
+                    clauses: vec![
+                        RecognizerClause::Fact {
+                            alias: "shared_call".into(),
+                            kind: "emmy.member_call".into(),
+                        },
+                        RecognizerClause::FieldEq {
+                            field: "shared_call.call_kind".into(),
+                            value: RecognizerPackLiteral::String("direct".into()),
+                        },
+                    ],
+                },
+            ],
+        },
+        RecognizerClause::FieldEq {
+            field: "shared_call.call_kind".into(),
+            value: RecognizerPackLiteral::String("direct".into()),
+        },
+    ]);
+    let (pack, plan) = compiled(rule, 100, 100)?;
+    let call = fact(
+        &context,
+        "emmy.member_call",
+        "KnownApi",
+        "direct",
+        1,
+        GraphConfidence::Derived,
+    )?;
+    let support = fact(
+        &context,
+        "reference.api",
+        "SupportingApi",
+        "direct",
+        2,
+        GraphConfidence::Possible,
+    )?;
+    let call_id = call.fact_id().clone();
+    let support_id = support.fact_id().clone();
+    let call_evidence = call.evidence_ids()[0];
+    let support_evidence = support.evidence_ids()[0];
+    let facts = bundle(
+        &context,
+        vec![call, support],
+        vec![coverage(
+            &context,
+            "emmy.member_call.complete",
+            RecognizerFactCoverageState::Complete,
+        )?],
+    )?;
+
+    let output = execute_recognizer_plan(
+        &context,
+        &pack,
+        &plan,
+        &facts,
+        RecognizerFactLimits::default(),
+        &AtomicBool::new(false),
+    )?;
+    let outcome = &output.outcomes()[0];
+    assert_eq!(outcome.state(), RecognizerRuleOutcomeState::Matched);
+    assert_eq!(outcome.matches().len(), 1);
+    assert_eq!(outcome.proposals().len(), 1);
+
+    let matched = &outcome.matches()[0];
+    assert_eq!(matched.bindings().len(), 2);
+    assert_eq!(matched.bindings().get("call"), Some(&call_id));
+    assert_eq!(matched.bindings().get("shared_call"), Some(&call_id));
+    assert!(!matched.bindings().contains_key("support"));
+    assert_eq!(matched.decisive_fact_ids(), &[call_id]);
+    assert_eq!(matched.confidence(), RecognizerOutputConfidence::Derived);
+
+    let RecognizerProposedAssertion::Entity {
+        confidence,
+        decisive_fact_ids,
+        evidence_ids,
+        ..
+    } = &outcome.proposals()[0]
+    else {
+        return Err("direct rule entity proposal".into());
+    };
+    assert_eq!(*confidence, RecognizerOutputConfidence::Derived);
+    assert!(!decisive_fact_ids.contains(&support_id));
+    assert!(evidence_ids.contains(&call_evidence));
+    assert!(evidence_ids.contains(&support_evidence));
+    Ok(())
+}
+
+#[test]
+fn projected_witness_fanout_refuses_before_quadratic_binding_copies() -> TestResult {
+    let context = context()?;
+    let rule = direct_rule(vec![
+        RecognizerClause::AnyOf {
+            clauses: vec![
+                RecognizerClause::Fact {
+                    alias: "support".into(),
+                    kind: "reference.api".into(),
+                },
+                RecognizerClause::FieldEq {
+                    field: "call.call_kind".into(),
+                    value: RecognizerPackLiteral::String("direct".into()),
+                },
+            ],
+        },
+        RecognizerClause::Fact {
+            alias: "next".into(),
+            kind: "reference.api".into(),
+        },
+    ]);
+    let (pack, plan) = compiled(rule, 1_000, 1_000)?;
+    let mut input = vec![fact(
+        &context,
+        "emmy.member_call",
+        "KnownApi",
+        "direct",
+        1,
+        GraphConfidence::Derived,
+    )?];
+    for index in 0..128 {
+        input.push(fact(
+            &context,
+            "reference.api",
+            &format!("Support{index}"),
+            "direct",
+            index + 2,
+            GraphConfidence::Possible,
+        )?);
+    }
+    let facts = bundle(
+        &context,
+        input,
+        vec![coverage(
+            &context,
+            "emmy.member_call.complete",
+            RecognizerFactCoverageState::Complete,
+        )?],
+    )?;
+    let output = execute_recognizer_plan(
+        &context,
+        &pack,
+        &plan,
+        &facts,
+        RecognizerFactLimits::default(),
+        &AtomicBool::new(false),
+    )?;
+    let outcome = &output.outcomes()[0];
+    assert_eq!(outcome.state(), RecognizerRuleOutcomeState::Partial);
+    assert!(outcome.truncated());
+    assert!(outcome.matches().is_empty());
+    assert!(outcome.proposals().is_empty());
+    assert!(
+        outcome
+            .blocker_ids()
+            .iter()
+            .any(|id| id.as_ref() == "matcher.proof-copy.truncated")
+    );
     Ok(())
 }
 
