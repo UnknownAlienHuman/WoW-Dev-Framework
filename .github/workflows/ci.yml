@@ -1,10 +1,16 @@
 name: CI
 on:
   workflow_dispatch:
+    inputs:
+      qualification_scope:
+        description: Full milestone or the two-platform rustdoc repair gate
+        type: choice
+        default: full
+        options: [full, rustdoc]
 permissions:
   contents: read
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ inputs.qualification_scope || 'full' }}
   cancel-in-progress: true
 jobs:
   checks:
@@ -25,8 +31,11 @@ jobs:
       - name: Install current stable Rust
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - name: Record tested inputs
+        env:
+          QUALIFICATION_SCOPE: ${{ inputs.qualification_scope || 'full' }}
         run: |
           git rev-parse HEAD
+          printf 'QUALIFICATION_SCOPE=%s\n' "$QUALIFICATION_SCOPE" | tee "$RUNNER_TEMP/QUALIFICATION_SCOPE"
           rustc +stable -Vv
       - name: Archive exact source under test
         if: runner.os == 'Linux'
@@ -42,6 +51,7 @@ jobs:
           path: |
             ${{ runner.temp }}/source-under-test.tar
             ${{ runner.temp }}/COMMIT_SHA
+            ${{ runner.temp }}/QUALIFICATION_SCOPE
             ${{ runner.temp }}/SHA256SUMS
           retention-days: 3
           if-no-files-found: error
@@ -59,7 +69,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        gate: [debug, release, rustdoc]
+        gate: ${{ fromJSON(inputs.qualification_scope == 'rustdoc' && '["rustdoc"]' || '["debug","release","rustdoc"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     defaults:
@@ -92,6 +102,7 @@ jobs:
         if: always()
         run: git diff --exit-code
   updated-dependencies:
+    if: inputs.qualification_scope != 'rustdoc'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -103,6 +114,7 @@ jobs:
       - run: cargo +stable test --workspace --all-targets --all-features
       - run: cargo +stable clippy --workspace --all-targets --all-features -- -D warnings
   parser-compatibility:
+    if: inputs.qualification_scope != 'rustdoc'
     name: Rolling Emmy parser compatibility
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -157,6 +169,7 @@ jobs:
           retention-days: 3
           if-no-files-found: error
   wasm-bridge:
+    if: inputs.qualification_scope != 'rustdoc'
     name: Wasm swap and rollback (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -237,6 +250,7 @@ jobs:
           retention-days: 3
           if-no-files-found: error
   annotation-consumers:
+    if: inputs.qualification_scope != 'rustdoc'
     name: Semantic annotation consumers (${{ matrix.os }})
     strategy:
       fail-fast: false
