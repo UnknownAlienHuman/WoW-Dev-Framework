@@ -4,6 +4,7 @@ mod context;
 mod graph;
 mod graph_build;
 mod graph_store;
+mod mcp;
 mod native;
 mod output;
 mod project;
@@ -49,6 +50,12 @@ fn run() -> u8 {
     }
     if arguments.first().is_some_and(|value| value == "search") {
         return search::run(arguments);
+    }
+    if arguments.first().is_some_and(|value| value == "mcp") {
+        return mcp::run(arguments);
+    }
+    if arguments.first().is_some_and(|value| value == "transport") {
+        return mcp::transport_capabilities::run(arguments);
     }
     if arguments.first().is_some_and(|value| value == "source") {
         return source::run(arguments);

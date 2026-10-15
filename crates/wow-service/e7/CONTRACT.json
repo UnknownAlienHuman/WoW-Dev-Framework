@@ -1,11 +1,27 @@
 {
   "schema_version": 1,
   "contract_id": "wow-service/e7-a/frontend-session-operation-registry",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-executable-bounded-subset",
   "work_package": "E7-A",
   "crate": "wow-service",
   "documentation_frontier": "E7-A",
-  "implementation_state": "not-started",
+  "implementation_state": "partial-executable",
+  "implemented_subset": {
+    "activation_issue": 170,
+    "mcp_profile": "mcp-2025-11-25-stdio-v1",
+    "operations": [
+      "frontend_status",
+      "frontend_capabilities",
+      "frontend_session_open",
+      "frontend_session_get",
+      "frontend_session_close"
+    ],
+    "mcp_tools": ["wow.status -> frontend_status"],
+    "mcp_resources": ["wow://profiles/mcp-2025-11-25-stdio-v1"],
+    "registry_digest": "frontend-operation-registry:sha256:6af3e5af4aff58a37b685d3fa01333eb4653470ffb6a0ac1361c452079ff90ff",
+    "profile_digest": "frontend-profile:sha256:2c743eec8a457cbde35824fb2b440b1646bf59c5e1d1f0d2d752e6845f362730",
+    "full_e7_a_conformance": "not-accepted"
+  },
   "application_contract": "apps/wow/e7/CONTRACT.json",
   "protocol_profiles": {
     "local_daemon": "wow-local-jsonrpc/1",
@@ -192,8 +208,9 @@
     "CI-before-real-executable-gates"
   ],
   "freeze_gate": {
-    "implementation_state": "not-started",
-    "required_before_first_rust_implementation": [
+    "implementation_state": "partial-executable",
+    "full_e7_a_acceptance": "not-accepted",
+    "required_before_full_e7_a_acceptance": [
       "implemented and frozen E0 through advertised E6 service and owner capabilities",
       "exact LSP 3.18 MCP 2025-11-25 and local daemon protocol library or adapter pins",
       "complete immutable operation registry and request result error schema digests",

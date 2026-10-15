@@ -1,11 +1,47 @@
 {
   "schema_version": 1,
   "contract_id": "apps/wow/e7-a/frontend-transports",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-executable-bounded-subset",
   "work_package": "E7-A",
   "application": "wow",
   "documentation_frontier": "E7-A",
-  "implementation_state": "not-started",
+  "implementation_state": "partial-executable",
+  "implemented_subset": {
+    "activation_issue": 170,
+    "transport_profile": "mcp-2025-11-25-stdio-v1",
+    "server_capabilities": ["tools", "resources"],
+    "tools": [
+      {"name": "wow.status", "service_operation": "frontend_status"}
+    ],
+    "registry_digest": "frontend-operation-registry:sha256:6af3e5af4aff58a37b685d3fa01333eb4653470ffb6a0ac1361c452079ff90ff",
+    "profile_digest": "frontend-profile:sha256:2c743eec8a457cbde35824fb2b440b1646bf59c5e1d1f0d2d752e6845f362730",
+    "tool_schema_digests": {
+      "input": "sha256:32062bdb9024160d3b9816f12ba2f337808ee107449f8bf08d55b0026944f51e",
+      "output": "sha256:045803f40c4599f2b8426d245053545e92de2c80c11047f0647d69e723d62407"
+    },
+    "not_advertised": [
+      "wow.search: no frontend search_query operation exists; search_build_query is a different operation"
+    ],
+    "resources": ["wow://profiles/mcp-2025-11-25-stdio-v1"],
+    "lifecycle": [
+      "initialize",
+      "notifications/initialized",
+      "tools/list",
+      "tools/call",
+      "resources/list",
+      "resources/read",
+      "EOF-close"
+    ],
+    "bounds": {
+      "frame_bytes": 65536,
+      "output_bytes": 65536,
+      "json_depth": 32,
+      "active_sessions": 1,
+      "active_requests": 1,
+      "queued_requests": 0
+    },
+    "full_e7_a_conformance": "not-accepted"
+  },
   "framework_dependencies": [
     "wow-service"
   ],
@@ -124,8 +160,9 @@
     "apps/wow/e7/examples/CHECKSUMS.json"
   ],
   "freeze_gate": {
-    "implementation_state": "not-started",
-    "required_before_first_rust_implementation": [
+    "implementation_state": "partial-executable",
+    "full_e7_a_acceptance": "not-accepted",
+    "required_before_full_e7_a_acceptance": [
       "implemented and frozen E7-A service operation registry session and overlay contracts",
       "exact daemon LSP and MCP protocol adapter and library pins",
       "all command method tool resource configuration endpoint output exit progress cancellation reconnect and isolation profiles",

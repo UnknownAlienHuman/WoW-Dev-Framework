@@ -12,6 +12,7 @@ mod backend;
 mod configuration;
 pub mod context;
 mod error;
+pub mod frontend;
 pub mod graph;
 mod identity;
 pub mod live_project;
