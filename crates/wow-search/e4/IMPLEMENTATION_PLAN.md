@@ -1,6 +1,8 @@
 # E4-A implementation plan
 
-**Status:** normative order; implementation not started.
+**Status:** normative target order; partial functional implementation exists.
+The current owner/consumer scope and remaining work are in [README.md](README.md)
+and canonical #169; the historical prerequisite freeze is not accepted.
 
 ## Phase 0 — prerequisite and profile freeze
 

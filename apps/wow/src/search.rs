@@ -16,13 +16,14 @@ use wow_service::{
     OperationId, ServiceErrorCode,
     search::{
         LocalMetadataPermission, SearchBounds, SearchBuildQueryRequest, SearchIndexBuildRequest,
-        SearchOperationService, SearchShardQueryRequest, SearchShardRetireRequest,
-        SearchSourceHoldBinding, SearchStoreGcRequest, SearchStoreLimits,
+        SearchOperationService, SearchRetrievalRequest, SearchShardQueryRequest,
+        SearchShardRetireRequest, SearchSourceHoldBinding, SearchStoreGcRequest, SearchStoreLimits,
     },
 };
 
 const HELP: &str = "wow search index build --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --operation-id <ID> --allow-local-metadata-only <finite bounds>\nwow search query --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --literal-query <UTF-8-LITERAL> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index retire --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --build-operation-id <BuildOperationId> --source-store-epoch-id <ExactEpochId> --source-generation-hold-id <ExactRetentionRootId> --source-generation-hold-digest <sha256:...> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index gc --search-store <SEARCH-STORE-FILE> --target-object-id <ExactObjectId> --operation-id <ID> --gc-now <epoch> --gc-max-deletes <positive-u32> <Store limits>\nwow search build-query --store-root <PROJECT-STORE> <existing one-shot route; it does not claim durable SearchStore persistence>\nAll durable commands require --max-output-bytes <positive-u64> and Store limits: --store-max-object-bytes <positive-u64> --store-max-batch-objects <positive-u32> --store-max-catalog-mutations <positive-u32> --store-max-manifest-records <positive-u32> --store-max-gc-deletes <positive-u32>.\nBuild/query/retire also require Search bounds: --max-documents <positive-u32> --max-document-id-bytes <positive-u32> --max-owner-metadata-label-bytes <positive-u32> --max-literal-query-bytes <positive-u32> --max-candidate-results <positive-u32> --max-owner-evidence-records <positive-u32> --max-owner-manifest-bytes <positive-u64> --max-database-bytes <positive-u64> --max-search-object-bytes <positive-u64>.\n";
 const MAX_ARGUMENTS: usize = 64;
+const RETRIEVAL_HELP: &str = "wow search retrieve --search-store <STORE> --generation <EXACT> --search-shard-id <ID> --object-id <ID> --profile-digest <DIGEST> --query-json <CLOSED-QUERY-JSON> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <finite bounds>. This operation selects the exact file-set component and returns an immutable ranked result manifest; it advertises no continuation.\n";
 const DURABLE_FILE_SET_HELP: &str = "Durable index build/retire accept either --file-id <ID> or --file-ids <JSON-array-of-exact-IDs>. Durable query uses its real --file-id plus --file-set for that component. Preserve the full original selection and source-hold receipt for retirement.\n";
 const FILE_SET_HELP: &str = "For one-shot build-query, optional --file-ids <JSON-array-of-exact-ProjectFileIds> selects a finite set. --file-id must belong to it. Empty/duplicate/absent/over-cap selections refuse; --max-documents caps the raw set. No durable file-set handle is returned.\n";
 const MAX_ARGUMENT_BYTES: usize = 128 * 1024;
@@ -68,6 +69,7 @@ enum DurableCommand {
     Query(SearchShardQueryRequest),
     Retire(SearchShardRetireRequest),
     Gc(SearchStoreGcRequest),
+    Retrieve(SearchRetrievalRequest),
 }
 
 /// Entry used by the root dispatcher after it adds the search branch.
@@ -100,6 +102,7 @@ fn run_with_io<W: Write, E: Write>(
             .write_all(HELP.as_bytes())
             .and_then(|()| stdout.write_all(FILE_SET_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(DURABLE_FILE_SET_HELP.as_bytes()))
+            .and_then(|()| stdout.write_all(RETRIEVAL_HELP.as_bytes()))
             .and_then(|()| stdout.flush())
         {
             Ok(()) => 0,
@@ -183,6 +186,7 @@ fn run_durable<W: Write, E: Write>(
         DurableCommand::Query(request) => service.query_shard(&request, stop),
         DurableCommand::Retire(request) => service.retire_shard(&request, stop),
         DurableCommand::Gc(request) => service.collect_search_garbage(&request, stop),
+        DurableCommand::Retrieve(request) => service.retrieve_shard(&request, stop),
     };
     let bytes = match result {
         Ok(bytes) => bytes,
@@ -230,7 +234,12 @@ fn run_durable<W: Write, E: Write>(
 fn durable_status_exit(bytes: &[u8]) -> Option<u8> {
     let envelope: serde_json::Value = serde_json::from_slice(bytes).ok()?;
     match envelope.get("payload")?.get("status")?.as_str()? {
-        "candidate_only" => Some(2),
+        "candidate_only"
+        | "exact_not_found_partial"
+        | "no_candidates_under_executed_lanes"
+        | "lane_unavailable"
+        | "truncated" => Some(2),
+        "exact_found" => Some(0),
         "retained" | "retired" | "collected" => Some(0),
         _ => None,
     }
@@ -261,7 +270,7 @@ fn is_help(arguments: &[OsString]) -> bool {
             && arguments
                 .iter()
                 .any(|value| value == "--help" || value == "-h")
-            && (arguments[1] == "query" || arguments[1] == "index"))
+            && (arguments[1] == "query" || arguments[1] == "retrieve" || arguments[1] == "index"))
 }
 
 fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, &'static str> {
@@ -273,6 +282,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
     };
     let (command, prefix_len) = match command_word {
         "query" => ("query", 2),
+        "retrieve" => ("retrieve", 2),
         "index" => match arguments.get(2).and_then(|value| value.to_str()) {
             Some("build") => ("build", 3),
             Some("retire") => ("retire", 3),
@@ -322,6 +332,14 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             "--lease-expires-after",
             "--file-set",
         ]),
+        "retrieve" => allowed.extend_from_slice(&[
+            "--generation",
+            "--search-shard-id",
+            "--object-id",
+            "--profile-digest",
+            "--query-json",
+            "--lease-expires-after",
+        ]),
         "retire" => allowed.extend_from_slice(&[
             "--store-root",
             "--generation",
@@ -352,6 +370,25 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
     let store_limits = parse_store_limits(&options)?;
     let max_output_bytes = positive_u64(&options, "--max-output-bytes")?;
     let command = match command {
+        "retrieve" => DurableCommand::Retrieve(
+            SearchRetrievalRequest::new(
+                OperationId::new(required_text(&options, "--operation-id")?)
+                    .map_err(|_| "invalid --operation-id")?,
+                store_path,
+                required_text(&options, "--generation")?,
+                required_text(&options, "--search-shard-id")?,
+                required_text(&options, "--object-id")?,
+                required_text(&options, "--profile-digest")?,
+                required_text(&options, "--query-json")?.as_bytes(),
+                parse_search_bounds(&options)?,
+                store_limits,
+                max_output_bytes,
+                positive_u64(&options, "--lease-expires-after")?.get(),
+                LocalMetadataPermission::authorize_local_metadata_only(),
+                &AtomicBool::new(false),
+            )
+            .map_err(|_| "invalid exact retrieval request")?,
+        ),
         "build" => {
             let project_store_root = PathBuf::from(required(&options, "--store-root")?);
             let bounds = parse_search_bounds(&options)?;

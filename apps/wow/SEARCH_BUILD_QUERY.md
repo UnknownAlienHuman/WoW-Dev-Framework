@@ -1,5 +1,51 @@
 # Native exact-generation search
 
+## Explicit retained retrieval
+
+`wow search retrieve` binds an exact retained file-set handle and accepts
+`--query-json` instead of a mandatory known file/literal pair. It uses the same
+generation/shard/object/profile, finite Search/Store/output/lease bounds and
+explicit metadata permission as durable query. It selects the file-set reader;
+a single-file or incompatible profile refuses without fallback.
+
+The closed query schema is `wow-search/project-file-set-retrieval-request/1`:
+
+```json
+{
+  "schema": "wow-search/project-file-set-retrieval-request/1",
+  "query": {"class": "mixed", "entity_id": "project-file:group/beta.lua", "prefix": "group/", "text": "group"},
+  "enabled_lanes": ["exact_identity", "identifier_prefix", "literal_text"],
+  "required_lanes": ["exact_identity", "identifier_prefix", "literal_text"],
+  "max_scanned_documents": 64,
+  "max_candidates": 16,
+  "max_signals": 48,
+  "max_manifest_bytes": 262144
+}
+```
+
+Other query classes are `exact_entity` with `entity_id`, `identifier_prefix` with
+`prefix`, and `literal_text` with `text`. Prefix is case-sensitive over the actual
+relative-path label, with at least two UTF-8 bytes; it stays Candidate. Text uses
+the existing quoted native literal-phrase FTS and stays Candidate. Neither label
+lane invents a canonical API name or alias. Required unavailable name/alias/member/
+similarity/shape/graph lanes return explicit `lane_unavailable` with their states.
+
+The owner materializes the complete retained candidate ordering before delivery.
+Exact identity band0 dominates prefix band5 and text band7; candidates merge all
+signals in canonical lane order. The ranking tuple is band ascending, best
+canonical lane ordinal ascending, then `u32::MAX - reciprocal_rank_sum` ascending;
+each contribution is integer `1000000 / (60 + rank)`. Ties end with exact entity
+ID bytes. Physical FTS ordinal/rowid and raw BM25 do not determine this profile's
+rank. Every signal retains owner record/value digests, field role, normalization,
+prefix byte range where applicable, and source coverage/conflicts.
+
+`exact_found` exits0. `candidate_only`, `exact_not_found_partial`, approximate
+empty, unavailable required lanes and explicit truncation exit2; all keep
+`absence_authoritative=false`. Candidate/work caps are distinct from paging.
+The immutable `search-result-set` manifest and journal response replay exactly;
+this operation advertises no cursor or continuation. Full E4 projections/lanes,
+corpus/fault/platform qualification and retained continuation remain #169.
+
 ## Durable selected shard
 
 `index build` and `index retire` also accept an explicit `--file-ids` JSON array

@@ -49,6 +49,14 @@ public consumers are explicit one-shot build/query and the selected durable
 build/query/source-hold/retire/GC lifecycle. Original single-file handles remain
 exact; full E4/fault/platform acceptance remains open in #169.
 
+Explicit retained retrieval adds a closed query over the file-set component:
+exact entity, case-sensitive metadata-label prefix and native literal FTS with
+independent lane states, immutable candidate ordering, authority-banded ordinal
+fusion and field-origin explanations. Missing exact IDs stay partial; text misses
+and approximate matches carry no absence authority. Unsupported required lanes
+are unavailable. Canonical API names/aliases are not inferred from labels or
+opaque owner payload. Continuation is not advertised by this query profile.
+
 E4-A defines:
 
 - separate immutable user-project, Blizzard UI source, and ReferenceView search shards;

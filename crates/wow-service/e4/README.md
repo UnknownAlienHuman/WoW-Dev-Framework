@@ -1,6 +1,10 @@
 # `wow-service` E4-C search, lineage, migration, impact, and context-handoff contract
 
-**Status:** partial executable one-ProjectFile Search build/query and selected durable shard lifecycle. Only the implemented subset in the contract is active; broader E4-C and lineage/migration/impact/context handoff remain unaccepted in #169/#125. See [native Search commands](../../../apps/wow/SEARCH_BUILD_QUERY.md).
+**Status:** partial functional ProjectFile/set Search, durable lifecycle and
+explicit retained identity/prefix/literal retrieval with ranked result manifests.
+Only the implemented subset is active; broader E4-C, projections/lanes and
+retained continuation remain unaccepted in #169/#125. See
+[native Search commands](../../../apps/wow/SEARCH_BUILD_QUERY.md).
 
 **Contract ID:** `wow-service/e4-c/search-lineage-impact-use-cases`
 

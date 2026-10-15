@@ -3,6 +3,11 @@ use std::collections::BTreeSet;
 
 use super::*;
 
+mod retrieval;
+pub use retrieval::{
+    RetrievalRequest, RetrievalResult, RetrievalState, SearchQuery, SearchRetrievalLane,
+};
+
 const PROFILE_SCHEMA: &str = "wow-search/project-file-set-local-metadata-profile/1";
 const MANIFEST_SCHEMA: &str = "wow-search/project-file-set-shard-manifest/1";
 

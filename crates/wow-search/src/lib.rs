@@ -30,8 +30,9 @@ pub use wow_store::search::SearchStoreLeaseRequest;
 
 mod file_set;
 pub use file_set::{
-    PreparedProjectFileSetShard, ProjectFileSetSelection, SearchFileSetBuildProfile,
-    SearchFileSetOpenRequest, SearchFileSetPrepareRequest, SearchFileSetShard,
+    PreparedProjectFileSetShard, ProjectFileSetSelection, RetrievalRequest, RetrievalResult,
+    RetrievalState, SearchFileSetBuildProfile, SearchFileSetOpenRequest,
+    SearchFileSetPrepareRequest, SearchFileSetShard, SearchQuery, SearchRetrievalLane,
     open_project_file_set_shard, prepare_project_file_set_shard,
 };
 

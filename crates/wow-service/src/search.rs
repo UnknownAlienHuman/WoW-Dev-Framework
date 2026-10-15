@@ -4,6 +4,8 @@
 //! and it requires explicit finite owner, Store, lease, and output bounds.
 
 mod documents;
+mod retrieval;
+pub use retrieval::SearchRetrievalRequest;
 mod file_set;
 use documents::{Documents, Profile as DurableProfile, Selection as DurableSelection};
 
@@ -447,6 +449,13 @@ pub struct SearchOperationService {
 }
 
 impl SearchOperationService {
+    pub fn retrieve_shard(
+        &self,
+        request: &SearchRetrievalRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        retrieval::execute(request, stop)
+    }
     #[must_use]
     pub fn new() -> Self {
         Self::default()
