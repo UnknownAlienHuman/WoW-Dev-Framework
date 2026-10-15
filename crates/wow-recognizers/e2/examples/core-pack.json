@@ -39,7 +39,7 @@
       "core.signal.cvar_callback@1",
       "core.hook.set_script@1",
       "core.hook.hook_script@1",
-      "core.hook.secure_posthook@1",
+      "core.hook.secure_posthook@2",
       "core.library.libstub_require@1",
       "core.library.libstub_new@1",
       "core.state.saved_variable_root@1",
@@ -165,39 +165,47 @@
       },
       {
         "rule_id": "core.hook.secure_posthook",
-        "version": 1,
-        "required_capabilities": [
-          "emmy.fact.references",
-          "emmy.fact.calls"
-        ],
-        "scope": "file-or-function",
+        "version": 2,
+        "required_capabilities": ["emmy.fact.calls"],
+        "scope": "function",
         "clauses": [
           {
             "op": "fact",
             "as": "call",
-            "kind": "LuaCallFact"
-          },
-          {
-            "op": "fact",
-            "as": "callee",
-            "kind": "LuaReferenceFact"
-          },
-          {
-            "op": "join",
-            "left": "call.callee_reference_fact_id",
-            "right": "callee.source_fact_id"
+            "kind": "lua_call"
           },
           {
             "op": "field_eq",
-            "field": "callee.resolved_symbol_key",
+            "field": "call.callable_key",
             "value": "hooksecurefunc"
+          },
+          {
+            "op": "field_eq",
+            "field": "call.colon_call",
+            "value": false
+          },
+          {
+            "op": "field_eq",
+            "field": "call.secure_api_provenance",
+            "value": true
+          },
+          {
+            "op": "any_of",
+            "clauses": [
+              {"op":"field_eq","field":"call.secure_signature_kind","value":"global_name_string"},
+              {"op":"field_eq","field":"call.secure_signature_kind","value":"global_name_dynamic"},
+              {"op":"field_eq","field":"call.secure_signature_kind","value":"table_member_string"},
+              {"op":"field_eq","field":"call.secure_signature_kind","value":"table_member_dynamic"}
+            ]
           }
         ],
-        "confidence_policy": "Derived when target and callback resolve exactly; Possible otherwise",
+        "confidence_policy": "Derived only for exact selected Library API and Main target/callback; unresolved target has no graph edge, unresolved callback is at most Possible; known invalid types, wrong arity and Main shadows do not match",
         "outputs": [
           {
             "kind": "relation_assertion",
             "relation_kind_id": "hooks",
+            "source": "call.caller",
+            "target": "call.target_endpoint",
             "attributes": {
               "hook_kind": "secure_posthook",
               "safety_claim": null

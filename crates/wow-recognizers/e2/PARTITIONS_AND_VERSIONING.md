@@ -20,9 +20,17 @@ runtime rule set: the exact selected pack ID/version/digest owns its rule
 versions. A native adapter pack and the shared core example are distinct packs.
 `capability_routing` separately records current availability. In particular,
 `core.library.embed@1` remains declared but `not-evaluated`, blocked by #159;
-the executable shared pack omits the unsupported rule. The explicit xtask owner
+the shared core candidate omits the unsupported rule. The explicit xtask owner
 map rejects both a false functional embed claim and the old misleading
 `active_rule_ids` field. This metadata change accepts no fixture or checksum.
+
+The selected W5 native pack/profile 6 implements secure-posthook rule 2. Its
+Library provenance, typed argument/endpoint checks and null-free receipt shape
+are bound to that private pack identity; the declared capability remains
+`core.hook.secure_posthook@1`. The shared core example is a separate unreleased
+`e2-2` candidate with null acceptance pins. Its W5 rule-2 update is consolidated
+before acceptance rather than minting another development pack version; it does
+not establish a frozen global runtime pack or complete W11 acceptance.
 
 ## Pack version
 

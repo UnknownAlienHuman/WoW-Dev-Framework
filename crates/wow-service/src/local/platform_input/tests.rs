@@ -5,6 +5,7 @@ mod event_registry_keys;
 mod function_fingerprints;
 mod native_type_resolution;
 mod project_budgets;
+mod w5_secure_hooks;
 mod xml_classification;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};

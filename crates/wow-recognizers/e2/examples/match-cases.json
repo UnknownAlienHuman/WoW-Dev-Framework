@@ -112,7 +112,7 @@
     },
     {
       "case_id": "RECOG-HOOK-003",
-      "rule_id": "core.hook.secure_posthook@1",
+      "rule_id": "core.hook.secure_posthook@2",
       "input_variant": "complete",
       "expected_outcome": "Matched",
       "expected_relation_kind": "hooks",

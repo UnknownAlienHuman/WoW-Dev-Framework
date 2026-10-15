@@ -153,16 +153,24 @@ Match exact `SetScript` call. Emit `sets_script` relation with object, script na
 
 Match exact `HookScript` call. Emit `hooks` relation with `hook_kind=script_posthook` (or frozen exact semantic kind). It does not claim protected/forbidden/taint safety.
 
-### `core.hook.secure_posthook@1`
+### `core.hook.secure_posthook@2`
 
-Match exact `hooksecurefunc` forms:
+Require the exact selected Library `hooksecurefunc` target, not a Main shadow.
+Admit the donor argument forms with string values in name/member positions:
 
 ```text
 hooksecurefunc(globalName, callback)
 hooksecurefunc(table, methodName, callback)
 ```
 
-Emit `hooks` relation for exact target/callback; dynamic target is Possible. Do not recognize global assignment/override as a safe hook. No combat/taint guarantee.
+An exact Main target and callback permit a Derived registration-site relation
+from the calling function to the target function. Unresolved targets do not
+produce a graph edge; a known target with unresolved callback is at most Possible.
+Resolve names only through the existing selected Emmy callable targets; a local
+string initializer does not create a new lookup. Known boolean/nil/integer string
+slots, invalid callback values and wrong arities do not match. Absent receipt
+endpoints/member names are omitted, preserving canonical JSON without null.
+No callback execution, combat/taint safety or global assignment safety is claimed.
 
 ## 6. Library family
 
