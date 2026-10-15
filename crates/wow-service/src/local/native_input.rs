@@ -714,6 +714,8 @@ impl LocalProjectInput {
                 analyzer,
                 physical_function_declarations: None,
                 physical_function_signatures: None,
+                function_call_budget: None,
+                hook_target_recipe: None,
             },
             reference.view,
             main,

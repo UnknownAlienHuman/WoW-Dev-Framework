@@ -429,13 +429,15 @@ impl ProjectReplay {
         }
         let schema = self.expected_base_schema()?;
         if self.configuration.hook_target_recipe().is_some() {
+            // Retained platform owners keep their retention requirement.
             if !self.function_calls
-                || !self
-                    .platform
-                    .as_ref()
-                    .is_some_and(ReplayPlatform::has_retention_limits)
                 || self.configuration.function_call_budget().is_none()
                 || self.uses_legacy_global_access_profile9()
+                || (self.configuration.is_platform()
+                    != self
+                        .platform
+                        .as_ref()
+                        .is_some_and(ReplayPlatform::has_retention_limits))
             {
                 return Err(invalid());
             }
@@ -443,7 +445,7 @@ impl ProjectReplay {
                 schema,
                 &self.configuration,
                 self.function_calls,
-                false,
+                self.supports_physical_update(),
             );
         }
         if self.configuration.function_call_evidence_profile()
@@ -843,7 +845,6 @@ fn selected_component_schema(
         selected_component_base_schema(base, configuration, function_calls, physical_primary)?;
     let selected = if configuration.hook_target_recipe().is_some() {
         if !function_calls
-            || !configuration.is_platform()
             || configuration.function_call_budget().is_none()
             || matches!(
                 base,
@@ -851,6 +852,12 @@ fn selected_component_schema(
                     | GRAPH_METADATA_BUDGET_REPLAY_SCHEMA
                     | GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA
             )
+        {
+            return Err(invalid());
+        }
+        // Ordinary inputs reuse the existing Library-bound physical owner.
+        if !configuration.is_platform()
+            && (!physical_primary || base != LIBRARY_BOUND_REPLAY_SCHEMA)
         {
             return Err(invalid());
         }

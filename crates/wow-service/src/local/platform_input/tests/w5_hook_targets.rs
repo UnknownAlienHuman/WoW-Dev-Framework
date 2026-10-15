@@ -58,6 +58,10 @@ fn literal_fixture(selected: bool) -> TestResult<(FixtureRoot, Value)> {
 #[test]
 fn canonical_hook_literals_reach_service_graph_readback() -> TestResult {
     let (root, _) = literal_fixture(true)?;
+    assert_literal_graph_readback(&root)
+}
+
+fn assert_literal_graph_readback(root: &FixtureRoot) -> TestResult {
     let stop = AtomicBool::new(false);
     let input = LocalProjectInput::from_config_path(&root.0.join("project.json"), &stop)?;
     let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
@@ -300,5 +304,64 @@ fn canonical_hook_literals_replay_source_absent_preserves_original_ids_and_old_r
             if selected { 3 } else { 0 }
         );
     }
+    Ok(())
+}
+
+#[test]
+fn ordinary_hook_literals_public_input_graph_and_source_absent_publication() -> TestResult {
+    let (root, config) = literal_fixture(true)?;
+    let profile = write_json(
+        &root,
+        "profile.json",
+        &config["source_profile"]["target"]["reference_profile"],
+    )?;
+    let main = ProjectDiskFile::new("main.lua").with_identity(
+        digest(LITERAL_SOURCE.as_bytes()),
+        LITERAL_SOURCE.len() as u64,
+    );
+    let ordinary = json!({
+        "schema": "wow-service/local-primary-callables-files/1",
+        "project_id": config["project_id"],
+        "workspace_id": config["workspace_id"],
+        "source_origin_id": config["source_origin_id"],
+        "logical_root": "fixtures/ordinary-hook-targets",
+        "profile": profile,
+        "reference_view": config["reference_view"],
+        "analyzer": config["analyzer"],
+        "main": {"root": "UI", "files": [main]},
+        "library": config["library"],
+        "physical_function_declarations": config["physical_function_declarations"],
+        "function_call_budget": config["project_budgets"]["function_calls"],
+        "hook_target_recipe": config["project_budgets"]["hook_target_recipe"],
+    });
+    write_json(&root, "project.json", &ordinary)?;
+    let stop = AtomicBool::new(false);
+    let store_path = root.0.join("ordinary-store");
+    crate::live_project::publish_local_project(
+        &root.0.join("project.json"),
+        &GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?,
+        &store_path,
+        &crate::live_project::LiveProjectPublishRequest::new(
+            "fixture:ordinary-hook-literals",
+            "absent",
+            true,
+            true,
+        )?,
+        &stop,
+    )?;
+    let before = serde_json::to_value(crate::live_project::read_live_project(
+        &store_path,
+        "current",
+        &stop,
+    )?)?;
+    // The same public graph/readback assertions also remove the original sources.
+    assert_literal_graph_readback(&root)?;
+    let after = serde_json::to_value(crate::live_project::read_live_project(
+        &store_path,
+        "current",
+        &stop,
+    )?)?;
+    assert_eq!(after["pair"], before["pair"]);
+    assert!(after["pair"]["project_snapshot_id"].is_string());
     Ok(())
 }

@@ -52,10 +52,12 @@ fn write_json(
 }
 
 fn fixture() -> TestResult<(FixtureRoot, Value)> {
+    static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let path = std::env::temp_dir().join(format!(
-        "wow-platform-transport-{}-{}",
+        "wow-platform-transport-{}-{}-{}",
         std::process::id(),
-        SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+        SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos(),
+        SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
     ));
     std::fs::create_dir(&path)?;
     let root = FixtureRoot(path);

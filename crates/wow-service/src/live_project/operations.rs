@@ -237,6 +237,16 @@ pub(super) fn publish_input(
             LiveProjectStore::create_native_library_input(root, &owner)?
         } else if schema == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1[0] {
             LiveProjectStore::create_primary_callables(root, &owner)?
+        } else if schema == publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1[0] {
+            // Select the registered catalog from the actual replay record.
+            LiveProjectStore {
+                store: wow_store::project::ProjectStore::create_with_gc(
+                    root,
+                    &owner,
+                    super::catalog_for(publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1)?,
+                )
+                .map_err(super::store_error)?,
+            }
         } else {
             LiveProjectStore::create(root, &owner)?
         }

@@ -130,6 +130,8 @@ pub(super) struct ProjectMetadata {
     pub(super) analyzer: AnalyzerInput,
     pub(super) physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
     pub(super) physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
+    pub(super) function_call_budget: Option<wow_emmy::function_calls::FunctionCallBudget>,
+    pub(super) hook_target_recipe: Option<wow_emmy::function_calls::HookTargetRecipe>,
 }
 
 #[derive(Deserialize)]
@@ -171,6 +173,8 @@ impl LocalProjectInput {
                 analyzer: input.analyzer,
                 physical_function_declarations: None,
                 physical_function_signatures: None,
+                function_call_budget: None,
+                hook_target_recipe: None,
             },
             input.reference_view,
             admit_files(input.main_files, ProjectFileRole::FirstPartyMain)?,
@@ -321,7 +325,7 @@ impl LocalProjectInput {
                 (1024, 16 * 1024 * 1024)
             }
         };
-        let policy = match platform.as_ref().and_then(|input| input.budgets) {
+        let mut policy = match platform.as_ref().and_then(|input| input.budgets) {
             Some(policy) => {
                 if platform
                     .as_ref()
@@ -342,6 +346,12 @@ impl LocalProjectInput {
             )
             .map_err(|_| invalid("invalid local project budgets"))?,
         };
+        if let Some(budget) = input.function_call_budget {
+            policy = policy.with_function_call_budget(budget);
+        }
+        if let Some(recipe) = input.hook_target_recipe {
+            policy = policy.with_hook_target_recipe(recipe);
+        }
         let configuration = ProjectConfigurationBuilder::new(
             input.project_id,
             kind,

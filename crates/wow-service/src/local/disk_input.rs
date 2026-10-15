@@ -47,6 +47,10 @@ struct DiskInput {
     physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
     #[serde(default, deserialize_with = "super::native_resources::present")]
     physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
+    #[serde(default, deserialize_with = "super::native_resources::present")]
+    function_call_budget: Option<wow_emmy::function_calls::FunctionCallBudget>,
+    #[serde(default, deserialize_with = "super::native_resources::present")]
+    hook_target_recipe: Option<wow_emmy::function_calls::HookTargetRecipe>,
 }
 
 #[derive(Deserialize)]
@@ -165,6 +169,8 @@ impl LocalProjectInput {
             }
         } else if input.physical_function_declarations.is_some()
             || input.physical_function_signatures.is_some()
+            || input.function_call_budget.is_some()
+            || input.hook_target_recipe.is_some()
         {
             return Err(invalid(
                 "callable recipes require the primary callable files schema",
@@ -224,6 +230,8 @@ impl LocalProjectInput {
                 analyzer,
                 physical_function_declarations: input.physical_function_declarations,
                 physical_function_signatures: input.physical_function_signatures,
+                function_call_budget: input.function_call_budget,
+                hook_target_recipe: input.hook_target_recipe,
             },
             reference,
             main,
@@ -294,6 +302,8 @@ impl LocalProjectInput {
                 analyzer,
                 physical_function_declarations: None,
                 physical_function_signatures: None,
+                function_call_budget: None,
+                hook_target_recipe: None,
             },
             reference,
             main,

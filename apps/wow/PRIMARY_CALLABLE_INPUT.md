@@ -22,6 +22,8 @@ Declaration-only, signature-only and combined selection share this one family.
 | `library` | Independent explicit root and nonempty files inventory of analyzer Library Lua |
 | `physical_function_declarations` | Optional `wow-emmy/physical-function-declaration-syntax/1` (DeclaredSyntaxV1) |
 | `physical_function_signatures` | Optional `wow-emmy/physical-function-indexed-types/1` (IndexedTypesV1) |
+| `hook_target_recipe` | Optional `hook_target_literals_v1`, with an explicit `function_call_budget` |
+| `function_call_budget` | Existing bounded native FunctionCallBudget; admitted here only with the hook recipe |
 
 Pinned metadata references retain `path`, `content_digest` and `byte_length`.
 Source file entries retain the existing path and optional digest/length pair;
@@ -40,6 +42,14 @@ schemas retain their unselected contract; use the original schema when neither
 recipe is wanted rather than an empty selected envelope.
 
 ## Native observations and context
+
+The optional hook recipe resolves arbitrary literal global-name and exact Main
+table/member targets in the existing Main/Library analyzer session. Select
+DeclaredSyntaxV1 to retain exact global callback declarations in the graph.
+Dynamic, shadowed, ambiguous and unsupported targets or callbacks remain
+conservative. It does not establish runtime hook execution or safety. Omit both
+new fields to preserve the existing query, configuration and replay identities;
+explicit null or unknown selections refuse.
 
 Selections bind ProjectConfiguration and its derived identity, then the genuine
 function-call report built in the same native Main/Library session. DeclaredSyntaxV1
@@ -74,6 +84,12 @@ CLI flag is introduced. [context inspect](CONTEXT_INSPECT.md) and
 [context build](CONTEXT_BUILD.md) retain their existing explicit host, store,
 publication, exact root, level and profile grammar over the acquired native pair.
 Their host Reference/profile must match; neither command selects analyzer recipes.
+
+With the hook recipe, publication selects the existing selected-components
+replay/catalog instead of the unselected Primary callable catalog. The retained
+recipe and native source bytes reconstruct the original Project/Graph pair after
+the source files are unavailable. This is an explicit component selection, with
+no migration or widening of an existing store catalog.
 
 The config-loading publish/update operation binds its frontend graph request to
 the admitted configuration, then preflights it, as the existing selected route

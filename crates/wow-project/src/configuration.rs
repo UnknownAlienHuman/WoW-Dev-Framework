@@ -750,7 +750,15 @@ impl ProjectConfiguration {
                 self.package_main_plan(),
             )?;
         }
-        if (self.budget_policy.function_call_budget().is_some()
+        // The closed hook recipe also runs in the explicit Main/Library session.
+        // Other selected call budgets still require retained platform packages.
+        let plain_function_call_budget = self.budget_policy.function_call_budget().is_some()
+            && !(self.budget_policy.hook_target_recipe().is_some()
+                && matches!(
+                    self.project_kind,
+                    ProjectKind::Fixture | ProjectKind::Repository
+                ));
+        if (plain_function_call_budget
             || self
                 .budget_policy
                 .function_call_evidence_profile()
@@ -778,6 +786,30 @@ impl ProjectConfiguration {
                 ProjectPhase::Configuration,
                 "selected function-call evidence profiles require an explicit function-call budget",
             ));
+        }
+        if self.budget_policy.hook_target_recipe().is_some() {
+            let ordinary_main = matches!(
+                self.project_kind,
+                ProjectKind::Fixture | ProjectKind::Repository
+            ) && self.load_plan_digest.is_none()
+                && self.package_load_plan_digest.is_none()
+                && self.package_main_plan_digest.is_none()
+                && self.package_xml_binding_profile.is_none()
+                && self.platform_graph_profile.is_none()
+                && self.xml_schema_classification.is_none();
+            if !ordinary_main
+                && !(matches!(self.project_kind, ProjectKind::BlizzardUiPlatformSource)
+                    && self
+                        .platform_packages()
+                        .and_then(|packages| packages.retention_limits())
+                        .is_some())
+            {
+                return Err(ProjectError::new(
+                    ProjectErrorCode::InvalidBudgetPolicy,
+                    ProjectPhase::Configuration,
+                    "selected hook-target literal recipe requires retained platform packages or explicit Main inputs",
+                ));
+            }
         }
         if self.budget_policy.source_graph_budget().is_some()
             && (self.platform_graph_profile.is_none()

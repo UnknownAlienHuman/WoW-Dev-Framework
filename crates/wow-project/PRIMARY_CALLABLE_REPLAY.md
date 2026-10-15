@@ -19,6 +19,14 @@ STORAGE_SCHEMA_CATALOGS. Prior catalog memberships/epochs are not widened.
 Declaration-only, signature-only and combined selection use this same family,
 with exact choices retained in configuration.
 
+An explicit HookTargetLiteralsV1 component selects the existing
+`wow-project/native-project-replay/selected-components/1` envelope and
+`STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1` catalog instead. It retains its finite
+function-call budget and the same physical Main/Library custody. Capture and
+hydrate admit this component on the ordinary explicit physical route as well as
+the retained native platform route; neither reader fabricates a platform owner.
+Omitting it preserves the original Primary callable family and identities.
+
 Admission requires ordinary Fixture/Repository physical Main plus exact separate
 Library snapshots and function-call analysis. At least one configuration recipe
 must be selected: PhysicalFunctionDeclarationRecipe::DeclaredSyntaxV1 and/or
