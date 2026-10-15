@@ -31,6 +31,9 @@ const PROJECT_CONTRACT: &str = "crates/wow-project/CONTRACT.json";
 const PROJECT_MANIFEST: &str = "crates/wow-project/examples/CHECKSUMS.json";
 const RECOGNIZER_CONTRACT: &str = "crates/wow-recognizers/e2/CONTRACT.json";
 const RECOGNIZER_MANIFEST: &str = "crates/wow-recognizers/e2/examples/CHECKSUMS.json";
+const RECOGNIZER_OWNER_ID: &str = "wow-recognizers/e2-b/core-structural-rules";
+const RECOGNIZER_DECLARED_SCOPE: &str = "Declared core capability identities, not a list of executable rules; actual pack/rule versions are bound by each selected immutable pack. Deferred capabilities remain explicit NotEvaluated.";
+const DEFERRED_EMBED_CAPABILITY: &str = "core.library.embed@1";
 
 struct CapabilitySpec {
     name: &'static str,
@@ -1072,7 +1075,7 @@ const OWNERS: &[OwnerSpec] = &[
         manifest_history_is_object: false,
         application_selection: Some("application-selected"),
         operation_matrix_matches_capabilities: false,
-        capability_matrix_field: Some("active_rule_ids"),
+        capability_matrix_field: Some("declared_rule_ids"),
         canonical_issue: Some(103),
         required_blocking_issues: &[103, 120],
     },
@@ -1204,8 +1207,21 @@ fn validate_contract(owner: &OwnerSpec, value: &Value, files: &BTreeSet<&str>) -
         "partial-functional-freeze-open",
         owner.canonical_issue.unwrap_or(120),
     )?;
-    if value["schema_version"].as_u64() != Some(2) || text(value, "contract_id")? != owner.id {
+    let schema_version = if owner.id == RECOGNIZER_OWNER_ID {
+        3
+    } else {
+        2
+    };
+    if value["schema_version"].as_u64() != Some(schema_version)
+        || text(value, "contract_id")? != owner.id
+    {
         return Err("machine-state contract identity/schema mismatch".into());
+    }
+    if owner.id == RECOGNIZER_OWNER_ID
+        && (value.get("active_rule_ids").is_some()
+            || text(value, "declared_rule_identity_scope")? != RECOGNIZER_DECLARED_SCOPE)
+    {
+        return Err("recognizer declared identities must not claim runtime activation".into());
     }
     if owner
         .canonical_issue
@@ -1533,10 +1549,21 @@ fn validate_capabilities(
             .iter()
             .find(|row| row["capability"].as_str() == Some(expected.name))
             .ok_or("required selected capability is absent")?;
-        if text(row, "status")? != "partial-functional"
-            || text(row, "acceptance_status")? != "pending"
+        let expected_status =
+            if owner.id == RECOGNIZER_OWNER_ID && expected.name == DEFERRED_EMBED_CAPABILITY {
+                "not-evaluated"
+            } else {
+                "partial-functional"
+            };
+        if text(row, "status")? != expected_status || text(row, "acceptance_status")? != "pending" {
+            return Err("mapped capability availability/acceptance differs from its owner".into());
+        }
+        if expected_status == "not-evaluated"
+            && !row["blocking_issues"]
+                .as_array()
+                .is_some_and(|issues| issues.iter().any(|issue| issue.as_u64() == Some(159)))
         {
-            return Err("mapped capability must remain partial-functional/pending".into());
+            return Err("deferred embed capability must retain its concrete blocker".into());
         }
         require_routes(&row["owners"], expected.owners)?;
         require_routes(&row["application_routes"], expected.application_routes)?;
@@ -1637,6 +1664,12 @@ mod tests {
             }
             let mut row = json!({"capability":capability.name,"status":"partial-functional",
                 "owners":owners,"application_routes":routes,"acceptance_status":"pending","blocking_issues":blockers});
+            if spec.id == RECOGNIZER_OWNER_ID && capability.name == DEFERRED_EMBED_CAPABILITY {
+                row["status"] = json!("not-evaluated");
+                if let Some(issues) = row["blocking_issues"].as_array_mut() {
+                    issues.push(json!(159));
+                }
+            }
             if let Some(selection) = capability.application_selection {
                 row["application_selection"] = json!(selection);
             }
@@ -1667,6 +1700,10 @@ mod tests {
             "operations":operations,"capability_routing":routing});
         if let Some(selection) = spec.application_selection {
             contract["application_selection"] = json!(selection);
+        }
+        if spec.id == RECOGNIZER_OWNER_ID {
+            contract["schema_version"] = json!(3);
+            contract["declared_rule_identity_scope"] = json!(RECOGNIZER_DECLARED_SCOPE);
         }
         if let Some(field) = spec.capability_matrix_field {
             contract[field] = json!(
@@ -2212,14 +2249,14 @@ mod tests {
         check(spec, contract.clone(), manifest.clone(), &files)?;
         assert!(manifest.get("implementation_state").is_none());
 
-        let active = contract["active_rule_ids"]
+        let declared = contract["declared_rule_ids"]
             .as_array()
-            .ok_or("active_rule_ids must be an array")?;
+            .ok_or("declared_rule_ids must be an array")?;
         let routes = contract["capability_routing"]
             .as_array()
             .ok_or("capability_routing must be an array")?;
-        assert_eq!(active.len(), 26);
-        assert_eq!(routes.len(), active.len());
+        assert_eq!(declared.len(), 26);
+        assert_eq!(routes.len(), declared.len());
         assert_eq!(
             text(&contract, "application_selection")?,
             "application-selected"
@@ -2240,9 +2277,16 @@ mod tests {
             text(&contract["preimplementation_freeze"], "evaluation")?,
             "NotEvaluated"
         );
-        for (identity, route) in active.iter().zip(routes) {
+        for (identity, route) in declared.iter().zip(routes) {
             assert_eq!(identity.as_str(), route["capability"].as_str());
-            assert_eq!(text(route, "status")?, "partial-functional");
+            assert_eq!(
+                text(route, "status")?,
+                if identity.as_str() == Some(DEFERRED_EMBED_CAPABILITY) {
+                    "not-evaluated"
+                } else {
+                    "partial-functional"
+                }
+            );
             assert_eq!(text(route, "acceptance_status")?, "pending");
             let blockers = route["blocking_issues"]
                 .as_array()
@@ -2303,8 +2347,24 @@ mod tests {
         assert!(validate_manifest(spec, &accepted_manifest).is_err());
 
         let mut stale_rule_matrix = contract.clone();
-        stale_rule_matrix["active_rule_ids"][25] = json!("core.future.rule@1");
+        stale_rule_matrix["declared_rule_ids"][25] = json!("core.future.rule@1");
         assert!(validate_contract(spec, &stale_rule_matrix, &files).is_err());
+
+        let mut stale_activation = contract.clone();
+        stale_activation["active_rule_ids"] = stale_activation["declared_rule_ids"].clone();
+        assert!(validate_contract(spec, &stale_activation, &files).is_err());
+        let mut stale_schema = contract.clone();
+        stale_schema["schema_version"] = json!(2);
+        assert!(validate_contract(spec, &stale_schema, &files).is_err());
+        let mut fake_embed = contract.clone();
+        let embed = fake_embed["capability_routing"]
+            .as_array_mut()
+            .ok_or("capability_routing must be an array")?
+            .iter_mut()
+            .find(|row| row["capability"].as_str() == Some(DEFERRED_EMBED_CAPABILITY))
+            .ok_or("deferred embed row is absent")?;
+        embed["status"] = json!("partial-functional");
+        assert!(validate_contract(spec, &fake_embed, &files).is_err());
 
         let mut type_only_owner = contract.clone();
         type_only_owner["capability_routing"][0]["owners"][0]["symbol"] = json!("SourceTocFamily");

@@ -524,8 +524,17 @@ field declaration is never substituted for its prefix or promoted to runtime
 environment authority. Unrelated declaration-name mismatches still refuse.
 An optional `FunctionCallBudget.global_access` selects cumulative positive work
 and text ceilings through `GlobalAccessBudget`; absence preserves the original
-2,000,000-work/8-MiB-text admission. Its explicit values bind report9, while
-omitted report7/8 recipes remain unchanged. A private immutable location index
+2,000,000-work/8-MiB-text admission. Its explicit values and local-constant
+custody bind report10, while omitted report7/8 recipes remain unchanged. Report10
+may attach a typed integer or bounded string initializer to a call argument
+only when Emmy's same-file declaration/reference indexes resolve the exact local,
+the declaration's exact initializer syntax is a direct scalar literal (with
+transparent parentheses only), no indexed write exists, and every indexed use
+stays in the declaration's closure. It retains the local spelling, declaration
+and initializer spans; the argument use span and enclosing call span remain on
+their existing call records. Reassigned, captured, aliased, computed, missing,
+or inexact values remain absent. Omitted report7/8 recipes remain unchanged. A
+private immutable location index
 serves exact callee/argument/receiver joins by file, function and span. It is
 excluded from serialization and identity, preserves every observation and
 refuses the same post-filter ambiguities. It grants no new source authority.
@@ -535,5 +544,10 @@ candidate guard still runs before resolution. Encoded-output refusal retains the
 original 128-byte identity reserve and reports the counts already collected;
 the attempted byte count is a lower bound, not the complete encoded size.
 Successful bytes, identities, capacities and cancellation behavior are unchanged.
+The former global-access report9 remains an explicit replay-only recipe for
+retained Project schema13/14/15 archives. It does not collect local constants and
+keeps report9's identity inputs; new global-access analysis uses report10. Project
+selects the legacy recipe only from those exact replay schemas, never by retry,
+hash, or a report-name fallback.
 See [the source-state route](../../apps/wow/GRAPH_BUILD.md#typed-literal-keys-and-lexical-aliases)
 for admission limits, serialization versions and deferred cases.

@@ -26,7 +26,7 @@ use wow_graph::{
     GraphProposalValue, GraphRelationKind, GraphRelationProposal, GraphRelationProposalInput,
 };
 
-use wow_emmy::function_calls::FunctionCallReport;
+use wow_emmy::function_calls::{FunctionCallReport, SourceCallConstant};
 use wow_emmy::global_access::{GlobalAccessKind, GlobalAccessResolution};
 
 pub const SOURCE_STATE_PARTITION: &str = "wow-recognizers.saved-variable-access";
@@ -814,8 +814,9 @@ fn graph_error(error: wow_graph::GraphError) -> RecognizerError {
 
 // ===== BEGIN WORKER 6: library family =====
 
-// Exact LibStub/GetLibrary/NewLibrary/embed structural call facts -> the declarative
-// core library recognizer -> graph proposals. This producer consumes only
+// Exact LibStub/GetLibrary/NewLibrary structural call facts -> the declarative
+// core library recognizer -> graph proposals. Embedding remains deferred until a
+// donor-backed owner supplies its exact receiver/value-flow facts. This producer consumes only
 // generation-bound Emmy owner facts. It never reparses Lua, never executes Lua or
 // repository scripts, and never infers an upstream repository, a license, a loaded
 // revision, or an embed relation from a path or folder name such as Libs/.
@@ -833,31 +834,30 @@ use crate::{
 };
 
 pub const SOURCE_STATE_LIBRARY_PARTITION: &str = "wow-recognizers.lua-library";
-pub const SOURCE_STATE_LIBRARY_PROFILE: &str = "wow-recognizers/source-library/3";
+pub const SOURCE_STATE_LIBRARY_PROFILE: &str = "wow-recognizers/source-library/4";
 const W6_FACT_PARTITION: &str = "wow-recognizers.lua-library-facts";
-const W6_FACT_PROFILE: &str = "wow-recognizers-lua-library-facts-3";
+const W6_FACT_PROFILE: &str = "wow-recognizers-lua-library-facts-4";
 const W6_MAX_CALLS: usize = 8192;
 const W6_MAX_FUNCTIONS: usize = 8192;
 const W6_MAX_ARGUMENTS_RETAINED: usize = 3;
 const W6_MAX_LIBRARY_KEY_BYTES: usize = 256;
 const W6_MAX_PROPOSALS: usize = 65_536;
+// Reuse the existing bounded source-state entity-merge support ceiling.
+const W6_MAX_ENTITY_SUPPORT: usize = 64;
+const W6_RULE_VERSION: u32 = 2;
 const W6_REQUIRE_RULE: &str = "core.library.libstub_require";
 const W6_NEW_RULE: &str = "core.library.libstub_new";
-const W6_EMBED_RULE: &str = "core.library.embed";
 const W6_LIBSTUB_CALLABLE: &str = "LibStub";
 const W6_GET_LIBRARY_CALLABLE: &str = "LibStub.GetLibrary";
 const W6_NEW_LIBRARY_CALLABLE: &str = "LibStub.NewLibrary";
-const W6_EMBED_LIBRARY_CALLABLE: &str = "LibStub.EmbedLibrary";
-// The one structural embed convention this pack declares, with the exact member
-// order it fixes. Receiver, library and target must all be resolved before an embed
-// relation is emitted; otherwise the outcome stays Possible or produces no match.
 
 // Normative relation ids from RULE_FAMILIES.md section 6.
 const W6_REQUIRE_RELATION: &str = "lua_requires_library";
 const W6_NEW_RELATION: &str = "lua_declares_library";
 const W6_EMBED_RELATION: &str = "lua_embeds_library";
 const W6_LIBRARY_ENTITY: &str = "library";
-const W6_LIBRARY_RELATIONS: [&str; 3] = [W6_REQUIRE_RELATION, W6_NEW_RELATION, W6_EMBED_RELATION];
+const W6_LIBRARY_RELATIONS: [&str; 2] = [W6_REQUIRE_RELATION, W6_NEW_RELATION];
+const W6_DEFERRED_LIBRARY_RELATIONS: [&str; 1] = [W6_EMBED_RELATION];
 
 // Caller supplied crosswalks, checked against the owner source partition and the
 // real source/evidence records before any fact is built.
@@ -875,9 +875,12 @@ pub struct SourceLibraryInput<'a> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SourceLibraryMatch {
     pub call_id: String,
+    /// Complete LibStub major key, including any hyphens and suffix text.
     pub library_name: String,
     pub caller_proposal_id: String,
-    pub version: Option<String>,
+    /// LibStub minor is independent of the major key and absent unless the
+    /// normalized call facts provide an exact value.
+    pub minor: Option<i64>,
     pub relation_proposal_id: String,
     pub rule_id: &'static str,
     pub relation: &'static str,
@@ -920,17 +923,20 @@ struct W6Call {
     argument_0_kind: Option<&'static str>,
     argument_0_key: Option<String>,
     argument_0_value: Option<String>,
+    argument_0_local_constant_kind: Option<&'static str>,
     argument_1_kind: Option<&'static str>,
     argument_1_key: Option<String>,
     argument_1_value: Option<String>,
+    argument_1_local_constant_kind: Option<&'static str>,
+    argument_1_integer: Option<i64>,
     argument_2_kind: Option<&'static str>,
 }
 
-// One exact library key observed at one exact call site. The version string is
-// exact retained evidence about the key, never a loaded revision or ownership.
+// One exact LibStub major key and optional separately resolved minor observed at
+// one exact call site. Neither axis proves a loaded revision or ownership.
 struct W6LibraryKey {
-    name: String,
-    version: Option<String>,
+    major: String,
+    minor: Option<i64>,
 }
 
 // One pending relation from a matched rule, before the projection.
@@ -943,6 +949,88 @@ struct W6Relation {
     source_handle_ids: Vec<StableHandleId>,
     evidence_ids: Vec<EvidenceId>,
     coverage_ids: Vec<wow_core::CoverageId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct W6LibraryEntitySupport {
+    source_handle_ids: BTreeSet<StableHandleId>,
+    evidence_ids: BTreeSet<EvidenceId>,
+    coverage_ids: BTreeSet<wow_core::CoverageId>,
+    confidence: GraphConfidence,
+}
+
+impl Default for W6LibraryEntitySupport {
+    fn default() -> Self {
+        Self {
+            source_handle_ids: BTreeSet::new(),
+            evidence_ids: BTreeSet::new(),
+            coverage_ids: BTreeSet::new(),
+            confidence: GraphConfidence::Derived,
+        }
+    }
+}
+
+impl W6LibraryEntitySupport {
+    fn include(&mut self, relation: &W6Relation) -> RecognizerResult<()> {
+        self.source_handle_ids
+            .extend(relation.source_handle_ids.iter().copied());
+        self.evidence_ids
+            .extend(relation.evidence_ids.iter().copied());
+        self.coverage_ids
+            .extend(relation.coverage_ids.iter().copied());
+        if self.source_handle_ids.len() > W6_MAX_ENTITY_SUPPORT
+            || self.evidence_ids.len() > W6_MAX_ENTITY_SUPPORT
+            || self.coverage_ids.len() > W6_MAX_PROPOSALS
+        {
+            return Err(failure(RecognizerErrorCode::BudgetExceeded));
+        }
+        if relation.confidence == GraphConfidence::Possible {
+            self.confidence = GraphConfidence::Possible;
+        }
+        Ok(())
+    }
+
+    fn proposal(self, proposal_id: String, major: &str) -> RecognizerResult<GraphEntityProposal> {
+        GraphEntityProposal::new(
+            proposal_id,
+            W6_LIBRARY_ENTITY,
+            BTreeMap::from([(
+                "library".into(),
+                GraphProposalValue::String(major.to_owned().into_boxed_str()),
+            )]),
+            self.confidence,
+            self.source_handle_ids.into_iter().collect(),
+            self.evidence_ids.into_iter().collect(),
+            self.coverage_ids.into_iter().collect(),
+        )
+        .map_err(graph_error)
+    }
+}
+
+fn library_entity_proposal_id(
+    context_id: wow_core::GenerationContextId,
+    major: &str,
+) -> RecognizerResult<String> {
+    let digest = wow_core::domain_separated_digest(
+        "wow-recognizers/source-library-entity/4",
+        &(SOURCE_STATE_LIBRARY_PROFILE, context_id, major),
+    )
+    .map_err(|_| failure(RecognizerErrorCode::AdapterIdentityMismatch))?;
+    Ok(format!(
+        "w6-library-{}",
+        ContentDigest::<CanonicalResult>::from_bytes(digest)
+    ))
+}
+
+fn include_library_support(
+    entities: &mut BTreeMap<String, W6LibraryEntitySupport>,
+    major: &str,
+    relation: &W6Relation,
+) -> RecognizerResult<()> {
+    entities
+        .entry(major.to_owned())
+        .or_default()
+        .include(relation)
 }
 
 pub fn recognize_source_library(
@@ -1045,9 +1133,12 @@ pub fn recognize_source_library(
         let mut argument_0_kind = None;
         let mut argument_0_key = None;
         let mut argument_0_value = None;
+        let mut argument_0_local_constant_kind = None;
         let mut argument_1_kind = None;
         let mut argument_1_key = None;
         let mut argument_1_value = None;
+        let mut argument_1_local_constant_kind = None;
+        let mut argument_1_integer = None;
         let mut argument_2_kind = None;
         for (ordinal, argument) in call
             .arguments()
@@ -1063,8 +1154,12 @@ pub fn recognize_source_library(
             if start > end {
                 return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
             }
-            let kind = match (argument.reference_key(), argument.literal()) {
-                (Some(key), None) => {
+            let kind = match (
+                argument.reference_key(),
+                argument.literal(),
+                argument.local_constant(),
+            ) {
+                (Some(key), None, None) => {
                     if ordinal == 0 {
                         argument_0_key = Some(key.to_owned());
                     } else if ordinal == 1 {
@@ -1072,7 +1167,7 @@ pub fn recognize_source_library(
                     }
                     "reference"
                 }
-                (None, Some(SourceCallLiteral::String(value))) => {
+                (None, Some(SourceCallLiteral::String(value)), None) => {
                     // Library-key bounds belong to the reviewed LibStub shape,
                     // not every unrelated string argument in the source graph.
                     if ordinal == 0 {
@@ -1082,9 +1177,36 @@ pub fn recognize_source_library(
                     }
                     "string"
                 }
-                (None, Some(SourceCallLiteral::Boolean(_))) => "boolean",
-                (None, Some(SourceCallLiteral::Nil)) => "nil",
-                (None, None) => {
+                (None, Some(SourceCallLiteral::Boolean(_)), None) => "boolean",
+                (None, Some(SourceCallLiteral::Nil), None) => "nil",
+                (None, None, Some(local_constant)) => {
+                    if ordinal == 0 {
+                        argument_0_key = Some(local_constant.name().to_owned());
+                        match local_constant.value() {
+                            SourceCallConstant::String(value) => {
+                                argument_0_value = Some(value.clone());
+                                argument_0_local_constant_kind = Some("string");
+                            }
+                            SourceCallConstant::Integer(_) => {
+                                argument_0_local_constant_kind = Some("integer");
+                            }
+                        }
+                    } else if ordinal == 1 {
+                        argument_1_key = Some(local_constant.name().to_owned());
+                        match local_constant.value() {
+                            SourceCallConstant::String(value) => {
+                                argument_1_value = Some(value.clone());
+                                argument_1_local_constant_kind = Some("string");
+                            }
+                            SourceCallConstant::Integer(value) => {
+                                argument_1_integer = Some(*value);
+                                argument_1_local_constant_kind = Some("integer");
+                            }
+                        }
+                    }
+                    "reference"
+                }
+                (None, None, None) => {
                     exact = false;
                     "dynamic"
                 }
@@ -1118,9 +1240,12 @@ pub fn recognize_source_library(
             argument_0_kind,
             argument_0_key,
             argument_0_value,
+            argument_0_local_constant_kind,
             argument_1_kind,
             argument_1_key,
             argument_1_value,
+            argument_1_local_constant_kind,
+            argument_1_integer,
             argument_2_kind,
         };
         normalized.exact = library_key(&normalized)?.is_some();
@@ -1167,11 +1292,8 @@ pub fn recognize_source_library(
     let mut pending = Vec::<W6Relation>::new();
     for outcome in output.outcomes() {
         checkpoint(stop)?;
-        if outcome.rule_version() != 1
-            || !matches!(
-                outcome.rule_id(),
-                W6_REQUIRE_RULE | W6_NEW_RULE | W6_EMBED_RULE
-            )
+        if outcome.rule_version() != W6_RULE_VERSION
+            || !matches!(outcome.rule_id(), W6_REQUIRE_RULE | W6_NEW_RULE)
         {
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
         }
@@ -1266,9 +1388,9 @@ pub fn recognize_source_library(
             library_key(call)?.ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?;
         matches.push(SourceLibraryMatch {
             call_id: call.call_id.clone(),
-            library_name: key.name,
+            library_name: key.major,
             caller_proposal_id: call.caller_proposal_id.clone(),
-            version: key.version,
+            minor: key.minor,
             relation_proposal_id: relation.proposal_id.clone(),
             rule_id: rule_id(relation.rule_id.as_str())
                 .ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?,
@@ -1283,43 +1405,54 @@ pub fn recognize_source_library(
         .iter()
         .map(|definition| definition.relation())
         .collect::<BTreeSet<_>>();
-    // Every retained match projects one library entity and one relation from the
-    // exact resolving caller. The version is retained as literal evidence on the
-    // match and is never promoted to a loaded revision or ownership claim.
+    // Group all matching relations by complete LibStub major before building one
+    // semantic entity. Entity identity and support cannot depend on the first call.
     let mut entity_proposals = Vec::<GraphEntityProposal>::new();
     let mut relation_proposals = Vec::<GraphRelationProposal>::new();
-    let mut entity_ids = BTreeMap::<String, String>::new();
+    let mut relation_by_proposal = BTreeMap::<String, &W6Relation>::new();
+    for relation in &pending {
+        if relation_by_proposal
+            .insert(relation.proposal_id.clone(), relation)
+            .is_some()
+        {
+            return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
+        }
+    }
+    let mut entity_support = BTreeMap::<String, W6LibraryEntitySupport>::new();
     for m in &matches {
         checkpoint(stop)?;
-        let relation = pending
-            .iter()
-            .find(|relation| relation.proposal_id == m.relation_proposal_id)
+        let relation = relation_by_proposal
+            .get(&m.relation_proposal_id)
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        include_library_support(&mut entity_support, &m.library_name, relation)?;
+    }
+    let mut entity_ids = BTreeMap::<String, String>::new();
+    for (major, support) in entity_support {
+        checkpoint(stop)?;
+        let entity_id = library_entity_proposal_id(input.context.context_id(), &major)?;
+        if entity_ids
+            .insert(major.clone(), entity_id.clone())
+            .is_some()
+        {
+            return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
+        }
+        entity_proposals.push(support.proposal(entity_id, &major)?);
+    }
+
+    // Relations retain call-specific confidence and evidence even when their
+    // semantic target entity aggregates corroborating support from other calls.
+    for m in &matches {
+        checkpoint(stop)?;
+        let relation = relation_by_proposal
+            .get(&m.relation_proposal_id)
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
         let caller = caller_nodes
             .get(&m.caller_proposal_id)
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let entity_id = if let Some(existing) = entity_ids.get(&m.library_name) {
-            existing.clone()
-        } else {
-            let entity_id = format!("w6-library-{}", relation.proposal_id);
-            entity_ids.insert(m.library_name.clone(), entity_id.clone());
-            entity_proposals.push(
-                GraphEntityProposal::new(
-                    entity_id.clone(),
-                    W6_LIBRARY_ENTITY,
-                    BTreeMap::from([(
-                        "library".into(),
-                        GraphProposalValue::String(m.library_name.clone().into_boxed_str()),
-                    )]),
-                    relation.confidence,
-                    relation.source_handle_ids.clone(),
-                    relation.evidence_ids.clone(),
-                    relation.coverage_ids.clone(),
-                )
-                .map_err(graph_error)?,
-            );
-            entity_id
-        };
+        let entity_id = entity_ids
+            .get(&m.library_name)
+            .cloned()
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
         relation_proposals.push(
             GraphRelationProposal::new(
                 m.relation_proposal_id.as_str(),
@@ -1351,6 +1484,14 @@ pub fn recognize_source_library(
                     } else {
                         "lua_library.no_exact_reviewed_libstub_call_observed"
                     },
+                )
+            } else if W6_DEFERRED_LIBRARY_RELATIONS
+                .iter()
+                .any(|declared| relation_id_for(declared) == Some(relation))
+            {
+                (
+                    GraphCoverageState::NotEvaluated,
+                    "lua_library.embed_convention_deferred_without_universal_donor",
                 )
             } else {
                 (
@@ -1393,7 +1534,6 @@ fn relation_for_rule(rule_id: &str) -> Option<&'static str> {
     match rule_id {
         W6_REQUIRE_RULE => Some(W6_REQUIRE_RELATION),
         W6_NEW_RULE => Some(W6_NEW_RELATION),
-        W6_EMBED_RULE => Some(W6_EMBED_RELATION),
         _ => None,
     }
 }
@@ -1402,13 +1542,12 @@ fn rule_id(rule_id: &str) -> Option<&'static str> {
     match rule_id {
         W6_REQUIRE_RULE => Some(W6_REQUIRE_RULE),
         W6_NEW_RULE => Some(W6_NEW_RULE),
-        W6_EMBED_RULE => Some(W6_EMBED_RULE),
         _ => None,
     }
 }
 
-// A library identity is a plain name with no path, separator, or control data. It
-// never carries a repository, a URL, or a license.
+// A LibStub major is the complete plain string key, including hyphens. It never
+// carries a repository, a URL, or a license.
 fn valid_library_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= W6_MAX_LIBRARY_KEY_BYTES
@@ -1417,31 +1556,21 @@ fn valid_library_name(name: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
 }
 
-// Splits an exact reviewed library key. An exact split requires a nonempty name
-// and a nonempty version; the version stays the retained literal string and is
-// never treated as a loaded revision or an ownership claim.
-fn split_library_key(key: &str) -> RecognizerResult<W6LibraryKey> {
-    if key.is_empty() || key.len() > W6_MAX_LIBRARY_KEY_BYTES || key.trim() != key {
-        return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
-    }
-    let Some((name, version)) = key.split_once('-') else {
-        if !valid_library_name(key) {
-            return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
-        }
-        return Ok(W6LibraryKey {
-            name: key.to_owned(),
-            version: None,
-        });
-    };
-    if !valid_library_name(name) || !valid_library_name(version) {
+// Retain the exact LibStub major as one identity. Hyphens are ordinary major-key
+// bytes; they do not divide a major from the independent minor argument.
+fn library_major_key(major: &str) -> RecognizerResult<W6LibraryKey> {
+    if !valid_library_name(major) {
         return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
     }
     Ok(W6LibraryKey {
-        name: name.to_owned(),
-        version: Some(version.to_owned()),
+        major: major.to_owned(),
+        minor: None,
     })
 }
 
+// LibStub's pinned NewLibrary implementation extracts the first digit run from
+// a string minor before numeric comparison. Keep this optional and independent of
+// the major; numeric/reference literals remain absent when Emmy has not typed them.
 // Normalizes one exact call into a library key when the reviewed structure is
 // exact. An unresolved callee, a dynamic key, an over-long argument list, or a
 // colon form yields no key at all rather than a guessed identity.
@@ -1452,25 +1581,29 @@ fn library_key(call: &W6Call) -> RecognizerResult<Option<W6LibraryKey>> {
     if call.argument_count == 0 || call.argument_count > W6_MAX_ARGUMENTS_RETAINED {
         return Ok(None);
     }
-    let literal = match callable_key {
-        W6_LIBSTUB_CALLABLE if !call.colon_call && call.argument_0_kind == Some("string") => {
-            call.argument_0_value.as_deref()
+    let major_is_string = call.argument_0_kind == Some("string")
+        || (call.argument_0_kind == Some("reference")
+            && call.argument_0_local_constant_kind == Some("string"));
+    let (major, minor) = match callable_key {
+        W6_LIBSTUB_CALLABLE if !call.colon_call && major_is_string => {
+            (call.argument_0_value.as_deref(), None)
         }
-        W6_GET_LIBRARY_CALLABLE | W6_NEW_LIBRARY_CALLABLE
-            if call.colon_call && call.argument_0_kind == Some("string") =>
-        {
-            call.argument_0_value.as_deref()
+        W6_GET_LIBRARY_CALLABLE | W6_NEW_LIBRARY_CALLABLE if call.colon_call && major_is_string => {
+            let minor = (callable_key == W6_NEW_LIBRARY_CALLABLE
+                && call.argument_1_kind == Some("reference")
+                && call.argument_1_local_constant_kind == Some("integer"))
+            .then_some(call.argument_1_integer)
+            .flatten();
+            (call.argument_0_value.as_deref(), minor)
         }
-        W6_EMBED_LIBRARY_CALLABLE
-            if !call.colon_call
-                && call.argument_0_kind == Some("reference")
-                && call.argument_1_kind == Some("string") =>
-        {
-            call.argument_1_value.as_deref()
-        }
-        _ => None,
+        _ => (None, None),
     };
-    literal.map(split_library_key).transpose()
+    let Some(major) = major else {
+        return Ok(None);
+    };
+    let mut key = library_major_key(major)?;
+    key.minor = minor;
+    Ok(Some(key))
 }
 
 fn build_library_fact(
@@ -1517,6 +1650,17 @@ fn build_library_fact(
                 RecognizerFactValue::String(kind.into()),
             );
         }
+        let local_constant_kind = match index {
+            "0" => call.argument_0_local_constant_kind,
+            "1" => call.argument_1_local_constant_kind,
+            _ => None,
+        };
+        if let Some(kind) = local_constant_kind {
+            fields.insert(
+                format!("argument_{index}_local_constant_kind").into_boxed_str(),
+                RecognizerFactValue::String(kind.into()),
+            );
+        }
         let reference = match index {
             "0" => call.argument_0_key.as_ref(),
             "1" => call.argument_1_key.as_ref(),
@@ -1540,18 +1684,21 @@ fn build_library_fact(
             );
         }
     }
-    // The library identity is derived only from an exact reviewed structure. A
-    // dynamic argument never produces a name or a version.
+    if let Some(value) = call.argument_1_integer {
+        fields.insert(
+            "argument_1_integer".into(),
+            RecognizerFactValue::Integer(value),
+        );
+    }
+    // The library identity is the complete exact major. Minor is a separate axis
+    // and is retained only when the owner facts provide an exact typed value.
     if let Ok(Some(key)) = library_key(call) {
         fields.insert(
             "library_name".into(),
-            RecognizerFactValue::String(key.name.into_boxed_str()),
+            RecognizerFactValue::String(key.major.into_boxed_str()),
         );
-        if let Some(version) = key.version {
-            fields.insert(
-                "library_version".into(),
-                RecognizerFactValue::String(version.into_boxed_str()),
-            );
+        if let Some(minor) = key.minor {
+            fields.insert("library_minor".into(), RecognizerFactValue::Integer(minor));
         }
     }
     RecognizerFact::new(
@@ -1639,11 +1786,11 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-library".into(),
-            version: "3".into(),
+            version: "4".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W6_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-library-3".into(),
+            evaluation_profile_id: "wow-recognizers-w11-library-4".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 4,
@@ -1657,7 +1804,7 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
             rules: vec![
                 RecognizerRule {
                     rule_id: W6_REQUIRE_RULE.into(),
-                    version: 1,
+                    version: W6_RULE_VERSION,
                     required_capabilities: vec!["emmy.fact.calls".into()],
                     scope: "function".into(),
                     clauses: vec![
@@ -1697,9 +1844,12 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                                 },
                             ],
                         },
-                        RecognizerClause::FieldEq {
+                        RecognizerClause::FieldIn {
                             field: "call.argument_0_kind".into(),
-                            value: crate::RecognizerPackLiteral::String("string".into()),
+                            values: vec![
+                                crate::RecognizerPackLiteral::String("string".into()),
+                                crate::RecognizerPackLiteral::String("reference".into()),
+                            ],
                         },
                         RecognizerClause::FieldEq {
                             field: "call.exact".into(),
@@ -1714,14 +1864,14 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                         target: "call.library_name".into(),
                         confidence: RecognizerOutputConfidence::Derived,
                     }],
-                    positive_fixture_ids: vec!["RECOG-LIB-004".into()],
-                    near_negative_fixture_ids: vec!["RECOG-LIB-005".into()],
-                    partial_fixture_ids: vec!["RECOG-STATE-004".into()],
-                    mutation_fixture_ids: vec!["RECOG-XML-004".into()],
+                    positive_fixture_ids: vec!["RECOG-LIB-001".into()],
+                    near_negative_fixture_ids: vec!["RECOG-LIB-004".into()],
+                    partial_fixture_ids: vec!["RECOG-LIB-009".into()],
+                    mutation_fixture_ids: vec!["RECOG-LIB-007".into()],
                 },
                 RecognizerRule {
                     rule_id: W6_NEW_RULE.into(),
-                    version: 1,
+                    version: W6_RULE_VERSION,
                     required_capabilities: vec!["emmy.fact.calls".into()],
                     scope: "function".into(),
                     clauses: vec![
@@ -1739,9 +1889,12 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                             field: "call.colon_call".into(),
                             value: crate::RecognizerPackLiteral::Boolean(true),
                         },
-                        RecognizerClause::FieldEq {
+                        RecognizerClause::FieldIn {
                             field: "call.argument_0_kind".into(),
-                            value: crate::RecognizerPackLiteral::String("string".into()),
+                            values: vec![
+                                crate::RecognizerPackLiteral::String("string".into()),
+                                crate::RecognizerPackLiteral::String("reference".into()),
+                            ],
                         },
                         RecognizerClause::FieldEq {
                             field: "call.exact".into(),
@@ -1756,56 +1909,10 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
                         target: "call.library_name".into(),
                         confidence: RecognizerOutputConfidence::Derived,
                     }],
-                    positive_fixture_ids: vec!["RECOG-LIB-005".into()],
+                    positive_fixture_ids: vec!["RECOG-LIB-002".into()],
                     near_negative_fixture_ids: vec!["RECOG-LIB-005".into()],
-                    partial_fixture_ids: vec!["RECOG-STATE-004".into()],
-                    mutation_fixture_ids: vec!["RECOG-XML-004".into()],
-                },
-                RecognizerRule {
-                    rule_id: W6_EMBED_RULE.into(),
-                    version: 1,
-                    required_capabilities: vec!["emmy.fact.calls".into()],
-                    scope: "function".into(),
-                    clauses: vec![
-                        RecognizerClause::Fact {
-                            alias: "call".into(),
-                            kind: "lua_call".into(),
-                        },
-                        RecognizerClause::FieldEq {
-                            field: "call.callable_key".into(),
-                            value: crate::RecognizerPackLiteral::String(
-                                W6_EMBED_LIBRARY_CALLABLE.into(),
-                            ),
-                        },
-                        RecognizerClause::FieldEq {
-                            field: "call.colon_call".into(),
-                            value: crate::RecognizerPackLiteral::Boolean(false),
-                        },
-                        RecognizerClause::FieldEq {
-                            field: "call.exact".into(),
-                            value: crate::RecognizerPackLiteral::Boolean(true),
-                        },
-                        RecognizerClause::FieldEq {
-                            field: "call.argument_0_kind".into(),
-                            value: crate::RecognizerPackLiteral::String("reference".into()),
-                        },
-                        RecognizerClause::FieldEq {
-                            field: "call.argument_1_kind".into(),
-                            value: crate::RecognizerPackLiteral::String("string".into()),
-                        },
-                    ],
-                    captures: Vec::new(),
-                    outputs: vec![RecognizerOutput::RelationAssertion {
-                        output_id: "libstub_embed".into(),
-                        relation_kind_id: W6_EMBED_RELATION.into(),
-                        source: "call.caller".into(),
-                        target: "call.library_name".into(),
-                        confidence: RecognizerOutputConfidence::Derived,
-                    }],
-                    positive_fixture_ids: vec!["RECOG-TOC-003".into()],
-                    near_negative_fixture_ids: vec!["RECOG-LIB-004".into()],
-                    partial_fixture_ids: vec!["RECOG-STATE-004".into()],
-                    mutation_fixture_ids: vec!["RECOG-XML-004".into()],
+                    partial_fixture_ids: vec!["RECOG-LIB-009".into()],
+                    mutation_fixture_ids: vec!["RECOG-LIB-007".into()],
                 },
             ],
         },
@@ -1819,3 +1926,390 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
     parse_recognizer_pack(&bytes)
 }
 // ===== END WORKER 6: library family =====
+
+#[cfg(test)]
+mod w6_library_tests {
+    use super::*;
+
+    fn call(
+        callable_key: &str,
+        colon_call: bool,
+        argument_0_value: &str,
+        argument_1_kind: Option<&'static str>,
+        argument_1_value: Option<&str>,
+    ) -> W6Call {
+        W6Call {
+            call_id: "call-id".into(),
+            caller_proposal_id: "caller-id".into(),
+            callable_key: Some(callable_key.into()),
+            colon_call,
+            argument_count: if argument_1_kind.is_some() { 2 } else { 1 },
+            exact: true,
+            handle: StableHandleId::from_hash([1; 32]),
+            evidence: EvidenceId::from_hash([2; 32]),
+            argument_0_kind: Some("string"),
+            argument_0_key: None,
+            argument_0_value: Some(argument_0_value.into()),
+            argument_0_local_constant_kind: None,
+            argument_1_kind,
+            argument_1_key: None,
+            argument_1_value: argument_1_value.map(str::to_owned),
+            argument_1_local_constant_kind: None,
+            argument_1_integer: None,
+            argument_2_kind: None,
+        }
+    }
+
+    fn relation(
+        proposal_id: &str,
+        call_id: &str,
+        confidence: GraphConfidence,
+        handle: u8,
+        evidence: u8,
+        coverage: u8,
+    ) -> W6Relation {
+        W6Relation {
+            proposal_id: proposal_id.into(),
+            rule_id: W6_REQUIRE_RULE.into(),
+            relation: W6_REQUIRE_RELATION,
+            call_id: call_id.into(),
+            confidence,
+            source_handle_ids: vec![StableHandleId::from_hash([handle; 32])],
+            evidence_ids: vec![EvidenceId::from_hash([evidence; 32])],
+            coverage_ids: vec![wow_core::CoverageId::from_hash([coverage; 32])],
+        }
+    }
+
+    #[test]
+    fn libstub_major_keeps_hyphens_and_minor_stays_separate() -> RecognizerResult<()> {
+        let require = call(W6_LIBSTUB_CALLABLE, false, "AceAddon-3.0", None, None);
+        let key = library_key(&require)?
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+        assert_eq!(key.major, "AceAddon-3.0");
+        assert_eq!(key.minor, None);
+
+        let new_with_untyped_numeric = call(
+            W6_NEW_LIBRARY_CALLABLE,
+            true,
+            "AceAddon-3.0",
+            Some("dynamic"),
+            None,
+        );
+        let key = library_key(&new_with_untyped_numeric)?
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+        assert_eq!(key.major, "AceAddon-3.0");
+        assert_eq!(key.minor, None);
+
+        let new_with_string_minor = call(
+            W6_NEW_LIBRARY_CALLABLE,
+            true,
+            "AceAddon-3.0",
+            Some("string"),
+            Some("13"),
+        );
+        let key = library_key(&new_with_string_minor)?
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+        assert_eq!(key.major, "AceAddon-3.0");
+        assert_eq!(key.minor, None);
+        Ok(())
+    }
+
+    #[test]
+    fn one_library_entity_merges_bounded_support_conservatively() -> RecognizerResult<()> {
+        let exact = relation("relation-a", "call-a", GraphConfidence::Derived, 1, 2, 3);
+        let possible = relation("relation-b", "call-b", GraphConfidence::Possible, 4, 5, 3);
+        let another_major = relation("relation-c", "call-c", GraphConfidence::Derived, 6, 7, 8);
+        let mut forward = BTreeMap::<String, W6LibraryEntitySupport>::new();
+        include_library_support(&mut forward, "AceAddon-3.0", &exact)?;
+        include_library_support(&mut forward, "AceAddon-3.0", &possible)?;
+        include_library_support(&mut forward, "AceAddon-2.0", &another_major)?;
+        let mut reverse = BTreeMap::<String, W6LibraryEntitySupport>::new();
+        include_library_support(&mut reverse, "AceAddon-2.0", &another_major)?;
+        include_library_support(&mut reverse, "AceAddon-3.0", &possible)?;
+        include_library_support(&mut reverse, "AceAddon-3.0", &exact)?;
+        assert_eq!(forward, reverse);
+        assert_eq!(forward.len(), 2);
+        let support = forward
+            .get("AceAddon-3.0")
+            .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        assert_eq!(support.source_handle_ids.len(), 2);
+        assert_eq!(support.evidence_ids.len(), 2);
+        assert_eq!(support.coverage_ids.len(), 1);
+        assert_eq!(support.confidence, GraphConfidence::Possible);
+        let proposal_id = library_entity_proposal_id(
+            wow_core::GenerationContextId::from_hash([1; 32]),
+            "AceAddon-3.0",
+        )?;
+        let proposal = support.clone().proposal(proposal_id, "AceAddon-3.0")?;
+        assert_eq!(
+            proposal.semantic_key().get("library"),
+            Some(&GraphProposalValue::String("AceAddon-3.0".into()))
+        );
+        assert_eq!(proposal.confidence(), GraphConfidence::Possible);
+        assert_eq!(proposal.source_handle_ids().len(), 2);
+        assert_eq!(proposal.evidence_ids().len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn library_entity_identity_uses_context_and_complete_major_not_first_relation()
+    -> RecognizerResult<()> {
+        let first_context = wow_core::GenerationContextId::from_hash([1; 32]);
+        let second_context = wow_core::GenerationContextId::from_hash([2; 32]);
+        let first_witness = library_entity_proposal_id(first_context, "AceAddon-3.0")?;
+        let surviving_witness = library_entity_proposal_id(first_context, "AceAddon-3.0")?;
+        let different_major = library_entity_proposal_id(first_context, "AceAddon-2.0")?;
+        let different_context = library_entity_proposal_id(second_context, "AceAddon-3.0")?;
+
+        assert_eq!(first_witness, surviving_witness);
+        assert_ne!(first_witness, different_major);
+        assert_ne!(first_witness, different_context);
+        Ok(())
+    }
+
+    #[test]
+    fn donor_local_major_and_minor_reach_the_w6_consumer() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use std::str::FromStr;
+        use wow_core::{
+            EvidenceConfidence, GenerationContextBuilder, ProducerId, ProfileId,
+            ProfileIdentityBuilder, ProfileKind, ProjectGenerationId, ReferenceGenerationId,
+            SourceKind, SourceOriginKind, ToolVersion,
+        };
+        use wow_emmy::{
+            LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
+            backend_identity_from_report,
+            function_calls::FunctionCallBudget,
+            global_access::GlobalAccessBudget,
+            references::{
+                MemberCallSessionQueryProfile, analyze_member_call_session_with_callable_queries,
+            },
+        };
+
+        let stop = AtomicBool::new(false);
+        let source = concat!(
+            "LibStub = {}\n",
+            "function LibStub.NewLibrary(major, minor) return {}, nil end\n",
+            "function RegisterLibrary()\n",
+            "  local MAJOR, MINOR = \"AceAddon-3.0\", 13\n",
+            "  local AceAddon, oldminor = LibStub:NewLibrary(MAJOR, MINOR)\n",
+            "end\n",
+        );
+        let compatibility_report = br#"{"analysis_crate":{"manifest_path":"crates/emmylua_code_analysis/Cargo.toml","name":"emmylua_code_analysis","version":"0.25.1"},"compatibility":{"missing_symbols":[],"required_symbols":[],"status":"compatible"},"producer_version":1,"report_sha256":"sha256:e56096cd332cd4d35105772f6084c0c4116f885dff237097c38706b249f8f343","schema":"wow-dev-framework/emmylua-compatibility-report","schema_version":1,"source":{"network_checked":false,"relation":"unverified_current","revision":"aaaca68425d9362876228649b0b8d92f07654daa","tree":"9175c01384e650b9a5bd64da69c36f47dbeaaf67"},"surface":{"files":[],"surface_sha256":"sha256:3333333333333333333333333333333333333333333333333333333333333333","symbols":[]}}"#;
+        let backend = backend_identity_from_report(compatibility_report)?;
+        let main = LuaWorkspaceSnapshot::build(
+            backend,
+            LuaWorkspaceUniverse::Fixture,
+            vec![LuaWorkspaceFileInput::new("main/library.lua", source)],
+            LuaWorkspaceLimits::new(4, 4096, 64 * 1024, 64 * 1024)?,
+        )?;
+        let call_budget = FunctionCallBudget::default()
+            .with_global_access_budget(GlobalAccessBudget::new(2_000_000, 8 * 1024 * 1024)?);
+        let callable_queries = vec!["LibStub.NewLibrary".to_owned()];
+        let report = analyze_member_call_session_with_callable_queries(
+            &main,
+            &[],
+            MemberCallSessionQueryProfile::new(&[], &callable_queries)
+                .with_function_call_budget(call_budget),
+            true,
+            &stop,
+        )?
+        .function_calls
+        .ok_or("profile10 function-call report")?;
+        assert_eq!(
+            serde_json::to_value(&report)?["profile"],
+            "wow-emmy/function-call-facts/10"
+        );
+        let call = report
+            .calls()
+            .iter()
+            .find(|call| call.resolved_callable_key() == Some(W6_NEW_LIBRARY_CALLABLE))
+            .ok_or("resolved NewLibrary donor-shaped call")?;
+        assert_eq!(call.arguments().len(), 2);
+        assert_eq!(
+            call.arguments()[0]
+                .local_constant()
+                .map(|value| value.name()),
+            Some("MAJOR")
+        );
+        assert_eq!(
+            call.arguments()[1]
+                .local_constant()
+                .map(|value| value.name()),
+            Some("MINOR")
+        );
+
+        let schema = wow_core::SchemaVersionEntry::new(
+            wow_core::SchemaId::from_str("schema:wow:w6-local-constant-fixture")?,
+            ToolVersion::from_str("1.0.0")?,
+        );
+        let profile = ProfileIdentityBuilder::new(
+            ProfileId::from_str("profile:fixture:w6-local-constants")?,
+            ProfileKind::Fixture,
+            "retail",
+            120_100,
+            SourceKind::SyntheticFixture,
+            "fixture:w6-local-constants-v1",
+            ContentDigest::<wow_core::SourceLogicalSnapshot>::from_bytes([9; 32]),
+        )
+        .schema_versions(vec![schema.clone()])
+        .fixture_scope("w6 local constant consumer")
+        .build()?;
+        let project_generation = ProjectGenerationId::derive(&"w6-local-constant-project")?;
+        let reference_generation = ReferenceGenerationId::derive(&"w6-local-constant-reference")?;
+        let context = GenerationContextBuilder::new(profile, reference_generation)
+            .project_generation(project_generation)
+            .schema_versions(vec![schema])
+            .build()?;
+        let call_digest = call
+            .content_digest()
+            .parse::<ContentDigest<SourceContent>>()?;
+        let call_handle = wow_core::SourceHandleBuilder::new(
+            SourceOriginKind::Fixture,
+            "fixture:w6-local-constants",
+            "fixture:w6-local-constants-v1",
+            call.path(),
+            call.call_span(),
+            call_digest,
+        )
+        .reference_generation(reference_generation)
+        .project_generation(project_generation)
+        .build()?;
+        let evidence = EvidenceRecord::new(
+            context.context_id(),
+            ProvenanceClass::ProjectSource,
+            EvidenceConfidence::Proven,
+            ClaimScope::SourceObservation,
+            ProducerId::from_str("wow.project")?,
+            ToolVersion::from_str("1.0.0")?,
+            vec![call_handle.handle_id()],
+            Vec::new(),
+            Vec::new(),
+        )?;
+        let call_handle_id = call_handle.handle_id();
+        let evidence_id = evidence.evidence_id();
+        let source_handles = BTreeMap::from([(call_handle_id, call_handle)]);
+        let evidence_records = BTreeMap::from([(evidence_id, evidence)]);
+
+        const SOURCE_PARTITION: &str = "wow-project.source-graph";
+        let registry = wow_graph::GraphRegistryBundle::build(
+            "graph-registry:w6-local-constants",
+            "1.0.0",
+            vec![
+                wow_graph::GraphEntityKindDefinition::new(
+                    "lua_source_function",
+                    vec!["project".into()],
+                    vec!["document".into(), "function".into()],
+                    vec![GraphConfidence::Derived, GraphConfidence::Possible],
+                )?,
+                wow_graph::GraphEntityKindDefinition::new(
+                    W6_LIBRARY_ENTITY,
+                    vec!["project".into()],
+                    vec!["library".into()],
+                    vec![GraphConfidence::Derived, GraphConfidence::Possible],
+                )?,
+            ],
+            [W6_REQUIRE_RELATION, W6_NEW_RELATION, W6_EMBED_RELATION]
+                .into_iter()
+                .map(|relation| {
+                    wow_graph::GraphRelationKindDefinition::new(
+                        relation,
+                        GraphRelationKind::UsesApi,
+                        vec!["lua_source_function".into()],
+                        vec![W6_LIBRARY_ENTITY.into()],
+                        vec![GraphConfidence::Derived, GraphConfidence::Possible],
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        )?;
+        let universe = wow_graph::GraphUniverseId::new("project:w6-local-constants")?;
+        let generation =
+            wow_graph::GraphGenerationId::new("project-generation:w6-local-constants:1")?;
+        let limits = wow_graph::GraphLimits::default();
+        let foundation = wow_graph::GraphSnapshot::build(
+            universe.clone(),
+            generation.clone(),
+            limits,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        )?;
+        let owner =
+            GraphPartitionSnapshot::new(registry.clone(), foundation, context.context_id(), &stop)?;
+        let mut source_entities = Vec::new();
+        let mut function_records = Vec::new();
+        for (index, function) in report.functions().iter().enumerate() {
+            let proposal_id = format!("source-function-{index}");
+            source_entities.push(GraphEntityProposal::new(
+                proposal_id.as_str(),
+                "lua_source_function",
+                BTreeMap::from([
+                    (
+                        Box::<str>::from("document"),
+                        GraphProposalValue::String(function.path().into()),
+                    ),
+                    (
+                        Box::<str>::from("function"),
+                        GraphProposalValue::String(function.fact_id().into()),
+                    ),
+                ]),
+                GraphConfidence::Derived,
+                vec![call_handle_id],
+                vec![evidence_id],
+                Vec::new(),
+            )?);
+            function_records.push((function.fact_id().to_owned(), proposal_id));
+        }
+        let function_proposals = function_records
+            .iter()
+            .map(|(function_id, proposal_id)| (function_id.as_str(), proposal_id.as_str()))
+            .collect::<BTreeMap<_, _>>();
+        let source_batch = GraphProposalBatch::build(
+            registry.bundle_id(),
+            registry.registry_digest(),
+            universe,
+            generation,
+            context.context_id(),
+            SOURCE_PARTITION,
+            source_entities,
+            Vec::new(),
+        )?;
+        let owner = owner
+            .prepare_replacement(
+                wow_graph::GraphPartitionReplacement {
+                    expected_snapshot_id: owner.snapshot().snapshot_id().clone(),
+                    expected_partition_digest: None,
+                    producer_version: "1.0.0".into(),
+                    batch: source_batch,
+                    coverage: Vec::new(),
+                },
+                &stop,
+            )?
+            .into_candidate();
+        let function_call_report = &report;
+        let function_call_support = report
+            .calls()
+            .iter()
+            .map(|call| (call.fact_id(), (call_handle_id, evidence_id)))
+            .collect::<BTreeMap<_, _>>();
+        let recognized = recognize_source_library(
+            SourceLibraryInput {
+                owner: &owner,
+                source_partition: SOURCE_PARTITION,
+                report: function_call_report,
+                context: &context,
+                function_proposals,
+                call_support: function_call_support,
+                source_handles: &source_handles,
+                evidence: &evidence_records,
+            },
+            &stop,
+        )?;
+        assert_eq!(recognized.recognition.matches().len(), 1);
+        let library = &recognized.recognition.matches()[0];
+        assert_eq!(library.rule_id, W6_NEW_RULE);
+        assert_eq!(library.library_name, "AceAddon-3.0");
+        assert_eq!(library.minor, Some(13));
+        Ok(())
+    }
+}

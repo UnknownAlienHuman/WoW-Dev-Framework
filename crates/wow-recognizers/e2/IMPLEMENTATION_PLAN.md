@@ -61,7 +61,7 @@ Implement in this order:
 5. custom TriggerEvent/RegisterCallback producer-consumer;
 6. CVar callback;
 7. SetScript/HookScript/hooksecurefunc;
-8. LibStub/new/embed;
+8. LibStub require/new with full-major identity and a separate optional minor axis; embed remains deferred;
 9. SavedVariables literal state paths.
 
 Each rule is merged only with its complete positive/near-negative/partial/dynamic/mutation set.

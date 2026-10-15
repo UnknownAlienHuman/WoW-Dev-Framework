@@ -152,12 +152,14 @@
 
 | ID | Case | Expected |
 |---|---|---|
-| `RECOG-LIB-001` | LibStub exact library key | requires_library |
-| `RECOG-LIB-002` | NewLibrary exact key/version | library declaration relation |
-| `RECOG-LIB-003` | Exact reviewed embed structure | embeds_library |
+| `RECOG-LIB-001` | Exact LibStub major `AceAddon-3.0` | one full-major entity and `requires_library` |
+| `RECOG-LIB-002` | Donor-shaped `NewLibrary(MAJOR, MINOR)` with Emmy exact local string/integer custody | declaration relation for full major `AceAddon-3.0`; minor `13`; source reference and spans retained |
 | `RECOG-LIB-004` | `Libs/` path only | no library/embed inference |
-| `RECOG-LIB-005` | Dynamic library key | Possible/no exact identity |
+| `RECOG-LIB-005` | Dynamic library major | no exact identity or relation |
 | `RECOG-LIB-006` | Upstream repo/license inferred | prohibited |
+| `RECOG-LIB-007` | Repeated exact same-major calls, shuffled and first-witness removed | one semantic entity; all bounded supports retained; each relation keeps its confidence; any Possible support keeps the entity Possible |
+| `RECOG-LIB-008` | Embed convention without a core donor owner | embed relation `NotEvaluated`; no `embeds_library` proposal |
+| `RECOG-LIB-009` | Reassigned/captured/computed local major or unresolved local minor | no inferred value; preserve the reference as unknown and do not emit a guessed identity |
 | `RECOG-STATE-001` | TOC root + resolved Lua root | exact state root link |
 | `RECOG-STATE-002` | Literal read chain | state_path + reads_state |
 | `RECOG-STATE-003` | Literal write chain | state_path + writes_state |

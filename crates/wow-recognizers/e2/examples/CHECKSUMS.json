@@ -18,7 +18,7 @@
   "profile_pins": {
     "recognizer_contract_id": "wow-recognizers/e2-b/core-structural-rules",
     "core_pack_id": "wow-core-structural",
-    "core_pack_version": "e2-1",
+    "core_pack_version": "e2-2",
     "fact_schema_profile_id": null,
     "graph_registry_bundle_id": null,
     "evaluation_profile_id": null,

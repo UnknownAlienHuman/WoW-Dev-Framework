@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "contract_id": "wow-recognizers/e2-b/core-structural-rules",
   "state": "partial-functional-freeze-open",
   "work_package": "E2-B",
@@ -41,7 +41,7 @@
     "custom-event-producer-subscription-with-trigger-evidence",
     "cvar-callback-registration",
     "setscript-hookscript-hooksecurefunc-structure",
-    "libstub-require-new-embed-structure",
+    "libstub-require-new-full-major-separate-minor-embed-deferred",
     "savedvariables-root-and-literal-state-paths",
     "proposed-graph-assertion-output-partitions",
     "confidence-ambiguity-coverage-and-not-evaluated",
@@ -98,7 +98,8 @@
   "e2_active_trust_classes": [
     "core"
   ],
-  "active_rule_ids": [
+  "declared_rule_identity_scope": "Declared core capability identities, not a list of executable rules; actual pack/rule versions are bound by each selected immutable pack. Deferred capabilities remain explicit NotEvaluated.",
+  "declared_rule_ids": [
     "core.toc.package@1",
     "core.toc.file_order@1",
     "core.toc.dependencies@1",
@@ -962,7 +963,7 @@
     },
     {
       "capability": "core.library.embed@1",
-      "status": "partial-functional",
+      "status": "not-evaluated",
       "owners": [
         {
           "path": "crates/wow-recognizers/src/source_state.rs",
@@ -989,6 +990,7 @@
       ],
       "acceptance_status": "pending",
       "blocking_issues": [
+        159,
         103,
         120
       ]

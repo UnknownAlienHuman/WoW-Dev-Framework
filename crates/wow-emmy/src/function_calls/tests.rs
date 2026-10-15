@@ -8,6 +8,12 @@ use emmylua_parser::{LuaChunk, LuaLanguageLevel, LuaParser, ParserConfig};
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
+fn source_slice(source: &str, span: wow_core::SourceSpan) -> TestResult<&str> {
+    let start = usize::try_from(span.byte_start().ok_or("span start")?)?;
+    let end = usize::try_from(span.byte_end().ok_or("span end")?)?;
+    Ok(source.get(start..end).ok_or("span outside source")?)
+}
+
 #[test]
 fn native_indexed_signature_keeps_union_order_empty_rows_and_unknown_types() -> TestResult {
     let stop = AtomicBool::new(false);
@@ -471,6 +477,153 @@ fn selected_global_budget_admits_native_text_above_default() -> TestResult {
     downgrade.budget = Some(FunctionCallBudget::default());
     downgrade.analysis_id = downgrade.identity()?;
     assert!(downgrade.validate().is_err());
+    Ok(())
+}
+
+#[test]
+fn global_budget_libstub_arguments_retain_exact_local_constant_custody() -> TestResult {
+    use crate::global_access::GlobalAccessBudget;
+
+    let source = concat!(
+        "local MAJOR, MINOR = \"AceAddon-3.0\", 13\n",
+        "LibStub:NewLibrary(MAJOR, MINOR)\n",
+    );
+    let main = snapshot(vec![LuaWorkspaceFileInput::new("main/libstub.lua", source)])?;
+    for (selected_budget, expected_profile) in [
+        (None, FUNCTION_CALL_PROFILE),
+        (
+            Some(FunctionCallBudget::default()),
+            FUNCTION_CALL_BUDGET_PROFILE,
+        ),
+    ] {
+        let mut query = MemberCallSessionQueryProfile::new(&[], &[]);
+        if let Some(budget) = selected_budget {
+            query = query.with_function_call_budget(budget);
+        }
+        let legacy = analyze_member_call_session_with_callable_queries(
+            &main,
+            &[],
+            query,
+            true,
+            &AtomicBool::new(false),
+        )?
+        .function_calls
+        .ok_or("legacy function-call report")?;
+        assert_eq!(legacy.profile, expected_profile);
+        assert!(
+            legacy
+                .calls()
+                .iter()
+                .flat_map(SourceCallFact::arguments)
+                .all(|argument| argument.local_constant().is_none())
+        );
+        let wire = serde_json::to_value(&legacy)?;
+        assert!(
+            wire["calls"][0]["arguments"][0]
+                .get("local_constant")
+                .is_none()
+        );
+    }
+    let budget = FunctionCallBudget::default()
+        .with_global_access_budget(GlobalAccessBudget::new(2_000_000, 8 * 1024 * 1024)?);
+    let report = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[],
+        MemberCallSessionQueryProfile::new(&[], &[]).with_function_call_budget(budget),
+        true,
+        &AtomicBool::new(false),
+    )?
+    .function_calls
+    .ok_or("function-call report")?;
+    assert_eq!(report.profile, FUNCTION_CALL_GLOBAL_BUDGET_PROFILE);
+    assert_eq!(report.profile, "wow-emmy/function-call-facts/10");
+    let call = report
+        .calls()
+        .iter()
+        .find(|call| {
+            source_slice(source, call.call_span()).ok() == Some("LibStub:NewLibrary(MAJOR, MINOR)")
+        })
+        .ok_or("native LibStub call")?;
+    assert_eq!(call.arguments().len(), 2);
+    assert_eq!(
+        source_slice(source, call.call_span())?,
+        "LibStub:NewLibrary(MAJOR, MINOR)"
+    );
+
+    let major = call.arguments()[0]
+        .local_constant()
+        .ok_or("MAJOR local constant")?;
+    assert_eq!(major.name(), "MAJOR");
+    assert_eq!(source_slice(source, call.arguments()[0].span())?, "MAJOR");
+    assert_eq!(source_slice(source, major.declaration_span())?, "MAJOR");
+    assert_eq!(
+        source_slice(source, major.initializer_span())?,
+        "\"AceAddon-3.0\""
+    );
+    assert!(matches!(
+        major.value(),
+        SourceCallConstant::String(value) if value == "AceAddon-3.0"
+    ));
+
+    let minor = call.arguments()[1]
+        .local_constant()
+        .ok_or("MINOR local constant")?;
+    assert_eq!(minor.name(), "MINOR");
+    assert_eq!(source_slice(source, call.arguments()[1].span())?, "MINOR");
+    assert_eq!(source_slice(source, minor.declaration_span())?, "MINOR");
+    assert_eq!(source_slice(source, minor.initializer_span())?, "13");
+    assert_eq!(minor.value(), &SourceCallConstant::Integer(13));
+    report.validate()?;
+    Ok(())
+}
+
+#[test]
+fn global_budget_local_constants_reject_written_captured_and_inexact_bindings() -> TestResult {
+    use crate::global_access::GlobalAccessBudget;
+
+    let cases = [
+        (
+            "written",
+            "local MAJOR = \"AceAddon-3.0\"\nMAJOR = \"other\"\nLibStub:NewLibrary(MAJOR, 13)\n",
+        ),
+        (
+            "captured",
+            "local MAJOR = \"AceAddon-3.0\"\nlocal function nested() return MAJOR end\nLibStub:NewLibrary(MAJOR, 13)\n",
+        ),
+        (
+            "computed",
+            "local MAJOR = \"Ace\" .. \"Addon-3.0\"\nLibStub:NewLibrary(MAJOR, 13)\n",
+        ),
+        (
+            "aliased",
+            "local BASE = \"AceAddon-3.0\"\nlocal MAJOR = BASE\nLibStub:NewLibrary(MAJOR, 13)\n",
+        ),
+    ];
+    let budget = FunctionCallBudget::default()
+        .with_global_access_budget(GlobalAccessBudget::new(2_000_000, 8 * 1024 * 1024)?);
+    for (label, source) in cases {
+        let main = snapshot(vec![LuaWorkspaceFileInput::new("main/libstub.lua", source)])?;
+        let report = analyze_member_call_session_with_callable_queries(
+            &main,
+            &[],
+            MemberCallSessionQueryProfile::new(&[], &[]).with_function_call_budget(budget),
+            true,
+            &AtomicBool::new(false),
+        )?
+        .function_calls
+        .ok_or("function-call report")?;
+        let call = report
+            .calls()
+            .iter()
+            .find(|call| {
+                source_slice(source, call.call_span())
+                    .is_ok_and(|text| text.starts_with("LibStub:NewLibrary("))
+            })
+            .ok_or(label)?;
+        assert_eq!(call.arguments().len(), 2, "{label}");
+        assert_eq!(call.arguments()[0].local_constant(), None, "{label}");
+        report.validate()?;
+    }
     Ok(())
 }
 

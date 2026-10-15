@@ -398,6 +398,7 @@ pub struct MemberCallSessionQueryProfile<'a> {
     query_limit: usize,
     member_pair_limit: usize,
     function_call_budget: Option<crate::function_calls::FunctionCallBudget>,
+    function_call_replay_recipe: Option<crate::function_calls::FunctionCallReplayRecipe>,
     physical_function_declarations:
         Option<crate::function_calls::PhysicalFunctionDeclarationRecipe>,
     physical_function_signatures: Option<crate::function_calls::PhysicalFunctionSignatureRecipe>,
@@ -412,6 +413,7 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
             query_limit: crate::bindings::MAX_QUERIES,
             member_pair_limit: DEFAULT_MEMBER_PAIR_LIMIT,
             function_call_budget: None,
+            function_call_replay_recipe: None,
             physical_function_declarations: None,
             physical_function_signatures: None,
         }
@@ -459,6 +461,17 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
         self
     }
 
+    /// Rebuild one exact retained schema13 function-call report recipe.
+    /// The selected budget must carry global-access work/text limits.
+    #[must_use]
+    pub const fn with_function_call_replay_recipe(
+        mut self,
+        recipe: crate::function_calls::FunctionCallReplayRecipe,
+    ) -> Self {
+        self.function_call_replay_recipe = Some(recipe);
+        self
+    }
+
     /// Select a physical declaration recipe in the same function-call sidecar.
     /// Existing query/count/output budgets and the absent-recipe path are retained.
     #[must_use]
@@ -503,11 +516,24 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
         }
         if !include_function_calls
             && (self.physical_function_declarations.is_some()
-                || self.physical_function_signatures.is_some())
+                || self.physical_function_signatures.is_some()
+                || self.function_call_replay_recipe.is_some())
         {
             return Err(EmmyMemberCallError::new(
                 EmmyMemberCallErrorCode::InvalidMainWorkspace,
                 "physical-function observations require the function-call sidecar",
+                None,
+            ));
+        }
+        if self.function_call_replay_recipe
+            == Some(crate::function_calls::FunctionCallReplayRecipe::LegacyGlobalAccessV9)
+            && !self
+                .function_call_budget
+                .is_some_and(|budget| budget.global_access_budget().is_some())
+        {
+            return Err(EmmyMemberCallError::new(
+                EmmyMemberCallErrorCode::InvalidMainWorkspace,
+                "legacy global-access report replay requires its selected global-access budget",
                 None,
             ));
         }
@@ -926,6 +952,7 @@ impl RegisteredMemberAnalysis {
                             profile.function_call_budget,
                             declaration_recipe,
                             Some(signature_recipe),
+                            profile.function_call_replay_recipe,
                             stop,
                         )?
                     }
@@ -938,6 +965,7 @@ impl RegisteredMemberAnalysis {
                         &lookup_analysis_ids,
                         profile.function_call_budget,
                         Some(recipe),
+                        profile.function_call_replay_recipe,
                         stop,
                     )?,
                     (None, None) => crate::function_calls::collect(
@@ -948,6 +976,7 @@ impl RegisteredMemberAnalysis {
                         &callable_signatures,
                         &lookup_analysis_ids,
                         profile.function_call_budget,
+                        profile.function_call_replay_recipe,
                         stop,
                     )?,
                 },

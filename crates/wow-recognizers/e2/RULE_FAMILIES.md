@@ -166,21 +166,34 @@ Emit `hooks` relation for exact target/callback; dynamic target is Possible. Do 
 
 ## 6. Library family
 
-### `core.library.libstub_require@1`
+### `core.library.libstub_require@2`
 
-Match exact resolved `LibStub("Name-Version")` or reviewed `GetLibrary` form.
+Match exact resolved `LibStub(major)` or reviewed `GetLibrary` form. The complete
+major string is the library identity; hyphens are ordinary major-key bytes and
+must not be parsed as a name/version separator.
 
-Outputs library entity proposal and `requires_library` relation. Version string is exact evidence, not proof of loaded revision or ownership.
+Outputs one major-keyed library entity and a `requires_library` relation. Repeated
+exact calls to the same major share one deterministic entity whose bounded source,
+evidence and coverage support includes every retained call. Entity confidence is
+conservative across that support; each relation keeps its own confidence.
 
-### `core.library.libstub_new@1`
+### `core.library.libstub_new@2`
 
-Match exact reviewed `LibStub:NewLibrary` form. Emit library declaration/creation relation with version when exact. It does not infer upstream repository or license.
+Match exact reviewed `LibStub:NewLibrary` form using the complete major argument.
+An Emmy report10 exact same-file local string may resolve a reference at argument
+0, and an exact local integer may resolve argument 1 as the independent minor.
+The original reference key and spans remain in the owner report. Untyped or
+unresolved values stay absent; neither axis proves a loaded revision, upstream
+repository or license.
 
-### `core.library.embed@1`
+### Library embed — deferred
 
-Match exact structural embed call only when receiver/library/target are resolved and the pack declares the convention. Emit `embeds_library`; otherwise Possible or no match.
+The core pack has no active embed rule. The pinned LibStub donor does not own an
+embed method; the reviewed AceAddon embed convention is profile-specific and stays
+deferred until an owner can prove its exact receiver, library major and target.
+The library producer reports this relation as `NotEvaluated`.
 
-Folder names such as `Libs/` do not prove an embed relation.
+Folder names such as `Libs/` never prove an embed relation.
 
 ## 7. State family
 

@@ -147,7 +147,7 @@ fn graph_metadata_budget_is_strict_and_requires_retained_graph_selection() -> Te
 }
 
 #[test]
-fn selected_global_budget_replay13_and_frozen_v12_store_preserve_current() -> TestResult {
+fn schema13_profile9_and_report10_schema16_replay_preserve_frozen_store() -> TestResult {
     selected_budget_replay_and_frozen_store_preserve_current(None)
 }
 
@@ -185,6 +185,91 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
     let plain = FunctionCallBudget::new(64, 16, 16, 16, 32, 64 * 1024)?;
     let component = GlobalAccessBudget::new(1024, 128 * 1024)?;
     let nested = plain.with_global_access_budget(component);
+    let legacy_parts = if graph_budget.is_none() {
+        let legacy = ProjectReplay::from_json(
+            include_bytes!("data/legacy-global-access-replay13-profile9-805.json"),
+            &stop,
+        )?;
+        let legacy_view = legacy.hydrate(&stop)?;
+        let legacy_report = legacy_view
+            .snapshot()
+            .analyzer_binding()
+            .function_call_report()
+            .ok_or("legacy schema13 report missing")?;
+        assert_eq!(
+            serde_json::to_value(legacy_report)?["profile"],
+            "wow-emmy/function-call-facts/9",
+        );
+        assert!(
+            !legacy_report
+                .named_targets()
+                .contains_key("LibStub.EmbedLibrary"),
+            "an unresolved historical lookup must not invent a callable target"
+        );
+        // Rebuild only the native direct prefix from the captured report9 owner.
+        // The original replay bytes must cross the frozen V13 catalog and the
+        // persisted pair reader below, not merely standalone hydration.
+        let mut plan = wow_project::graph::build_platform_graph_proposal_plan(&legacy_view, &stop)?;
+        let mut graph = wow_graph::GraphPartitionSnapshot::new(
+            plan.registry().clone(),
+            plan.foundation().clone(),
+            plan.scope().source_context_id,
+            &stop,
+        )?;
+        let mut stages = vec![(
+            plan.raw_inventory_batch()
+                .ok_or("legacy raw inventory")?
+                .clone(),
+            Vec::new(),
+            plan.raw_inventory_producer_version().to_owned(),
+        )];
+        for index in 0..=plan.producer_order().len() {
+            let (batch, coverage, version) = if index == 0 {
+                stages.pop().ok_or("legacy raw stage")?
+            } else {
+                let producer = plan.producer_order()[index - 1];
+                let stage = plan.build_stage(producer, &graph, &stop)?;
+                let version = stage.producer_version().to_owned();
+                let (batch, coverage) = stage.into_parts();
+                (batch, coverage, version)
+            };
+            graph = graph
+                .prepare_replacement(
+                    wow_graph::GraphPartitionReplacement {
+                        expected_snapshot_id: graph.snapshot().snapshot_id().clone(),
+                        expected_partition_digest: None,
+                        producer_version: version.into(),
+                        batch,
+                        coverage,
+                    },
+                    &stop,
+                )?
+                .into_candidate();
+        }
+        plan.finish(&graph, &stop)?;
+        let legacy_selection = PlatformStoreSelection::new(
+            legacy_view.configuration().project_id().clone(),
+            legacy_view
+                .configuration()
+                .platform_packages()
+                .ok_or("legacy platform")?
+                .source()
+                .profile()
+                .profile_id()
+                .clone(),
+        )?;
+        Some(
+            publication::ProjectPublicationBundle::from_replay_in_namespace(
+                &legacy,
+                &graph,
+                legacy_selection.namespace(),
+                &stop,
+            )?
+            .into_parts(),
+        )
+    } else {
+        None
+    };
     let has_xml = graph_budget.is_some_and(|budget| budget.xml_counts().is_some());
     let old_graph_budget = if has_xml {
         Some(wow_project::graph::SourceGraphBudget::new(
@@ -201,18 +286,18 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
         )
     } else if graph_budget.is_some() {
         (
-            "wow-project/native-project-replay/13",
+            "wow-project/native-project-replay/12",
             "wow-project/native-project-replay/14",
             publication::STORAGE_SCHEMAS_V13,
         )
     } else {
         (
-            "wow-project/native-project-replay/12",
             "wow-project/native-project-replay/13",
-            publication::STORAGE_SCHEMAS_V12,
+            "wow-project/native-project-replay/16",
+            publication::STORAGE_SCHEMAS_V13,
         )
     };
-    let old_sidecar = if graph_budget.is_some() {
+    let old_sidecar = if graph_budget.is_none() {
         nested
     } else {
         plain
@@ -245,9 +330,13 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
         "current".into(),
     )?
     .with_input_profile(&old_input);
-    let (old_bundle, _) =
-        old_request.live_publication_in_namespace(old_input, selection.namespace(), &stop)?;
-    let (old_records, old_bindings) = old_bundle.into_parts();
+    let (old_records, old_bindings) = match legacy_parts {
+        Some(parts) => parts,
+        None => old_request
+            .live_publication_in_namespace(old_input, selection.namespace(), &stop)?
+            .0
+            .into_parts(),
+    };
     let old_replay: ProjectReplay = old_records
         .iter()
         .find(|r| r.key() == "live.project.replay")
@@ -255,20 +344,30 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
         .decode()?;
     assert_eq!(serde_json::to_value(&old_replay)?["schema"], old_schema);
 
+    let new_sidecar = if graph_budget.is_some() {
+        plain
+    } else {
+        nested
+    };
     let new_policy = match graph_budget {
         Some(budget) => policy.with_source_graph_budget(budget),
-        None => policy.with_function_call_budget(nested),
+        None => policy.with_function_call_budget(new_sidecar),
     };
     selected(&mut config, new_policy)?;
     write_json(&root, "project.json", &config)?;
     let input = LocalProjectInput::from_config_path(&path, &stop)?;
-    assert_ne!(
-        input.bundle.configuration().configuration_digest(),
-        old_replay
-            .hydrate(&stop)?
-            .configuration()
-            .configuration_digest()
-    );
+    let old_view = old_replay.hydrate(&stop)?;
+    if graph_budget.is_none() {
+        assert_eq!(
+            input.bundle.configuration().configuration_digest(),
+            old_view.configuration().configuration_digest()
+        );
+    } else {
+        assert_ne!(
+            input.bundle.configuration().configuration_digest(),
+            old_view.configuration().configuration_digest()
+        );
+    }
     if graph_budget.is_some() {
         let mut refused_config = config.clone();
         refused_config["project_budgets"]["source_graph"]["max_metadata_bytes"] = json!(1);
@@ -309,9 +408,15 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
     assert_eq!(wire["schema"], new_schema);
     assert_eq!(
         wire["configuration"]["budgets"]["function_calls"],
-        serde_json::to_value(nested)?
+        serde_json::to_value(new_sidecar)?
     );
     let reopened = ProjectReplay::from_json(&serde_json::to_vec(&wire)?, &stop)?.hydrate(&stop)?;
+    if graph_budget.is_none() {
+        assert_ne!(
+            reopened.snapshot().analyzer_binding(),
+            old_view.snapshot().analyzer_binding()
+        );
+    }
     assert_eq!(
         reopened
             .configuration()
@@ -324,10 +429,18 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
         .analyzer_binding()
         .function_call_report()
         .ok_or("report")?;
-    assert_eq!(report.budget(), Some(nested));
+    assert_eq!(report.budget(), Some(new_sidecar));
     assert_eq!(
         serde_json::to_value(report)?["profile"],
-        FUNCTION_CALL_GLOBAL_BUDGET_PROFILE
+        if new_sidecar.global_access_budget().is_some() {
+            FUNCTION_CALL_GLOBAL_BUDGET_PROFILE
+        } else {
+            wow_emmy::function_calls::FUNCTION_CALL_BUDGET_PROFILE
+        }
+    );
+    assert!(
+        !report.named_targets().contains_key("LibStub.EmbedLibrary"),
+        "the removed synthetic endpoint must not be fabricated by the current recipe"
     );
     report.validate()?;
 
@@ -355,6 +468,24 @@ fn selected_budget_replay_and_frozen_store_preserve_current(
         &stop,
     )?;
     let pair = AcquiredProjectPair::read(&read, &stop)?;
+    assert_eq!(pair.project().snapshot_id(), old_view.snapshot_id());
+    assert_eq!(
+        pair.project().snapshot().analyzer_binding(),
+        old_view.snapshot().analyzer_binding()
+    );
+    if graph_budget.is_none() {
+        let report = pair
+            .project()
+            .snapshot()
+            .analyzer_binding()
+            .function_call_report()
+            .ok_or("stored report9")?;
+        assert_eq!(
+            serde_json::to_value(report)?["profile"],
+            "wow-emmy/function-call-facts/9"
+        );
+        assert!(!report.named_targets().contains_key("LibStub.EmbedLibrary"));
+    }
     assert_eq!(
         pair.project()
             .configuration()

@@ -35,8 +35,26 @@ const CORE_RECOGNIZER_CALLABLE_QUERIES: &[&str] = &[
     "LibStub",
     "LibStub.GetLibrary",
     "LibStub.NewLibrary",
-    "LibStub.EmbedLibrary",
 ];
+/// Schema13/14/15 report9 used this former W6 callable query only as retained
+/// lookup data. It is intentionally absent from current recognizer admission.
+const LEGACY_GLOBAL_ACCESS_PROFILE9_CALLABLE_QUERIES: &[&str] = &["LibStub.EmbedLibrary"];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FunctionCallAnalysisMode {
+    Disabled,
+    Current,
+    LegacyGlobalAccessV9,
+}
+impl FunctionCallAnalysisMode {
+    pub(crate) const fn enabled(self) -> bool {
+        !matches!(self, Self::Disabled)
+    }
+
+    pub(crate) const fn uses_legacy_global_access_profile9(self) -> bool {
+        matches!(self, Self::LegacyGlobalAccessV9)
+    }
+}
 
 /// Analyzer capability observation scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -246,10 +264,12 @@ pub(crate) fn build_analyzer_binding(
     inventory: &ProjectInputInventory,
     generation: &ProjectGenerationCandidate,
     libraries: &[LuaWorkspaceSnapshot],
-    function_calls: bool,
+    function_call_mode: FunctionCallAnalysisMode,
     cache: &mut Option<wow_emmy::session::AnalyzerSession>,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectAnalyzerBinding> {
+    let function_calls = function_call_mode.enabled();
+    let legacy_global_access_profile9 = function_call_mode.uses_legacy_global_access_profile9();
     checkpoint(stop)?;
     generation.validate(configuration, inventory)?;
     generation.validate_library_ids(libraries.iter().map(LuaWorkspaceSnapshot::snapshot_id))?;
@@ -380,6 +400,13 @@ pub(crate) fn build_analyzer_binding(
             .map(|query| (*query).to_owned())
             .collect::<Vec<_>>();
         queries_to_resolve.extend(queries.iter().cloned());
+        if legacy_global_access_profile9 {
+            queries_to_resolve.extend(
+                LEGACY_GLOBAL_ACCESS_PROFILE9_CALLABLE_QUERIES
+                    .iter()
+                    .map(|query| (*query).to_owned()),
+            );
+        }
         queries_to_resolve.sort();
         queries_to_resolve.dedup();
         queries_to_resolve
@@ -407,6 +434,13 @@ pub(crate) fn build_analyzer_binding(
     let query_profile = match budget.function_call_budget() {
         Some(budget) => query_profile.with_function_call_budget(budget),
         None => query_profile,
+    };
+    let query_profile = if legacy_global_access_profile9 {
+        query_profile.with_function_call_replay_recipe(
+            wow_emmy::function_calls::FunctionCallReplayRecipe::LegacyGlobalAccessV9,
+        )
+    } else {
+        query_profile
     };
     let query_profile = match declaration_recipe {
         Some(recipe) => query_profile.with_physical_function_declarations(recipe),

@@ -134,8 +134,10 @@ jobs:
             -e '/"crates\/wow-rules",/d' \
             -e '/"crates\/wow-service",/d' \
             -e '/"crates\/wow-recognizers",/d' \
+            -e '/"crates\/wow-search",/d' \
+            -e '/"crates\/wow-context",/d' \
             Cargo.toml
-          for member in apps/wow-reference-builder crates/wow-emmy crates/wow-project crates/wow-rules crates/wow-service crates/wow-recognizers; do
+          for member in apps/wow apps/wow-reference-builder crates/wow-emmy crates/wow-project crates/wow-rules crates/wow-service crates/wow-recognizers crates/wow-search crates/wow-context; do
             if grep -Fq "\"$member\"," Cargo.toml; then
               echo "$member remained in the parser-only workspace" >&2
               exit 1

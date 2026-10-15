@@ -539,3 +539,52 @@ fn unselected_primary_keeps_v4_and_ordinary_catalog() -> TestResult {
     store.close()?;
     Ok(())
 }
+
+#[test]
+fn core_library_queries_exclude_synthetic_embed_and_keep_libstub_accessors() -> TestResult {
+    let stop = AtomicBool::new(false);
+    let config = configuration(None, None)?;
+    let library = library(config.analyzer_binding().backend().clone())?;
+    let source = concat!(
+        "LibStub = {}\n",
+        "function LibStub.GetLibrary(major, silent) return {} end\n",
+        "function LibStub.NewLibrary(major, minor) return {}, nil end\n",
+        "function LibStub.EmbedLibrary(addon, major) return true end\n",
+        "function Probe(addon)\n",
+        "  LibStub.GetLibrary(\"FixtureLibrary-1\", true)\n",
+        "  LibStub.NewLibrary(\"FixtureLibrary-1\", 1)\n",
+        "  LibStub.EmbedLibrary(addon, \"FixtureLibrary-1\")\n",
+        "end\n",
+    );
+    let bundle = ProjectInputBundle::closed(
+        config,
+        vec![ProjectInputFile::new("main/library-queries.lua", source)?],
+        vec![library],
+    )?;
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(bundle, &stop)?;
+    let view = publisher.open_current()?;
+    let report = report(&view)?;
+    report.validate()?;
+    assert!(report.source_health_complete());
+
+    for api in ["LibStub.GetLibrary", "LibStub.NewLibrary"] {
+        assert!(matches!(
+            report.named_targets().get(api),
+            Some(wow_emmy::function_calls::SourceCallTarget::MainFunction { .. })
+        ));
+    }
+    assert!(
+        !report.named_targets().contains_key("LibStub.EmbedLibrary"),
+        "the unsupported synthetic embed member must not be selected as a core API"
+    );
+    assert!(report.calls().iter().any(|call| {
+        call.arguments().get(1).is_some_and(|argument| {
+            argument.literal()
+                == Some(&wow_emmy::function_calls::SourceCallLiteral::String(
+                    "FixtureLibrary-1".into(),
+                ))
+        })
+    }));
+    Ok(())
+}

@@ -35,13 +35,13 @@
     },
     {
       "case_id": "RECOG-LIB-005",
-      "rule_id": "core.library.libstub_require@1",
-      "reason": "dynamic-library-key",
+      "rule_id": "core.library.libstub_require@2",
+      "reason": "dynamic-library-major",
       "input_variant": "library-key-from-runtime-expression",
-      "expected_confidence": "Possible",
+      "expected_outcome": "EvaluatedNoMatch",
       "expected_competing_match_ids": [],
       "expected_ambiguity_id": null,
-      "forbidden_resolution": "path-or-vendored-folder-name"
+      "forbidden_resolution": "source-text-or-vendored-folder-name"
     },
     {
       "case_id": "RECOG-STATE-004",

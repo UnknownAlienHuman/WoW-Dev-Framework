@@ -112,6 +112,31 @@ epoch IDs through a strictly validated legacy open; v2 writes require a new stor
 There is no migration or catalog widening in place. Package replay, generation
 Library binding and full acceptance remain open at this predecessor.
 
+## Global-access function-call replay compatibility
+
+Retained platform replays captured with `FunctionCallBudget.global_access` before
+the Emmy report10 change use report9. Schema13 is the global-access-only recipe;
+schemas14 and 15 can also carry that report9 recipe when a graph budget is selected.
+`ProjectReplay::hydrate_owner` dispatches those exact schemas to Emmy's frozen
+`LegacyGlobalAccessV9` report recipe and the pre-W6 Project callable query set,
+including `LibStub.EmbedLibrary` only as legacy lookup data. Missing query results
+remain absent from `named_targets`; this compatibility lookup does not assert that
+the target exists. Hydration still compares the captured project/analyzer IDs and
+exact recaptured archive, without rewriting expected identities.
+
+Current report10 global-access archives use
+`wow-project/native-project-replay/16` / `wow-project.live-replay.v16`, including
+when a graph budget is composed. `STORAGE_SCHEMAS_V16` admits this new recipe;
+schema13/14 catalogs retain their prior membership and reject v16 writes. The
+compatibility consumer is the native `ProjectReplay::hydrate_owner` path used by
+`ProjectReplay::hydrate` and `AcquiredProjectPair::read`.
+
+The retained report9 witness is the 8,010-byte schema13 archive captured and
+hydrated at source head `805aa78a6db5171ec75b0e75fd986a237c854904` before report10
+was applied. Its retained fixture is
+`wow-service/src/local/platform_input/tests/data/legacy-global-access-replay13-profile9-805.json`
+with SHA-256 `64ecd01e5088531c70eb9b0a112f761ef3f7e32c3b0cf951ea3c90bc0da8c9b9`.
+
 ## Complete declared package corpus
 
 Selected declaration syntax uses

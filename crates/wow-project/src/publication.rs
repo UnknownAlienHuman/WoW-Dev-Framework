@@ -5,7 +5,7 @@ use wow_core::ProjectGenerationId;
 use wow_emmy::LuaWorkspaceSnapshot;
 use wow_emmy::session::{AnalyzerSession, AnalyzerUpdateWork};
 
-use crate::analyzer::build_analyzer_binding;
+use crate::analyzer::{FunctionCallAnalysisMode, build_analyzer_binding};
 use crate::update::apply_file_operations;
 use crate::{
     ProjectConfiguration, ProjectError, ProjectErrorCode, ProjectGenerationCandidate,
@@ -24,7 +24,7 @@ pub struct ProjectPublisher {
     current_inputs: Vec<ProjectInputFile>,
     libraries: Vec<LuaWorkspaceSnapshot>,
     last_failure: Option<ProjectError>,
-    function_calls: bool,
+    function_call_mode: FunctionCallAnalysisMode,
     legacy_generation: bool,
     /// Retained native session for the current physical input set. Build state
     /// only: it never mutates a published snapshot and is discarded on any
@@ -46,7 +46,7 @@ impl ProjectPublisher {
             current_inputs: Vec::new(),
             libraries: Vec::new(),
             last_failure: None,
-            function_calls: false,
+            function_call_mode: FunctionCallAnalysisMode::Disabled,
             legacy_generation: false,
             analyzer_session: None,
         }
@@ -58,15 +58,31 @@ impl ProjectPublisher {
     #[must_use]
     pub fn with_function_call_facts() -> Self {
         Self {
-            function_calls: true,
+            function_call_mode: FunctionCallAnalysisMode::Current,
             ..Self::new()
         }
+    }
+
+    /// Rebuilds retained global-access replay data with its frozen report9 recipe.
+    pub(crate) fn legacy_global_access_profile9_replay() -> Self {
+        Self {
+            function_call_mode: FunctionCallAnalysisMode::LegacyGlobalAccessV9,
+            ..Self::new()
+        }
+    }
+
+    pub(crate) const fn uses_legacy_global_access_profile9(&self) -> bool {
+        self.function_call_mode.uses_legacy_global_access_profile9()
     }
 
     /// Only old native archives may reproduce the frozen generation recipe.
     pub(crate) fn legacy_replay(function_calls: bool) -> Self {
         Self {
-            function_calls,
+            function_call_mode: if function_calls {
+                FunctionCallAnalysisMode::Current
+            } else {
+                FunctionCallAnalysisMode::Disabled
+            },
             legacy_generation: true,
             ..Self::new()
         }
@@ -99,7 +115,7 @@ impl ProjectPublisher {
             configuration,
             inventory.clone(),
             libraries.clone(),
-            self.function_calls,
+            self.function_call_mode,
             self.legacy_generation,
             &mut self.analyzer_session,
             stop,
@@ -315,7 +331,7 @@ impl ProjectPublisher {
             target_configuration,
             inventory.clone(),
             libraries.clone(),
-            self.function_calls,
+            self.function_call_mode,
             self.legacy_generation,
             &mut self.analyzer_session,
             stop,
@@ -349,7 +365,11 @@ impl ProjectPublisher {
     }
 
     pub(crate) fn replay_inputs(&self) -> (&[ProjectInputFile], &[LuaWorkspaceSnapshot], bool) {
-        (&self.current_inputs, &self.libraries, self.function_calls)
+        (
+            &self.current_inputs,
+            &self.libraries,
+            self.function_call_mode.enabled(),
+        )
     }
 
     #[must_use]
@@ -420,11 +440,12 @@ fn build_snapshot(
     configuration: ProjectConfiguration,
     inventory: ProjectInputInventory,
     libraries: Vec<LuaWorkspaceSnapshot>,
-    function_calls: bool,
+    function_call_mode: FunctionCallAnalysisMode,
     legacy_generation: bool,
     cache: &mut Option<AnalyzerSession>,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectSnapshot> {
+    let function_calls = function_call_mode.enabled();
     let generation = if legacy_generation {
         ProjectGenerationCandidate::derive(&configuration, &inventory)?
     } else {
@@ -440,7 +461,7 @@ fn build_snapshot(
         &inventory,
         &generation,
         &libraries,
-        function_calls,
+        function_call_mode,
         cache,
         stop,
     )?;

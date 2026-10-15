@@ -14,6 +14,16 @@ pack ID/version
 
 Every output assertion proposal can be traced to this hierarchy.
 
+The machine-state contract uses metadata schema 3 and `declared_rule_ids` for
+the declared core capability inventory. Those identities do not advertise a
+runtime rule set: the exact selected pack ID/version/digest owns its rule
+versions. A native adapter pack and the shared core example are distinct packs.
+`capability_routing` separately records current availability. In particular,
+`core.library.embed@1` remains declared but `not-evaluated`, blocked by #159;
+the executable shared pack omits the unsupported rule. The explicit xtask owner
+map rejects both a false functional embed claim and the old misleading
+`active_rule_ids` field. This metadata change accepts no fixture or checksum.
+
 ## Pack version
 
 Pack version changes when the active rule set, rule order identity, compatibility profile, budgets that can change output, or evaluation gate changes.
@@ -79,6 +89,8 @@ The W2 native bridge and W3 custom-signal adapters preserve the decoded string l
 This interpretation change is identified by W2 profile wow-recognizers/lua-native-event-bridges/5 and fact profile wow-recognizers-lua-native-event-bridge-facts-5, plus W3 profile wow-recognizers/lua-custom-signals/5 and fact profile wow-recognizers-lua-custom-signal-facts-3. The typed rules and graph registry are unchanged, so their versions do not change. The real replacement consumer is wow-service::graph::build::signals::publish_signals: it replaces the stable W2 and W3 graph partitions from the new exact facts. Existing snapshots keep their recorded identities; this adds no legacy alias or reinterpretation path.
 
 The E2-B plan schema `wow-recognizers/semantic-plan/e2-b/2` records dependency-correct order within each original clause scope. Its plan identity changes because clause interpretation and execution order now agree; old `/1` plans are not reinterpreted. The native Service witness consumes the rebuilt plan through `wow-service::graph::build::signals::publish_signals`, which replaces the W3 producer partition under its current profile. Other recognizer-backed producers likewise replace only their own output partitions when rebuilt against the new plan.
+
+The W6 library interpretation is identified by Emmy input profile `wow-emmy/function-call-facts/10`, source profile `wow-recognizers/source-library/4`, fact profile `wow-recognizers-lua-library-facts-4`, core pack version `4`, and require/new rule version `2`. Report10 supplies exact same-file local scalar custody: a typed string at argument 0 can supply the complete major, and a typed integer at argument 1 can supply the independent NewLibrary minor. The source reference key and declaration, initializer, argument-use, and call spans remain in the retained Emmy report. Unproved locals remain unresolved. The real compatibility consumer is `wow-service::graph::build::signals::publish_signals`, which replaces the `wow-recognizers.lua-library` partition and serializes `SourceLibraryRecognition` in `GraphBuildReport.library_recognition`. Prior `/3` recognition outputs and serialized match fields are not reinterpreted. Project global-access replay schema `/13` captures the selected budget, source corpus, and analyzer snapshot identity, then rebuilds the report during hydration. The existing `primary_callable_replay` witness does not select a global-access budget; compatibility of previously captured profile9 global-access replays against report10 remains `NotEvaluated` in this slice. No Project replay version was minted here. Core embed coverage is `NotEvaluated` while no universal donor-backed owner exists.
 
 ## Pack enable/disable
 

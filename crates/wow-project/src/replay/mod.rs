@@ -37,6 +37,8 @@ const FUNCTION_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/1
 const GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/13";
 const GRAPH_METADATA_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/14";
 const GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/15";
+/// Current report10 interpretation for retained global-access replays.
+const GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/16";
 // New selection is a named component recipe, not a renumbered aggregate ladder.
 // Actual consumers are expected_schema, hydrate and publication storage catalogs.
 const XML_CLASSIFICATION_REPLAY_SCHEMA: &str =
@@ -315,13 +317,21 @@ impl ProjectReplay {
         };
         let platform_schema =
             if platform_owner.is_some_and(|owner| owner.retention_limits().is_some()) {
-                if let Some(budget) = configuration.source_graph_budget() {
-                    graph_budget_schema(budget)
-                } else if configuration
+                let has_global_access_budget = configuration
                     .function_call_budget()
-                    .is_some_and(|budget| budget.global_access_budget().is_some())
-                {
-                    GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA
+                    .is_some_and(|budget| budget.global_access_budget().is_some());
+                if publisher.uses_legacy_global_access_profile9() {
+                    if !has_global_access_budget {
+                        return Err(invalid());
+                    }
+                    configuration
+                        .source_graph_budget()
+                        .map(graph_budget_schema)
+                        .unwrap_or(GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA)
+                } else if has_global_access_budget {
+                    GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA
+                } else if let Some(budget) = configuration.source_graph_budget() {
+                    graph_budget_schema(budget)
                 } else if configuration.function_call_budget().is_some() {
                     FUNCTION_BUDGET_REPLAY_SCHEMA
                 } else {
@@ -403,6 +413,37 @@ impl ProjectReplay {
             return Err(invalid());
         }
         let schema = self.expected_base_schema()?;
+        let has_global_access_budget = self
+            .configuration
+            .function_call_budget()
+            .is_some_and(|budget| budget.global_access_budget().is_some());
+        if has_global_access_budget
+            && self
+                .platform
+                .as_ref()
+                .is_some_and(ReplayPlatform::has_retention_limits)
+            && self
+                .configuration
+                .source_graph_budget()
+                .is_none_or(|_| self.configuration.platform_graph_profile().is_some())
+        {
+            let selected = if self.uses_legacy_global_access_profile9() {
+                self.configuration
+                    .source_graph_budget()
+                    .map(graph_budget_schema)
+                    .unwrap_or(GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA)
+            } else if self.schema == GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA {
+                GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA
+            } else {
+                return Err(invalid());
+            };
+            return selected_component_schema(
+                selected,
+                &self.configuration,
+                self.function_calls,
+                self.supports_physical_update(),
+            );
+        }
         if let Some(budget) = self.configuration.source_graph_budget() {
             return if self
                 .platform
@@ -426,9 +467,7 @@ impl ProjectReplay {
                 .is_some_and(ReplayPlatform::has_retention_limits),
             self.configuration.function_call_budget(),
         ) {
-            (true, Some(budget)) if budget.global_access_budget().is_some() => {
-                Ok(GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA)
-            }
+            (true, Some(budget)) if budget.global_access_budget().is_some() => Err(invalid()),
             (true, Some(_)) => Ok(FUNCTION_BUDGET_REPLAY_SCHEMA),
             (true, None) => Ok(RETAINED_PLATFORM_REPLAY_SCHEMA),
             (false, None) => Ok(schema),
@@ -641,10 +680,15 @@ impl ProjectReplay {
                 .collect::<ProjectResult<Vec<_>>>()?
         };
         let bundle = ProjectInputBundle::closed(config, files, libraries)?;
+        let legacy_global_access_profile9 = self.uses_legacy_global_access_profile9();
         let mut publisher = if self.generation_schema_version.is_none() {
             ProjectPublisher::legacy_replay(self.function_calls)
         } else if self.function_calls {
-            ProjectPublisher::with_function_call_facts()
+            if legacy_global_access_profile9 {
+                ProjectPublisher::legacy_global_access_profile9_replay()
+            } else {
+                ProjectPublisher::with_function_call_facts()
+            }
         } else {
             ProjectPublisher::new()
         };
@@ -668,6 +712,17 @@ impl ProjectReplay {
             && self.packages.is_none()
             && self.platform.is_none()
     }
+    fn uses_legacy_global_access_profile9(&self) -> bool {
+        self.configuration
+            .function_call_budget()
+            .is_some_and(|budget| budget.global_access_budget().is_some())
+            && matches!(
+                self.schema.as_str(),
+                GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA
+                    | GRAPH_METADATA_BUDGET_REPLAY_SCHEMA
+                    | GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA
+            )
+    }
     fn storage_schema(&self) -> ProjectResult<&'static str> {
         if self.schema != self.expected_schema()? {
             return Err(invalid());
@@ -688,6 +743,7 @@ impl ProjectReplay {
             GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v13"),
             GRAPH_METADATA_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v14"),
             GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v15"),
+            GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA => Ok("wow-project.live-replay.v16"),
             XML_CLASSIFICATION_REPLAY_SCHEMA => Ok(XML_CLASSIFICATION_STORAGE_SCHEMA),
             PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA => {
                 Ok(PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA)

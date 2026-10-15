@@ -4,8 +4,11 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
-use emmylua_code_analysis::{EmmyLuaAnalysis, LuaSignatureId, LuaType};
-use emmylua_parser::{LuaAst, LuaAstNode, LuaClosureExpr, LuaExpr, LuaLiteralToken};
+use emmylua_code_analysis::{EmmyLuaAnalysis, LuaDeclId, LuaSignatureId, LuaType, SemanticModel};
+use emmylua_parser::{
+    LuaAst, LuaAstNode, LuaClosureExpr, LuaExpr, LuaLiteralToken, LuaNameExpr, LuaSyntaxId,
+    LuaSyntaxKind, NumberResult,
+};
 use serde::Serialize;
 use wow_core::SourceSpan;
 
@@ -44,8 +47,16 @@ pub use signature::{
 pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/7";
 /// Explicit budget-bound sidecar; absent selection preserves profile7.
 pub const FUNCTION_CALL_BUDGET_PROFILE: &str = "wow-emmy/function-call-facts/8";
-/// Explicit independent global-access work/text selection, retained by replay13.
-pub const FUNCTION_CALL_GLOBAL_BUDGET_PROFILE: &str = "wow-emmy/function-call-facts/9";
+/// Explicit global-access work/text selection retained by schema13 archives.
+pub const FUNCTION_CALL_GLOBAL_BUDGET_LEGACY_PROFILE: &str = "wow-emmy/function-call-facts/9";
+/// Explicit global-access budget and local-constant custody profile (report10).
+pub const FUNCTION_CALL_GLOBAL_BUDGET_PROFILE: &str = "wow-emmy/function-call-facts/10";
+
+/// Exact historical report recipe used by retained global-access replay records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionCallReplayRecipe {
+    LegacyGlobalAccessV9,
+}
 // Existing callable/call occurrence keys keep their original recipe. Added
 // normalized call arguments/callable keys change report identity, not old occurrence keys.
 const OCCURRENCE_PROFILE: &str = "wow-emmy/function-call-facts/1";
@@ -139,10 +150,41 @@ pub enum SourceCallLiteral {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+pub enum SourceCallConstant {
+    Integer(i64),
+    String(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SourceCallLocalConstant {
+    name: String,
+    declaration_span: SourceSpan,
+    initializer_span: SourceSpan,
+    value: SourceCallConstant,
+}
+impl SourceCallLocalConstant {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub const fn declaration_span(&self) -> SourceSpan {
+        self.declaration_span
+    }
+    pub const fn initializer_span(&self) -> SourceSpan {
+        self.initializer_span
+    }
+    pub fn value(&self) -> &SourceCallConstant {
+        &self.value
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SourceCallArgument {
     span: SourceSpan,
     #[serde(skip_serializing_if = "Option::is_none")]
     literal: Option<SourceCallLiteral>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    local_constant: Option<SourceCallLocalConstant>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reference_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -154,6 +196,9 @@ impl SourceCallArgument {
     }
     pub fn literal(&self) -> Option<&SourceCallLiteral> {
         self.literal.as_ref()
+    }
+    pub fn local_constant(&self) -> Option<&SourceCallLocalConstant> {
+        self.local_constant.as_ref()
     }
     pub fn reference_key(&self) -> Option<&str> {
         self.reference_key.as_deref()
@@ -389,6 +434,11 @@ impl FunctionCallReport {
             {
                 limits
             }
+            (FUNCTION_CALL_GLOBAL_BUDGET_LEGACY_PROFILE, Some(limits))
+                if limits.global_access_budget().is_some() =>
+            {
+                limits
+            }
             (FUNCTION_CALL_GLOBAL_BUDGET_PROFILE, Some(limits))
                 if limits.global_access_budget().is_some() =>
             {
@@ -500,6 +550,38 @@ impl FunctionCallReport {
                     && value.len() > MAX_CALL_LITERAL_BYTES
                 {
                     return Err(invalid());
+                }
+                if let Some(local_constant) = &argument.local_constant {
+                    let (Some(declaration_start), Some(declaration_end)) = (
+                        local_constant.declaration_span.byte_start(),
+                        local_constant.declaration_span.byte_end(),
+                    ) else {
+                        return Err(invalid());
+                    };
+                    let (Some(initializer_start), Some(initializer_end)) = (
+                        local_constant.initializer_span.byte_start(),
+                        local_constant.initializer_span.byte_end(),
+                    ) else {
+                        return Err(invalid());
+                    };
+                    if self.profile != FUNCTION_CALL_GLOBAL_BUDGET_PROFILE
+                        || local_constant.name.is_empty()
+                        || local_constant.name.len() > MAX_CALL_LITERAL_BYTES
+                        || declaration_start > declaration_end
+                        || declaration_end > initializer_start
+                        || initializer_start > initializer_end
+                        || initializer_end > start
+                        || argument.literal.is_some()
+                        || argument.reference_key.is_some()
+                        || argument.reference_target.is_some()
+                        || matches!(
+                            &local_constant.value,
+                            SourceCallConstant::String(value)
+                                if value.len() > MAX_CALL_LITERAL_BYTES
+                        )
+                    {
+                        return Err(invalid());
+                    }
                 }
                 if argument
                     .reference_key
@@ -659,6 +741,152 @@ fn call_literal(mut expr: LuaExpr) -> Option<SourceCallLiteral> {
     None
 }
 
+fn call_scalar_constant(mut expr: LuaExpr) -> Option<SourceCallConstant> {
+    for _ in 0..MAX_SCOPE_DEPTH {
+        match expr {
+            LuaExpr::ParenExpr(paren) => expr = paren.get_expr()?,
+            LuaExpr::LiteralExpr(value) => {
+                return match value.get_literal()? {
+                    LuaLiteralToken::String(value) => {
+                        let value = value.get_value();
+                        (value.len() <= MAX_CALL_LITERAL_BYTES)
+                            .then_some(SourceCallConstant::String(value))
+                    }
+                    LuaLiteralToken::Number(value) => match value.get_number_value() {
+                        NumberResult::Int(value) => Some(SourceCallConstant::Integer(value)),
+                        NumberResult::Uint(_) | NumberResult::Float(_) | NumberResult::Number => {
+                            None
+                        }
+                    },
+                    _ => None,
+                };
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
+fn local_constant_for_argument(
+    argument: &LuaExpr,
+    model: &SemanticModel<'_>,
+    file: &LuaWorkspaceFile,
+    workspace: &str,
+    caller_function_id: &str,
+    cache: &mut HashMap<LuaDeclId, Option<SourceCallLocalConstant>>,
+    stop: &AtomicBool,
+) -> EmmyMemberCallResult<Option<SourceCallLocalConstant>> {
+    let mut expression = argument.clone();
+    let mut argument_name = None;
+    for _ in 0..MAX_SCOPE_DEPTH {
+        match expression {
+            LuaExpr::ParenExpr(paren) => {
+                let Some(inner) = paren.get_expr() else {
+                    return Ok(None);
+                };
+                expression = inner;
+            }
+            LuaExpr::NameExpr(name) => {
+                argument_name = Some(name);
+                break;
+            }
+            _ => return Ok(None),
+        }
+    }
+    let Some(name) = argument_name else {
+        return Ok(None);
+    };
+    let file_id = model.get_file_id();
+    let Some(decl_id) = model
+        .get_db()
+        .get_reference_index()
+        .get_local_reference(&file_id)
+        .and_then(|references| references.get_decl_id(&name.get_range()))
+    else {
+        return Ok(None);
+    };
+    if let Some(cached) = cache.get(&decl_id) {
+        return Ok(cached.clone());
+    }
+
+    let result = (|| -> EmmyMemberCallResult<Option<SourceCallLocalConstant>> {
+        let Some(declaration) = model.get_db().get_decl_index().get_decl(&decl_id) else {
+            return Ok(None);
+        };
+        if declaration.get_file_id() != file_id
+            || !declaration.is_local()
+            || declaration.is_param()
+            || name.get_name_text().as_deref() != Some(declaration.get_name())
+        {
+            return Ok(None);
+        }
+        let Some(references) = model
+            .get_db()
+            .get_reference_index()
+            .get_decl_references(&file_id, &decl_id)
+        else {
+            return Ok(None);
+        };
+        let Some(initializer_id) = declaration.get_value_syntax_id() else {
+            return Ok(None);
+        };
+        let root = model.get_root().syntax();
+        let Some(initializer_node) = initializer_id.to_node_from_root(root) else {
+            return Ok(None);
+        };
+        let Some(initializer) = LuaExpr::cast(initializer_node) else {
+            return Ok(None);
+        };
+        if initializer.get_syntax_id() != initializer_id {
+            return Ok(None);
+        }
+        let Some(value) = call_scalar_constant(initializer) else {
+            return Ok(None);
+        };
+        let Some(declaration_node) = declaration.get_syntax_id().to_node_from_root(root) else {
+            return Ok(None);
+        };
+        let declaration_function_id = caller(workspace, file, &declaration_node)?;
+        if declaration_function_id != caller_function_id {
+            return Ok(None);
+        }
+
+        let mut found_use = false;
+        for reference in &references.cells {
+            checkpoint(stop)?;
+            if reference.range == declaration.get_range() {
+                continue;
+            }
+            if reference.is_write {
+                return Ok(None);
+            }
+            found_use |= reference.range == name.get_range();
+            let reference_id = LuaSyntaxId::new(LuaSyntaxKind::NameExpr.into(), reference.range);
+            let Some(reference_node) = reference_id.to_node_from_root(root) else {
+                return Ok(None);
+            };
+            let Some(reference_name) = LuaNameExpr::cast(reference_node) else {
+                return Ok(None);
+            };
+            if caller(workspace, file, reference_name.syntax())? != declaration_function_id {
+                return Ok(None);
+            }
+        }
+        if !found_use {
+            return Ok(None);
+        }
+
+        Ok(Some(SourceCallLocalConstant {
+            name: name.get_name_text().ok_or_else(invalid)?,
+            declaration_span: ast_span(file, declaration.get_range())?,
+            initializer_span: ast_span(file, initializer_id.get_range())?,
+            value,
+        }))
+    })()?;
+    cache.insert(decl_id, result.clone());
+    Ok(result)
+}
+
 fn invalid() -> EmmyMemberCallError {
     EmmyMemberCallError::new(
         EmmyMemberCallErrorCode::SemanticModelUnavailable,
@@ -759,6 +987,7 @@ pub(crate) fn collect(
     callable_signatures: &BTreeMap<String, LuaSignatureId>,
     symbol_lookup_analysis_ids: &[&str],
     selected_budget: Option<FunctionCallBudget>,
+    replay_recipe: Option<FunctionCallReplayRecipe>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
     collect_with_declarations(
@@ -770,6 +999,7 @@ pub(crate) fn collect(
         symbol_lookup_analysis_ids,
         selected_budget,
         None,
+        replay_recipe,
         stop,
     )
 }
@@ -786,6 +1016,7 @@ pub(crate) fn collect_with_declarations(
     symbol_lookup_analysis_ids: &[&str],
     selected_budget: Option<FunctionCallBudget>,
     declaration_recipe: Option<PhysicalFunctionDeclarationRecipe>,
+    replay_recipe: Option<FunctionCallReplayRecipe>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
     collect_with_components(
@@ -798,6 +1029,7 @@ pub(crate) fn collect_with_declarations(
         selected_budget,
         declaration_recipe,
         None,
+        replay_recipe,
         stop,
     )
 }
@@ -814,9 +1046,17 @@ pub(crate) fn collect_with_components(
     selected_budget: Option<FunctionCallBudget>,
     declaration_recipe: Option<PhysicalFunctionDeclarationRecipe>,
     signature_recipe: Option<PhysicalFunctionSignatureRecipe>,
+    replay_recipe: Option<FunctionCallReplayRecipe>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
     let limits = selected_budget.unwrap_or_default();
+    let legacy_global_access_profile =
+        replay_recipe == Some(FunctionCallReplayRecipe::LegacyGlobalAccessV9);
+    if legacy_global_access_profile
+        && !selected_budget.is_some_and(|budget| budget.global_access_budget().is_some())
+    {
+        return Err(invalid());
+    }
     let mut declaration_bytes = declaration::DeclarationBudget::new(limits.max_report_bytes());
     let mut signatures = HashMap::new();
     let mut access_sources = HashMap::new();
@@ -1033,6 +1273,8 @@ pub(crate) fn collect_with_components(
     let mut global_accesses = Vec::new();
     let mut access_budget =
         crate::global_access::AccessBudget::new(limits.global_access_budget().unwrap_or_default());
+    let include_local_constants =
+        limits.global_access_budget().is_some() && !legacy_global_access_profile;
     for file in main.files() {
         checkpoint(stop)?;
         if files
@@ -1044,6 +1286,7 @@ pub(crate) fn collect_with_components(
             continue;
         }
         let model = semantic_model(analysis, main_root, file)?;
+        let mut local_constant_cache = HashMap::new();
         let aliases =
             crate::global_access::AliasIndex::collect(&model, file, &mut access_budget, stop)
                 .map_err(|error| crate::global_access::at_path(error, file.path()))?;
@@ -1116,9 +1359,23 @@ pub(crate) fn collect_with_components(
                     list.get_args()
                         .map(|argument| {
                             let span = ast_span(file, argument.syntax().text_range())?;
+                            let local_constant = if include_local_constants {
+                                local_constant_for_argument(
+                                    &argument,
+                                    &model,
+                                    file,
+                                    main.snapshot_id(),
+                                    &caller_function_id,
+                                    &mut local_constant_cache,
+                                    stop,
+                                )?
+                            } else {
+                                None
+                            };
                             Ok(SourceCallArgument {
                                 span,
                                 literal: call_literal(argument),
+                                local_constant,
                                 reference_key: None,
                                 reference_target: None,
                             })
@@ -1243,7 +1500,9 @@ pub(crate) fn collect_with_components(
         named_targets.insert(query.clone(), target);
     }
     let mut report = FunctionCallReport {
-        profile: if selected_budget.is_some_and(|budget| budget.global_access_budget().is_some()) {
+        profile: if legacy_global_access_profile {
+            FUNCTION_CALL_GLOBAL_BUDGET_LEGACY_PROFILE
+        } else if selected_budget.is_some_and(|budget| budget.global_access_budget().is_some()) {
             FUNCTION_CALL_GLOBAL_BUDGET_PROFILE
         } else if selected_budget.is_some() {
             FUNCTION_CALL_BUDGET_PROFILE

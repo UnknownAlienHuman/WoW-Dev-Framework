@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "fixture_id": "wow-recognizers-e2-core-pack-v1",
+  "fixture_id": "wow-recognizers-e2-core-pack-v2",
   "state": "documentation-only-pending-profile-and-byte-freeze",
   "pack": {
     "pack_id": "wow-core-structural",
-    "version": "e2-1",
+    "version": "e2-2",
     "trust_class": "core",
     "fact_schema_profile_id": null,
     "graph_registry_bundle_id": null,
@@ -42,7 +42,6 @@
       "core.hook.secure_posthook@1",
       "core.library.libstub_require@1",
       "core.library.libstub_new@1",
-      "core.library.embed@1",
       "core.state.saved_variable_root@1",
       "core.state.literal_path_read@1",
       "core.state.literal_path_write@1"

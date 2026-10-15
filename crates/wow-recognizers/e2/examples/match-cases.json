@@ -130,12 +130,73 @@
       "expected_proposal_ids": []
     },
     {
+      "case_id": "RECOG-LIB-001",
+      "rule_id": "core.library.libstub_require@2",
+      "input_variant": "exact-full-major-AceAddon-3.0",
+      "expected_outcome": "Matched",
+      "expected_entity_kind": "library",
+      "expected_entity_semantic_key": {
+        "library": "AceAddon-3.0"
+      },
+      "expected_relation_kind": "lua_requires_library",
+      "expected_confidence": "Derived",
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-LIB-002",
+      "rule_id": "core.library.libstub_new@2",
+      "input_variant": "donor-shaped-local-MAJOR-MINOR",
+      "expected_outcome": "Matched",
+      "expected_entity_semantic_key": {
+        "library": "AceAddon-3.0"
+      },
+      "expected_relation_kind": "lua_declares_library",
+      "expected_minor": 13,
+      "expected_original_reference_keys": ["MAJOR", "MINOR"],
+      "forbidden_claims": [
+        "major-name-version-split",
+        "loaded-library-revision"
+      ],
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
       "case_id": "RECOG-LIB-004",
-      "rule_id": "core.library.libstub_require@1",
+      "rule_id": "core.library.libstub_require@2",
       "input_variant": "libs-path-without-libstub-call",
       "expected_outcome": "EvaluatedNoMatch",
       "expected_match_ids": [],
       "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-LIB-007",
+      "rule_id": "core.library.libstub_require@2",
+      "input_variant": "two-exact-callers-same-major-shuffled-and-first-witness-removed",
+      "expected_outcome": "Matched",
+      "expected_entity_count": 1,
+      "expected_entity_support_calls": 2,
+      "expected_input_order_invariant": true,
+      "expected_entity_confidence": "Derived",
+      "expected_relation_confidences": ["Derived", "Derived"],
+      "expected_match_ids": [],
+      "expected_proposal_ids": []
+    },
+    {
+      "case_id": "RECOG-LIB-008",
+      "rule_id": "core.library.embed@1",
+      "input_variant": "embed-convention-deferred",
+      "expected_outcome": "NotEvaluated",
+      "blocking_issue": 159,
+      "expected_relation_kind": "lua_embeds_library",
+      "forbidden_claims": ["embeds_library"]
+    },
+    {
+      "case_id": "RECOG-LIB-009",
+      "rule_id": "core.library.libstub_new@2",
+      "input_variant": "reassigned-or-captured-local-major-without-exact-custody",
+      "expected_outcome": "NotEvaluatedOrNoExactMatch",
+      "forbidden_claims": ["major-from-variable-name", "minor-from-major-suffix"]
     },
     {
       "case_id": "RECOG-STATE-002",

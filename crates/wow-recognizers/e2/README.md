@@ -64,7 +64,7 @@ The frozen E2-B pack covers:
 - custom registry callback only when an exact `TriggerEvent` producer is present;
 - CVar callback registration;
 - `SetScript`, `HookScript`, and `hooksecurefunc` structure;
-- LibStub library requirement/creation/embed structure;
+- LibStub library requirement/creation keyed by the complete major; embed conventions remain deferred until a donor-backed owner exists;
 - SavedVariables root and literal state path reads/writes.
 
 The pack intentionally does not infer generic module/service/lifecycle roles from arbitrary names. Named framework conventions are E5 calibration-pack data.
