@@ -52,6 +52,10 @@ their published wire identities remain distinct.
 An explicit [identifier-similarity query](../../apps/wow/SEARCH_IDENTIFIER_SIMILARITY.md)
 uses captured native names with frozen scalar distance, charged work and band-8
 Candidate signals. Legacy requests retain their original profiles and bytes.
+The separate [ProjectEntity component](../../apps/wow/SEARCH_PROJECT_ENTITIES.md)
+indexes original materialized graph-node metadata and executes exact-seed
+Candidate graph retrieval through the held Graph owner. It reuses the existing
+Project generation hold and durable Search lifecycle.
 The historical preimplementation freeze is not accepted.
 
 The explicit file-set component uses a separately named metadata profile and

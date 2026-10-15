@@ -1,10 +1,15 @@
 //! Closed document selection for the existing durable Search lifecycle.
 use super::*;
+use wow_search::entities::{
+    EntitySearchProfile, EntitySearchShard, PreparedEntityShard, open_project_entity_shard,
+    prepare_project_entity_shard,
+};
 use wow_search::{
     PreparedProjectFileSetShard, ProjectFileSetSelection, SearchFileSetBuildProfile,
     SearchFileSetOpenRequest, SearchFileSetPrepareRequest, SearchFileSetShard,
     open_project_file_set_shard, prepare_project_file_set_shard,
 };
+pub(super) const ENTITY_COMPONENT: &str = "project_graph_entities_v1";
 
 pub(super) const FILE_SET_COMPONENT: &str = "project_file_set_v1";
 
@@ -89,6 +94,7 @@ impl SearchShardRetireRequest {
 pub(super) enum Selection {
     Single(Box<str>),
     FileSet(ProjectFileSetSelection),
+    GraphEntities,
 }
 
 #[derive(Serialize)]
@@ -143,6 +149,11 @@ impl Selection {
                 file_ids: Some(selection.ids()),
                 document_component: Some(FILE_SET_COMPONENT),
             },
+            Self::GraphEntities => Identity {
+                file_id: None,
+                file_ids: None,
+                document_component: Some(ENTITY_COMPONENT),
+            },
         }
     }
 
@@ -152,6 +163,7 @@ impl Selection {
                 ProjectFileId::parse(id).map_err(map_project_error)?,
             )),
             Self::FileSet(selection) => Ok(Documents::FileSet(selection)),
+            Self::GraphEntities => Ok(Documents::GraphEntities),
         }
     }
 }
@@ -159,6 +171,7 @@ impl Selection {
 pub(super) enum Documents<'a> {
     Single(ProjectFileId),
     FileSet(&'a ProjectFileSetSelection),
+    GraphEntities,
 }
 
 impl Documents<'_> {
@@ -174,12 +187,18 @@ impl Documents<'_> {
                 file_ids: Some(selection.ids()),
                 document_component: Some(FILE_SET_COMPONENT),
             },
+            Self::GraphEntities => Identity {
+                file_id: None,
+                file_ids: None,
+                document_component: Some(ENTITY_COMPONENT),
+            },
         }
     }
     pub(super) fn single_id(&self) -> Option<&ProjectFileId> {
         match self {
             Self::Single(id) => Some(id),
             Self::FileSet(_) => None,
+            Self::GraphEntities => None,
         }
     }
 }
@@ -187,9 +206,22 @@ impl Documents<'_> {
 pub(super) enum Profile {
     Single(SearchBuildProfile),
     FileSet(SearchFileSetBuildProfile),
+    GraphEntities(EntitySearchProfile),
 }
 
 impl Profile {
+    pub(super) fn for_selection(
+        bounds: SearchBounds,
+        selection: &Selection,
+    ) -> ServiceResult<Self> {
+        if matches!(selection, Selection::GraphEntities) {
+            Ok(Self::GraphEntities(
+                EntitySearchProfile::new(bounds).map_err(map_search_error)?,
+            ))
+        } else {
+            Self::new(bounds, selection.is_file_set())
+        }
+    }
     pub(super) fn new(bounds: SearchBounds, file_set: bool) -> ServiceResult<Self> {
         if file_set {
             Ok(Self::FileSet(
@@ -205,12 +237,14 @@ impl Profile {
         match self {
             Self::Single(profile) => profile.digest(),
             Self::FileSet(profile) => profile.digest(),
+            Self::GraphEntities(profile) => profile.digest(),
         }
     }
     pub(super) fn component(&self) -> Option<&'static str> {
         match self {
             Self::Single(_) => None,
             Self::FileSet(_) => Some(FILE_SET_COMPONENT),
+            Self::GraphEntities(_) => Some(ENTITY_COMPONENT),
         }
     }
     pub(super) fn prepare(
@@ -223,6 +257,19 @@ impl Profile {
         stop: &AtomicBool,
     ) -> ServiceResult<Prepared> {
         match (self, documents) {
+            (Self::GraphEntities(profile), Documents::GraphEntities) => {
+                Ok(Prepared::GraphEntities(
+                    prepare_project_entity_shard(
+                        read,
+                        generation,
+                        profile,
+                        permission,
+                        object_limits,
+                        stop,
+                    )
+                    .map_err(map_search_error)?,
+                ))
+            }
             (Self::Single(profile), Documents::Single(id)) => Ok(Prepared::Single(
                 prepare_project_file_shard(
                     read,
@@ -271,6 +318,19 @@ impl Profile {
         stop: &AtomicBool,
     ) -> ServiceResult<Opened> {
         let opened = match self {
+            Self::GraphEntities(profile) => Ok(Opened::GraphEntities(
+                open_project_entity_shard(
+                    store,
+                    logical_id,
+                    &object_id,
+                    &generation,
+                    profile,
+                    permission,
+                    lease,
+                    stop,
+                )
+                .map_err(map_search_error)?,
+            )),
             Self::Single(profile) => Ok(Opened::Single(
                 open_project_file_shard(
                     store,
@@ -318,6 +378,7 @@ impl Profile {
                     .iter()
                     .map(|document| document.entity_id())
                     .eq(selection.ids().iter()),
+                (Opened::GraphEntities(_), Documents::GraphEntities) => true,
                 _ => false,
             };
             if !matches {
@@ -335,42 +396,69 @@ impl Profile {
 pub(super) enum Prepared {
     Single(PreparedProjectFileShard),
     FileSet(PreparedProjectFileSetShard),
+    GraphEntities(PreparedEntityShard),
 }
 impl Prepared {
     pub(super) fn logical_id(&self) -> &str {
         match self {
             Self::Single(value) => value.logical_id(),
             Self::FileSet(value) => value.logical_id(),
+            Self::GraphEntities(value) => value.logical_id(),
         }
     }
     pub(super) fn object_id(&self) -> &wow_store::ObjectId {
         match self {
             Self::Single(value) => value.object_id(),
             Self::FileSet(value) => value.object_id(),
+            Self::GraphEntities(value) => value.object_id(),
         }
     }
     pub(super) fn source_generation(&self) -> &str {
         match self {
             Self::Single(value) => value.source_generation(),
             Self::FileSet(value) => value.source_generation(),
+            Self::GraphEntities(value) => value.source_generation(),
         }
     }
     pub(super) fn profile_digest(&self) -> &str {
         match self {
             Self::Single(value) => value.profile_digest(),
             Self::FileSet(value) => value.profile_digest(),
+            Self::GraphEntities(value) => value.profile_digest(),
         }
     }
-    pub(super) fn documents(&self) -> &[wow_search::ProjectFileSearchDocument] {
+    pub(super) fn transport_documents(&self) -> Vec<DurableDocument<'_>> {
         match self {
-            Self::Single(value) => std::slice::from_ref(value.document()),
-            Self::FileSet(value) => value.documents(),
+            Self::Single(value) => vec![DurableDocument {
+                entity_id: value.document().entity_id().as_str(),
+                owner_metadata_label: value.document().owner_metadata_label().as_str(),
+                entity_kind: None,
+            }],
+            Self::FileSet(value) => value
+                .documents()
+                .iter()
+                .map(|d| DurableDocument {
+                    entity_id: d.entity_id().as_str(),
+                    owner_metadata_label: d.owner_metadata_label().as_str(),
+                    entity_kind: None,
+                })
+                .collect(),
+            Self::GraphEntities(value) => value
+                .documents()
+                .iter()
+                .map(|d| DurableDocument {
+                    entity_id: d.entity_id().as_str(),
+                    owner_metadata_label: d.owner_metadata_key(),
+                    entity_kind: Some(d.entity_kind()),
+                })
+                .collect(),
         }
     }
     pub(super) fn into_object(self) -> PendingObject {
         match self {
             Self::Single(value) => value.into_object(),
             Self::FileSet(value) => value.into_object(),
+            Self::GraphEntities(value) => value.into_object(),
         }
     }
 }
@@ -378,30 +466,35 @@ impl Prepared {
 pub(super) enum Opened {
     Single(wow_search::SearchShard),
     FileSet(SearchFileSetShard),
+    GraphEntities(EntitySearchShard),
 }
 impl Opened {
     pub(super) fn logical_id(&self) -> &str {
         match self {
             Self::Single(value) => value.logical_id(),
             Self::FileSet(value) => value.logical_id(),
+            Self::GraphEntities(value) => value.logical_id(),
         }
     }
     pub(super) fn object_id(&self) -> &wow_store::ObjectId {
         match self {
             Self::Single(value) => value.object_id(),
             Self::FileSet(value) => value.object_id(),
+            Self::GraphEntities(value) => value.object_id(),
         }
     }
     pub(super) fn source_generation(&self) -> &str {
         match self {
             Self::Single(value) => value.source_generation(),
             Self::FileSet(value) => value.source_generation(),
+            Self::GraphEntities(value) => value.source_generation(),
         }
     }
     pub(super) fn profile_digest(&self) -> &str {
         match self {
             Self::Single(value) => value.profile_digest(),
             Self::FileSet(value) => value.profile_digest(),
+            Self::GraphEntities(value) => value.profile_digest(),
         }
     }
     pub(super) fn is_file_set(&self) -> bool {
@@ -414,6 +507,7 @@ impl Opened {
         match self {
             Self::Single(value) => value.exact_id_lookup(id),
             Self::FileSet(value) => value.exact_id_lookup(id),
+            Self::GraphEntities(_) => Err(wow_search::SearchError::InvalidProfile),
         }
     }
     pub(super) fn exact_label_lookup(
@@ -423,6 +517,7 @@ impl Opened {
         match self {
             Self::Single(value) => value.exact_label_lookup(label),
             Self::FileSet(value) => value.exact_label_lookup(label),
+            Self::GraphEntities(_) => Err(wow_search::SearchError::InvalidProfile),
         }
     }
     pub(super) fn literal_candidates(
@@ -432,12 +527,14 @@ impl Opened {
         match self {
             Self::Single(value) => value.literal_candidates(query),
             Self::FileSet(value) => value.literal_candidates(query),
+            Self::GraphEntities(_) => Err(wow_search::SearchError::InvalidProfile),
         }
     }
     pub(super) fn release(self, store: &mut Store) -> wow_search::SearchResult<()> {
         match self {
             Self::Single(value) => value.release(store),
             Self::FileSet(value) => value.release(store),
+            Self::GraphEntities(value) => value.release(store),
         }
     }
 }

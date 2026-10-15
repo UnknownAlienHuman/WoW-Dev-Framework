@@ -12,6 +12,9 @@ retirement/GC, with exact replay, cumulative limits and explicit release.
 The same query/continuation path transports the explicit
 [identifier-similarity mode](../../../apps/wow/SEARCH_IDENTIFIER_SIMILARITY.md)
 without reinterpreting Candidate signals or changing legacy query profiles.
+The [ProjectEntity/seeded-graph route](../../../apps/wow/SEARCH_PROJECT_ENTITIES.md)
+reuses Source hold/epoch/physical-Store custody and real retained Project/Graph
+acquisition, checked closure and existing build/retire/GC journals.
 Only the implemented subset is active; broader E4-C and projections/lanes
 remain unaccepted in #169/#125. See [pagination](../../../apps/wow/SEARCH_PAGINATION.md) and
 [native Search commands](../../../apps/wow/SEARCH_BUILD_QUERY.md).

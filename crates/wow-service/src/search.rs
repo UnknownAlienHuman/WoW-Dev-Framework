@@ -4,6 +4,8 @@
 //! and it requires explicit finite owner, Store, lease, and output bounds.
 
 mod documents;
+mod entity;
+pub use entity::EntityRetrievalRequest;
 mod reference;
 pub use reference::{
     ReferenceContinueRequest, ReferenceIndexBuildRequest, ReferenceResultReleaseRequest,
@@ -454,6 +456,13 @@ pub struct SearchOperationService {
 }
 
 impl SearchOperationService {
+    pub fn retrieve_entities(
+        &self,
+        request: &EntityRetrievalRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        entity::execute(request, stop)
+    }
     pub fn continue_reference_results(
         &self,
         request: &ReferenceContinueRequest,
@@ -799,6 +808,8 @@ struct DurableRetirePayload<'a> {
 struct DurableDocument<'a> {
     entity_id: &'a str,
     owner_metadata_label: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entity_kind: Option<&'a str>,
 }
 
 #[derive(Serialize)]
@@ -983,7 +994,27 @@ fn validate_retirement_source_hold(
     documents: &Documents<'_>,
     profile: &DurableProfile,
 ) -> ServiceResult<RetentionRoot> {
-    let binding = &request.source_hold;
+    validate_source_hold_binding(
+        project_store,
+        search_store_instance_id,
+        &request.source_hold,
+        generation,
+        documents,
+        profile,
+        request.store_limits,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_source_hold_binding(
+    project_store: &ProjectStore,
+    search_store_instance_id: &wow_store::StoreInstanceId,
+    binding: &SearchSourceHoldBinding,
+    generation: &StoreGenerationId,
+    documents: &Documents<'_>,
+    profile: &DurableProfile,
+    store_limits: SearchStoreLimits,
+) -> ServiceResult<RetentionRoot> {
     let source_store_epoch_id = project_store.epoch().epoch_id().as_str();
     if binding.source_store_epoch_id.as_ref() != source_store_epoch_id {
         return Err(failure(
@@ -998,7 +1029,7 @@ fn validate_retirement_source_hold(
         generation,
         documents,
         profile,
-        request.store_limits,
+        store_limits,
     )?;
     if expected.root_id().as_str() != binding.retention_root_id.as_ref()
         || expected.pin_digest() != binding.retention_root_digest.as_ref()
@@ -1472,7 +1503,7 @@ fn durable_build_shard(
     stop: &AtomicBool,
 ) -> ServiceResult<Box<[u8]>> {
     check_cancelled(stop)?;
-    let profile = DurableProfile::new(request.bounds, request.selection.is_file_set())?;
+    let profile = DurableProfile::for_selection(request.bounds, &request.selection)?;
     let generation = StoreGenerationId::parse(request.store_generation_id.to_string())
         .map_err(map_store_error)?;
     let documents = request.selection.normalize()?;
@@ -1611,7 +1642,7 @@ fn durable_build_shard(
     let object_id = prepared.object_id().clone();
     let single_document = match &prepared {
         documents::Prepared::Single(value) => Some(value.document()),
-        documents::Prepared::FileSet(_) => None,
+        documents::Prepared::FileSet(_) | documents::Prepared::GraphEntities(_) => None,
     };
     let payload = DurableBuildPayload {
         status: "retained",
@@ -1627,16 +1658,7 @@ fn durable_build_shard(
         owner_metadata_label: single_document
             .map(|document| document.owner_metadata_label().as_str()),
         documents: if profile.component().is_some() {
-            Some(
-                prepared
-                    .documents()
-                    .iter()
-                    .map(|document| DurableDocument {
-                        entity_id: document.entity_id().as_str(),
-                        owner_metadata_label: document.owner_metadata_label().as_str(),
-                    })
-                    .collect(),
-            )
+            Some(prepared.transport_documents())
         } else {
             None
         },
@@ -2242,7 +2264,7 @@ fn durable_retire_shard(
     stop: &AtomicBool,
 ) -> ServiceResult<Box<[u8]>> {
     check_cancelled(stop)?;
-    let profile = DurableProfile::new(request.bounds, request.selection.is_file_set())?;
+    let profile = DurableProfile::for_selection(request.bounds, &request.selection)?;
     if profile.digest() != request.profile_digest.as_ref() {
         return Err(failure(
             ServiceErrorCode::IdentityMismatch,
