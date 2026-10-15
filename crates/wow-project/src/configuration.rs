@@ -21,6 +21,12 @@ mod graph_capabilities;
 mod platform;
 mod xml_classification;
 use crate::platform_source::{PlatformPackageBinding, PlatformPackageSpecialization};
+/// Retain original W6 matcher witnesses and Graph derivation records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LibraryWitnessRecipe {
+    MatcherV1,
+}
 pub use graph_capabilities::{PlatformGraphCapabilities, PlatformGraphCapability};
 use platform::RetainedPlatformPackages;
 use xml_classification::RetainedXmlClassification;
@@ -634,6 +640,8 @@ pub struct ProjectConfiguration {
     native_api_uses: Option<NativeApiUseRecipe>,
     #[serde(skip_serializing_if = "Option::is_none")]
     state_projection: Option<StateProjectionRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    library_witnesses: Option<LibraryWitnessRecipe>,
 }
 
 impl ProjectConfiguration {
@@ -927,6 +935,7 @@ impl ProjectConfiguration {
             self.native_library_input_digest,
             self.native_api_uses,
             self.state_projection,
+            self.library_witnesses,
         )?;
         if expected != self.configuration_digest {
             return Err(ProjectError::new(
@@ -1087,6 +1096,52 @@ impl ProjectConfiguration {
         self.native_api_uses
     }
 
+    #[must_use]
+    pub const fn library_witnesses(&self) -> Option<LibraryWitnessRecipe> {
+        self.library_witnesses
+    }
+
+    pub(crate) fn with_library_witnesses(
+        mut self,
+        recipe: LibraryWitnessRecipe,
+    ) -> ProjectResult<Self> {
+        if self.library_witnesses.is_some() {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidConfiguration,
+                ProjectPhase::Configuration,
+                "library witness recipe is already selected",
+            ));
+        }
+        self.library_witnesses = Some(recipe);
+        self.configuration_digest = configuration_digest(
+            &self.project_id,
+            self.project_kind,
+            &self.workspace_id,
+            &self.source_origin_id,
+            &self.logical_root,
+            &self.selected_profile,
+            self.reference_generation,
+            &self.analyzer_binding,
+            &self.capability_policy,
+            self.budget_policy,
+            self.load_plan_digest,
+            self.package_load_plan_digest,
+            self.package_main_plan_digest,
+            self.platform_package_binding_digest,
+            self.package_xml_binding_profile,
+            self.platform_graph_profile,
+            self.xml_schema_classification.as_ref(),
+            self.physical_function_declarations,
+            self.physical_function_signatures,
+            self.native_library_input_digest,
+            self.native_api_uses,
+            self.state_projection,
+            self.library_witnesses,
+        )?;
+        self.validate()?;
+        Ok(self)
+    }
+
     /// Exact selected state source interpretation; no runtime existence follows.
     #[must_use]
     pub const fn state_projection(&self) -> Option<StateProjectionRecipe> {
@@ -1128,6 +1183,7 @@ impl ProjectConfiguration {
             self.native_library_input_digest,
             self.native_api_uses,
             self.state_projection,
+            self.library_witnesses,
         )?;
         self.validate()?;
         Ok(self)
@@ -1171,6 +1227,7 @@ impl ProjectConfiguration {
             self.native_library_input_digest,
             self.native_api_uses,
             self.state_projection,
+            self.library_witnesses,
         )?;
         self.validate()?;
         Ok(self)
@@ -1214,6 +1271,7 @@ impl ProjectConfiguration {
             self.native_library_input_digest,
             self.native_api_uses,
             self.state_projection,
+            self.library_witnesses,
         )?;
         self.validate()?;
         Ok(self)
@@ -1246,6 +1304,7 @@ pub struct ProjectConfigurationBuilder {
     physical_function_declarations: Option<PhysicalFunctionDeclarationRecipe>,
     physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
     state_projection: Option<StateProjectionRecipe>,
+    library_witnesses: Option<LibraryWitnessRecipe>,
 }
 
 impl ProjectConfigurationBuilder {
@@ -1281,6 +1340,7 @@ impl ProjectConfigurationBuilder {
             physical_function_declarations: None,
             physical_function_signatures: None,
             state_projection: None,
+            library_witnesses: None,
         }
     }
 
@@ -1318,6 +1378,12 @@ impl ProjectConfigurationBuilder {
     #[must_use]
     pub const fn with_state_projection(mut self, recipe: StateProjectionRecipe) -> Self {
         self.state_projection = Some(recipe);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_library_witnesses(mut self, recipe: LibraryWitnessRecipe) -> Self {
+        self.library_witnesses = Some(recipe);
         self
     }
 
@@ -1511,6 +1577,7 @@ impl ProjectConfigurationBuilder {
             None,
             None,
             self.state_projection,
+            self.library_witnesses,
         )?;
         let configuration = ProjectConfiguration {
             project_id: self.project_id,
@@ -1542,6 +1609,7 @@ impl ProjectConfigurationBuilder {
             native_library_input: None,
             native_api_uses: None,
             state_projection: self.state_projection,
+            library_witnesses: self.library_witnesses,
         };
         configuration.validate()?;
         Ok(configuration)
@@ -1572,6 +1640,7 @@ fn configuration_digest(
     native_library_input_digest: Option<ContentDigest<CanonicalResult>>,
     native_api_uses: Option<NativeApiUseRecipe>,
     state_projection: Option<StateProjectionRecipe>,
+    library_witnesses: Option<LibraryWitnessRecipe>,
 ) -> ProjectResult<ContentDigest<CanonicalResult>> {
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -1614,6 +1683,8 @@ fn configuration_digest(
         native_api_uses: Option<NativeApiUseRecipe>,
         #[serde(skip_serializing_if = "Option::is_none")]
         state_projection: Option<StateProjectionRecipe>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        library_witnesses: Option<LibraryWitnessRecipe>,
     }
     canonical_digest(
         "wow-project/configuration/e0-d/1",
@@ -1644,6 +1715,7 @@ fn configuration_digest(
             native_library_input_digest,
             native_api_uses,
             state_projection,
+            library_witnesses,
         },
         ProjectPhase::Configuration,
     )

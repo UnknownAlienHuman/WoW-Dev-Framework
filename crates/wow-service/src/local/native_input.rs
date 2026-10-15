@@ -53,6 +53,8 @@ struct NativeInput {
     #[serde(default, deserialize_with = "present")]
     state_projection: Option<wow_project::StateProjectionRecipe>,
     #[serde(default, deserialize_with = "present")]
+    library_witnesses: Option<wow_project::LibraryWitnessRecipe>,
+    #[serde(default, deserialize_with = "present")]
     annotation_inputs: Option<NativeAnnotationInputs>,
     #[serde(default, deserialize_with = "present")]
     compatibility_evidence: Option<NativeCompatibilityInputs>,
@@ -736,6 +738,12 @@ impl LocalProjectInput {
             assembled.bundle = assembled
                 .bundle
                 .with_state_projection(recipe)
+                .map_err(super::disk_input::acquisition_error)?;
+        }
+        if let Some(recipe) = input.library_witnesses {
+            assembled.bundle = assembled
+                .bundle
+                .with_library_witnesses(recipe)
                 .map_err(super::disk_input::acquisition_error)?;
         }
         assembled.native_input = Some(Arc::new(NativeInputEvidence {

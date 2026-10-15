@@ -44,10 +44,25 @@ pub(super) fn admit(bytes: &[u8], stop: &AtomicBool) -> Result<AdmittedBundle, G
     let expected_request = take_string(&mut root, "request_digest")?;
     let request = root.remove("request").ok_or_else(invalid)?;
     let request_bytes = wow_core::canonical_json_bytes(&request).map_err(|_| invalid())?;
+    let legacy_request = request.get("schema").and_then(Value::as_str)
+        == Some("wow-service/graph-build-request/9")
+        && request.get("library_witnesses").is_none();
+    // This is an imported metadata artifact, never native matcher authority.
+    // Other selected components keep their own admission contracts.
+    let witness_request = request.get("schema").and_then(Value::as_str)
+        == Some("wow-service/graph-build-request/library-witnesses/1")
+        && request.get("library_witnesses").and_then(Value::as_str) == Some("matcher_v1")
+        && request.as_object().is_some_and(|fields| {
+            fields.keys().all(|field| {
+                matches!(
+                    field.as_str(),
+                    "schema" | "project_id" | "selector" | "projection" | "library_witnesses"
+                )
+            })
+        });
     if request_bytes.len() > super::GRAPH_REQUEST_MAX_BYTES
         || hash(&request_bytes).as_ref() != expected_request.as_ref()
-        || request.get("schema").and_then(Value::as_str)
-            != Some("wow-service/graph-build-request/9")
+        || !(legacy_request || witness_request)
         || request.get("projection").and_then(Value::as_str)
             != Some(wow_project::graph::SOURCE_GRAPH_PROFILE)
     {

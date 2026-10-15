@@ -586,6 +586,15 @@ impl ProjectInputBundle {
         Ok(self)
     }
 
+    /// Select complete W6 witness metadata before generation and publication.
+    pub fn with_library_witnesses(
+        mut self,
+        recipe: crate::LibraryWitnessRecipe,
+    ) -> ProjectResult<Self> {
+        self.configuration = self.configuration.with_library_witnesses(recipe)?;
+        Ok(self)
+    }
+
     pub(crate) fn into_parts(
         self,
     ) -> (

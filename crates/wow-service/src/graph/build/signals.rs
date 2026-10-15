@@ -78,6 +78,7 @@ fn replacement(
 pub(super) fn publish_signals(
     source: &GraphPartitionSnapshot,
     crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
+    library_witnesses: Option<wow_project::LibraryWitnessRecipe>,
     stop: &AtomicBool,
 ) -> ServiceResult<(
     GraphPartitionSnapshot,
@@ -238,8 +239,13 @@ pub(super) fn publish_signals(
         source_handles: provenance.source_handles(),
         evidence: provenance.evidence(),
     };
-    let library = recognize_source_library(library_input, stop)
-        .map_err(|e| recognizer_error("library", e))?;
+    let library = match library_witnesses {
+        Some(wow_project::LibraryWitnessRecipe::MatcherV1) => {
+            wow_recognizers::source_state::recognize_source_library_witnesses(library_input, stop)
+        }
+        None => recognize_source_library(library_input, stop),
+    }
+    .map_err(|e| recognizer_error("library", e))?;
     checkpoint(stop)?;
     crosswalk.reserve("library_recognition", &library.recognition, stop)?;
     let library_snapshot = replacement(&hooks_snapshot, library.batch, library.coverage, stop)?;

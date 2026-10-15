@@ -2,6 +2,7 @@
 //! This adapter joins exact retained owner facts; it does not parse source.
 #![allow(dead_code)]
 mod assertions;
+mod library_witness;
 use crate::{
     ObservationFamily, ObservationOrigin, RecognitionCoverage, RecognitionCoverageState,
     RecognitionReport, RecognizerErrorCode, RecognizerLimits, RecognizerRegistry, RecognizerResult,
@@ -11,6 +12,9 @@ pub use assertions::{
     SOURCE_STATE_ASSERTION_PROFILE, SourceStateAssertionEndpoints, SourceStateAssertionFact,
     SourceStateAssertionInput, SourceStateAssertionProposals, SourceStateAssertionRecognition,
     recognize_source_state_assertions,
+};
+pub use library_witness::{
+    SOURCE_STATE_LIBRARY_WITNESS_PROFILE, SourceLibraryWitness, recognize_source_library_witnesses,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -903,6 +907,8 @@ pub struct SourceLibraryMatch {
     pub relation_proposal_id: String,
     pub rule_id: &'static str,
     pub relation: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub witness: Option<SourceLibraryWitness>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -982,6 +988,7 @@ struct W6Relation {
     source_handle_ids: Vec<StableHandleId>,
     evidence_ids: Vec<EvidenceId>,
     coverage_ids: Vec<wow_core::CoverageId>,
+    witness: Option<library_witness::PendingWitness>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1180,6 +1187,14 @@ pub fn recognize_source_library(
     input: SourceLibraryInput<'_>,
     stop: &AtomicBool,
 ) -> RecognizerResult<SourceLibraryProposals> {
+    recognize_source_library_inner(input, false, stop)
+}
+
+fn recognize_source_library_inner(
+    input: SourceLibraryInput<'_>,
+    retain_witnesses: bool,
+    stop: &AtomicBool,
+) -> RecognizerResult<SourceLibraryProposals> {
     checkpoint(stop)?;
     if input.report.calls().len() > W6_MAX_CALLS
         || input.report.functions().len() > W6_MAX_FUNCTIONS
@@ -1201,7 +1216,9 @@ pub fn recognize_source_library(
     }
     let aceaddon_local_result_profile = input.report.local_call_result_profile()
         == Some(FunctionCallEvidenceProfile::AceAddonLocalResultV1);
-    let recognition_profile = if aceaddon_local_result_profile {
+    let recognition_profile = if retain_witnesses {
+        SOURCE_STATE_LIBRARY_WITNESS_PROFILE
+    } else if aceaddon_local_result_profile {
         SOURCE_STATE_LIBRARY_ACEADDON_PROFILE
     } else {
         SOURCE_STATE_LIBRARY_PROFILE
@@ -1452,6 +1469,7 @@ pub fn recognize_source_library(
     let output = execute_recognizer_plan(input.context, &pack, &plan, &bundle, fact_limits, stop)?;
 
     let mut pending = Vec::<W6Relation>::new();
+    let mut witness_bytes = 0_u64;
     for outcome in output.outcomes() {
         checkpoint(stop)?;
         let expected_version = match outcome.rule_id() {
@@ -1536,6 +1554,16 @@ pub fn recognize_source_library(
                 source_handle_ids: source_handle_ids.clone(),
                 evidence_ids: evidence_ids.clone(),
                 coverage_ids: coverage_ids.clone(),
+                witness: if retain_witnesses {
+                    Some(library_witness::capture(
+                        outcome,
+                        proposal,
+                        &mut witness_bytes,
+                        stop,
+                    )?)
+                } else {
+                    None
+                },
             });
         }
     }
@@ -1577,6 +1605,7 @@ pub fn recognize_source_library(
             rule_id: rule_id(relation.rule_id.as_str())
                 .ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?,
             relation: relation.relation,
+            witness: None,
         });
     }
 
@@ -1707,6 +1736,18 @@ pub fn recognize_source_library(
         relation_proposals,
     )
     .map_err(graph_error)?;
+    let batch = if retain_witnesses {
+        library_witness::attach(
+            batch,
+            &mut matches,
+            &mut pending,
+            &entity_ids,
+            source_partition,
+            stop,
+        )?
+    } else {
+        batch
+    };
     checkpoint(stop)?;
     Ok(SourceLibraryProposals {
         batch,
@@ -2344,6 +2385,7 @@ mod w6_library_tests {
             source_handle_ids: vec![StableHandleId::from_hash([handle; 32])],
             evidence_ids: vec![EvidenceId::from_hash([evidence; 32])],
             coverage_ids: vec![wow_core::CoverageId::from_hash([coverage; 32])],
+            witness: None,
         }
     }
 
@@ -2674,24 +2716,82 @@ mod w6_library_tests {
             .iter()
             .map(|call| (call.fact_id(), (call_handle_id, evidence_id)))
             .collect::<BTreeMap<_, _>>();
-        let recognized = recognize_source_library(
-            SourceLibraryInput {
-                owner: &owner,
-                source_partition: SOURCE_PARTITION,
-                report: function_call_report,
-                context: &context,
-                function_proposals,
-                call_support: function_call_support,
-                source_handles: &source_handles,
-                evidence: &evidence_records,
-            },
-            &stop,
-        )?;
+        let input = || SourceLibraryInput {
+            owner: &owner,
+            source_partition: SOURCE_PARTITION,
+            report: function_call_report,
+            context: &context,
+            function_proposals: function_proposals.clone(),
+            call_support: function_call_support.clone(),
+            source_handles: &source_handles,
+            evidence: &evidence_records,
+        };
+        let recognized = recognize_source_library(input(), &stop)?;
         assert_eq!(recognized.recognition.matches().len(), 1);
         let library = &recognized.recognition.matches()[0];
         assert_eq!(library.rule_id, W6_NEW_RULE);
         assert_eq!(library.library_name, "AceAddon-3.0");
         assert_eq!(library.minor, Some(13));
+        assert!(library.witness.is_none());
+        assert!(recognized.batch.assertion_records().is_none());
+        let proved = recognize_source_library_witnesses(input(), &stop)?;
+        let witness = proved.recognition.matches()[0]
+            .witness
+            .as_ref()
+            .ok_or("original matcher witness")?;
+        assert_eq!(witness.matched.decisive_fact_ids().len(), 1);
+        assert_eq!(witness.matched.bindings().len(), 1);
+        assert_eq!(witness.matched.captures().len(), 0);
+        assert_eq!(
+            proved
+                .batch
+                .assertion_records()
+                .ok_or("records")?
+                .derivations
+                .len(),
+            2
+        );
+        let selected = owner
+            .prepare_replacement(
+                wow_graph::GraphPartitionReplacement {
+                    expected_snapshot_id: owner.snapshot().snapshot_id().clone(),
+                    expected_partition_digest: None,
+                    producer_version: "1.0.0".into(),
+                    batch: proved.batch,
+                    coverage: proved.coverage,
+                },
+                &stop,
+            )?
+            .into_candidate();
+        let partition = selected
+            .partition(SOURCE_STATE_LIBRARY_PARTITION)
+            .ok_or("W6 partition")?;
+        let accepted = partition.report().accepted_entities()[0].node();
+        let node = selected
+            .snapshot()
+            .nodes()
+            .iter()
+            .find(|node| node.kind() == accepted.kind() && node.owner_key() == accepted.owner_key())
+            .ok_or("exact materialized library entity")?
+            .node_id()
+            .clone();
+        let explanation = wow_graph::GraphExplainQuery::new(
+            selected.snapshot().snapshot_id().clone(),
+            wow_graph::GraphExplainSubject::Entity(node),
+            wow_graph::GraphExplainLimits::default(),
+        )?
+        .execute(&selected, &stop)?;
+        assert_eq!(explanation.derivations().len(), 2);
+        assert!(
+            !explanation.derivation_complete(),
+            "upstream Derived source has no derivation"
+        );
+        // The ordinary route is still exactly the same computation after the
+        // opt-in route; optional witness fields are omitted, not null.
+        assert_eq!(
+            canonical_json_bytes(&recognized.recognition)?,
+            canonical_json_bytes(&recognize_source_library(input(), &stop)?.recognition)?
+        );
         Ok(())
     }
 }

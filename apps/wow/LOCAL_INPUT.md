@@ -64,6 +64,25 @@ and [the finite proof recipe](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.
 
 ## Execution
 
+The separate `wow-service/local-project-native/1` input accepts optional
+`"library_witnesses": "matcher_v1"`. This selects W6 library matcher receipts and
+Graph derivation records through the same `wow graph build` and `wow project
+publish` Service route. Omission preserves the legacy producer and bytes; null,
+unknown values and a request/configuration mismatch are rejected.
+
+Each retained match contains its original matcher identity, rule/version,
+bindings/captures, decisive facts and source/evidence/coverage references. One
+major-keyed library entity retains all its relation witnesses; each relation
+keeps its independent confidence. Graph Explain follows original assertion
+addresses and reports any upstream missing derivation conservatively. This
+metadata establishes static recognition only, without runtime load or ownership
+claims. Retained native reopen recomputes the selected W6 batch from the original
+held source recipe before accepting it.
+
+The profile bounds witness metadata at 16 MiB and the derivation fan-in at 64
+witnesses per library. Exceeding either refuses the selected projection rather
+than keeping a successful prefix. Other owner/Graph/output limits still apply.
+
 `status` validates input/configuration and reports components without running the
 analyzer. Until a check materializes a snapshot, project state is partial and
 `current_context` is absent. It does not claim an on-disk published generation.

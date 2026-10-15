@@ -201,6 +201,17 @@ exact calls to the same major share one deterministic entity whose bounded sourc
 evidence and coverage support includes every retained call. Entity confidence is
 conservative across that support; each relation keeps its own confidence.
 
+The explicit `LibraryWitnessRecipe::MatcherV1` consumer selects
+`wow-recognizers/source-library/witness-derivation/1`. It retains each original
+`RecognizerMatch` and its exact output/entity/caller mapping, and attaches
+existing Graph derivation records from the shared entity to all relation
+witnesses and from each relation to its original source caller. This is a proof
+projection of the same matcher/pack, not an additional library convention.
+The default producer's serialized bytes and historical replay remain unchanged.
+Witness bytes and entity fan-in are bounded before retention; upstream incomplete
+source derivations remain incomplete. The actual compatibility consumers are
+Project configuration identity, retained ProjectReplay and Service W6 admission.
+
 ### `core.library.libstub_new@2`
 
 Match exact reviewed `LibStub:NewLibrary` form using the complete major argument.

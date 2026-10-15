@@ -6,6 +6,7 @@ mod event_registry_custom;
 mod event_registry_keys;
 mod event_registry_receivers;
 mod function_fingerprints;
+mod library_witnesses;
 mod native_type_resolution;
 mod project_budgets;
 mod w5_secure_hooks;

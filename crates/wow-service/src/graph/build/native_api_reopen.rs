@@ -20,6 +20,7 @@ pub(crate) fn validate(
     pair: &AcquiredProjectPair,
     stop: &AtomicBool,
 ) -> ServiceResult<Option<NativeApiProvenance>> {
+    super::library_witness_reopen::validate(pair, stop)?;
     let project = pair.project();
     let configuration = project.configuration();
     let Some(recipe) = configuration.native_api_uses() else {

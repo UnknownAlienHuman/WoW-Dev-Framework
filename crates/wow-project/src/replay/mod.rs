@@ -864,6 +864,11 @@ fn selected_component_schema(
         // Exact component recipe; hydrate and AcquiredProjectPair share the
         // already registered selected-components catalog. Old readers stay exact.
         SELECTED_COMPONENTS_REPLAY_SCHEMA
+    } else if configuration.library_witnesses().is_some() {
+        if !function_calls {
+            return Err(invalid());
+        }
+        SELECTED_COMPONENTS_REPLAY_SCHEMA
     } else if configuration.state_projection().is_some() {
         if !function_calls
             || configuration.is_platform()

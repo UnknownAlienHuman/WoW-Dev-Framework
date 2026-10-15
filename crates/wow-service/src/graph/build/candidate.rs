@@ -309,8 +309,13 @@ pub(super) fn capture_once(
         cvar_recognition,
         hook_recognition,
         library_recognition,
-    ) = signals::publish_signals(&snapshot, addresses, stop)
-        .map_err(|failure| stage_error("signals", failure))?;
+    ) = signals::publish_signals(
+        &snapshot,
+        addresses,
+        native.project().configuration().library_witnesses(),
+        stop,
+    )
+    .map_err(|failure| stage_error("signals", failure))?;
     let (snapshot, toc_recognition) = toc::publish_bound(&snapshot, addresses, stop)
         .map_err(|failure| stage_error("toc", failure))?;
     let (snapshot, xml_recognition) = xml::publish_bound(&snapshot, addresses, stop)
