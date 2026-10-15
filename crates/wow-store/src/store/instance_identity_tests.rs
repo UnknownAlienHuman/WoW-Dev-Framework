@@ -225,6 +225,7 @@ fn path_aba_is_rejected_by_connected_sqlite_write_admission() -> TestResult {
         let mut active = ABA_PATHS.lock().map_err(|_| "ABA hook lock poisoned")?;
         let phase = active.as_ref().map(|paths| paths.phase);
         *active = None;
+        phase
     };
     assert_eq!(phase, Some(2), "both deterministic path swaps must run");
     let open_error = match opened {

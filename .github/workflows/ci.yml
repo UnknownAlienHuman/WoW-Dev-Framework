@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
     inputs:
       qualification_scope:
-        description: Full milestone or the two-platform rustdoc repair gate
+        description: Full milestone, acceptance lanes, or the two-platform rustdoc repair gate
         type: choice
         default: full
-        options: [full, rustdoc]
+        options: [full, acceptance, rustdoc]
 permissions:
   contents: read
 concurrency:
@@ -114,7 +114,7 @@ jobs:
       - run: cargo +stable test --workspace --all-targets --all-features
       - run: cargo +stable clippy --workspace --all-targets --all-features -- -D warnings
   parser-compatibility:
-    if: inputs.qualification_scope != 'rustdoc'
+    if: inputs.qualification_scope != 'rustdoc' && inputs.qualification_scope != 'acceptance'
     name: Rolling Emmy parser compatibility
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -171,7 +171,7 @@ jobs:
           retention-days: 3
           if-no-files-found: error
   wasm-bridge:
-    if: inputs.qualification_scope != 'rustdoc'
+    if: inputs.qualification_scope != 'rustdoc' && inputs.qualification_scope != 'acceptance'
     name: Wasm swap and rollback (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -252,7 +252,7 @@ jobs:
           retention-days: 3
           if-no-files-found: error
   annotation-consumers:
-    if: inputs.qualification_scope != 'rustdoc'
+    if: inputs.qualification_scope != 'rustdoc' && inputs.qualification_scope != 'acceptance'
     name: Semantic annotation consumers (${{ matrix.os }})
     strategy:
       fail-fast: false
