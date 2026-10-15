@@ -514,6 +514,7 @@ fn replay_completed_result(
     host: &ContextMapHostInput,
     stop: &AtomicBool,
 ) -> ServiceResult<Option<ContextMapResult>> {
+    checkpoint(stop)?;
     let Some(operation) = store.operation(operation_id).map_err(|_| store_failure())? else {
         return Ok(None);
     };
@@ -556,7 +557,6 @@ fn replay_completed_result(
     // Completed response replay either confirms an active exact hold or finishes
     // idempotent release when a later round already completed.
     ensure_retention_for_operation_outcome(host, store, &outcome)?;
-    checkpoint(stop)?;
     Ok(Some(response_result(bytes)?))
 }
 
@@ -803,7 +803,6 @@ pub(super) fn execute_context_build_with_continuation(
                 release_retention_root(host, &retention)?;
             }
             ensure_retention_for_operation_outcome(host, &continuation_store, &outcome)?;
-            checkpoint(stop)?;
             response_result(bytes)
         }
         Err(error) => {
@@ -1779,7 +1778,6 @@ fn continue_inner(
     let (outcome, bytes) = persisted;
     ensure_retention_for_operation_outcome(host, store, &outcome)
         .map_err(|error| ("failed", error))?;
-    checkpoint(stop).map_err(|error| ("closed", error))?;
     Ok(ContextMapResult {
         bytes,
         status,

@@ -579,7 +579,7 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
         continuation_operation,
         std::sync::Arc::clone(&cancelled_continue_stop),
     );
-    let interrupted_continue =
+    let completed_continue =
         execute_context_continue(&host, &continuation, &cancelled_continue_stop);
     assert!(
         continue_observer
@@ -587,14 +587,20 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
             .map_err(|_| std::io::Error::other("continuation observer panicked"))?
             .map_err(std::io::Error::other)?
     );
-    assert!(matches!(
-        interrupted_continue,
-        Err(error) if error.code() == crate::ServiceErrorCode::Cancelled
-    ));
+    let completed_continue = completed_continue.map_err(|error| {
+        std::io::Error::other(format!("completed continuation response: {error:?}"))
+    })?;
+    assert_eq!(completed_continue.status(), ContextMapStatus::Partial);
+    assert_eq!(completed_continue.failure_code(), None);
     let resumed = execute_context_continue(&host, &continuation, &stop)
         .map_err(|error| std::io::Error::other(format!("continuation resume: {error:?}")))?;
     assert_eq!(resumed.status(), ContextMapStatus::Partial);
     assert_eq!(resumed.failure_code(), None);
+    assert_eq!(
+        completed_continue.canonical_bytes(),
+        resumed.canonical_bytes(),
+        "exact continuation retry must return the already committed response"
+    );
     let resumed_envelope: Value = serde_json::from_slice(resumed.canonical_bytes())?;
     assert_eq!(resumed_envelope["operation"], "context_continue");
     assert_eq!(
@@ -942,8 +948,8 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
         Some(crate::ServiceErrorCode::InvalidRequest)
     );
 
-    // The cancellation observer sees a completed initial JSON issuance. Its exact
-    // retry recovers the stored response, and a persisted JSON prefix resumes.
+    // Cancellation after completion must still return the stored response. Its
+    // exact retry is byte-identical, and the persisted JSON prefix resumes.
     let mut rendered_request = ContextBuildRequest::primary(
         STORE_ID,
         ContextMapPublication::store_generation(publication.generation_id.as_str())?,
@@ -966,18 +972,22 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
         build_operation,
         std::sync::Arc::clone(&cancelled_build_stop),
     );
-    let interrupted_build = execute_context_build(&host, &rendered_request, &cancelled_build_stop);
+    let completed_build = execute_context_build(&host, &rendered_request, &cancelled_build_stop);
     assert!(
         build_observer
             .join()
             .map_err(|_| std::io::Error::other("build observer panicked"))?
             .map_err(std::io::Error::other)?
     );
-    assert!(matches!(
-        interrupted_build,
-        Err(error) if error.code() == crate::ServiceErrorCode::Cancelled
-    ));
+    let completed_build = completed_build
+        .map_err(|error| std::io::Error::other(format!("completed build response: {error:?}")))?;
+    assert_eq!(completed_build.failure_code(), None);
     let json_issue = execute_context_build(&host, &rendered_request, &stop)?;
+    assert_eq!(
+        completed_build.canonical_bytes(),
+        json_issue.canonical_bytes(),
+        "exact build retry must return the already committed response"
+    );
     let json_envelope: Value = serde_json::from_slice(json_issue.canonical_bytes())?;
     let json_token = json_envelope["payload"]["continuation_id"]
         .as_str()
