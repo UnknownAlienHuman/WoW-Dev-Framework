@@ -3100,6 +3100,10 @@ fn assert_frontier_build_refused(
 #[test]
 fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_budget() -> TestResult
 {
+    const ORIGINAL_METADATA_LIMIT: u64 = 8 * 1024 * 1024;
+    // Both renderers plus Service delivery exceed the original 8 MiB fixture
+    // allowance. Keep finite headroom for that cumulative positive path.
+    const FRONTIER_METADATA_LIMIT: u64 = 12 * 1024 * 1024;
     let stop = AtomicBool::new(false);
     let scratch = Scratch::new()?;
     let input = scratch.root.join("state-input");
@@ -3139,7 +3143,7 @@ fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_bud
     let outside: GraphNodeId = serde_json::from_value(character["node"]["node_id"].clone())?;
     let mut host_json = host_value(&store_root, &profile, &reference);
     host_json["limits"]["max_context_work"] = json!(32_000_000);
-    host_json["limits"]["max_metadata_bytes"] = json!(8 * 1024 * 1024);
+    host_json["limits"]["max_metadata_bytes"] = json!(FRONTIER_METADATA_LIMIT);
     let host = decode_host(&host_json, &stop)?;
     let baseline_request = exact_inspect_request(
         &publication.generation_id,
@@ -3253,11 +3257,23 @@ fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_bud
         .with_frontier_expansion(vec![ContextMapRoot::graph_entity(frontier.as_str())?])?;
         let built = execute_context_build(&host, &build_request, &stop)?;
         let built_payload = assert_frontier_pack(&built, &payload, &native, &scratch)?;
+        let work = built_payload["operation_budget_usage"]["work_reserved"]
+            .as_u64()
+            .ok_or("actual build work")?;
+        let reserved = built_payload["operation_budget_usage"]["bytes_reserved"]
+            .as_u64()
+            .ok_or("actual build reservation")?;
+        let delivery = u64::try_from(built.canonical_bytes().len())?;
+        let cumulative = reserved.checked_add(delivery).ok_or("build delivery sum")?;
+        assert!(
+            work <= host_json["limits"]["max_context_work"]
+                .as_u64()
+                .ok_or("work bound")?
+        );
+        assert!(cumulative <= FRONTIER_METADATA_LIMIT);
         eprintln!(
-            "frontier-pack fixture {render:?}: pack_bytes={} work={} bytes={}",
+            "frontier-pack fixture {render:?}: pack_bytes={} work={work} bytes={reserved} delivery={delivery} cumulative={cumulative} cap={FRONTIER_METADATA_LIMIT}",
             built_payload["semantic_pack_byte_length"],
-            built_payload["operation_budget_usage"]["work_reserved"],
-            built_payload["operation_budget_usage"]["bytes_reserved"]
         );
         build_requests.push(build_request);
         build_results.push(built);
@@ -3274,6 +3290,21 @@ fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_bud
             wow_core::canonical_json_bytes(&built["semantic_pack"])?,
             pack_bytes
         );
+    }
+    // Both carries the shared pack charge once and each renderer's measured
+    // increment once; it cannot reset the ledger or repeat common preparation.
+    for resource in ["work_reserved", "bytes_reserved"] {
+        let reservation = |index: usize| {
+            build_payloads[index]["operation_budget_usage"][resource]
+                .as_u64()
+                .ok_or("measured build reservation")
+        };
+        let common = reservation(0)?;
+        let expected = reservation(1)?
+            .checked_add(reservation(2)?)
+            .and_then(|sum| sum.checked_sub(common))
+            .ok_or("combined renderer reservation")?;
+        assert_eq!(reservation(3)?, expected, "{resource}");
     }
     assert!(rows(&build_payloads[0]["rendered_artifacts"])?.is_empty());
     let json_only = rows(&build_payloads[1]["rendered_artifacts"])?;
@@ -3526,7 +3557,7 @@ fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_bud
         vec![ContextMapRoot::graph_entity(next.as_str())?],
     ];
     // The retained two-round history and both renderers need a distinct finite
-    // caller allowance. Keep the original 8 MiB legacy controls unchanged.
+    // caller allowance. Retain the original 8 MiB progressive refusal below.
     let mut progressive_host_json = host_json.clone();
     progressive_host_json["limits"]["max_metadata_bytes"] = json!(16 * 1024 * 1024);
     let progressive_host = decode_host(&progressive_host_json, &stop)?;
@@ -3696,8 +3727,10 @@ fn retained_native_state_path_frontier_adds_exact_siblings_under_one_inspect_bud
         Some(reference_guard(&profile, &reference)?),
     )?
     .with_progressive_expansion(batches)?;
+    let mut progressive_refusal_json = host_json.clone();
+    progressive_refusal_json["limits"]["max_metadata_bytes"] = json!(ORIGINAL_METADATA_LIMIT);
     assert_frontier_build_refused(
-        &host,
+        &decode_host(&progressive_refusal_json, &stop)?,
         &progressive_build_request,
         ServiceErrorCode::BudgetExceeded,
         "closed",

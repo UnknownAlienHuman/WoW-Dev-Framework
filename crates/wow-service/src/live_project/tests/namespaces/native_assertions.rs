@@ -336,6 +336,7 @@ fn native_assertion_chain_uses_exact_direct_predecessors() -> TestResult {
             state.recognition.receipts().len(),
             source.state_bindings().len()
         );
+        let mut dynamic_kinds = Vec::new();
         for receipt in state.recognition.receipts() {
             let binding = source
                 .state_bindings()
@@ -351,7 +352,19 @@ fn native_assertion_chain_uses_exact_direct_predecessors() -> TestResult {
                 binding.source_handle_ids.as_slice()
             );
             assert_eq!(proposal.evidence_ids(), binding.evidence_ids.as_slice());
+            assert_eq!(proposal.confidence(), binding.confidence);
+            let access = report
+                .global_accesses()
+                .iter()
+                .find(|access| access.fact_id() == binding.access_id)
+                .ok_or("original state access missing")?;
+            if !access.is_alias() && !access.path_complete() {
+                assert_eq!(proposal.confidence(), wow_graph::GraphConfidence::Possible);
+                dynamic_kinds.push(access.kind());
+            }
         }
+        assert!(dynamic_kinds.contains(&GlobalAccessKind::Read));
+        assert!(dynamic_kinds.contains(&GlobalAccessKind::Write));
         let state_count = state.recognition.receipts().len();
         owner = admit(
             &owner,
