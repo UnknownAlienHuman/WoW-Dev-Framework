@@ -10,6 +10,7 @@ mod emmy;
 mod engine;
 mod error;
 mod facts;
+mod graph;
 mod identity;
 mod matcher;
 mod model;
@@ -37,6 +38,11 @@ pub use facts::{
     RECOGNIZER_FACT_BUNDLE_SCHEMA, RecognizerFact, RecognizerFactBundle, RecognizerFactCoverage,
     RecognizerFactCoverageInput, RecognizerFactCoverageState, RecognizerFactInput,
     RecognizerFactLimits, RecognizerFactScope, RecognizerFactScopeKind, RecognizerFactValue,
+};
+pub use graph::{
+    RecognizerGraphEndpointBinding, RecognizerGraphEndpointSide, RecognizerGraphHandoff,
+    RecognizerGraphHandoffDisposition, RecognizerGraphHandoffParts, RecognizerGraphHandoffRequest,
+    adapt_recognizer_output_to_graph,
 };
 pub use identity::{
     EmmyDirectCallAdapterId, RecognitionAssertionId, RecognitionReportId, RecognizerFactBundleId,
