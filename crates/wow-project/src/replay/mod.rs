@@ -289,7 +289,8 @@ impl ProjectReplay {
         };
         if (configuration.native_library_input().is_some()
             || configuration.native_api_uses().is_some()
-            || configuration.state_projection().is_some())
+            || configuration.state_projection().is_some()
+            || configuration.hook_target_recipe().is_some())
             && generation_schema_version != Some(2)
         {
             return Err(invalid());
@@ -420,12 +421,31 @@ impl ProjectReplay {
     fn expected_schema(&self) -> ProjectResult<&'static str> {
         if (self.configuration.native_library_input().is_some()
             || self.configuration.native_api_uses().is_some()
-            || self.configuration.state_projection().is_some())
+            || self.configuration.state_projection().is_some()
+            || self.configuration.hook_target_recipe().is_some())
             && self.generation_schema_version != Some(2)
         {
             return Err(invalid());
         }
         let schema = self.expected_base_schema()?;
+        if self.configuration.hook_target_recipe().is_some() {
+            if !self.function_calls
+                || !self
+                    .platform
+                    .as_ref()
+                    .is_some_and(ReplayPlatform::has_retention_limits)
+                || self.configuration.function_call_budget().is_none()
+                || self.uses_legacy_global_access_profile9()
+            {
+                return Err(invalid());
+            }
+            return selected_component_schema(
+                schema,
+                &self.configuration,
+                self.function_calls,
+                false,
+            );
+        }
         if self.configuration.function_call_evidence_profile()
             == Some(wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1)
         {
@@ -821,7 +841,23 @@ fn selected_component_schema(
 ) -> ProjectResult<&'static str> {
     let selected =
         selected_component_base_schema(base, configuration, function_calls, physical_primary)?;
-    let selected = if configuration.state_projection().is_some() {
+    let selected = if configuration.hook_target_recipe().is_some() {
+        if !function_calls
+            || !configuration.is_platform()
+            || configuration.function_call_budget().is_none()
+            || matches!(
+                base,
+                GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA
+                    | GRAPH_METADATA_BUDGET_REPLAY_SCHEMA
+                    | GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA
+            )
+        {
+            return Err(invalid());
+        }
+        // Exact component recipe; hydrate and AcquiredProjectPair share the
+        // already registered selected-components catalog. Old readers stay exact.
+        SELECTED_COMPONENTS_REPLAY_SCHEMA
+    } else if configuration.state_projection().is_some() {
         if !function_calls
             || configuration.is_platform()
             || configuration.platform_graph_profile().is_some()

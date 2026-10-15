@@ -400,6 +400,7 @@ pub struct MemberCallSessionQueryProfile<'a> {
     function_call_budget: Option<crate::function_calls::FunctionCallBudget>,
     function_call_replay_recipe: Option<crate::function_calls::FunctionCallReplayRecipe>,
     function_call_evidence_profile: Option<crate::function_calls::FunctionCallEvidenceProfile>,
+    hook_target_recipe: Option<crate::function_calls::HookTargetRecipe>,
     physical_function_declarations:
         Option<crate::function_calls::PhysicalFunctionDeclarationRecipe>,
     physical_function_signatures: Option<crate::function_calls::PhysicalFunctionSignatureRecipe>,
@@ -416,6 +417,7 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
             function_call_budget: None,
             function_call_replay_recipe: None,
             function_call_evidence_profile: None,
+            hook_target_recipe: None,
             physical_function_declarations: None,
             physical_function_signatures: None,
         }
@@ -484,6 +486,16 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
         self
     }
 
+    /// Select same-call exact hook literal lookups without expanding default queries.
+    #[must_use]
+    pub const fn with_hook_target_recipe(
+        mut self,
+        recipe: crate::function_calls::HookTargetRecipe,
+    ) -> Self {
+        self.hook_target_recipe = Some(recipe);
+        self
+    }
+
     /// Select a physical declaration recipe in the same function-call sidecar.
     /// Existing query/count/output budgets and the absent-recipe path are retained.
     #[must_use]
@@ -530,7 +542,8 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
             && (self.physical_function_declarations.is_some()
                 || self.physical_function_signatures.is_some()
                 || self.function_call_replay_recipe.is_some()
-                || self.function_call_evidence_profile.is_some())
+                || self.function_call_evidence_profile.is_some()
+                || self.hook_target_recipe.is_some())
         {
             return Err(EmmyMemberCallError::new(
                 EmmyMemberCallErrorCode::InvalidMainWorkspace,
@@ -949,7 +962,26 @@ impl RegisteredMemberAnalysis {
         lookup_analysis_ids.sort_unstable();
         lookup_analysis_ids.dedup();
         let function_calls = if include_function_calls {
-            Some(
+            Some(if let Some(recipe) = profile.hook_target_recipe {
+                crate::function_calls::collect_with_components(
+                    analysis,
+                    main,
+                    main_root,
+                    &library_roots,
+                    &callable_signatures,
+                    &lookup_analysis_ids,
+                    profile.function_call_budget,
+                    profile.physical_function_declarations,
+                    profile.physical_function_signatures,
+                    profile.function_call_replay_recipe,
+                    profile.function_call_evidence_profile,
+                    Some((
+                        recipe,
+                        profile.query_limit.saturating_sub(callable_queries.len()),
+                    )),
+                    stop,
+                )?
+            } else {
                 match (
                     profile.physical_function_signatures,
                     profile.physical_function_declarations,
@@ -967,6 +999,7 @@ impl RegisteredMemberAnalysis {
                             Some(signature_recipe),
                             profile.function_call_replay_recipe,
                             profile.function_call_evidence_profile,
+                            None,
                             stop,
                         )?
                     }
@@ -995,8 +1028,8 @@ impl RegisteredMemberAnalysis {
                         profile.function_call_evidence_profile,
                         stop,
                     )?,
-                },
-            )
+                }
+            })
         } else {
             None
         };

@@ -280,7 +280,8 @@ pub(crate) fn build_analyzer_binding(
     let signature_recipe = configuration.physical_function_signatures();
     if (declaration_recipe.is_some()
         || signature_recipe.is_some()
-        || configuration.state_projection().is_some())
+        || configuration.state_projection().is_some()
+        || configuration.budget_policy().hook_target_recipe().is_some())
         && !function_calls
     {
         return Err(ProjectError::new(
@@ -463,6 +464,10 @@ pub(crate) fn build_analyzer_binding(
     };
     let query_profile = match budget.function_call_evidence_profile() {
         Some(profile) => query_profile.with_function_call_evidence_profile(profile),
+        None => query_profile,
+    };
+    let query_profile = match budget.hook_target_recipe() {
+        Some(recipe) => query_profile.with_hook_target_recipe(recipe),
         None => query_profile,
     };
     let query_profile = if legacy_global_access_profile9 {

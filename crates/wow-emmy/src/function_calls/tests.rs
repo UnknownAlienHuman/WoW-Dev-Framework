@@ -6,6 +6,8 @@ use crate::{
 };
 use emmylua_parser::{LuaChunk, LuaLanguageLevel, LuaParser, ParserConfig};
 
+mod hook_targets;
+
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 fn source_slice(source: &str, span: wow_core::SourceSpan) -> TestResult<&str> {

@@ -1818,7 +1818,15 @@ fn w5_secure_posthook_semantics(
     }
 
     let api_provenance = w5_secure_api_provenance(report, call);
-    let target_endpoint = if signature_kind == W5_SECURE_SIGNATURE_GLOBAL_STRING
+    let target_endpoint = if report.hook_target_recipe().is_some() {
+        // Selected literal lookups retain the original argument scope. A local
+        // reference spelling is never substituted into the global query map.
+        call.hook_target().and_then(|target| {
+            function_proposals
+                .get(target.function_id())
+                .map(|proposal| (*proposal).to_owned())
+        })
+    } else if signature_kind == W5_SECURE_SIGNATURE_GLOBAL_STRING
         || signature_kind == W5_SECURE_SIGNATURE_TABLE_MEMBER_STRING
     {
         target_query

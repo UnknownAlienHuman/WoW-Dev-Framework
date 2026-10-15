@@ -113,6 +113,12 @@ struct ReplayBudgets {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::configuration::present_hook_target_recipe"
+    )]
+    hook_target_recipe: Option<wow_emmy::function_calls::HookTargetRecipe>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
         deserialize_with = "crate::configuration::present_source_graph_budget"
     )]
     source_graph: Option<crate::graph::SourceGraphBudget>,
@@ -129,6 +135,7 @@ impl ReplayBudgets {
             max_output_bytes: b.max_output_bytes(),
             function_calls: b.function_call_budget(),
             function_call_evidence_profile: b.function_call_evidence_profile(),
+            hook_target_recipe: b.hook_target_recipe(),
             source_graph: b.source_graph_budget(),
         }
     }
@@ -148,6 +155,10 @@ impl ReplayBudgets {
         };
         let policy = match self.function_call_evidence_profile {
             Some(profile) => policy.with_function_call_evidence_profile(profile),
+            None => policy,
+        };
+        let policy = match self.hook_target_recipe {
+            Some(recipe) => policy.with_hook_target_recipe(recipe),
             None => policy,
         };
         Ok(match self.source_graph {
@@ -289,6 +300,11 @@ impl ReplayConfiguration {
         &self,
     ) -> Option<wow_emmy::function_calls::FunctionCallEvidenceProfile> {
         self.budgets.function_call_evidence_profile
+    }
+    pub(super) const fn hook_target_recipe(
+        &self,
+    ) -> Option<wow_emmy::function_calls::HookTargetRecipe> {
+        self.budgets.hook_target_recipe
     }
     pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {
         config.validate()?;

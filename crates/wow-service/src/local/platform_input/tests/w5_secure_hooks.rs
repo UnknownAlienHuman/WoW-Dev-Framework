@@ -1,4 +1,6 @@
 use super::*;
+#[path = "w5_hook_targets.rs"]
+mod literal_targets;
 use crate::graph::{
     GraphBuildRequest, GraphDirection, GraphReadOperation, GraphReadQuery, GraphReadRequest,
     GraphReadStatus, GraphSubgraphLimits, GraphSubgraphQuery, execute_graph_build,

@@ -240,6 +240,8 @@ pub struct ProjectBudgetPolicy {
     #[serde(skip_serializing_if = "Option::is_none")]
     function_call_evidence_profile: Option<wow_emmy::function_calls::FunctionCallEvidenceProfile>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    hook_target_recipe: Option<wow_emmy::function_calls::HookTargetRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     source_graph: Option<crate::graph::SourceGraphBudget>,
 }
 
@@ -257,6 +259,8 @@ struct ProjectBudgetPolicyInput {
     function_calls: Option<wow_emmy::function_calls::FunctionCallBudget>,
     #[serde(default, deserialize_with = "present_function_call_evidence_profile")]
     function_call_evidence_profile: Option<wow_emmy::function_calls::FunctionCallEvidenceProfile>,
+    #[serde(default, deserialize_with = "present_hook_target_recipe")]
+    hook_target_recipe: Option<wow_emmy::function_calls::HookTargetRecipe>,
     #[serde(default, deserialize_with = "present_source_graph_budget")]
     source_graph: Option<crate::graph::SourceGraphBudget>,
 }
@@ -277,6 +281,15 @@ where
     D: serde::Deserializer<'de>,
 {
     wow_emmy::function_calls::FunctionCallBudget::deserialize(deserializer).map(Some)
+}
+
+pub(crate) fn present_hook_target_recipe<'de, D>(
+    deserializer: D,
+) -> Result<Option<wow_emmy::function_calls::HookTargetRecipe>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    wow_emmy::function_calls::HookTargetRecipe::deserialize(deserializer).map(Some)
 }
 
 pub(crate) fn present_function_call_evidence_profile<'de, D>(
@@ -307,6 +320,10 @@ impl TryFrom<ProjectBudgetPolicyInput> for ProjectBudgetPolicy {
         };
         let policy = match input.function_call_evidence_profile {
             Some(profile) => policy.with_function_call_evidence_profile(profile),
+            None => policy,
+        };
+        let policy = match input.hook_target_recipe {
+            Some(recipe) => policy.with_hook_target_recipe(recipe),
             None => policy,
         };
         Ok(match input.source_graph {
@@ -352,6 +369,7 @@ impl ProjectBudgetPolicy {
             max_output_bytes,
             function_calls: None,
             function_call_evidence_profile: None,
+            hook_target_recipe: None,
             source_graph: None,
         })
     }
@@ -418,6 +436,20 @@ impl ProjectBudgetPolicy {
         self,
     ) -> Option<wow_emmy::function_calls::FunctionCallBudget> {
         self.function_calls
+    }
+
+    /// Closed same-call literal lookup recipe consumed by native W5.
+    #[must_use]
+    pub const fn with_hook_target_recipe(
+        mut self,
+        recipe: wow_emmy::function_calls::HookTargetRecipe,
+    ) -> Self {
+        self.hook_target_recipe = Some(recipe);
+        self
+    }
+    #[must_use]
+    pub const fn hook_target_recipe(self) -> Option<wow_emmy::function_calls::HookTargetRecipe> {
+        self.hook_target_recipe
     }
 
     /// Select an opt-in typed evidence recipe for a named function-call consumer.
@@ -734,10 +766,11 @@ impl ProjectConfiguration {
                 "selected function-call budgets require native retained packages",
             ));
         }
-        if self
-            .budget_policy
-            .function_call_evidence_profile()
-            .is_some()
+        if (self.budget_policy.hook_target_recipe().is_some()
+            || self
+                .budget_policy
+                .function_call_evidence_profile()
+                .is_some())
             && self.budget_policy.function_call_budget().is_none()
         {
             return Err(ProjectError::new(

@@ -23,6 +23,7 @@ use crate::references::{
 
 mod budget;
 mod declaration;
+mod hook_targets;
 mod location_index;
 mod shape;
 mod signature;
@@ -35,6 +36,7 @@ pub use declaration::{
     SourceFunctionDeclarationForm, SourceFunctionDeclarationUnavailable,
     SourceFunctionDeclarationUnsupported,
 };
+pub use hook_targets::{HookTargetRecipe, SourceHookTarget, SourceHookTargetForm};
 use location_index::AccessLocationIndex;
 pub use shape::{
     FunctionShapeEvent, FunctionShapeNode, FunctionShapeToken, SourceFunctionShape,
@@ -280,6 +282,8 @@ pub struct SourceCallFact {
     callee_span: SourceSpan,
     arguments: Vec<SourceCallArgument>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    hook_target: Option<SourceHookTarget>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     resolved_callable_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     receiver_binding_id: Option<String>,
@@ -289,6 +293,10 @@ pub struct SourceCallFact {
     target: SourceCallTarget,
 }
 impl SourceCallFact {
+    /// Same-call literal lookup, selected explicitly by the Project W5 recipe.
+    pub fn hook_target(&self) -> Option<&SourceHookTarget> {
+        self.hook_target.as_ref()
+    }
     pub fn fact_id(&self) -> &str {
         &self.fact_id
     }
@@ -341,6 +349,8 @@ pub struct SourceFunctionFile {
 pub struct FunctionCallReport {
     profile: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
+    hook_target_recipe: Option<HookTargetRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     local_call_result_profile: Option<FunctionCallEvidenceProfile>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     call_result_bindings: Vec<SourceCallResultBinding>,
@@ -369,6 +379,9 @@ pub struct FunctionCallReport {
     analysis_id: String,
 }
 impl FunctionCallReport {
+    pub const fn hook_target_recipe(&self) -> Option<HookTargetRecipe> {
+        self.hook_target_recipe
+    }
     pub const fn local_call_result_profile(&self) -> Option<FunctionCallEvidenceProfile> {
         self.local_call_result_profile
     }
@@ -461,6 +474,15 @@ impl FunctionCallReport {
         self.files.iter().all(|file| file.parse_error_count == 0)
     }
     fn identity(&self) -> EmmyMemberCallResult<String> {
+        if let Some(recipe) = self.hook_target_recipe {
+            return canonical_id(
+                "emmy-function-calls:sha256:",
+                &(recipe, self.identity_without_hook_recipe()?),
+            );
+        }
+        self.identity_without_hook_recipe()
+    }
+    fn identity_without_hook_recipe(&self) -> EmmyMemberCallResult<String> {
         let facts = (
             self.profile,
             &self.backend,
@@ -573,6 +595,7 @@ impl FunctionCallReport {
             return Err(invalid());
         }
         self.access_locations.validate(&self.global_accesses)?;
+        hook_targets::validate(self, stop)?;
         let functions = self
             .functions
             .iter()
@@ -1492,6 +1515,7 @@ pub(crate) fn collect_with_declarations(
         None,
         replay_recipe,
         local_call_result_profile,
+        None,
         stop,
     )
 }
@@ -1510,12 +1534,14 @@ pub(crate) fn collect_with_components(
     signature_recipe: Option<PhysicalFunctionSignatureRecipe>,
     replay_recipe: Option<FunctionCallReplayRecipe>,
     local_call_result_profile: Option<FunctionCallEvidenceProfile>,
+    hook_targets: Option<(HookTargetRecipe, usize)>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
     let limits = selected_budget.unwrap_or_default();
     let legacy_global_access_profile =
         replay_recipe == Some(FunctionCallReplayRecipe::LegacyGlobalAccessV9);
-    if (legacy_global_access_profile && local_call_result_profile.is_some())
+    if (legacy_global_access_profile
+        && (local_call_result_profile.is_some() || hook_targets.is_some()))
         || (legacy_global_access_profile
             && !selected_budget.is_some_and(|budget| budget.global_access_budget().is_some()))
     {
@@ -1734,6 +1760,7 @@ pub(crate) fn collect_with_components(
         }
     }
     let mut calls = Vec::new();
+    let mut hook_requests = hook_targets::Requests::default();
     let mut global_accesses = Vec::new();
     let mut access_budget =
         crate::global_access::AccessBudget::new(limits.global_access_budget().unwrap_or_default());
@@ -1816,6 +1843,20 @@ pub(crate) fn collect_with_components(
                 }
                 _ => (SourceCallTarget::Indeterminate, None),
             };
+            if let Some((_, query_limit)) = hook_targets {
+                hook_requests.observe(
+                    &call,
+                    &target,
+                    &model,
+                    &access_sources,
+                    callable_signatures,
+                    &signatures,
+                    calls.len(),
+                    limits,
+                    query_limit,
+                    stop,
+                )?;
+            }
             let caller_function_id = caller(main.snapshot_id(), file, call.syntax())?;
             let arguments = call
                 .get_args_list()
@@ -1879,6 +1920,7 @@ pub(crate) fn collect_with_components(
                 call_span,
                 callee_span,
                 arguments,
+                hook_target: None,
                 resolved_callable_key,
                 receiver_binding_id: None,
                 receiver_span: None,
@@ -1949,6 +1991,16 @@ pub(crate) fn collect_with_components(
     } else {
         Vec::new()
     };
+    hook_requests.resolve(
+        analysis,
+        main,
+        main_root,
+        libraries,
+        &signatures,
+        &global_accesses,
+        &mut calls,
+        stop,
+    )?;
     calls.sort_by(|a, b| a.fact_id.cmp(&b.fact_id));
     let library_snapshot_ids = libraries
         .iter()
@@ -1979,6 +2031,7 @@ pub(crate) fn collect_with_components(
         named_targets.insert(query.clone(), target);
     }
     let mut report = FunctionCallReport {
+        hook_target_recipe: hook_targets.map(|(recipe, _)| recipe),
         profile: if local_call_result_profile.is_some() {
             FUNCTION_CALL_LOCAL_RESULT_PROFILE
         } else if legacy_global_access_profile {

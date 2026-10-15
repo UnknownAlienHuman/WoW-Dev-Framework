@@ -295,6 +295,26 @@ replay/store budgets. Choose finite values from
 the actual selected operation; neither this selector nor a synthetic boundary
 case qualifies the full corpus or its peak memory.
 
+#### Literal secure-hook target selection
+
+For the selected retained source input, optional
+`project_budgets.hook_target_recipe: "hook_target_literals_v1"` enables exact
+literal target lookup for genuine Library `hooksecurefunc` calls. It reuses the
+same native semantic session and the continuing query, target, AST and output
+bounds. Select the existing physical function declaration recipe when named
+callbacks need their original declaration custody.
+
+The admitted forms are a direct global-name string and an exact Main global
+table with a direct member-name string. Dynamic, ambiguous, reassigned and
+shadowed values retain conservative results; local target strings and local
+table propagation are not part of this recipe. These facts describe source
+structure, not runtime hook execution or safety.
+
+Omission preserves the original callable queries and replay identities. The
+selected recipe is retained in configuration and the existing selected-component
+replay envelope; capture and source-absent acquisition must preserve its exact
+selection. This does not grant another catalog or activate unselected owners.
+
 #### Independent global-access work and text
 
 An optional `project_budgets.function_calls.global_access` object selects two
