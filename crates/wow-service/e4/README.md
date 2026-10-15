@@ -3,6 +3,9 @@
 **Status:** partial functional ProjectFile/set Search, durable lifecycle and
 explicit retained identity/prefix/literal retrieval with ranked result manifests,
 plus opt-in retained whole-candidate pages, exact continuation and root release.
+The separate [native Reference Search route](../../../apps/wow/SEARCH_REFERENCE.md)
+now builds/queries/retires genuine global/namespace callable projections through
+one atomic ReferenceView/Search publication and exact retained owner reads.
 Only the implemented subset is active; broader E4-C and projections/lanes
 remain unaccepted in #169/#125. See [pagination](../../../apps/wow/SEARCH_PAGINATION.md) and
 [native Search commands](../../../apps/wow/SEARCH_BUILD_QUERY.md).

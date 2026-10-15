@@ -15,15 +15,17 @@ use std::{
 use wow_service::{
     OperationId, ServiceErrorCode,
     search::{
-        LocalMetadataPermission, SearchBounds, SearchBuildQueryRequest, SearchContinueRequest,
-        SearchIndexBuildRequest, SearchOperationService, SearchResultReleaseRequest,
-        SearchRetrievalRequest, SearchShardQueryRequest, SearchShardRetireRequest,
-        SearchSourceHoldBinding, SearchStoreGcRequest, SearchStoreLimits,
+        LocalMetadataPermission, ReferenceIndexBuildRequest, ReferenceShardRequest, SearchBounds,
+        SearchBuildQueryRequest, SearchContinueRequest, SearchIndexBuildRequest,
+        SearchOperationService, SearchResultReleaseRequest, SearchRetrievalRequest,
+        SearchShardQueryRequest, SearchShardRetireRequest, SearchSourceHoldBinding,
+        SearchStoreGcRequest, SearchStoreLimits,
     },
 };
 
 const HELP: &str = "wow search index build --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --operation-id <ID> --allow-local-metadata-only <finite bounds>\nwow search query --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --literal-query <UTF-8-LITERAL> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index retire --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --build-operation-id <BuildOperationId> --source-store-epoch-id <ExactEpochId> --source-generation-hold-id <ExactRetentionRootId> --source-generation-hold-digest <sha256:...> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index gc --search-store <SEARCH-STORE-FILE> --target-object-id <ExactObjectId> --operation-id <ID> --gc-now <epoch> --gc-max-deletes <positive-u32> <Store limits>\nwow search build-query --store-root <PROJECT-STORE> <existing one-shot route; it does not claim durable SearchStore persistence>\nAll durable commands require --max-output-bytes <positive-u64> and Store limits: --store-max-object-bytes <positive-u64> --store-max-batch-objects <positive-u32> --store-max-catalog-mutations <positive-u32> --store-max-manifest-records <positive-u32> --store-max-gc-deletes <positive-u32>.\nBuild/query/retire also require Search bounds: --max-documents <positive-u32> --max-document-id-bytes <positive-u32> --max-owner-metadata-label-bytes <positive-u32> --max-literal-query-bytes <positive-u32> --max-candidate-results <positive-u32> --max-owner-evidence-records <positive-u32> --max-owner-manifest-bytes <positive-u64> --max-database-bytes <positive-u64> --max-search-object-bytes <positive-u64>.\n";
 const MAX_ARGUMENTS: usize = 64;
+const REFERENCE_HELP: &str = "wow search reference build --config <PINNED-SOURCE-REFERENCE-JSON> --expect-config-sha256 <DIGEST> --search-store <STORE> --operation-id <ID> --allow-local-metadata-only <Search/Store/output bounds>\nwow search reference query --handle-json <EXACT-HANDLE> --query-json <CLOSED-QUERY> --search-store <SAME-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output bounds>\nwow search reference retire --handle-json <EXACT-HANDLE> --search-store <SAME-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output bounds>\n";
 const RETRIEVAL_HELP: &str = "wow search retrieve --search-store <STORE> --generation <EXACT> --search-shard-id <ID> --object-id <ID> --profile-digest <DIGEST> --query-json <CLOSED-QUERY-JSON> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <finite bounds>. This operation selects the exact file-set component and returns an immutable ranked result manifest. Without --page-json it advertises no continuation.\n";
 const PAGINATION_HELP: &str = "Optional retrieve --page-json <CLOSED-PAGE-POLICY> retains an immutable result and exact shard before returning page one. wow search continue --continuation-json <EXACT-TOKEN> --search-store <STORE> --operation-id <ID> --allow-local-metadata-only <original Store/output limits>. wow search results release --session-object-id <EXACT> --search-store <STORE> --operation-id <ID> --allow-local-metadata-only <Store/output limits> releases both roots; completed response replay remains retained.\n";
 const DURABLE_FILE_SET_HELP: &str = "Durable index build/retire accept either --file-id <ID> or --file-ids <JSON-array-of-exact-IDs>. Durable query uses its real --file-id plus --file-set for that component. Preserve the full original selection and source-hold receipt for retirement.\n";
@@ -67,6 +69,9 @@ struct ParsedDurableSearch {
 }
 
 enum DurableCommand {
+    ReferenceBuild(ReferenceIndexBuildRequest),
+    ReferenceQuery(ReferenceShardRequest),
+    ReferenceRetire(ReferenceShardRequest),
     Build(SearchIndexBuildRequest),
     Query(SearchShardQueryRequest),
     Retire(SearchShardRetireRequest),
@@ -108,6 +113,7 @@ fn run_with_io<W: Write, E: Write>(
             .and_then(|()| stdout.write_all(DURABLE_FILE_SET_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(RETRIEVAL_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(PAGINATION_HELP.as_bytes()))
+            .and_then(|()| stdout.write_all(REFERENCE_HELP.as_bytes()))
             .and_then(|()| stdout.flush())
         {
             Ok(()) => 0,
@@ -187,6 +193,9 @@ fn run_durable<W: Write, E: Write>(
     }
     let service = SearchOperationService::new();
     let result = match parsed.command {
+        DurableCommand::ReferenceBuild(request) => service.build_reference_shard(&request, stop),
+        DurableCommand::ReferenceQuery(request) => service.query_reference_shard(&request, stop),
+        DurableCommand::ReferenceRetire(request) => service.retire_reference_shard(&request, stop),
         DurableCommand::Build(request) => service.build_shard(&request, stop),
         DurableCommand::Query(request) => service.query_shard(&request, stop),
         DurableCommand::Retire(request) => service.retire_shard(&request, stop),
@@ -245,8 +254,9 @@ fn durable_status_exit(bytes: &[u8]) -> Option<u8> {
         | "exact_not_found_partial"
         | "no_candidates_under_executed_lanes"
         | "lane_unavailable"
-        | "truncated" => Some(2),
-        "exact_found" => Some(0),
+        | "truncated"
+        | "conflict_blocked" => Some(2),
+        "exact_found" | "exact_not_found_with_authority" => Some(0),
         "retained" | "retired" | "collected" | "released" => Some(0),
         _ => None,
     }
@@ -282,6 +292,10 @@ fn is_help(arguments: &[OsString]) -> bool {
                 || arguments[1] == "index"
                 || arguments[1] == "continue"
                 || arguments[1] == "results"))
+        || (arguments.len() >= 3
+            && arguments[0] == "search"
+            && arguments[1] == "reference"
+            && arguments.iter().any(|v| v == "--help" || v == "-h"))
 }
 
 fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, &'static str> {
@@ -292,6 +306,12 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
         return Ok(None);
     };
     let (command, prefix_len) = match command_word {
+        "reference" => match arguments.get(2).and_then(|v| v.to_str()) {
+            Some("build") => ("reference-build", 3),
+            Some("query") => ("reference-query", 3),
+            Some("retire") => ("reference-retire", 3),
+            _ => return Ok(None),
+        },
         "query" => ("query", 2),
         "retrieve" => ("retrieve", 2),
         "continue" => ("continue", 2),
@@ -332,6 +352,13 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
     ];
     let mut allowed = vec!["--search-store", "--operation-id", "--max-output-bytes"];
     match command {
+        "reference-build" => allowed.extend_from_slice(&["--config", "--expect-config-sha256"]),
+        "reference-query" => {
+            allowed.extend_from_slice(&["--handle-json", "--query-json", "--lease-expires-after"])
+        }
+        "reference-retire" => {
+            allowed.extend_from_slice(&["--handle-json", "--lease-expires-after"])
+        }
         "build" => {
             allowed.extend_from_slice(&["--store-root", "--generation", "--file-id", "--file-ids"])
         }
@@ -373,7 +400,10 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
         "gc" => allowed.extend_from_slice(&["--target-object-id", "--gc-now", "--gc-max-deletes"]),
         _ => return Err("unknown durable search command"),
     }
-    if !matches!(command, "gc" | "continue" | "release") {
+    if !matches!(
+        command,
+        "gc" | "continue" | "release" | "reference-query" | "reference-retire"
+    ) {
         allowed.extend_from_slice(BOUNDS_OPTIONS);
     }
     allowed.extend_from_slice(STORE_OPTIONS);
@@ -386,6 +416,44 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
     let store_limits = parse_store_limits(&options)?;
     let max_output_bytes = positive_u64(&options, "--max-output-bytes")?;
     let command = match command {
+        "reference-build" => DurableCommand::ReferenceBuild(
+            ReferenceIndexBuildRequest::new(
+                OperationId::new(required_text(&options, "--operation-id")?)
+                    .map_err(|_| "invalid --operation-id")?,
+                PathBuf::from(required(&options, "--config")?),
+                required_text(&options, "--expect-config-sha256")?,
+                store_path,
+                parse_search_bounds(&options)?,
+                store_limits,
+                max_output_bytes,
+                LocalMetadataPermission::authorize_local_metadata_only(),
+            )
+            .map_err(|_| "invalid native Reference Search build request")?,
+        ),
+        "reference-query" | "reference-retire" => {
+            let request = ReferenceShardRequest::new(
+                OperationId::new(required_text(&options, "--operation-id")?)
+                    .map_err(|_| "invalid --operation-id")?,
+                store_path,
+                required_text(&options, "--handle-json")?.as_bytes(),
+                if command == "reference-query" {
+                    Some(required_text(&options, "--query-json")?.as_bytes())
+                } else {
+                    None
+                },
+                store_limits,
+                max_output_bytes,
+                positive_u64(&options, "--lease-expires-after")?.get(),
+                LocalMetadataPermission::authorize_local_metadata_only(),
+                &AtomicBool::new(false),
+            )
+            .map_err(|_| "invalid exact Reference Search handle/query")?;
+            if command == "reference-query" {
+                DurableCommand::ReferenceQuery(request)
+            } else {
+                DurableCommand::ReferenceRetire(request)
+            }
+        }
         "continue" => DurableCommand::Continue(
             SearchContinueRequest::new(
                 OperationId::new(required_text(&options, "--operation-id")?)

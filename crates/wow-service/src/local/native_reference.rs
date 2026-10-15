@@ -48,6 +48,21 @@ pub struct SourceReferenceResult {
 }
 
 impl SourceReferenceResult {
+    pub(crate) fn source_revision(&self) -> &str {
+        &self.revision
+    }
+    pub(crate) fn configuration_digest(&self) -> &ContentDigest<SourceContent> {
+        &self.configuration_content_digest
+    }
+    pub(crate) fn acquisition_failures(&self) -> impl Iterator<Item = (&str, &str, &NativeError)> {
+        self.input_failures.iter().map(|failure| {
+            (
+                failure.path.as_str(),
+                failure.sha256.as_str(),
+                &failure.error,
+            )
+        })
+    }
     pub fn profile(&self) -> &ProfileIdentity {
         &self.profile
     }

@@ -256,6 +256,10 @@ pub struct ReferenceRecord {
 }
 
 impl ReferenceRecord {
+    /// Validate an exact lookup key under the same grammar as stored records.
+    pub fn validate_key(key: &str) -> ReferenceViewResult<()> {
+        validate_identifier("record.key", key)
+    }
     /// Builds one canonical record.
     ///
     /// # Errors
@@ -345,7 +349,7 @@ impl ReferenceRecord {
     }
 
     fn validate(&self) -> ReferenceViewResult<()> {
-        validate_identifier("record.key", self.key())?;
+        Self::validate_key(self.key())?;
         validate_payload(self.payload())?;
         validate_id_slice("record.source_ids", self.source_ids())?;
         validate_restrictions(self.restrictions())

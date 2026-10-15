@@ -88,7 +88,7 @@ impl NativeCallableSignature<'_> {
         self.signature.name.as_str()
     }
     /// Original captured callable namespace when the source stated one;
-    /// `None` is not a claim that the callable is unnested.
+    /// `None` is the admitted global-owner case; no namespace is inferred.
     pub fn namespace(&self) -> Option<&str> {
         self.signature.namespace.as_deref()
     }

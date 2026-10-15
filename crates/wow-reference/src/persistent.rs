@@ -284,6 +284,18 @@ impl<'store> PersistentReferenceStore<'store> {
         Self { store }
     }
 
+    /// Prepare the existing immutable ReferenceView object without Store writes.
+    /// The caller can atomically publish it with dependent objects and roots.
+    pub fn prepare_view(&self, view: &ReferenceView) -> ReferenceStoreResult<PendingObject> {
+        view.validate().map_err(|_| {
+            ReferenceStoreError::new(
+                ReferenceStoreErrorCode::ArtifactDecodeFailed,
+                "reference view failed validation before preparation",
+            )
+        })?;
+        self.pending_view(view)
+    }
+
     pub fn store_view(
         &mut self,
         view: &ReferenceView,
@@ -472,6 +484,34 @@ mod tests {
     #[test]
     fn reference_view_wire_type_is_strictly_persistable() {
         assert_wire_codec::<ReferenceView>();
+    }
+
+    #[test]
+    fn prepare_view_has_no_effect_until_its_callers_batch_commits()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let configuration =
+            StoreConfiguration::new("reference-prepare-test", StoreLimits::default())?;
+        let mut store = Store::open_in_memory(configuration)?;
+        let view = ReferenceView::new(
+            "reference:prepare-test",
+            vec![crate::ReferencePartition::new(
+                "reference.prepare",
+                crate::CoverageStatus::Partial,
+                Vec::new(),
+            )?],
+            Vec::new(),
+        )?;
+        let pending = PersistentReferenceStore::new(&mut store).prepare_view(&view)?;
+        let id = pending.object_id().clone();
+        assert!(store.object(&id)?.is_none());
+        let mut batch = WriteBatch::new();
+        batch.add_object(pending)?;
+        store.commit(batch)?;
+        assert_eq!(
+            PersistentReferenceStore::new(&mut store).read_exact(&id)?,
+            Some(view)
+        );
+        Ok(())
     }
 
     #[test]

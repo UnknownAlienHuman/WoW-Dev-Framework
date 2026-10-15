@@ -91,11 +91,19 @@ source-normalized callable captured during `project_callables`. The sealed view
 binds its original Reference generation/view digest, record key/digest and source
 ID. It retains ordered parameters/returns, unresolved source type identities,
 tri-state nilability and raw default/stride values with original member spans.
-No payload parser, correction application or annotation lowering runs in this reader;
-unknown fields remain in the original record. Conflicting candidates cannot mint
+No payload parser, correction application or annotation lowering runs in this reader.
+The reachable handle exposes captured name/namespace, and its ordered fields
+expose original name/type/inner-type/nilability alongside source spans. These
+ports feed the [native Search projection](../../apps/wow/SEARCH_REFERENCE.md).
+Unknown fields remain in the original record. Conflicting candidates cannot mint
 this view. The private catalog is skipped by serialization, preserving existing
 Reference and projection bytes. Consumers must validate the complete binding
 against their held universe; replacing a public report does not relabel it.
+`PersistentReferenceStore::prepare_view` prepares the existing immutable view
+object without Store writes, allowing Service to commit its exact dependent
+shard, roots and response in the same owning operation transaction. Its object
+kind, schema and bytes are unchanged. `ReferenceRecord::validate_key` shares the
+existing owner key grammar with strict query consumers.
 See the selected [context consumer](../wow-context/e3/NATIVE_PRIMARY_REFERENCE_FACTS.md).
 
 The explicit `project_callables_with_type_resolution` producer also attaches a

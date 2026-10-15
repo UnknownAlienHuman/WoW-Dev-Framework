@@ -4,6 +4,8 @@
 //! and it requires explicit finite owner, Store, lease, and output bounds.
 
 mod documents;
+mod reference;
+pub use reference::{ReferenceIndexBuildRequest, ReferenceShardRequest};
 mod retrieval;
 pub use retrieval::{SearchContinueRequest, SearchResultReleaseRequest, SearchRetrievalRequest};
 mod file_set;
@@ -449,6 +451,27 @@ pub struct SearchOperationService {
 }
 
 impl SearchOperationService {
+    pub fn build_reference_shard(
+        &self,
+        request: &ReferenceIndexBuildRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        reference::build(request, stop)
+    }
+    pub fn query_reference_shard(
+        &self,
+        request: &ReferenceShardRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        reference::execute(request, false, stop)
+    }
+    pub fn retire_reference_shard(
+        &self,
+        request: &ReferenceShardRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        reference::execute(request, true, stop)
+    }
     pub fn continue_results(
         &self,
         request: &SearchContinueRequest,
