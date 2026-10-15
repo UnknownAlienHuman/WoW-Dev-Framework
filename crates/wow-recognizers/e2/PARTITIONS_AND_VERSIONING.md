@@ -19,7 +19,8 @@ the declared core capability inventory. Those identities do not advertise a
 runtime rule set: the exact selected pack ID/version/digest owns its rule
 versions. A native adapter pack and the shared core example are distinct packs.
 `capability_routing` separately records current availability. In particular,
-`core.library.embed@1` remains declared but `not-evaluated`, blocked by #159;
+`core.library.embed@1` remains declared but `not-evaluated`, with remaining
+universal-rule acceptance tracked by #103/#120;
 the shared core candidate omits the unsupported rule. The explicit xtask owner
 map rejects both a false functional embed claim and the old misleading
 `active_rule_ids` field. This metadata change accepts no fixture or checksum.
@@ -31,6 +32,15 @@ are bound to that private pack identity; the declared capability remains
 `e2-2` candidate with null acceptance pins. Its W5 rule-2 update is consolidated
 before acceptance rather than minting another development pack version; it does
 not establish a frozen global runtime pack or complete W11 acceptance.
+
+The opt-in `AceAddonLocalResultV1` report11 recipe uses the separate
+`wow-calibration-aceaddon-local-result` pack and
+`calibration.library.aceaddon_embed@1` rule. Its source-library profile is
+`wow-recognizers/source-library/aceaddon-local-result/1`; Project retains it under
+`wow-project/native-project-replay/aceaddon-local-result/1` and
+`wow-project.live-replay.aceaddon-local-result.v1`. Default and previously admitted
+recipes retain their original interpretation. This selected structural adapter
+does not activate `core.library.embed@1` or accept the E5 calibration lifecycle.
 
 ## Pack version
 

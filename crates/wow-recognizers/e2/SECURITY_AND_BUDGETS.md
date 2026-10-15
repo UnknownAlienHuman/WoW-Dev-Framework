@@ -21,6 +21,9 @@ Untrusted or malformed pack/fact/corpus data may attempt to:
 
 - E2 core packs are repository-owned immutable reviewed artifacts.
 - External/user/calibration packs are disabled unless a later explicit audit/activation policy applies.
+- The repository-owned, opt-in AceAddon local-result structural recipe accepts
+  no external pack input. Its selected native adapter does not grant E5 pack
+  review, signing, publication or activation authority.
 - Pack parsing never follows includes, URLs, file paths, environment variables, or aliases.
 - No signatures are claimed before a signing/publication milestone exists.
 

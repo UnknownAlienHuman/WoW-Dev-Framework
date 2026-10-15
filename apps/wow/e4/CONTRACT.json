@@ -1,11 +1,21 @@
 {
   "schema_version": 1,
   "contract_id": "apps/wow/e4-c/search-lineage-impact-cli",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
   "work_package": "E4-C",
   "application": "wow",
   "documentation_frontier": "E4-C",
-  "implementation_state": "not-started",
+  "implementation_state": "partial-functional",
+  "acceptance_status": "pending",
+  "canonical_issue": 169,
+  "availability_scope": "Only implemented_subset is executable; remaining command lists define the target E4-C contract.",
+  "preimplementation_freeze": {"status": "missed", "evaluation": "NotEvaluated"},
+  "implemented_subset": {
+    "scope": "one exact ProjectFile metadata shard",
+    "commands": ["search build-query", "search index build", "search query", "search index retire", "search index gc"],
+    "owner": "apps/wow/src/search.rs",
+    "full_e4_c_acceptance": "not-accepted"
+  },
   "framework_dependencies": [
     "wow-service"
   ],
@@ -180,8 +190,9 @@
     "apps/wow/e4/examples/CHECKSUMS.json"
   ],
   "freeze_gate": {
-    "implementation_state": "not-started",
-    "required_before_first_rust_implementation": [
+    "implementation_state": "partial-functional",
+    "full_e4_c_acceptance": "not-accepted",
+    "required_before_full_e4_c_acceptance": [
       "implemented and frozen wow-service E4-C request result error and canonical byte contracts",
       "frozen command selector root config query review artifact continuation output exit signal cancellation broken-pipe and platform adapter profiles",
       "all canonical request envelope stdout artifact text-required-field exit-code and error vectors",

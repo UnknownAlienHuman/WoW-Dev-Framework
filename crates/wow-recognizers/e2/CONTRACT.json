@@ -990,7 +990,6 @@
       ],
       "acceptance_status": "pending",
       "blocking_issues": [
-        159,
         103,
         120
       ]

@@ -112,7 +112,9 @@ fn input_bundle_with_plans(
     )?;
     Ok(ProjectInputBundle::closed(config, files, vec![library])?)
 }
-fn owners(source: &str) -> TestResult<(ProjectPublisher, GraphPartitionSnapshot)> {
+pub(crate) fn owners(
+    source: &str,
+) -> Result<(ProjectPublisher, GraphPartitionSnapshot), Box<dyn Error>> {
     owners_from_bundle(input_bundle(source)?)
 }
 fn owners_from_bundle(

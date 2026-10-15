@@ -331,3 +331,152 @@ fn completed_result_retarget_and_catalog_prune_share_one_transaction() -> TestRe
     );
     Ok(())
 }
+#[test]
+fn operation_gc_deletion_and_receipt_commit_atomically_and_replay_exactly() -> TestResult {
+    let mut store = Store::open_in_memory(StoreConfiguration::new(
+        "gc-operation-receipt-test",
+        StoreLimits::default(),
+    )?)?;
+    let victim = pending("gc.test.object", json!({"value":"victim"}))?;
+    let victim_id = victim.object_id().clone();
+    let mut seed = WriteBatch::new();
+    seed.add_object(victim)?;
+    store.commit(seed)?;
+
+    let operation_id = OperationId::new("store-gc:receipt-fault")?;
+    let request_digest = RequestDigest::new(format!("sha256:{}", "a".repeat(64)))?;
+    let before_commit = store.collect_garbage_with_operation_boundary(
+        &operation_id,
+        &request_digest,
+        crate::LogicalEpoch::new(0),
+        8,
+        |boundary| match boundary {
+            OperationCommitBoundary::BeforeCommit => Err(StoreError::new(
+                StoreErrorCode::OutcomeUnknown,
+                "injected process loss before atomic GC commit",
+            )),
+            OperationCommitBoundary::AfterCommit => Ok(()),
+        },
+    );
+    assert_eq!(
+        before_commit
+            .err()
+            .ok_or("expected precommit fault")?
+            .code(),
+        StoreErrorCode::OutcomeUnknown
+    );
+    assert!(store.object(&victim_id)?.is_some());
+    assert!(
+        store.operation(&operation_id)?.is_none(),
+        "precommit failure must roll back operation row and deletion together"
+    );
+
+    let after_commit = store.collect_garbage_with_operation_boundary(
+        &operation_id,
+        &request_digest,
+        crate::LogicalEpoch::new(0),
+        8,
+        |boundary| match boundary {
+            OperationCommitBoundary::BeforeCommit => Ok(()),
+            OperationCommitBoundary::AfterCommit => Err(StoreError::new(
+                StoreErrorCode::OutcomeUnknown,
+                "injected response loss after atomic GC commit",
+            )),
+        },
+    );
+    assert_eq!(
+        after_commit
+            .err()
+            .ok_or("expected postcommit response loss")?
+            .code(),
+        StoreErrorCode::OutcomeUnknown
+    );
+    assert!(store.object(&victim_id)?.is_none());
+    let completed = store
+        .operation(&operation_id)?
+        .ok_or("atomic GC operation record missing")?;
+    assert_eq!(completed.state(), OperationState::Completed);
+    let result_id = completed
+        .result_object_id()
+        .ok_or("completed GC operation has no receipt object")?;
+    let stored_receipt = store
+        .object(result_id)?
+        .ok_or("completed GC receipt object missing")?;
+    assert_eq!(
+        stored_receipt.kind(),
+        "wow-store.garbage-collection-receipt"
+    );
+    assert_eq!(stored_receipt.schema_version(), 1);
+    let persisted: crate::GarbageCollectionReceipt = stored_receipt.decode()?;
+    assert_eq!(persisted.deleted(), std::slice::from_ref(&victim_id));
+
+    let later_orphan = pending("gc.test.object", json!({"value":"later"}))?;
+    let later_id = later_orphan.object_id().clone();
+    let mut later_seed = WriteBatch::new();
+    later_seed.add_object(later_orphan)?;
+    store.commit(later_seed)?;
+
+    let replay = store.collect_garbage_with_operation(
+        &operation_id,
+        &request_digest,
+        crate::LogicalEpoch::new(0),
+        8,
+    )?;
+    assert!(replay.replayed());
+    assert_eq!(replay.receipt(), &persisted);
+    assert!(
+        store.object(&later_id)?.is_some(),
+        "exact replay must not collect a later orphan"
+    );
+
+    let preprepared_id = OperationId::new("store-gc:preprepared-refused")?;
+    let preprepared_digest = RequestDigest::new(format!("sha256:{}", "c".repeat(64)))?;
+    let protected_orphan = pending("gc.test.object", json!({"value":"preprepared"}))?;
+    let protected_id = protected_orphan.object_id().clone();
+    let mut protected_seed = WriteBatch::new();
+    protected_seed.add_object(protected_orphan)?;
+    store.commit(protected_seed)?;
+    let OperationBegin::Started(prepared) =
+        store.begin_operation(preprepared_id.clone(), preprepared_digest.clone())?
+    else {
+        return Err("preprepared GC operation was not newly prepared".into());
+    };
+    assert_eq!(prepared.state(), OperationState::Prepared);
+    let refused = store.collect_garbage_with_operation(
+        &preprepared_id,
+        &preprepared_digest,
+        crate::LogicalEpoch::new(0),
+        8,
+    );
+    assert_eq!(
+        refused
+            .err()
+            .ok_or("expected preprepared GC refusal")?
+            .code(),
+        StoreErrorCode::OutcomeUnknown
+    );
+    assert!(store.object(&protected_id)?.is_some());
+    assert_eq!(
+        store
+            .operation(&preprepared_id)?
+            .ok_or("preprepared operation missing")?
+            .state(),
+        OperationState::Prepared
+    );
+    let changed_digest = RequestDigest::new(format!("sha256:{}", "b".repeat(64)))?;
+    let conflict = store.collect_garbage_with_operation(
+        &operation_id,
+        &changed_digest,
+        crate::LogicalEpoch::new(0),
+        8,
+    );
+    assert_eq!(
+        conflict
+            .err()
+            .ok_or("expected operation digest conflict")?
+            .code(),
+        StoreErrorCode::OperationConflict
+    );
+    assert!(store.object(&later_id)?.is_some());
+    Ok(())
+}

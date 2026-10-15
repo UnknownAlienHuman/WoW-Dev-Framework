@@ -1,6 +1,6 @@
 # `wow-search` E4-A exact-generation retrieval core
 
-**Status:** partial executable ProjectFile metadata shard and native build/query route; full E4-A acceptance pending in [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169). The complete planned scope below remains normative.
+**Status:** partial executable ProjectFile metadata shard, native one-shot build/query and selected durable build/exact reopen/query/retire/GC route; full E4-A acceptance pending in [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169). The complete planned scope below remains normative.
 
 **Contract ID:** `wow-search/e4-a/exact-generation-retrieval-core`
 

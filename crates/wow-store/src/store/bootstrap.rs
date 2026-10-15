@@ -104,6 +104,7 @@ pub(super) fn create(final_path: &Path, configuration: StoreConfiguration) -> St
     let Store {
         connection,
         configuration: _,
+        instance_id: _,
     } = store;
     connection.close().map_err(|(connection, error)| {
         drop(connection);

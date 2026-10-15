@@ -187,7 +187,7 @@
       "rule_id": "core.library.embed@1",
       "input_variant": "embed-convention-deferred",
       "expected_outcome": "NotEvaluated",
-      "blocking_issue": 159,
+      "blocking_issue": 103,
       "expected_relation_kind": "lua_embeds_library",
       "forbidden_claims": ["embeds_library"]
     },

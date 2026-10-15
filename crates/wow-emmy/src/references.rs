@@ -399,6 +399,7 @@ pub struct MemberCallSessionQueryProfile<'a> {
     member_pair_limit: usize,
     function_call_budget: Option<crate::function_calls::FunctionCallBudget>,
     function_call_replay_recipe: Option<crate::function_calls::FunctionCallReplayRecipe>,
+    function_call_evidence_profile: Option<crate::function_calls::FunctionCallEvidenceProfile>,
     physical_function_declarations:
         Option<crate::function_calls::PhysicalFunctionDeclarationRecipe>,
     physical_function_signatures: Option<crate::function_calls::PhysicalFunctionSignatureRecipe>,
@@ -414,6 +415,7 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
             member_pair_limit: DEFAULT_MEMBER_PAIR_LIMIT,
             function_call_budget: None,
             function_call_replay_recipe: None,
+            function_call_evidence_profile: None,
             physical_function_declarations: None,
             physical_function_signatures: None,
         }
@@ -472,6 +474,16 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
         self
     }
 
+    /// Select the typed local call-result receipt used by the named AceAddon W6 profile.
+    #[must_use]
+    pub const fn with_function_call_evidence_profile(
+        mut self,
+        profile: crate::function_calls::FunctionCallEvidenceProfile,
+    ) -> Self {
+        self.function_call_evidence_profile = Some(profile);
+        self
+    }
+
     /// Select a physical declaration recipe in the same function-call sidecar.
     /// Existing query/count/output budgets and the absent-recipe path are retained.
     #[must_use]
@@ -517,7 +529,8 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
         if !include_function_calls
             && (self.physical_function_declarations.is_some()
                 || self.physical_function_signatures.is_some()
-                || self.function_call_replay_recipe.is_some())
+                || self.function_call_replay_recipe.is_some()
+                || self.function_call_evidence_profile.is_some())
         {
             return Err(EmmyMemberCallError::new(
                 EmmyMemberCallErrorCode::InvalidMainWorkspace,
@@ -953,6 +966,7 @@ impl RegisteredMemberAnalysis {
                             declaration_recipe,
                             Some(signature_recipe),
                             profile.function_call_replay_recipe,
+                            profile.function_call_evidence_profile,
                             stop,
                         )?
                     }
@@ -966,6 +980,7 @@ impl RegisteredMemberAnalysis {
                         profile.function_call_budget,
                         Some(recipe),
                         profile.function_call_replay_recipe,
+                        profile.function_call_evidence_profile,
                         stop,
                     )?,
                     (None, None) => crate::function_calls::collect(
@@ -977,6 +992,7 @@ impl RegisteredMemberAnalysis {
                         &lookup_analysis_ids,
                         profile.function_call_budget,
                         profile.function_call_replay_recipe,
+                        profile.function_call_evidence_profile,
                         stop,
                     )?,
                 },

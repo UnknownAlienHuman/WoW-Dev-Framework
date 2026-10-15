@@ -33,9 +33,12 @@ implementation: selected ProjectFile metadata shard; full E4-A pending
 The selected [native search command](../../apps/wow/SEARCH_BUILD_QUERY.md) builds
 one immutable shard from an exact retained Project/Graph pair, preserves the
 owner's file ID and relative-path label, and exposes exact ID/label lookups plus
-Candidate-only literal FTS. The one-shot CLI uses an in-memory generic Store;
-durable reopening, other document/lane classes, ranking, misses and continuation
-remain separate work. The historical preimplementation freeze is not accepted.
+Candidate-only literal FTS. The one-shot CLI uses an in-memory generic Store.
+The separate durable CLI builds a retained shard, reopens its exact handle in a
+later process, and explicitly retires/collects it through the operation journal,
+catalog roots and leases. Other document/lane classes, ranking, misses,
+continuation and full durability/fault qualification remain separate work.
+The historical preimplementation freeze is not accepted.
 
 E4-A defines:
 

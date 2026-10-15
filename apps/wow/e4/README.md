@@ -1,6 +1,6 @@
 # `apps/wow` E4-C search, lineage, migration, and impact CLI contract
 
-**Status:** implementation-ready documentation; no Rust code yet.
+**Status:** partial executable one-ProjectFile Search CLI, including selected durable build/query/retire/GC. Only the contract's implemented subset is active; the remaining target command families below are not advertised as implemented. Full E4-C acceptance remains #169/#125. See [native Search commands](../SEARCH_BUILD_QUERY.md).
 
 **Contract ID:** `apps/wow/e4-c/search-lineage-impact-cli`
 

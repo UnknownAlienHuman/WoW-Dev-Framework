@@ -1558,13 +1558,6 @@ fn validate_capabilities(
         if text(row, "status")? != expected_status || text(row, "acceptance_status")? != "pending" {
             return Err("mapped capability availability/acceptance differs from its owner".into());
         }
-        if expected_status == "not-evaluated"
-            && !row["blocking_issues"]
-                .as_array()
-                .is_some_and(|issues| issues.iter().any(|issue| issue.as_u64() == Some(159)))
-        {
-            return Err("deferred embed capability must retain its concrete blocker".into());
-        }
         require_routes(&row["owners"], expected.owners)?;
         require_routes(&row["application_routes"], expected.application_routes)?;
         let blockers = row["blocking_issues"]
@@ -1666,9 +1659,6 @@ mod tests {
                 "owners":owners,"application_routes":routes,"acceptance_status":"pending","blocking_issues":blockers});
             if spec.id == RECOGNIZER_OWNER_ID && capability.name == DEFERRED_EMBED_CAPABILITY {
                 row["status"] = json!("not-evaluated");
-                if let Some(issues) = row["blocking_issues"].as_array_mut() {
-                    issues.push(json!(159));
-                }
             }
             if let Some(selection) = capability.application_selection {
                 row["application_selection"] = json!(selection);

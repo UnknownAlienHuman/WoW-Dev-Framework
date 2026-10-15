@@ -1,5 +1,48 @@
 # Native exact-generation search
 
+## Durable selected shard
+
+`wow search index build` prepares one exact ProjectFile metadata shard from an
+explicit retained ProjectStore generation and publishes it into a separate
+explicit SearchStore file. Publication atomically commits the immutable shard,
+its direct catalog root, response object and completed operation journal entry.
+
+The selected `wow-search.durable-shard-store.v2` profile uses a Store-owned
+physical instance identity. Each retained shard also holds its exact source
+generation in ProjectStore; two SearchStore instances keep independent holds.
+Copied SearchStore files and older identity-free profiles are refused. Retirement
+validates the original source epoch and hold before releasing it.
+
+`wow search query` opens the exact returned shard/object/profile/generation/file
+handle in a later process. It validates the retained owner manifest and physical
+document before exact ID/label and literal FTS queries; it does not rebuild the
+shard or resolve Current. `candidate_only` remains Candidate evidence and uses
+CLI exit 2. The metadata permission and every finite bound remain explicit.
+
+`wow search index retire` validates the same handle and atomically removes its
+catalog root with the retirement response/journal completion. `wow search index gc`
+runs bounded explicit Store GC and reports whether the selected target object was
+deleted. The native deletion and GC receipt commit together; an interrupted
+outer operation adopts that receipt on retry without collecting again.
+A released query lease must not keep that retired object alive until its
+expiry. Build, retirement and GC completion use exit 0; owner refusals retain
+their error mapping. Store initialization may create the explicitly named new
+SearchStore before its operation journal exists; no shard is published by that
+initialization.
+
+Each operation binds an exact ID/request digest. Completed retries return stored
+response bytes; a conflicting request fails, and an interrupted Prepared outcome
+requires reconciliation. These are immutable metadata observations, not current
+source availability or a promise that a retired handle can still be queried.
+Physical process reopen is separate from power-loss/platform acceptance.
+
+Use `wow search --help` for the closed build/query/retire/GC grammar. Source bodies,
+snippets, inferred aliases, complete ranking/miss/continuation, lineage and full
+E4-A/E4-C acceptance remain outside this selected route in
+[#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169).
+
+## One-shot build/query
+
 `wow search build-query` builds and queries one immutable ProjectFile metadata
 shard through the Search, Store and Service owners. Use `wow search --help` for
 the closed grammar and required finite bounds. The command requires an explicit
@@ -15,7 +58,7 @@ outside this projection.
 The Service validates the physical SQLite/FTS5 shard and reopens it read-only.
 It releases the shard lease and checks the retained read/store closure before
 returning canonical `wow-service/search-result-envelope/1` bytes. The CLI adds
-one LF. Success is exit 0, cancellation 130, request refusal 64 and output failure
+one LF. Candidate-only output uses exit 2, cancellation 130, request refusal 64 and output failure
 4; other owner failures retain their mapped error code.
 
 This first route uses an in-memory generic search Store and a process-local

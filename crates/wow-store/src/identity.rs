@@ -78,6 +78,60 @@ text_id!(CatalogName, "catalog name", 128, component);
 text_id!(CatalogPath, "catalog path", 1024, path);
 text_id!(RequestDigest, "request digest", 71, digest);
 
+/// Opaque identity minted by Store for one physical owned database.
+///
+/// There is intentionally no public constructor or deserializer: callers can
+/// read and carry an admitted identity, but cannot assert or rebind one.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct StoreInstanceId(Box<str>);
+
+impl StoreInstanceId {
+    pub(crate) fn from_sqlite_entropy(bytes: &[u8]) -> StoreResult<Self> {
+        if bytes.len() != 16 {
+            return Err(StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                "SQLite returned an invalid store identity entropy value",
+            ));
+        }
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        let mut value = String::with_capacity(47);
+        value.push_str("store-instance:");
+        for byte in bytes {
+            value.push(char::from(HEX[usize::from(byte >> 4)]));
+            value.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        }
+        Ok(Self(value.into_boxed_str()))
+    }
+
+    pub(crate) fn from_stored(value: String) -> StoreResult<Self> {
+        let valid = value.strip_prefix("store-instance:").is_some_and(|hex| {
+            hex.len() == 32
+                && hex
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        });
+        if !valid {
+            return Err(StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                "stored store instance identity is malformed",
+            ));
+        }
+        Ok(Self(value.into_boxed_str()))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for StoreInstanceId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct LogicalEpoch(u64);

@@ -1556,8 +1556,12 @@ fn valid_path_text(value: &str) -> bool {
 }
 
 fn store_error_code(code: StoreErrorCode) -> &'static str {
+    // Preserve the Reference Pack wire vocabulary: identity admission failures
+    // retain their configuration or integrity category on this surface.
     match code {
-        StoreErrorCode::ConfigurationInvalid => "configuration_invalid",
+        StoreErrorCode::ConfigurationInvalid | StoreErrorCode::StoreInstanceIdentityUnavailable => {
+            "configuration_invalid"
+        }
         StoreErrorCode::IdentifierInvalid => "identifier_invalid",
         StoreErrorCode::ObjectTooLarge => "object_too_large",
         StoreErrorCode::BatchTooLarge => "batch_too_large",
@@ -1570,7 +1574,9 @@ fn store_error_code(code: StoreErrorCode) -> &'static str {
         StoreErrorCode::LeaseConflict => "lease_conflict",
         StoreErrorCode::LeaseInvalid => "lease_invalid",
         StoreErrorCode::BudgetExceeded => "budget_exceeded",
-        StoreErrorCode::IntegrityViolation => "integrity_violation",
+        StoreErrorCode::IntegrityViolation | StoreErrorCode::StoreInstanceIdentityMismatch => {
+            "integrity_violation"
+        }
         StoreErrorCode::DatabaseUnavailable => "database_unavailable",
         StoreErrorCode::Cancelled => "cancelled",
         StoreErrorCode::WriterBusy => "writer_busy",

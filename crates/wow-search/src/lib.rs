@@ -18,11 +18,11 @@ use wow_project::{
     ProjectError, ProjectFileId, ProjectFileRecord, replay::publication::AcquiredProjectPair,
 };
 use wow_store::{
-    LeaseId, LeaseRecord, LogicalEpoch, ObjectId, Store, StoreError, StoreErrorCode,
+    LeaseId, LeaseRecord, LogicalEpoch, ObjectId, PendingObject, Store, StoreError, StoreErrorCode,
     project::{ReadSnapshot, StoreGenerationId},
     search::{
-        PublishedSearchShard, SearchStore, SearchStoreDocument, SearchStoreLimits,
-        SearchStoreProfile,
+        PreparedSearchShard, PublishedSearchShard, SearchStore, SearchStoreDocument,
+        SearchStoreLimits, SearchStoreProfile,
     },
 };
 
@@ -237,6 +237,65 @@ impl SearchShardBuildRequest {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct SearchShardPrepareRequest {
+    store_generation_id: StoreGenerationId,
+    file_id: ProjectFileId,
+    profile: SearchBuildProfile,
+    permission: LocalMetadataPermission,
+}
+
+impl SearchShardPrepareRequest {
+    #[must_use]
+    pub fn new(
+        store_generation_id: StoreGenerationId,
+        file_id: ProjectFileId,
+        profile: SearchBuildProfile,
+        permission: LocalMetadataPermission,
+    ) -> Self {
+        Self {
+            store_generation_id,
+            file_id,
+            profile,
+            permission,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SearchShardOpenRequest {
+    store_generation_id: StoreGenerationId,
+    file_id: ProjectFileId,
+    profile: SearchBuildProfile,
+    logical_id: Box<str>,
+    object_id: ObjectId,
+    lease: SearchStoreLeaseRequest,
+    permission: LocalMetadataPermission,
+}
+
+impl SearchShardOpenRequest {
+    #[must_use]
+    pub fn new(
+        store_generation_id: StoreGenerationId,
+        file_id: ProjectFileId,
+        profile: SearchBuildProfile,
+        logical_id: impl Into<Box<str>>,
+        object_id: ObjectId,
+        lease: SearchStoreLeaseRequest,
+        permission: LocalMetadataPermission,
+    ) -> Self {
+        Self {
+            store_generation_id,
+            file_id,
+            profile,
+            logical_id: logical_id.into(),
+            object_id,
+            lease,
+            permission,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OwnerMetadataLabel(Box<str>);
@@ -317,6 +376,45 @@ struct SearchShardManifest {
     graph_partitions: Vec<GraphPartitionEvidence>,
     graph_conflict_manifest: GraphConflictManifestState,
     source_provenance_present: bool,
+}
+
+pub struct PreparedProjectFileShard {
+    logical_id: Box<str>,
+    manifest: SearchShardManifest,
+    manifest_bytes: Box<[u8]>,
+    physical: PreparedSearchShard,
+}
+
+impl PreparedProjectFileShard {
+    #[must_use]
+    pub fn logical_id(&self) -> &str {
+        &self.logical_id
+    }
+
+    #[must_use]
+    pub fn object_id(&self) -> &ObjectId {
+        self.physical.object_id()
+    }
+
+    #[must_use]
+    pub fn source_generation(&self) -> &str {
+        &self.manifest.source.store_generation_id
+    }
+
+    #[must_use]
+    pub fn profile_digest(&self) -> &str {
+        &self.manifest.profile_digest
+    }
+
+    #[must_use]
+    pub fn document(&self) -> &ProjectFileSearchDocument {
+        &self.manifest.document
+    }
+
+    #[must_use]
+    pub fn into_object(self) -> PendingObject {
+        self.physical.into_object()
+    }
 }
 
 pub struct SearchShard {
@@ -404,7 +502,7 @@ impl SearchShard {
     }
 
     pub fn release(self, store: &mut Store) -> SearchResult<()> {
-        self.physical.release(store).map_err(SearchError::Store)
+        release_physical(self.physical, store)
     }
 
     fn document_for(
@@ -480,6 +578,53 @@ pub fn build_project_file_shard(
     store: &mut Store,
     stop: &AtomicBool,
 ) -> SearchResult<SearchShard> {
+    let SearchShardBuildRequest {
+        store_generation_id,
+        file_id,
+        profile,
+        permission,
+        lease,
+    } = request;
+    let prepared = prepare_project_file_shard(
+        read,
+        SearchShardPrepareRequest::new(store_generation_id, file_id, profile.clone(), permission),
+        store.configuration().limits(),
+        stop,
+    )?;
+    let PreparedProjectFileShard {
+        logical_id,
+        manifest,
+        manifest_bytes,
+        physical,
+    } = prepared;
+    let object_id = physical.object_id().clone();
+    let mut batch = wow_store::WriteBatch::new();
+    batch.add_object(physical.into_object())?;
+    store.commit(batch)?;
+    let physical_profile =
+        SearchStoreProfile::new(profile.digest().to_owned(), profile.bounds().physical()?)?;
+    let physical = SearchStore::open_exact(
+        store,
+        physical_profile,
+        logical_id.clone(),
+        &object_id,
+        lease,
+        stop,
+    )?;
+    let physical = verify_reopened_owner_manifest(physical, &manifest_bytes, store)?;
+    Ok(SearchShard {
+        logical_id,
+        manifest,
+        physical,
+    })
+}
+
+pub fn prepare_project_file_shard(
+    read: &ReadSnapshot,
+    request: SearchShardPrepareRequest,
+    object_limits: wow_store::StoreLimits,
+    stop: &AtomicBool,
+) -> SearchResult<PreparedProjectFileShard> {
     if stop.load(Ordering::Acquire) {
         return Err(SearchError::Cancelled);
     }
@@ -580,8 +725,7 @@ pub fn build_project_file_shard(
         request.profile.digest.to_string(),
         request.profile.bounds.physical()?,
     )?;
-    let physical = SearchStore::build_and_publish(
-        store,
+    let physical = SearchStore::prepare(
         physical_profile,
         logical_id.to_string(),
         &[SearchStoreDocument::new(
@@ -589,15 +733,107 @@ pub fn build_project_file_shard(
             document.owner_metadata_label.as_str(),
         )],
         &manifest_bytes,
+        object_limits,
+        stop,
+    )?;
+    Ok(PreparedProjectFileShard {
+        logical_id,
+        manifest,
+        manifest_bytes: manifest_bytes.into_boxed_slice(),
+        physical,
+    })
+}
+
+pub fn open_project_file_shard(
+    store: &mut Store,
+    request: SearchShardOpenRequest,
+    stop: &AtomicBool,
+) -> SearchResult<SearchShard> {
+    if stop.load(Ordering::Acquire) {
+        return Err(SearchError::Cancelled);
+    }
+    if !request.permission.authorized {
+        return Err(SearchError::LocalMetadataPermissionRequired);
+    }
+    let physical_profile = SearchStoreProfile::new(
+        request.profile.digest().to_owned(),
+        request.profile.bounds().physical()?,
+    )?;
+    let logical_id = request.logical_id;
+    let object_id = request.object_id;
+    let store_generation_id = request.store_generation_id;
+    let file_id = request.file_id;
+    let profile = request.profile;
+    let physical = SearchStore::open_exact(
+        store,
+        physical_profile,
+        logical_id.clone(),
+        &object_id,
         request.lease,
         stop,
     )?;
-    let physical = verify_reopened_owner_manifest(physical, &manifest_bytes, store)?;
+    let manifest = match validate_opened_manifest(
+        &physical,
+        &logical_id,
+        &object_id,
+        &store_generation_id,
+        &file_id,
+        &profile,
+    ) {
+        Ok(manifest) => manifest,
+        Err(error) => return Err(release_after_owner_error(physical, store, error)),
+    };
     Ok(SearchShard {
         logical_id,
         manifest,
         physical,
     })
+}
+
+fn validate_opened_manifest(
+    physical: &PublishedSearchShard,
+    logical_id: &str,
+    object_id: &ObjectId,
+    store_generation_id: &StoreGenerationId,
+    file_id: &ProjectFileId,
+    profile: &SearchBuildProfile,
+) -> SearchResult<SearchShardManifest> {
+    let bytes = physical.reader().owner_manifest_bytes();
+    let manifest: SearchShardManifest =
+        serde_json::from_slice(bytes).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+    let canonical =
+        wow_core::canonical_json_bytes(&manifest).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+    let expected_logical_id = format!("search-shard:sha256:{}", hex(&Sha256::digest(bytes)));
+    if canonical.as_slice() != bytes
+        || physical.object_id() != object_id
+        || physical.search_shard_id() != logical_id
+        || expected_logical_id != logical_id
+        || physical.reader().profile_digest() != profile.digest()
+        || physical.reader().document_count() != 1
+        || manifest.schema.as_ref() != SEARCH_MANIFEST_SCHEMA
+        || manifest.profile_digest.as_ref() != profile.digest()
+        || manifest.source.store_generation_id.as_ref() != store_generation_id.as_str()
+        || &manifest.document.entity_id != file_id
+    {
+        return Err(SearchError::OwnerEvidenceInvalid);
+    }
+    let physical_document = physical
+        .reader()
+        .exact_id(file_id.as_str())?
+        .ok_or(SearchError::OwnerEvidenceInvalid)?;
+    if physical_document.owner_metadata_label() != manifest.document.owner_metadata_label.as_str() {
+        return Err(SearchError::OwnerEvidenceInvalid);
+    }
+    let labels = physical
+        .reader()
+        .exact_label(manifest.document.owner_metadata_label.as_str())?;
+    if labels.len() != 1
+        || labels[0].document_id() != file_id.as_str()
+        || labels[0].owner_metadata_label() != manifest.document.owner_metadata_label.as_str()
+    {
+        return Err(SearchError::OwnerEvidenceInvalid);
+    }
+    Ok(manifest)
 }
 
 fn verify_reopened_owner_manifest(
@@ -608,15 +844,21 @@ fn verify_reopened_owner_manifest(
     if physical.reader().owner_manifest_bytes() == expected_manifest {
         return Ok(physical);
     }
+    Err(release_after_owner_error(
+        physical,
+        store,
+        SearchError::OwnerEvidenceInvalid,
+    ))
+}
 
+fn release_physical(physical: PublishedSearchShard, store: &mut Store) -> SearchResult<()> {
     let lease_id = physical.lease().lease_id().clone();
     let holder = physical.lease().holder().into();
     let object_id = physical.object_id().clone();
     let shard_id = physical.search_shard_id().into();
     let expires_after = physical.lease().expires_after();
-
     match physical.release(store) {
-        Ok(()) => Err(SearchError::OwnerEvidenceInvalid),
+        Ok(()) => Ok(()),
         Err(error) => Err(SearchError::ShardLeaseCleanupOutcomeUnknown {
             lease_id,
             holder,
@@ -625,6 +867,17 @@ fn verify_reopened_owner_manifest(
             expires_after,
             release_error: error.code(),
         }),
+    }
+}
+
+fn release_after_owner_error(
+    physical: PublishedSearchShard,
+    store: &mut Store,
+    owner_error: SearchError,
+) -> SearchError {
+    match release_physical(physical, store) {
+        Ok(()) => owner_error,
+        Err(cleanup_error) => cleanup_error,
     }
 }
 

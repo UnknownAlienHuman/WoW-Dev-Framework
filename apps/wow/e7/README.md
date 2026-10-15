@@ -1,10 +1,17 @@
 # `apps/wow` E7-A frontend transports
 
-**Status:** implementation-ready documentation; no Rust code exists.
+**Status:** partial executable subset; full E7-A acceptance remains open.
 
 **Contract ID:** `apps/wow/e7-a/frontend-transports`
 
-`apps/wow` hosts explicit one-shot CLI, local daemon, LSP 3.18 stdio, MCP 2025-11-25 stdio, and optional local-only MCP Streamable HTTP modes over `wow-service`. Its only framework dependency is `wow-service`.
+The executable subset is `wow transport capabilities` and
+`wow mcp --transport stdio --profile mcp-2025-11-25-stdio-v1`, with fixed
+`wow.status` and the exact profile resource. The other host modes below remain
+specified and unimplemented; their inventory does not advertise runtime support.
+
+The final host contract covers one-shot CLI, local daemon, LSP 3.18 stdio,
+MCP 2025-11-25 stdio, and optional local-only MCP Streamable HTTP modes over
+`wow-service`. Its only framework dependency is `wow-service`.
 
 ## Host modes
 

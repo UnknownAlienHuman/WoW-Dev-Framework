@@ -36,7 +36,7 @@ pub use recovery::{
 };
 mod retention;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 pub use operations::{
     LiveProjectLibraryMode, LiveProjectPublishRequest, LiveProjectResult, LiveProjectUpdateRequest,

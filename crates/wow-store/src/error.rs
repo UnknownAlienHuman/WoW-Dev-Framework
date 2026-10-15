@@ -18,6 +18,8 @@ pub enum StoreErrorCode {
     LeaseConflict,
     LeaseInvalid,
     IntegrityViolation,
+    StoreInstanceIdentityUnavailable,
+    StoreInstanceIdentityMismatch,
     BudgetExceeded,
     DatabaseUnavailable,
     Cancelled,

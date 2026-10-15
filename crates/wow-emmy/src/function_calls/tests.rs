@@ -825,6 +825,211 @@ fn lexical_global_access_retains_function_alias_and_rebinding_provenance() -> Te
 }
 
 #[test]
+fn native_aceaddon_local_result_receiver_is_typed_and_mutations_stay_unresolved() -> TestResult {
+    let stop = AtomicBool::new(false);
+    let main_source = concat!(
+        "local MAJOR, MINOR = \"AceAddon-3.0\", 13\n",
+        "local AceAddon, oldminor = LibStub:NewLibrary(MAJOR, MINOR)\n",
+        "function AceAddon:EmbedLibrary(addon, libname)\n",
+        "  local lib = LibStub:GetLibrary(libname, true)\n",
+        "  lib:Embed(addon)\n",
+        "end\n",
+        "local function slot_one(addon)\n",
+        "  local lib, oldminor = LibStub:NewLibrary(\"AceAddon-3.0\", 13)\n",
+        "  oldminor:Embed(addon)\n",
+        "end\n",
+        "local function rebound(addon, libname)\n",
+        "  local lib = LibStub:GetLibrary(libname, true)\n",
+        "  lib = {}\n",
+        "  lib:Embed(addon)\n",
+        "end\n",
+        "local function_rebound, function_oldminor = LibStub:NewLibrary(MAJOR, MINOR)\n",
+        "function function_rebound() end\n",
+        "MyAddon = {}\n",
+        "AceAddon:EmbedLibrary(MyAddon, \"AceConsole-3.0\")\n",
+        "function_rebound:EmbedLibrary(MyAddon, \"Rejected-FunctionStatement\")\n",
+    );
+    let library_source = concat!(
+        "---@meta _\n",
+        "---@class AceAddon\n",
+        "AceAddon = {}\n",
+        "---@param addon table\n",
+        "---@param libname string\n",
+        "function AceAddon:EmbedLibrary(addon, libname) end\n",
+        "---@class AceAddonLib\n",
+        "AceAddonLib = {}\n",
+        "---@param addon table\n",
+        "function AceAddonLib:Embed(addon) end\n",
+        "LibStub = {}\n",
+        "---@param major string\n",
+        "---@param silent boolean\n",
+        "---@return AceAddonLib\n",
+        "function LibStub:GetLibrary(major, silent) end\n",
+        "---@param major string\n",
+        "---@param minor integer\n",
+        "---@return AceAddon\n",
+        "---@return integer\n",
+        "function LibStub:NewLibrary(major, minor) end\n",
+    );
+    let main = snapshot(vec![LuaWorkspaceFileInput::new(
+        "main/aceaddon.lua",
+        main_source,
+    )])?;
+    let library = snapshot(vec![LuaWorkspaceFileInput::new(
+        "library/aceaddon.lua",
+        library_source,
+    )])?;
+    let queries = [
+        "AceAddon.EmbedLibrary".to_owned(),
+        "AceAddonLib.Embed".to_owned(),
+        "LibStub.GetLibrary".to_owned(),
+        "LibStub.NewLibrary".to_owned(),
+    ];
+    let profile = MemberCallSessionQueryProfile::new(&[], &queries)
+        .with_function_call_evidence_profile(FunctionCallEvidenceProfile::AceAddonLocalResultV1);
+    let report = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[&library],
+        profile,
+        true,
+        &stop,
+    )?
+    .function_calls
+    .ok_or("local-result report")?;
+    report.validate()?;
+    assert_eq!(
+        report.local_call_result_profile(),
+        Some(FunctionCallEvidenceProfile::AceAddonLocalResultV1)
+    );
+
+    let mut calls = report
+        .calls()
+        .iter()
+        .map(|call| Ok((call, source_slice(main_source, call.call_span())?)))
+        .collect::<TestResult<Vec<_>>>()?;
+    calls.sort_by_key(|(call, _)| call.call_span().byte_start());
+    let embed = calls
+        .iter()
+        .find(|(call, source)| call.path() == "main/aceaddon.lua" && *source == "lib:Embed(addon)")
+        .map(|(call, _)| *call)
+        .ok_or("typed local receiver embed call")?;
+    assert_eq!(
+        embed.resolved_callable_key(),
+        Some("AceAddonLib.Embed"),
+        "call target {:?}, selected target {:?}",
+        embed.target(),
+        report.named_targets().get("AceAddonLib.Embed")
+    );
+    assert_eq!(
+        report.named_targets().get("AceAddonLib.Embed"),
+        Some(embed.target())
+    );
+    let result_zero_id = embed
+        .receiver_binding_id()
+        .ok_or("receiver result-zero binding")?;
+    let result_zero = report
+        .call_result_binding(result_zero_id)
+        .ok_or("receiver binding record")?;
+    assert_eq!(result_zero.result_slot(), 0);
+    let initializer = report
+        .calls()
+        .iter()
+        .find(|call| call.fact_id() == result_zero.initializer_call_fact_id())
+        .ok_or("GetLibrary initializer call")?;
+    assert_eq!(
+        initializer.resolved_callable_key(),
+        Some("LibStub.GetLibrary")
+    );
+    assert_eq!(
+        report.named_targets().get("LibStub.GetLibrary"),
+        Some(initializer.target())
+    );
+    assert_eq!(
+        source_slice(main_source, embed.receiver_span().ok_or("receiver span")?)?,
+        "lib"
+    );
+
+    let outer_embed = calls
+        .iter()
+        .find(|(_, source)| *source == "AceAddon:EmbedLibrary(MyAddon, \"AceConsole-3.0\")")
+        .map(|(call, _)| *call)
+        .ok_or("AceAddon EmbedLibrary caller")?;
+    assert_eq!(
+        outer_embed.resolved_callable_key(),
+        Some("AceAddon.EmbedLibrary"),
+        "outer target {:?}, selected target {:?}",
+        outer_embed.target(),
+        report.named_targets().get("AceAddon.EmbedLibrary")
+    );
+    assert_eq!(
+        report.named_targets().get("AceAddon.EmbedLibrary"),
+        Some(outer_embed.target())
+    );
+    let method_receiver_binding = report
+        .call_result_binding(
+            outer_embed
+                .receiver_binding_id()
+                .ok_or("method-field function statement preserves receiver binding")?,
+        )
+        .ok_or("method-field declaration leaves local result receipt available")?;
+    assert_eq!(method_receiver_binding.result_slot(), 0);
+    assert!(outer_embed.arguments()[0].reference_target().is_some());
+    assert_eq!(
+        outer_embed.arguments()[1].literal(),
+        Some(&SourceCallLiteral::String("AceConsole-3.0".into()))
+    );
+
+    let slot_one = calls
+        .iter()
+        .find(|(call, source)| {
+            call.path() == "main/aceaddon.lua" && *source == "oldminor:Embed(addon)"
+        })
+        .map(|(call, _)| *call)
+        .ok_or("second-result receiver call")?;
+    let slot_one_binding = report
+        .call_result_binding(
+            slot_one
+                .receiver_binding_id()
+                .ok_or("second-result binding id")?,
+        )
+        .ok_or("second-result binding")?;
+    assert_eq!(slot_one_binding.result_slot(), 1);
+
+    let rebound = calls
+        .iter()
+        .rev()
+        .find(|(call, source)| call.path() == "main/aceaddon.lua" && *source == "lib:Embed(addon)")
+        .map(|(call, _)| *call)
+        .ok_or("reassigned receiver call")?;
+    assert_eq!(rebound.receiver_binding_id(), None);
+
+    let function_rebound = calls
+        .iter()
+        .find(|(_, source)| {
+            *source == "function_rebound:EmbedLibrary(MyAddon, \"Rejected-FunctionStatement\")"
+        })
+        .map(|(call, _)| *call)
+        .ok_or("bare-name function-statement receiver write")?;
+    assert_eq!(function_rebound.receiver_binding_id(), None);
+
+    let ordinary = analyze_member_call_session_with_callable_queries(
+        &main,
+        &[&library],
+        MemberCallSessionQueryProfile::new(&[], &queries),
+        true,
+        &stop,
+    )?
+    .function_calls
+    .ok_or("ordinary report")?;
+    assert!(
+        serde_json::to_value(ordinary)?
+            .get("call_result_bindings")
+            .is_none()
+    );
+    Ok(())
+}
+
+#[test]
 fn selected_function_budget_has_strict_wire_and_independent_target_access_bounds() -> TestResult {
     let budget = FunctionCallBudget::default();
     let wire = serde_json::to_value(budget)?;

@@ -39,6 +39,8 @@ const CORE_RECOGNIZER_CALLABLE_QUERIES: &[&str] = &[
 /// Original non-global recipes and schema13/14/15 report9 used this former W6
 /// callable query as retained lookup data. It grants no recognizer admission.
 const LEGACY_CALLABLE_LOOKUP_QUERIES: &[&str] = &["LibStub.EmbedLibrary"];
+const ACEADDON_LOCAL_RESULT_CALLABLE_QUERIES: &[&str] =
+    &["AceAddon.EmbedLibrary", "AceAddonLib.Embed"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FunctionCallAnalysisMode {
@@ -420,6 +422,19 @@ pub(crate) fn build_analyzer_binding(
     } else {
         Vec::new()
     };
+    let callable_queries = if function_calls && budget.function_call_evidence_profile().is_some() {
+        let mut selected = callable_queries;
+        selected.extend(
+            ACEADDON_LOCAL_RESULT_CALLABLE_QUERIES
+                .iter()
+                .map(|query| (*query).to_owned()),
+        );
+        selected.sort();
+        selected.dedup();
+        selected
+    } else {
+        callable_queries
+    };
     let query_profile = wow_emmy::MemberCallSessionQueryProfile::new(queries, &callable_queries);
     let query_profile = match native_fact_limit {
         Some(limit) => query_profile
@@ -440,6 +455,10 @@ pub(crate) fn build_analyzer_binding(
     };
     let query_profile = match budget.function_call_budget() {
         Some(budget) => query_profile.with_function_call_budget(budget),
+        None => query_profile,
+    };
+    let query_profile = match budget.function_call_evidence_profile() {
+        Some(profile) => query_profile.with_function_call_evidence_profile(profile),
         None => query_profile,
     };
     let query_profile = if legacy_global_access_profile9 {

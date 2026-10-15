@@ -230,6 +230,8 @@ pub struct ProjectBudgetPolicy {
     #[serde(skip_serializing_if = "Option::is_none")]
     function_calls: Option<wow_emmy::function_calls::FunctionCallBudget>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    function_call_evidence_profile: Option<wow_emmy::function_calls::FunctionCallEvidenceProfile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     source_graph: Option<crate::graph::SourceGraphBudget>,
 }
 
@@ -245,6 +247,8 @@ struct ProjectBudgetPolicyInput {
     max_output_bytes: u64,
     #[serde(default, deserialize_with = "present_function_call_budget")]
     function_calls: Option<wow_emmy::function_calls::FunctionCallBudget>,
+    #[serde(default, deserialize_with = "present_function_call_evidence_profile")]
+    function_call_evidence_profile: Option<wow_emmy::function_calls::FunctionCallEvidenceProfile>,
     #[serde(default, deserialize_with = "present_source_graph_budget")]
     source_graph: Option<crate::graph::SourceGraphBudget>,
 }
@@ -267,6 +271,15 @@ where
     wow_emmy::function_calls::FunctionCallBudget::deserialize(deserializer).map(Some)
 }
 
+pub(crate) fn present_function_call_evidence_profile<'de, D>(
+    deserializer: D,
+) -> Result<Option<wow_emmy::function_calls::FunctionCallEvidenceProfile>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    wow_emmy::function_calls::FunctionCallEvidenceProfile::deserialize(deserializer).map(Some)
+}
+
 impl TryFrom<ProjectBudgetPolicyInput> for ProjectBudgetPolicy {
     type Error = ProjectError;
 
@@ -282,6 +295,10 @@ impl TryFrom<ProjectBudgetPolicyInput> for ProjectBudgetPolicy {
         )?;
         let policy = match input.function_calls {
             Some(budget) => policy.with_function_call_budget(budget),
+            None => policy,
+        };
+        let policy = match input.function_call_evidence_profile {
+            Some(profile) => policy.with_function_call_evidence_profile(profile),
             None => policy,
         };
         Ok(match input.source_graph {
@@ -326,6 +343,7 @@ impl ProjectBudgetPolicy {
             max_generic_findings,
             max_output_bytes,
             function_calls: None,
+            function_call_evidence_profile: None,
             source_graph: None,
         })
     }
@@ -392,6 +410,23 @@ impl ProjectBudgetPolicy {
         self,
     ) -> Option<wow_emmy::function_calls::FunctionCallBudget> {
         self.function_calls
+    }
+
+    /// Select an opt-in typed evidence recipe for a named function-call consumer.
+    #[must_use]
+    pub const fn with_function_call_evidence_profile(
+        mut self,
+        profile: wow_emmy::function_calls::FunctionCallEvidenceProfile,
+    ) -> Self {
+        self.function_call_evidence_profile = Some(profile);
+        self
+    }
+
+    #[must_use]
+    pub const fn function_call_evidence_profile(
+        self,
+    ) -> Option<wow_emmy::function_calls::FunctionCallEvidenceProfile> {
+        self.function_call_evidence_profile
     }
 
     #[must_use]
@@ -663,7 +698,11 @@ impl ProjectConfiguration {
                 self.package_main_plan(),
             )?;
         }
-        if self.budget_policy.function_call_budget().is_some()
+        if (self.budget_policy.function_call_budget().is_some()
+            || self
+                .budget_policy
+                .function_call_evidence_profile()
+                .is_some())
             && self
                 .platform_packages()
                 .and_then(|packages| packages.retention_limits())
@@ -673,6 +712,18 @@ impl ProjectConfiguration {
                 ProjectErrorCode::InvalidBudgetPolicy,
                 ProjectPhase::Configuration,
                 "selected function-call budgets require native retained packages",
+            ));
+        }
+        if self
+            .budget_policy
+            .function_call_evidence_profile()
+            .is_some()
+            && self.budget_policy.function_call_budget().is_none()
+        {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidBudgetPolicy,
+                ProjectPhase::Configuration,
+                "selected function-call evidence profiles require an explicit function-call budget",
             ));
         }
         if self.budget_policy.source_graph_budget().is_some()

@@ -88,7 +88,8 @@ impl std::error::Error for ReferenceStoreError {}
 impl From<StoreError> for ReferenceStoreError {
     fn from(source: StoreError) -> Self {
         let code = match source.code() {
-            StoreErrorCode::ConfigurationInvalid => {
+            StoreErrorCode::ConfigurationInvalid
+            | StoreErrorCode::StoreInstanceIdentityUnavailable => {
                 ReferenceStoreErrorCode::StoreConfigurationInvalid
             }
             StoreErrorCode::Cancelled => ReferenceStoreErrorCode::StoreCancelled,
@@ -110,7 +111,9 @@ impl From<StoreError> for ReferenceStoreError {
             }
             StoreErrorCode::LeaseConflict => ReferenceStoreErrorCode::StoreLeaseConflict,
             StoreErrorCode::LeaseInvalid => ReferenceStoreErrorCode::StoreLeaseInvalid,
-            StoreErrorCode::IntegrityViolation => ReferenceStoreErrorCode::StoreIntegrityViolation,
+            StoreErrorCode::IntegrityViolation | StoreErrorCode::StoreInstanceIdentityMismatch => {
+                ReferenceStoreErrorCode::StoreIntegrityViolation
+            }
             StoreErrorCode::BudgetExceeded => ReferenceStoreErrorCode::StoreBudgetExceeded,
             StoreErrorCode::DatabaseUnavailable => {
                 ReferenceStoreErrorCode::StoreDatabaseUnavailable

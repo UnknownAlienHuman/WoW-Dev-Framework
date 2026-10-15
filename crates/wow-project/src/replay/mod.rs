@@ -39,6 +39,11 @@ const GRAPH_METADATA_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-re
 const GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/15";
 /// Current report10 interpretation for retained global-access replays.
 const GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/16";
+/// Named replay reader for the opt-in AceAddon local-result evidence recipe.
+const ACEADDON_LOCAL_RESULT_REPLAY_SCHEMA: &str =
+    "wow-project/native-project-replay/aceaddon-local-result/1";
+pub(super) const ACEADDON_LOCAL_RESULT_STORAGE_SCHEMA: &str =
+    "wow-project.live-replay.aceaddon-local-result.v1";
 // New selection is a named component recipe, not a renumbered aggregate ladder.
 // Actual consumers are expected_schema, hydrate and publication storage catalogs.
 const XML_CLASSIFICATION_REPLAY_SCHEMA: &str =
@@ -321,22 +326,28 @@ impl ProjectReplay {
                     .function_call_budget()
                     .is_some_and(|budget| budget.global_access_budget().is_some());
                 if publisher.uses_legacy_global_access_profile9() {
-                    if !has_global_access_budget {
-                        return Err(invalid());
-                    }
-                    configuration
-                        .source_graph_budget()
-                        .map(graph_budget_schema)
-                        .unwrap_or(GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA)
-                } else if has_global_access_budget {
-                    GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA
-                } else if let Some(budget) = configuration.source_graph_budget() {
-                    graph_budget_schema(budget)
-                } else if configuration.function_call_budget().is_some() {
-                    FUNCTION_BUDGET_REPLAY_SCHEMA
-                } else {
-                    RETAINED_PLATFORM_REPLAY_SCHEMA
+                if !has_global_access_budget {
+                    return Err(invalid());
                 }
+                configuration
+                    .source_graph_budget()
+                    .map(graph_budget_schema)
+                    .unwrap_or(GLOBAL_ACCESS_BUDGET_REPLAY_SCHEMA)
+            } else if configuration.function_call_evidence_profile()
+                == Some(
+                    wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1,
+                )
+            {
+                ACEADDON_LOCAL_RESULT_REPLAY_SCHEMA
+            } else if has_global_access_budget {
+                GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA
+            } else if let Some(budget) = configuration.source_graph_budget() {
+                graph_budget_schema(budget)
+            } else if configuration.function_call_budget().is_some() {
+                FUNCTION_BUDGET_REPLAY_SCHEMA
+            } else {
+                RETAINED_PLATFORM_REPLAY_SCHEMA
+            }
             } else {
                 platform_schema
             };
@@ -413,6 +424,23 @@ impl ProjectReplay {
             return Err(invalid());
         }
         let schema = self.expected_base_schema()?;
+        if self.configuration.function_call_evidence_profile()
+            == Some(wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1)
+        {
+            return if schema == ACEADDON_LOCAL_RESULT_REPLAY_SCHEMA
+                && self.function_calls
+                && self
+                    .platform
+                    .as_ref()
+                    .is_some_and(ReplayPlatform::has_retention_limits)
+                && self.configuration.function_call_budget().is_some()
+                && !self.uses_legacy_global_access_profile9()
+            {
+                Ok(ACEADDON_LOCAL_RESULT_REPLAY_SCHEMA)
+            } else {
+                Err(invalid())
+            };
+        }
         let has_global_access_budget = self
             .configuration
             .function_call_budget()
@@ -481,6 +509,22 @@ impl ProjectReplay {
         )
     }
     fn expected_base_schema(&self) -> ProjectResult<&'static str> {
+        if self.configuration.function_call_evidence_profile()
+            == Some(wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1)
+        {
+            return if self.generation_schema_version == Some(2)
+                && self.configuration.is_platform()
+                && self
+                    .platform
+                    .as_ref()
+                    .is_some_and(ReplayPlatform::has_retention_limits)
+                && self.configuration.function_call_budget().is_some()
+            {
+                Ok(ACEADDON_LOCAL_RESULT_REPLAY_SCHEMA)
+            } else {
+                Err(invalid())
+            };
+        }
         if let Some(profile) = self.configuration.platform_graph_profile() {
             return if self.generation_schema_version == Some(2)
                 && self.configuration.package_xml_binding_profile()
@@ -744,6 +788,7 @@ impl ProjectReplay {
             GRAPH_METADATA_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v14"),
             GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v15"),
             GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA => Ok("wow-project.live-replay.v16"),
+            ACEADDON_LOCAL_RESULT_REPLAY_SCHEMA => Ok(ACEADDON_LOCAL_RESULT_STORAGE_SCHEMA),
             XML_CLASSIFICATION_REPLAY_SCHEMA => Ok(XML_CLASSIFICATION_STORAGE_SCHEMA),
             PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA => {
                 Ok(PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA)

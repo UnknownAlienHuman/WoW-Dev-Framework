@@ -4,12 +4,15 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
-use emmylua_code_analysis::{EmmyLuaAnalysis, LuaDeclId, LuaSignatureId, LuaType, SemanticModel};
-use emmylua_parser::{
-    LuaAst, LuaAstNode, LuaClosureExpr, LuaExpr, LuaLiteralToken, LuaNameExpr, LuaSyntaxId,
-    LuaSyntaxKind, NumberResult,
+use emmylua_code_analysis::{
+    EmmyLuaAnalysis, LuaDeclId, LuaSemanticDeclId, LuaSignatureId, LuaType, SemanticDeclLevel,
+    SemanticModel,
 };
-use serde::Serialize;
+use emmylua_parser::{
+    LuaAst, LuaAstNode, LuaAstToken, LuaCallExpr, LuaClosureExpr, LuaExpr, LuaLiteralToken,
+    LuaNameExpr, LuaSyntaxId, LuaSyntaxKind, LuaVarExpr, NumberResult,
+};
+use serde::{Deserialize, Serialize};
 use wow_core::SourceSpan;
 
 use crate::bindings::{SymbolTarget, checkpoint};
@@ -51,6 +54,14 @@ pub const FUNCTION_CALL_BUDGET_PROFILE: &str = "wow-emmy/function-call-facts/8";
 pub const FUNCTION_CALL_GLOBAL_BUDGET_LEGACY_PROFILE: &str = "wow-emmy/function-call-facts/9";
 /// Explicit global-access budget and local-constant custody profile (report10).
 pub const FUNCTION_CALL_GLOBAL_BUDGET_PROFILE: &str = "wow-emmy/function-call-facts/10";
+/// Opt-in exact local call-result custody for the named AceAddon consumer.
+pub const FUNCTION_CALL_LOCAL_RESULT_PROFILE: &str = "wow-emmy/function-call-facts/11";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FunctionCallEvidenceProfile {
+    AceAddonLocalResultV1,
+}
 
 /// Exact historical report recipe used by retained global-access replay records.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -222,6 +233,43 @@ impl SourceCallReceiver {
     }
 }
 
+/// Exact local declaration initialized by a bounded multiple-return call.
+/// Result slots are zero-based; the current profile admits only slots 0 and 1.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SourceCallResultBinding {
+    binding_id: String,
+    path: String,
+    content_digest: String,
+    scope_function_id: String,
+    declaration_span: SourceSpan,
+    initializer_call_fact_id: String,
+    result_slot: u8,
+}
+
+impl SourceCallResultBinding {
+    pub fn binding_id(&self) -> &str {
+        &self.binding_id
+    }
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+    pub fn content_digest(&self) -> &str {
+        &self.content_digest
+    }
+    pub fn scope_function_id(&self) -> &str {
+        &self.scope_function_id
+    }
+    pub const fn declaration_span(&self) -> SourceSpan {
+        self.declaration_span
+    }
+    pub fn initializer_call_fact_id(&self) -> &str {
+        &self.initializer_call_fact_id
+    }
+    pub const fn result_slot(&self) -> u8 {
+        self.result_slot
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SourceCallFact {
     fact_id: String,
@@ -233,6 +281,10 @@ pub struct SourceCallFact {
     arguments: Vec<SourceCallArgument>,
     #[serde(skip_serializing_if = "Option::is_none")]
     resolved_callable_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    receiver_binding_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    receiver_span: Option<SourceSpan>,
     colon_call: bool,
     target: SourceCallTarget,
 }
@@ -261,6 +313,12 @@ impl SourceCallFact {
     pub fn resolved_callable_key(&self) -> Option<&str> {
         self.resolved_callable_key.as_deref()
     }
+    pub fn receiver_binding_id(&self) -> Option<&str> {
+        self.receiver_binding_id.as_deref()
+    }
+    pub const fn receiver_span(&self) -> Option<SourceSpan> {
+        self.receiver_span
+    }
     pub const fn is_colon_call(&self) -> bool {
         self.colon_call
     }
@@ -282,6 +340,10 @@ pub struct SourceFunctionFile {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FunctionCallReport {
     profile: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    local_call_result_profile: Option<FunctionCallEvidenceProfile>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    call_result_bindings: Vec<SourceCallResultBinding>,
     #[serde(skip_serializing_if = "Option::is_none")]
     budget: Option<FunctionCallBudget>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -307,6 +369,18 @@ pub struct FunctionCallReport {
     analysis_id: String,
 }
 impl FunctionCallReport {
+    pub const fn local_call_result_profile(&self) -> Option<FunctionCallEvidenceProfile> {
+        self.local_call_result_profile
+    }
+    pub fn call_result_bindings(&self) -> &[SourceCallResultBinding] {
+        &self.call_result_bindings
+    }
+    pub fn call_result_binding(&self, binding_id: &str) -> Option<&SourceCallResultBinding> {
+        self.call_result_bindings
+            .binary_search_by(|binding| binding.binding_id().cmp(binding_id))
+            .ok()
+            .and_then(|index| self.call_result_bindings.get(index))
+    }
     #[must_use]
     pub const fn budget(&self) -> Option<FunctionCallBudget> {
         self.budget
@@ -400,6 +474,19 @@ impl FunctionCallReport {
             self.symbol_lookup_analysis_id.as_slice(),
             &self.symbol_lookup_analysis_ids,
         );
+        if let Some(profile) = self.local_call_result_profile {
+            return canonical_id(
+                "emmy-function-calls:sha256:",
+                &(
+                    profile,
+                    self.declaration_recipe.as_slice(),
+                    self.signature_recipe.as_slice(),
+                    self.budget.as_slice(),
+                    &self.call_result_bindings,
+                    facts,
+                ),
+            );
+        }
         if let Some(recipe) = self.signature_recipe {
             return canonical_id(
                 "emmy-function-calls:sha256:",
@@ -444,6 +531,12 @@ impl FunctionCallReport {
             {
                 limits
             }
+            (FUNCTION_CALL_LOCAL_RESULT_PROFILE, limits)
+                if self.local_call_result_profile
+                    == Some(FunctionCallEvidenceProfile::AceAddonLocalResultV1) =>
+            {
+                limits.unwrap_or_default()
+            }
             _ => return Err(invalid()),
         };
         let lookup_ids = self
@@ -452,7 +545,10 @@ impl FunctionCallReport {
             .map(String::as_str)
             .collect::<Vec<_>>();
         let expected_lookup_id = lookup_identity(&self.main_snapshot_id, &lookup_ids)?;
-        if self.identity()? != self.analysis_id
+        let expected_local_result_profile = (self.profile == FUNCTION_CALL_LOCAL_RESULT_PROFILE)
+            .then_some(FunctionCallEvidenceProfile::AceAddonLocalResultV1);
+        if self.local_call_result_profile != expected_local_result_profile
+            || self.identity()? != self.analysis_id
             || self.symbol_lookup_analysis_id != expected_lookup_id
             || self.functions.len() as u128 > u128::from(limits.max_functions())
             || self.calls.len() as u128 > u128::from(limits.max_calls())
@@ -466,6 +562,12 @@ impl FunctionCallReport {
                 .windows(2)
                 .any(|w| w[0].fact_id >= w[1].fact_id)
             || self.calls.windows(2).any(|w| w[0].fact_id >= w[1].fact_id)
+            || self.call_result_bindings.len() as u128
+                > u128::from(limits.max_calls()).saturating_mul(2)
+            || self
+                .call_result_bindings
+                .windows(2)
+                .any(|w| w[0].binding_id >= w[1].binding_id)
             || self.files.windows(2).any(|w| w[0].path >= w[1].path)
         {
             return Err(invalid());
@@ -564,8 +666,10 @@ impl FunctionCallReport {
                     ) else {
                         return Err(invalid());
                     };
-                    if self.profile != FUNCTION_CALL_GLOBAL_BUDGET_PROFILE
-                        || local_constant.name.is_empty()
+                    if !matches!(
+                        self.profile,
+                        FUNCTION_CALL_GLOBAL_BUDGET_PROFILE | FUNCTION_CALL_LOCAL_RESULT_PROFILE
+                    ) || local_constant.name.is_empty()
                         || local_constant.name.len() > MAX_CALL_LITERAL_BYTES
                         || declaration_start > declaration_end
                         || declaration_end > initializer_start
@@ -615,6 +719,85 @@ impl FunctionCallReport {
             {
                 return Err(invalid());
             }
+        }
+        let calls_by_id = self
+            .calls
+            .iter()
+            .map(|call| (call.fact_id(), call))
+            .collect::<BTreeMap<_, _>>();
+        let mut call_result_bindings = BTreeMap::new();
+        for binding in &self.call_result_bindings {
+            let initializer = calls_by_id
+                .get(binding.initializer_call_fact_id())
+                .ok_or_else(invalid)?;
+            let file = files.get(binding.path.as_str()).ok_or_else(invalid)?;
+            binding.declaration_span.validate().map_err(|_| invalid())?;
+            let (Some(declaration_start), Some(declaration_end)) = (
+                binding.declaration_span.byte_start(),
+                binding.declaration_span.byte_end(),
+            ) else {
+                return Err(invalid());
+            };
+            let Some(initializer_start) = initializer.call_span().byte_start() else {
+                return Err(invalid());
+            };
+            if binding.binding_id
+                != local_call_result_binding_id(
+                    &self.main_snapshot_id,
+                    &binding.path,
+                    &binding.content_digest,
+                    &binding.scope_function_id,
+                    binding.declaration_span,
+                    binding.initializer_call_fact_id(),
+                    binding.result_slot,
+                )?
+                || binding.result_slot > 1
+                || declaration_start >= declaration_end
+                || declaration_end > initializer_start
+                || file.content_digest != binding.content_digest
+                || initializer.path() != binding.path
+                || initializer.content_digest() != binding.content_digest
+                || initializer.caller_function_id() != binding.scope_function_id
+                || !functions.contains_key(binding.scope_function_id())
+                || call_result_bindings
+                    .insert(binding.binding_id(), binding)
+                    .is_some()
+            {
+                return Err(invalid());
+            }
+        }
+        for call in &self.calls {
+            match (&call.receiver_binding_id, call.receiver_span) {
+                (Some(binding_id), Some(receiver_span)) => {
+                    let binding = call_result_bindings
+                        .get(binding_id.as_str())
+                        .ok_or_else(invalid)?;
+                    let (Some(start), Some(end), Some(callee_start), Some(callee_end)) = (
+                        receiver_span.byte_start(),
+                        receiver_span.byte_end(),
+                        call.callee_span().byte_start(),
+                        call.callee_span().byte_end(),
+                    ) else {
+                        return Err(invalid());
+                    };
+                    if self.local_call_result_profile.is_none()
+                        || !call.is_colon_call()
+                        || binding.path() != call.path()
+                        || binding.content_digest() != call.content_digest()
+                        || binding.scope_function_id() != call.caller_function_id()
+                        || start >= end
+                        || start < callee_start
+                        || end > callee_end
+                    {
+                        return Err(invalid());
+                    }
+                }
+                (None, None) => {}
+                _ => return Err(invalid()),
+            }
+        }
+        if self.local_call_result_profile.is_none() && !self.call_result_bindings.is_empty() {
+            return Err(invalid());
         }
         for access in &self.global_accesses {
             access.validate(&self.main_snapshot_id)?;
@@ -973,6 +1156,281 @@ pub(crate) fn caller(
     )
 }
 
+const CALL_RESULT_BINDING_PROFILE: &str = "wow-emmy/local-call-result-binding/1";
+
+fn local_call_result_binding_id(
+    snapshot_id: &str,
+    path: &str,
+    content_digest: &str,
+    scope_function_id: &str,
+    declaration_span: SourceSpan,
+    initializer_call_fact_id: &str,
+    result_slot: u8,
+) -> EmmyMemberCallResult<String> {
+    canonical_id(
+        "emmy-call-result-binding:sha256:",
+        &(
+            CALL_RESULT_BINDING_PROFILE,
+            snapshot_id,
+            path,
+            content_digest,
+            scope_function_id,
+            declaration_span,
+            initializer_call_fact_id,
+            result_slot,
+        ),
+    )
+}
+
+fn enclosing_closure(node: &emmylua_parser::LuaSyntaxNode) -> Option<rowan::TextRange> {
+    node.ancestors().skip(1).find_map(|ancestor| {
+        LuaClosureExpr::cast(ancestor).map(|closure| closure.syntax().text_range())
+    })
+}
+
+fn direct_local_colon_receiver(call: &LuaCallExpr) -> Option<LuaNameExpr> {
+    if !call.is_colon_call() {
+        return None;
+    }
+    let LuaExpr::IndexExpr(index) = call.get_prefix_expr()? else {
+        return None;
+    };
+    let LuaExpr::NameExpr(receiver) = index.get_prefix_expr()? else {
+        return None;
+    };
+    Some(receiver)
+}
+
+struct PendingCallResultBinding {
+    binding: SourceCallResultBinding,
+    declaration_scope: Option<rowan::TextRange>,
+    invalid: bool,
+}
+
+/// Retain only direct one-call local declarations with at most two Lua result
+/// slots. The bounded census rejects writes, alias receivers, captures, and
+/// declaration ambiguity rather than trying to evaluate Lua value flow.
+#[allow(clippy::too_many_arguments)]
+fn collect_local_call_result_bindings(
+    analysis: &EmmyLuaAnalysis,
+    main: &LuaWorkspaceSnapshot,
+    main_root: &Path,
+    calls: &mut [SourceCallFact],
+    visits: &mut u64,
+    limits: FunctionCallBudget,
+    stop: &AtomicBool,
+) -> EmmyMemberCallResult<Vec<SourceCallResultBinding>> {
+    let mut call_locations = HashMap::<(String, u64, u64), usize>::with_capacity(calls.len());
+    for (index, call) in calls.iter().enumerate() {
+        checkpoint(stop)?;
+        let (Some(start), Some(end)) = (call.call_span().byte_start(), call.call_span().byte_end())
+        else {
+            return Err(invalid());
+        };
+        if call_locations
+            .insert((call.path().to_owned(), start, end), index)
+            .is_some()
+        {
+            return Err(invalid());
+        }
+    }
+
+    let mut result_bindings = Vec::new();
+    let mut receiver_uses = Vec::<(usize, usize, SourceSpan)>::new();
+    for file in main.files() {
+        checkpoint(stop)?;
+        let model = semantic_model(analysis, main_root, file)?;
+        if model
+            .get_file_parse_error()
+            .is_some_and(|errors| !errors.is_empty())
+        {
+            continue;
+        }
+        let root = model.get_root();
+        let mut pending = Vec::<PendingCallResultBinding>::new();
+        let mut semantic_bindings = HashMap::<LuaSemanticDeclId, usize>::new();
+
+        for node in root.descendants::<LuaAst>() {
+            checkpoint(stop)?;
+            visit(visits, limits.max_ast_visits())
+                .map_err(|error| crate::global_access::at_path(error, file.path()))?;
+            let LuaAst::LuaLocalStat(stat) = node else {
+                continue;
+            };
+            let names = stat.get_local_name_list().collect::<Vec<_>>();
+            let values = stat.get_value_exprs().collect::<Vec<_>>();
+            if names.is_empty() || names.len() > 2 || values.len() != 1 {
+                continue;
+            }
+            let Some(LuaExpr::CallExpr(initializer)) = values.first().cloned() else {
+                continue;
+            };
+            let initializer_span = ast_span(file, initializer.get_range())?;
+            let (Some(start), Some(end)) =
+                (initializer_span.byte_start(), initializer_span.byte_end())
+            else {
+                return Err(invalid());
+            };
+            let Some(call_index) = call_locations
+                .get(&(file.path().to_owned(), start, end))
+                .copied()
+            else {
+                continue;
+            };
+            let initializer_fact = &calls[call_index];
+            let scope_function_id = caller(main.snapshot_id(), file, stat.syntax())?;
+            if initializer_fact.path() != file.path()
+                || initializer_fact.content_digest() != file.content_sha256()
+                || initializer_fact.caller_function_id() != scope_function_id
+            {
+                continue;
+            }
+            for (slot, name) in names.iter().enumerate() {
+                let Some(token) = name.get_name_token() else {
+                    continue;
+                };
+                let Some(semantic_decl) =
+                    model.find_decl(name.syntax().clone().into(), SemanticDeclLevel::default())
+                else {
+                    continue;
+                };
+                let result_slot = u8::try_from(slot).map_err(|_| invalid())?;
+                let declaration_span = ast_span(file, token.syntax().text_range())?;
+                let binding_id = local_call_result_binding_id(
+                    main.snapshot_id(),
+                    file.path(),
+                    file.content_sha256(),
+                    &scope_function_id,
+                    declaration_span,
+                    initializer_fact.fact_id(),
+                    result_slot,
+                )?;
+                let index = pending.len();
+                let binding = SourceCallResultBinding {
+                    binding_id,
+                    path: file.path().into(),
+                    content_digest: file.content_sha256().into(),
+                    scope_function_id: scope_function_id.clone(),
+                    declaration_span,
+                    initializer_call_fact_id: initializer_fact.fact_id().into(),
+                    result_slot,
+                };
+                if let Some(previous) = semantic_bindings.insert(semantic_decl.clone(), index) {
+                    pending[previous].invalid = true;
+                }
+                pending.push(PendingCallResultBinding {
+                    binding,
+                    declaration_scope: enclosing_closure(name.syntax()),
+                    invalid: false,
+                });
+            }
+        }
+        if pending.is_empty() {
+            continue;
+        }
+
+        for node in root.descendants::<LuaAst>() {
+            checkpoint(stop)?;
+            visit(visits, limits.max_ast_visits())
+                .map_err(|error| crate::global_access::at_path(error, file.path()))?;
+            match node {
+                LuaAst::LuaAssignStat(stat) => {
+                    let (variables, _) = stat.get_var_and_expr_list();
+                    for variable in variables {
+                        let LuaVarExpr::NameExpr(name) = variable else {
+                            continue;
+                        };
+                        let Some(decl) = model
+                            .find_decl(name.syntax().clone().into(), SemanticDeclLevel::default())
+                        else {
+                            continue;
+                        };
+                        if let Some(index) = semantic_bindings.get(&decl).copied() {
+                            pending[index].invalid = true;
+                        }
+                    }
+                }
+                LuaAst::LuaFuncStat(stat) => {
+                    if let Some(LuaVarExpr::NameExpr(name)) = stat.get_func_name()
+                        && let Some(decl) = model
+                            .find_decl(name.syntax().clone().into(), SemanticDeclLevel::default())
+                        && let Some(index) = semantic_bindings.get(&decl).copied()
+                    {
+                        pending[index].invalid = true;
+                    }
+                }
+                LuaAst::LuaNameExpr(name) => {
+                    let Some(decl) =
+                        model.find_decl(name.syntax().clone().into(), SemanticDeclLevel::default())
+                    else {
+                        continue;
+                    };
+                    let Some(index) = semantic_bindings.get(&decl).copied() else {
+                        continue;
+                    };
+                    if enclosing_closure(name.syntax()) != pending[index].declaration_scope {
+                        pending[index].invalid = true;
+                    }
+                }
+                LuaAst::LuaCallExpr(call) => {
+                    let Some(receiver) = direct_local_colon_receiver(&call) else {
+                        continue;
+                    };
+                    let Some(decl) = model.find_decl(
+                        receiver.syntax().clone().into(),
+                        SemanticDeclLevel::default(),
+                    ) else {
+                        continue;
+                    };
+                    let Some(index) = semantic_bindings.get(&decl).copied() else {
+                        continue;
+                    };
+                    let caller_id = caller(main.snapshot_id(), file, call.syntax())?;
+                    if caller_id != pending[index].binding.scope_function_id {
+                        pending[index].invalid = true;
+                        continue;
+                    }
+                    let call_span = ast_span(file, call.get_range())?;
+                    let (Some(start), Some(end)) = (call_span.byte_start(), call_span.byte_end())
+                    else {
+                        return Err(invalid());
+                    };
+                    let Some(call_index) = call_locations
+                        .get(&(file.path().to_owned(), start, end))
+                        .copied()
+                    else {
+                        continue;
+                    };
+                    let receiver_span = ast_span(file, receiver.syntax().text_range())?;
+                    receiver_uses.push((call_index, index, receiver_span));
+                }
+                _ => {}
+            }
+        }
+        let valid_indices = pending
+            .iter()
+            .enumerate()
+            .filter_map(|(index, value)| (!value.invalid).then_some(index))
+            .collect::<BTreeSet<_>>();
+        for index in valid_indices.iter().copied() {
+            result_bindings.push(pending[index].binding.clone());
+        }
+        for (call_index, binding_index, receiver_span) in receiver_uses.iter().copied() {
+            if !valid_indices.contains(&binding_index) {
+                continue;
+            }
+            let call = calls.get_mut(call_index).ok_or_else(invalid)?;
+            if call.receiver_binding_id.is_some() || call.receiver_span.is_some() {
+                return Err(invalid());
+            }
+            call.receiver_binding_id = Some(pending[binding_index].binding.binding_id.clone());
+            call.receiver_span = Some(receiver_span);
+        }
+        receiver_uses.clear();
+    }
+    result_bindings.sort_by(|left, right| left.binding_id.cmp(&right.binding_id));
+    Ok(result_bindings)
+}
 enum CapturedFunction {
     Main(String),
     Library(SymbolTarget),
@@ -988,6 +1446,7 @@ pub(crate) fn collect(
     symbol_lookup_analysis_ids: &[&str],
     selected_budget: Option<FunctionCallBudget>,
     replay_recipe: Option<FunctionCallReplayRecipe>,
+    local_call_result_profile: Option<FunctionCallEvidenceProfile>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
     collect_with_declarations(
@@ -1000,6 +1459,7 @@ pub(crate) fn collect(
         selected_budget,
         None,
         replay_recipe,
+        local_call_result_profile,
         stop,
     )
 }
@@ -1017,6 +1477,7 @@ pub(crate) fn collect_with_declarations(
     selected_budget: Option<FunctionCallBudget>,
     declaration_recipe: Option<PhysicalFunctionDeclarationRecipe>,
     replay_recipe: Option<FunctionCallReplayRecipe>,
+    local_call_result_profile: Option<FunctionCallEvidenceProfile>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
     collect_with_components(
@@ -1030,6 +1491,7 @@ pub(crate) fn collect_with_declarations(
         declaration_recipe,
         None,
         replay_recipe,
+        local_call_result_profile,
         stop,
     )
 }
@@ -1047,13 +1509,15 @@ pub(crate) fn collect_with_components(
     declaration_recipe: Option<PhysicalFunctionDeclarationRecipe>,
     signature_recipe: Option<PhysicalFunctionSignatureRecipe>,
     replay_recipe: Option<FunctionCallReplayRecipe>,
+    local_call_result_profile: Option<FunctionCallEvidenceProfile>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
     let limits = selected_budget.unwrap_or_default();
     let legacy_global_access_profile =
         replay_recipe == Some(FunctionCallReplayRecipe::LegacyGlobalAccessV9);
-    if legacy_global_access_profile
-        && !selected_budget.is_some_and(|budget| budget.global_access_budget().is_some())
+    if (legacy_global_access_profile && local_call_result_profile.is_some())
+        || (legacy_global_access_profile
+            && !selected_budget.is_some_and(|budget| budget.global_access_budget().is_some()))
     {
         return Err(invalid());
     }
@@ -1273,8 +1737,8 @@ pub(crate) fn collect_with_components(
     let mut global_accesses = Vec::new();
     let mut access_budget =
         crate::global_access::AccessBudget::new(limits.global_access_budget().unwrap_or_default());
-    let include_local_constants =
-        limits.global_access_budget().is_some() && !legacy_global_access_profile;
+    let include_local_constants = local_call_result_profile.is_some()
+        || (limits.global_access_budget().is_some() && !legacy_global_access_profile);
     for file in main.files() {
         checkpoint(stop)?;
         if files
@@ -1416,6 +1880,8 @@ pub(crate) fn collect_with_components(
                 callee_span,
                 arguments,
                 resolved_callable_key,
+                receiver_binding_id: None,
+                receiver_span: None,
                 colon_call,
                 target,
             });
@@ -1470,6 +1936,19 @@ pub(crate) fn collect_with_components(
         }
     }
     functions.sort_by(|a, b| a.fact_id.cmp(&b.fact_id));
+    let call_result_bindings = if local_call_result_profile.is_some() {
+        collect_local_call_result_bindings(
+            analysis,
+            main,
+            main_root,
+            &mut calls,
+            &mut visits,
+            limits,
+            stop,
+        )?
+    } else {
+        Vec::new()
+    };
     calls.sort_by(|a, b| a.fact_id.cmp(&b.fact_id));
     let library_snapshot_ids = libraries
         .iter()
@@ -1500,7 +1979,9 @@ pub(crate) fn collect_with_components(
         named_targets.insert(query.clone(), target);
     }
     let mut report = FunctionCallReport {
-        profile: if legacy_global_access_profile {
+        profile: if local_call_result_profile.is_some() {
+            FUNCTION_CALL_LOCAL_RESULT_PROFILE
+        } else if legacy_global_access_profile {
             FUNCTION_CALL_GLOBAL_BUDGET_LEGACY_PROFILE
         } else if selected_budget.is_some_and(|budget| budget.global_access_budget().is_some()) {
             FUNCTION_CALL_GLOBAL_BUDGET_PROFILE
@@ -1509,6 +1990,8 @@ pub(crate) fn collect_with_components(
         } else {
             FUNCTION_CALL_PROFILE
         },
+        local_call_result_profile,
+        call_result_bindings,
         budget: selected_budget,
         declaration_recipe,
         signature_recipe,

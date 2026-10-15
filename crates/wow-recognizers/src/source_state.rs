@@ -26,7 +26,9 @@ use wow_graph::{
     GraphProposalValue, GraphRelationKind, GraphRelationProposal, GraphRelationProposalInput,
 };
 
-use wow_emmy::function_calls::{FunctionCallReport, SourceCallConstant};
+use wow_emmy::function_calls::{
+    FunctionCallEvidenceProfile, FunctionCallReport, SourceCallConstant, SourceCallTarget,
+};
 use wow_emmy::global_access::{GlobalAccessKind, GlobalAccessResolution};
 
 pub const SOURCE_STATE_PARTITION: &str = "wow-recognizers.saved-variable-access";
@@ -815,8 +817,8 @@ fn graph_error(error: wow_graph::GraphError) -> RecognizerError {
 // ===== BEGIN WORKER 6: library family =====
 
 // Exact LibStub/GetLibrary/NewLibrary structural call facts -> the declarative
-// core library recognizer -> graph proposals. Embedding remains deferred until a
-// donor-backed owner supplies its exact receiver/value-flow facts. This producer consumes only
+// core library recognizer -> graph proposals. The opt-in AceAddon profile consumes
+// only typed result-slot and selected-call evidence. This producer consumes only
 // generation-bound Emmy owner facts. It never reparses Lua, never executes Lua or
 // repository scripts, and never infers an upstream repository, a license, a loaded
 // revision, or an embed relation from a path or folder name such as Libs/.
@@ -837,6 +839,7 @@ pub const SOURCE_STATE_LIBRARY_PARTITION: &str = "wow-recognizers.lua-library";
 pub const SOURCE_STATE_LIBRARY_PROFILE: &str = "wow-recognizers/source-library/4";
 const W6_FACT_PARTITION: &str = "wow-recognizers.lua-library-facts";
 const W6_FACT_PROFILE: &str = "wow-recognizers-lua-library-facts-4";
+const W6_LOCAL_RESULT_FACT_PROFILE: &str = "wow-recognizers-lua-library-facts-5";
 const W6_MAX_CALLS: usize = 8192;
 const W6_MAX_FUNCTIONS: usize = 8192;
 const W6_MAX_ARGUMENTS_RETAINED: usize = 3;
@@ -845,11 +848,15 @@ const W6_MAX_PROPOSALS: usize = 65_536;
 // Reuse the existing bounded source-state entity-merge support ceiling.
 const W6_MAX_ENTITY_SUPPORT: usize = 64;
 const W6_RULE_VERSION: u32 = 2;
+const W6_ACEADDON_EMBED_RULE_VERSION: u32 = 1;
 const W6_REQUIRE_RULE: &str = "core.library.libstub_require";
 const W6_NEW_RULE: &str = "core.library.libstub_new";
+const W6_ACEADDON_EMBED_RULE: &str = "calibration.library.aceaddon_embed";
 const W6_LIBSTUB_CALLABLE: &str = "LibStub";
 const W6_GET_LIBRARY_CALLABLE: &str = "LibStub.GetLibrary";
 const W6_NEW_LIBRARY_CALLABLE: &str = "LibStub.NewLibrary";
+const W6_ACEADDON_EMBED_CALLABLE: &str = "AceAddon.EmbedLibrary";
+const W6_ACEADDON_MAJOR: &str = "AceAddon-3.0";
 
 // Normative relation ids from RULE_FAMILIES.md section 6.
 const W6_REQUIRE_RELATION: &str = "lua_requires_library";
@@ -858,6 +865,8 @@ const W6_EMBED_RELATION: &str = "lua_embeds_library";
 const W6_LIBRARY_ENTITY: &str = "library";
 const W6_LIBRARY_RELATIONS: [&str; 2] = [W6_REQUIRE_RELATION, W6_NEW_RELATION];
 const W6_DEFERRED_LIBRARY_RELATIONS: [&str; 1] = [W6_EMBED_RELATION];
+const SOURCE_STATE_LIBRARY_ACEADDON_PROFILE: &str =
+    "wow-recognizers/source-library/aceaddon-local-result/1";
 
 // Caller supplied crosswalks, checked against the owner source partition and the
 // real source/evidence records before any fact is built.
@@ -880,7 +889,17 @@ pub struct SourceLibraryMatch {
     pub caller_proposal_id: String,
     /// LibStub minor is independent of the major key and absent unless the
     /// normalized call facts provide an exact value.
+    // Canonical Service graph results reject JSON null, so absence is omission.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub minor: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receiver_binding_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initializer_call_fact_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initializer_source_handle_id: Option<StableHandleId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub initializer_evidence_id: Option<EvidenceId>,
     pub relation_proposal_id: String,
     pub rule_id: &'static str,
     pub relation: &'static str,
@@ -918,6 +937,8 @@ struct W6Call {
     colon_call: bool,
     argument_count: usize,
     exact: bool,
+    callable_target_selected: Option<bool>,
+    receiver_proof: Option<W6LocalResultReceiverProof>,
     handle: StableHandleId,
     evidence: EvidenceId,
     argument_0_kind: Option<&'static str>,
@@ -930,6 +951,18 @@ struct W6Call {
     argument_1_local_constant_kind: Option<&'static str>,
     argument_1_integer: Option<i64>,
     argument_2_kind: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct W6LocalResultReceiverProof {
+    binding_id: String,
+    result_slot: u8,
+    initializer_call_fact_id: String,
+    initializer_callable_key: Option<String>,
+    initializer_major: Option<String>,
+    initializer_target_selected: bool,
+    initializer_source_handle_id: StableHandleId,
+    initializer_evidence_id: EvidenceId,
 }
 
 // One exact LibStub major key and optional separately resolved minor observed at
@@ -1011,9 +1044,17 @@ fn library_entity_proposal_id(
     context_id: wow_core::GenerationContextId,
     major: &str,
 ) -> RecognizerResult<String> {
+    library_entity_proposal_id_for_profile(context_id, major, SOURCE_STATE_LIBRARY_PROFILE)
+}
+
+fn library_entity_proposal_id_for_profile(
+    context_id: wow_core::GenerationContextId,
+    major: &str,
+    profile: &str,
+) -> RecognizerResult<String> {
     let digest = wow_core::domain_separated_digest(
         "wow-recognizers/source-library-entity/4",
-        &(SOURCE_STATE_LIBRARY_PROFILE, context_id, major),
+        &(profile, context_id, major),
     )
     .map_err(|_| failure(RecognizerErrorCode::AdapterIdentityMismatch))?;
     Ok(format!(
@@ -1031,6 +1072,108 @@ fn include_library_support(
         .entry(major.to_owned())
         .or_default()
         .include(relation)
+}
+
+fn source_call_target_selected(
+    report: &FunctionCallReport,
+    call: &wow_emmy::function_calls::SourceCallFact,
+) -> bool {
+    let Some(selected) = call
+        .resolved_callable_key()
+        .and_then(|key| report.named_targets().get(key))
+    else {
+        return false;
+    };
+    selected_source_call_target_matches(selected, call.target())
+}
+
+fn selected_source_call_target_matches(
+    selected: &SourceCallTarget,
+    call_target: &SourceCallTarget,
+) -> bool {
+    matches!(
+        selected,
+        SourceCallTarget::MainFunction { .. } | SourceCallTarget::LibraryFunction { .. }
+    ) && selected == call_target
+}
+
+fn exact_source_call_string(
+    call: &wow_emmy::function_calls::SourceCallFact,
+    ordinal: usize,
+) -> Option<String> {
+    let argument = call.arguments().get(ordinal)?;
+    match (argument.literal(), argument.local_constant()) {
+        (Some(SourceCallLiteral::String(value)), None) => Some(value.clone()),
+        (None, Some(value)) => match value.value() {
+            SourceCallConstant::String(value) => Some(value.clone()),
+            SourceCallConstant::Integer(_) => None,
+        },
+        _ => None,
+    }
+}
+
+fn local_result_receiver_proof(
+    input: &SourceLibraryInput<'_>,
+    call: &wow_emmy::function_calls::SourceCallFact,
+) -> RecognizerResult<Option<W6LocalResultReceiverProof>> {
+    let report = input.report;
+    if report.local_call_result_profile()
+        != Some(FunctionCallEvidenceProfile::AceAddonLocalResultV1)
+        || call.resolved_callable_key() != Some(W6_ACEADDON_EMBED_CALLABLE)
+    {
+        return Ok(None);
+    }
+    let Some(binding_id) = call.receiver_binding_id() else {
+        return Ok(None);
+    };
+    let binding = report
+        .call_result_binding(binding_id)
+        .ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+    if binding.binding_id() != binding_id
+        || binding.path() != call.path()
+        || binding.content_digest() != call.content_digest()
+        || binding.scope_function_id() != call.caller_function_id()
+        || binding.initializer_call_fact_id() == call.fact_id()
+    {
+        return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+    }
+    let initializer = report
+        .calls()
+        .iter()
+        .find(|candidate| candidate.fact_id() == binding.initializer_call_fact_id())
+        .ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+    if initializer.path() != binding.path()
+        || initializer.content_digest() != binding.content_digest()
+        || initializer.caller_function_id() != binding.scope_function_id()
+    {
+        return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
+    }
+    let (initializer_source_handle_id, initializer_evidence_id) = input
+        .call_support
+        .get(initializer.fact_id())
+        .copied()
+        .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
+    validate_call_support(
+        input,
+        initializer_source_handle_id,
+        initializer_evidence_id,
+        initializer,
+    )?;
+    let initializer_key = initializer.resolved_callable_key().map(str::to_owned);
+    let initializer_major = (initializer_key.as_deref() == Some(W6_NEW_LIBRARY_CALLABLE))
+        .then(|| exact_source_call_string(initializer, 0))
+        .flatten();
+    let initializer_target_selected = source_call_target_selected(report, initializer);
+    Ok(Some(W6LocalResultReceiverProof {
+        binding_id: binding.binding_id().into(),
+        result_slot: binding.result_slot(),
+        initializer_call_fact_id: initializer.fact_id().into(),
+        initializer_callable_key: initializer_key,
+        initializer_major,
+        initializer_target_selected,
+        initializer_source_handle_id,
+        initializer_evidence_id,
+    }))
 }
 
 pub fn recognize_source_library(
@@ -1056,6 +1199,13 @@ pub fn recognize_source_library(
     if input.owner.source_context_id() != input.context.context_id() {
         return Err(failure(RecognizerErrorCode::AdapterIdentityMismatch));
     }
+    let aceaddon_local_result_profile = input.report.local_call_result_profile()
+        == Some(FunctionCallEvidenceProfile::AceAddonLocalResultV1);
+    let recognition_profile = if aceaddon_local_result_profile {
+        SOURCE_STATE_LIBRARY_ACEADDON_PROFILE
+    } else {
+        SOURCE_STATE_LIBRARY_PROFILE
+    };
 
     let lookup = input.owner.producer_lookup(stop).map_err(graph_error)?;
     let graph = lookup.input_view();
@@ -1228,6 +1378,7 @@ pub fn recognize_source_library(
         {
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
         }
+        let receiver_proof = local_result_receiver_proof(&input, call)?;
         let mut normalized = W6Call {
             call_id: call.fact_id().to_owned(),
             caller_proposal_id: caller_proposal_id.to_owned(),
@@ -1235,6 +1386,9 @@ pub fn recognize_source_library(
             colon_call: call.is_colon_call(),
             argument_count: call.arguments().len(),
             exact,
+            callable_target_selected: aceaddon_local_result_profile
+                .then(|| source_call_target_selected(input.report, call)),
+            receiver_proof,
             handle,
             evidence,
             argument_0_kind,
@@ -1261,13 +1415,18 @@ pub fn recognize_source_library(
     } else {
         RecognizerFactCoverageState::NotEvaluated
     };
+    let fact_profile = if aceaddon_local_result_profile {
+        W6_LOCAL_RESULT_FACT_PROFILE
+    } else {
+        W6_FACT_PROFILE
+    };
     let coverage = vec![RecognizerFactCoverage::new(
         RecognizerFactCoverageInput {
             context_id: input.context.context_id(),
             partition_id: W6_FACT_PARTITION.into(),
             capability_id: "emmy.fact.calls".into(),
             producer_id: "wow.emmy".into(),
-            producer_version: W6_FACT_PROFILE.into(),
+            producer_version: fact_profile.into(),
             state: coverage_state,
             blocker_ids: if coverage_state == RecognizerFactCoverageState::Complete {
                 Vec::new()
@@ -1285,16 +1444,24 @@ pub fn recognize_source_library(
         coverage,
         fact_limits,
     )?;
-    let pack = library_pack(input.owner.registry().bundle_id())?;
+    let pack = library_pack(
+        input.owner.registry().bundle_id(),
+        aceaddon_local_result_profile,
+    )?;
     let plan = compile_recognizer_plan(&pack)?;
     let output = execute_recognizer_plan(input.context, &pack, &plan, &bundle, fact_limits, stop)?;
 
     let mut pending = Vec::<W6Relation>::new();
     for outcome in output.outcomes() {
         checkpoint(stop)?;
-        if outcome.rule_version() != W6_RULE_VERSION
-            || !matches!(outcome.rule_id(), W6_REQUIRE_RULE | W6_NEW_RULE)
-        {
+        let expected_version = match outcome.rule_id() {
+            W6_REQUIRE_RULE | W6_NEW_RULE => Some(W6_RULE_VERSION),
+            W6_ACEADDON_EMBED_RULE if aceaddon_local_result_profile => {
+                Some(W6_ACEADDON_EMBED_RULE_VERSION)
+            }
+            _ => None,
+        };
+        if expected_version != Some(outcome.rule_version()) {
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
         }
         let expected = relation_for_rule(outcome.rule_id())
@@ -1386,11 +1553,26 @@ pub fn recognize_source_library(
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
         let key =
             library_key(call)?.ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?;
+        let receiver_proof = if relation.relation == W6_EMBED_RELATION {
+            Some(
+                call.receiver_proof
+                    .as_ref()
+                    .ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?,
+            )
+        } else {
+            None
+        };
         matches.push(SourceLibraryMatch {
             call_id: call.call_id.clone(),
             library_name: key.major,
             caller_proposal_id: call.caller_proposal_id.clone(),
             minor: key.minor,
+            receiver_binding_id: receiver_proof.map(|proof| proof.binding_id.clone()),
+            initializer_call_fact_id: receiver_proof
+                .map(|proof| proof.initializer_call_fact_id.clone()),
+            initializer_source_handle_id: receiver_proof
+                .map(|proof| proof.initializer_source_handle_id),
+            initializer_evidence_id: receiver_proof.map(|proof| proof.initializer_evidence_id),
             relation_proposal_id: relation.proposal_id.clone(),
             rule_id: rule_id(relation.rule_id.as_str())
                 .ok_or_else(|| failure(RecognizerErrorCode::AdapterFactMismatch))?,
@@ -1429,7 +1611,11 @@ pub fn recognize_source_library(
     let mut entity_ids = BTreeMap::<String, String>::new();
     for (major, support) in entity_support {
         checkpoint(stop)?;
-        let entity_id = library_entity_proposal_id(input.context.context_id(), &major)?;
+        let entity_id = library_entity_proposal_id_for_profile(
+            input.context.context_id(),
+            &major,
+            recognition_profile,
+        )?;
         if entity_ids
             .insert(major.clone(), entity_id.clone())
             .is_some()
@@ -1485,6 +1671,13 @@ pub fn recognize_source_library(
                         "lua_library.no_exact_reviewed_libstub_call_observed"
                     },
                 )
+            } else if aceaddon_local_result_profile
+                && relation_id_for(W6_EMBED_RELATION) == Some(relation)
+            {
+                (
+                    GraphCoverageState::Partial,
+                    "lua_library.aceaddon_local_result_profile_only",
+                )
             } else if W6_DEFERRED_LIBRARY_RELATIONS
                 .iter()
                 .any(|declared| relation_id_for(declared) == Some(relation))
@@ -1519,7 +1712,7 @@ pub fn recognize_source_library(
         batch,
         coverage: graph_coverage,
         recognition: SourceLibraryRecognition {
-            profile: SOURCE_STATE_LIBRARY_PROFILE,
+            profile: recognition_profile,
             analyzer_report_id: input.report.analysis_id().into(),
             fact_bundle_id: bundle.bundle_id().to_string(),
             pack_digest: pack.pack_digest().into(),
@@ -1534,6 +1727,7 @@ fn relation_for_rule(rule_id: &str) -> Option<&'static str> {
     match rule_id {
         W6_REQUIRE_RULE => Some(W6_REQUIRE_RELATION),
         W6_NEW_RULE => Some(W6_NEW_RELATION),
+        W6_ACEADDON_EMBED_RULE => Some(W6_EMBED_RELATION),
         _ => None,
     }
 }
@@ -1542,6 +1736,7 @@ fn rule_id(rule_id: &str) -> Option<&'static str> {
     match rule_id {
         W6_REQUIRE_RULE => Some(W6_REQUIRE_RULE),
         W6_NEW_RULE => Some(W6_NEW_RULE),
+        W6_ACEADDON_EMBED_RULE => Some(W6_ACEADDON_EMBED_RULE),
         _ => None,
     }
 }
@@ -1584,6 +1779,9 @@ fn library_key(call: &W6Call) -> RecognizerResult<Option<W6LibraryKey>> {
     let major_is_string = call.argument_0_kind == Some("string")
         || (call.argument_0_kind == Some("reference")
             && call.argument_0_local_constant_kind == Some("string"));
+    let aceaddon_library_is_string = call.argument_1_kind == Some("string")
+        || (call.argument_1_kind == Some("reference")
+            && call.argument_1_local_constant_kind == Some("string"));
     let (major, minor) = match callable_key {
         W6_LIBSTUB_CALLABLE if !call.colon_call && major_is_string => {
             (call.argument_0_value.as_deref(), None)
@@ -1595,6 +1793,23 @@ fn library_key(call: &W6Call) -> RecognizerResult<Option<W6LibraryKey>> {
             .then_some(call.argument_1_integer)
             .flatten();
             (call.argument_0_value.as_deref(), minor)
+        }
+        W6_ACEADDON_EMBED_CALLABLE
+            if call.colon_call
+                && call.argument_0_kind == Some("reference")
+                && aceaddon_library_is_string
+                && call.callable_target_selected == Some(true)
+                && call.receiver_proof.as_ref().is_some_and(|proof| {
+                    proof.result_slot == 0
+                        && !proof.binding_id.is_empty()
+                        && !proof.initializer_call_fact_id.is_empty()
+                        && proof.initializer_callable_key.as_deref()
+                            == Some(W6_NEW_LIBRARY_CALLABLE)
+                        && proof.initializer_major.as_deref() == Some(W6_ACEADDON_MAJOR)
+                        && proof.initializer_target_selected
+                }) =>
+        {
+            (call.argument_1_value.as_deref(), None)
         }
         _ => (None, None),
     };
@@ -1637,6 +1852,42 @@ fn build_library_fact(
         fields.insert(
             "callable_key".into(),
             RecognizerFactValue::String(key.clone().into_boxed_str()),
+        );
+    }
+    if let Some(selected) = call.callable_target_selected {
+        fields.insert(
+            "callable_target_selected".into(),
+            RecognizerFactValue::Boolean(selected),
+        );
+    }
+    if let Some(proof) = &call.receiver_proof {
+        fields.insert(
+            "receiver_binding_id".into(),
+            RecognizerFactValue::Reference(proof.binding_id.clone().into_boxed_str()),
+        );
+        fields.insert(
+            "receiver_result_slot".into(),
+            RecognizerFactValue::Integer(i64::from(proof.result_slot)),
+        );
+        fields.insert(
+            "receiver_initializer_call_fact_id".into(),
+            RecognizerFactValue::Reference(proof.initializer_call_fact_id.clone().into_boxed_str()),
+        );
+        if let Some(key) = &proof.initializer_callable_key {
+            fields.insert(
+                "receiver_initializer_callable_key".into(),
+                RecognizerFactValue::String(key.clone().into_boxed_str()),
+            );
+        }
+        if let Some(major) = &proof.initializer_major {
+            fields.insert(
+                "receiver_initializer_major".into(),
+                RecognizerFactValue::String(major.clone().into_boxed_str()),
+            );
+        }
+        fields.insert(
+            "receiver_initializer_target_selected".into(),
+            RecognizerFactValue::Boolean(proof.initializer_target_selected),
         );
     }
     for (index, kind) in [
@@ -1701,6 +1952,19 @@ fn build_library_fact(
             fields.insert("library_minor".into(), RecognizerFactValue::Integer(minor));
         }
     }
+    let mut source_handle_ids = vec![call.handle];
+    let mut evidence_ids = vec![call.evidence];
+    if let Some(proof) = &call.receiver_proof {
+        source_handle_ids.push(proof.initializer_source_handle_id);
+        evidence_ids.push(proof.initializer_evidence_id);
+    }
+    source_handle_ids.sort_unstable();
+    evidence_ids.sort_unstable();
+    if source_handle_ids.windows(2).any(|pair| pair[0] == pair[1])
+        || evidence_ids.windows(2).any(|pair| pair[0] == pair[1])
+    {
+        return Err(failure(RecognizerErrorCode::AdapterBindingDuplicate));
+    }
     RecognizerFact::new(
         input.context.context_id(),
         RecognizerFactInput {
@@ -1711,15 +1975,21 @@ fn build_library_fact(
                 call.caller_proposal_id.clone(),
             )?,
             producer_id: "wow.emmy".into(),
-            producer_version: W6_FACT_PROFILE.into(),
+            producer_version: if input.report.local_call_result_profile()
+                == Some(FunctionCallEvidenceProfile::AceAddonLocalResultV1)
+            {
+                W6_LOCAL_RESULT_FACT_PROFILE.into()
+            } else {
+                W6_FACT_PROFILE.into()
+            },
             confidence: if call.exact {
                 GraphConfidence::Derived
             } else {
                 GraphConfidence::Possible
             },
             fields,
-            source_handle_ids: vec![call.handle],
-            evidence_ids: vec![call.evidence],
+            source_handle_ids,
+            evidence_ids,
         },
         fact_limits,
     )
@@ -1781,16 +2051,108 @@ fn validate_call_support(
     Ok(())
 }
 
-fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecognizerPack> {
+fn aceaddon_embed_rule() -> RecognizerRule {
+    RecognizerRule {
+        rule_id: W6_ACEADDON_EMBED_RULE.into(),
+        version: W6_ACEADDON_EMBED_RULE_VERSION,
+        required_capabilities: vec!["emmy.fact.calls".into()],
+        scope: "function".into(),
+        clauses: vec![
+            RecognizerClause::Fact {
+                alias: "call".into(),
+                kind: "lua_call".into(),
+            },
+            RecognizerClause::FieldEq {
+                field: "call.callable_key".into(),
+                value: crate::RecognizerPackLiteral::String(W6_ACEADDON_EMBED_CALLABLE.into()),
+            },
+            RecognizerClause::FieldEq {
+                field: "call.colon_call".into(),
+                value: crate::RecognizerPackLiteral::Boolean(true),
+            },
+            RecognizerClause::FieldEq {
+                field: "call.callable_target_selected".into(),
+                value: crate::RecognizerPackLiteral::Boolean(true),
+            },
+            RecognizerClause::FieldEq {
+                field: "call.receiver_result_slot".into(),
+                value: crate::RecognizerPackLiteral::Integer(0),
+            },
+            RecognizerClause::FieldEq {
+                field: "call.receiver_initializer_callable_key".into(),
+                value: crate::RecognizerPackLiteral::String(W6_NEW_LIBRARY_CALLABLE.into()),
+            },
+            RecognizerClause::FieldEq {
+                field: "call.receiver_initializer_major".into(),
+                value: crate::RecognizerPackLiteral::String(W6_ACEADDON_MAJOR.into()),
+            },
+            RecognizerClause::FieldEq {
+                field: "call.receiver_initializer_target_selected".into(),
+                value: crate::RecognizerPackLiteral::Boolean(true),
+            },
+            RecognizerClause::FieldEq {
+                field: "call.argument_0_kind".into(),
+                value: crate::RecognizerPackLiteral::String("reference".into()),
+            },
+            RecognizerClause::FieldIn {
+                field: "call.argument_1_kind".into(),
+                values: vec![
+                    crate::RecognizerPackLiteral::String("string".into()),
+                    crate::RecognizerPackLiteral::String("reference".into()),
+                ],
+            },
+            RecognizerClause::FieldEq {
+                field: "call.exact".into(),
+                value: crate::RecognizerPackLiteral::Boolean(true),
+            },
+        ],
+        captures: Vec::new(),
+        outputs: vec![RecognizerOutput::RelationAssertion {
+            output_id: "aceaddon_embed_library".into(),
+            relation_kind_id: W6_EMBED_RELATION.into(),
+            source: "call.caller".into(),
+            target: "call.library_name".into(),
+            confidence: RecognizerOutputConfidence::Derived,
+        }],
+        positive_fixture_ids: vec!["RECOG-LIB-ACEADDON-001".into()],
+        near_negative_fixture_ids: vec![
+            "RECOG-LIB-ACEADDON-002".into(),
+            "RECOG-LIB-ACEADDON-003".into(),
+        ],
+        partial_fixture_ids: vec!["RECOG-LIB-ACEADDON-004".into()],
+        mutation_fixture_ids: vec!["RECOG-LIB-ACEADDON-005".into()],
+    }
+}
+
+fn library_pack(
+    registry_bundle_id: &str,
+    aceaddon_local_result_profile: bool,
+) -> RecognizerResult<crate::CompiledRecognizerPack> {
     let mut document = RecognizerPackDocument {
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
-            pack_id: "wow-core-lua-library".into(),
-            version: "4".into(),
+            pack_id: if aceaddon_local_result_profile {
+                "wow-calibration-aceaddon-local-result".into()
+            } else {
+                "wow-core-lua-library".into()
+            },
+            version: if aceaddon_local_result_profile {
+                "1".into()
+            } else {
+                "4".into()
+            },
             trust_class: RecognizerPackTrustClass::Core,
-            fact_schema_profile_id: W6_FACT_PROFILE.into(),
+            fact_schema_profile_id: if aceaddon_local_result_profile {
+                W6_LOCAL_RESULT_FACT_PROFILE.into()
+            } else {
+                W6_FACT_PROFILE.into()
+            },
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-library-4".into(),
+            evaluation_profile_id: if aceaddon_local_result_profile {
+                "wow-recognizers-aceaddon-local-result-1".into()
+            } else {
+                "wow-recognizers-w11-library-4".into()
+            },
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 4,
@@ -1917,6 +2279,9 @@ fn library_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRec
             ],
         },
     };
+    if aceaddon_local_result_profile {
+        document.pack.rules.push(aceaddon_embed_rule());
+    }
     document
         .pack
         .rules
@@ -1945,6 +2310,8 @@ mod w6_library_tests {
             colon_call,
             argument_count: if argument_1_kind.is_some() { 2 } else { 1 },
             exact: true,
+            callable_target_selected: None,
+            receiver_proof: None,
             handle: StableHandleId::from_hash([1; 32]),
             evidence: EvidenceId::from_hash([2; 32]),
             argument_0_kind: Some("string"),
@@ -1978,6 +2345,21 @@ mod w6_library_tests {
             evidence_ids: vec![EvidenceId::from_hash([evidence; 32])],
             coverage_ids: vec![wow_core::CoverageId::from_hash([coverage; 32])],
         }
+    }
+
+    #[test]
+    fn aceaddon_target_selection_rejects_matching_non_executable_sentinels() {
+        let signature_not_captured = SourceCallTarget::SignatureNotCaptured;
+        assert!(!selected_source_call_target_matches(
+            &signature_not_captured,
+            &signature_not_captured,
+        ));
+
+        let indeterminate = SourceCallTarget::Indeterminate;
+        assert!(!selected_source_call_target_matches(
+            &indeterminate,
+            &indeterminate,
+        ));
     }
 
     #[test]

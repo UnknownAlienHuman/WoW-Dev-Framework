@@ -202,9 +202,18 @@ repository or license.
 ### Library embed — deferred
 
 The core pack has no active embed rule. The pinned LibStub donor does not own an
-embed method; the reviewed AceAddon embed convention is profile-specific and stays
-deferred until an owner can prove its exact receiver, library major and target.
-The library producer reports this relation as `NotEvaluated`.
+embed method. The default library producer reports this relation as
+`NotEvaluated`; universal-rule acceptance remains in #103/#120.
+
+The explicit `AceAddonLocalResultV1` recipe instead selects the separate
+`calibration.library.aceaddon_embed@1` structural rule. It requires the concrete
+selected `AceAddon.EmbedLibrary` colon-call target, exact addon argument and major,
+and a same-scope local receiver bound to result slot 0 of the selected
+`LibStub:NewLibrary("AceAddon-3.0", minor)` initializer. The binding and initializer
+identity, source and evidence remain in the accepted relation support. Rebinding,
+other result slots, unsupported aliases/captures and uncertain targets do not
+establish this relation. This bounded recipe does not prove successful runtime
+embedding, a loaded library, its revision/license or full E5 acceptance.
 
 Folder names such as `Libs/` never prove an embed relation.
 

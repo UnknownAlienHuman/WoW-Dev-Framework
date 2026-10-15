@@ -79,10 +79,33 @@ pub struct StoreConfiguration {
     profile_id: Box<str>,
     limits: StoreLimits,
     configuration_id: Box<str>,
+    #[serde(skip)]
+    instance_identity: bool,
 }
 
 impl StoreConfiguration {
     pub fn new(profile_id: impl Into<Box<str>>, limits: StoreLimits) -> StoreResult<Self> {
+        Self::build(profile_id, limits, false)
+    }
+
+    /// Builds an explicit identity-aware profile. New physical stores receive
+    /// a Store-owned identity; existing identity-free stores are refused and
+    /// never upgraded in place. Use a new profile id for the named consumer
+    /// (for example, `wow-search.durable-shard-store.v2`). Byte copies retain
+    /// their identity and are refused when their physical file binding differs;
+    /// no clone or restore rebind operation is provided.
+    pub fn new_with_instance_identity(
+        profile_id: impl Into<Box<str>>,
+        limits: StoreLimits,
+    ) -> StoreResult<Self> {
+        Self::build(profile_id, limits, true)
+    }
+
+    fn build(
+        profile_id: impl Into<Box<str>>,
+        limits: StoreLimits,
+        instance_identity: bool,
+    ) -> StoreResult<Self> {
         limits.validate()?;
         let profile_id = profile_id.into();
         if profile_id.is_empty()
@@ -101,11 +124,14 @@ impl StoreConfiguration {
             schema: &'static str,
             profile_id: &'a str,
             limits: StoreLimits,
+            #[serde(skip_serializing_if = "is_false")]
+            instance_identity: bool,
         }
         let bytes = canonical_json_bytes(&Identity {
             schema: STORE_SCHEMA,
             profile_id: &profile_id,
             limits,
+            instance_identity,
         })
         .map_err(|_| {
             StoreError::new(
@@ -120,6 +146,7 @@ impl StoreConfiguration {
             profile_id,
             limits,
             configuration_id,
+            instance_identity,
         })
     }
 
@@ -137,6 +164,14 @@ impl StoreConfiguration {
     pub fn configuration_id(&self) -> &str {
         &self.configuration_id
     }
+
+    pub(crate) const fn requires_instance_identity(&self) -> bool {
+        self.instance_identity
+    }
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -792,6 +827,32 @@ impl GarbageCollectionReceipt {
     #[must_use]
     pub const fn more_available(&self) -> bool {
         self.more_available
+    }
+}
+
+/// The exact GC receipt returned by a durable Store operation.
+///
+/// replayed is invocation metadata. The persisted operation result contains
+/// only the immutable GarbageCollectionReceipt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GarbageCollectionOperationOutcome {
+    receipt: GarbageCollectionReceipt,
+    replayed: bool,
+}
+
+impl GarbageCollectionOperationOutcome {
+    pub(crate) fn new(receipt: GarbageCollectionReceipt, replayed: bool) -> Self {
+        Self { receipt, replayed }
+    }
+
+    #[must_use]
+    pub fn receipt(&self) -> &GarbageCollectionReceipt {
+        &self.receipt
+    }
+
+    #[must_use]
+    pub const fn replayed(&self) -> bool {
+        self.replayed
     }
 }
 

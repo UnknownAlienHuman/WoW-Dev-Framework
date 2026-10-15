@@ -1,6 +1,6 @@
 # `wow-service` E4-C search, lineage, migration, impact, and context-handoff contract
 
-**Status:** implementation-ready documentation; no Rust code yet.
+**Status:** partial executable one-ProjectFile Search build/query and selected durable shard lifecycle. Only the implemented subset in the contract is active; broader E4-C and lineage/migration/impact/context handoff remain unaccepted in #169/#125. See [native Search commands](../../../apps/wow/SEARCH_BUILD_QUERY.md).
 
 **Contract ID:** `wow-service/e4-c/search-lineage-impact-use-cases`
 

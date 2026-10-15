@@ -522,3 +522,519 @@ end
     assert!(cvar_partition.report().accepted_relations().is_empty());
     Ok(())
 }
+
+#[test]
+fn aceaddon_local_result_embed_reaches_service_graph_readback() -> TestResult {
+    use crate::graph::{GraphBuildRequest, GraphReadStatus, execute_graph_build};
+    use std::sync::atomic::AtomicBool;
+    use wow_graph::{
+        GraphAssertionSupport, GraphExplainLimits, GraphExplainQuery, GraphExplainSubject,
+        GraphExplainedRecord, GraphPartitionSnapshot, GraphProposalEndpoint, GraphProposalValue,
+    };
+    use wow_project::disk::ProjectDiskFile;
+    use wow_project::{
+        PlatformGraphCapabilities, PlatformGraphCapability, PlatformGraphProfile,
+        ProjectBudgetPolicy, ProjectPublisher, replay::ProjectReplay,
+    };
+    use wow_recognizers::source_state::SOURCE_STATE_LIBRARY_PARTITION;
+
+    let (root, mut config) = super::native_fixture()?;
+    let capabilities = PlatformGraphCapabilities::new(&[
+        PlatformGraphCapability::InventorySpansV1,
+        PlatformGraphCapability::StructuralRolesV1,
+        PlatformGraphCapability::XmlSourceMapsV1,
+        PlatformGraphCapability::CustomSignalRelationsV1,
+    ])?;
+    config["graph_profile"] =
+        serde_json::to_value(PlatformGraphProfile::DirectCapabilitiesV1(capabilities))?;
+    let budgets = ProjectBudgetPolicy::fixture_e0()?
+        .with_function_call_budget(
+            wow_emmy::function_calls::FunctionCallBudget::default()
+                .with_global_access_budget(wow_emmy::global_access::GlobalAccessBudget::default()),
+        )
+        .with_function_call_evidence_profile(
+            wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1,
+        );
+    config["schema"] = json!(crate::local::LOCAL_PLATFORM_BUDGET_SCHEMA);
+    config["retained_package_limits"] = serde_json::to_value(
+        wow_project::platform_source::PlatformPackageRetentionLimits::new(2, 1024 * 1024)?,
+    )?;
+    config["project_budgets"] = serde_json::to_value(budgets)?;
+
+    std::fs::create_dir(root.0.join("Libs"))?;
+    // Minimal typed Library inventory for exact Emmy API selection; it does not
+    // claim a current installed API surface.
+    let library = concat!(
+        "---@meta _\n",
+        "---@class AceAddon\n",
+        "AceAddon = {}\n",
+        "---@param addon AceAddon\n",
+        "---@param libname string\n",
+        "---@param silent boolean|nil\n",
+        "---@param offset number|nil\n",
+        "function AceAddon:EmbedLibrary(addon, libname, silent, offset) end\n",
+        "---@class AceAddonLib\n",
+        "AceAddonLib = {}\n",
+        "---@param addon AceAddon\n",
+        "function AceAddonLib:Embed(addon) end\n",
+        "---@class LibStub\n",
+        "LibStub = {}\n",
+        "---@param major string\n",
+        "---@param minor integer\n",
+        "---@return AceAddon\n",
+        "---@return integer\n",
+        "function LibStub:NewLibrary(major, minor) end\n",
+        "---@param major string\n",
+        "---@param silent boolean\n",
+        "---@return AceAddonLib\n",
+        "function LibStub:GetLibrary(major, silent) end\n",
+    );
+    std::fs::write(root.0.join("Libs/AceAddon.lua"), library)?;
+    config["library"] = json!({
+        "root":"Libs",
+        "files":[ProjectDiskFile::new("AceAddon.lua")]
+    });
+    super::write_json(&root, "project.json", &config)?;
+    // The focused Main excerpt follows WoWUIDev/Ace3 commit
+    // d295b12f8b889a30e86e0e901c5494df4b149c49, AceAddon-3.0.lua blob
+    // 00e4e4837ae9b6c77f74a3b3a2a5f1b601b48e63.
+    let main = concat!(
+        "local MAJOR, MINOR = \"AceAddon-3.0\", 13\n",
+        "local AceAddon, oldminor = LibStub:NewLibrary(MAJOR, MINOR)\n",
+        "function AceAddon:EmbedLibrary(addon, libname, silent, offset)\n",
+        "  local lib = LibStub:GetLibrary(libname, true)\n",
+        "  lib:Embed(addon)\n",
+        "end\n",
+        "MyAddon = {}\n",
+        "AceAddon:EmbedLibrary(MyAddon, \"AceConsole-3.0\")\n",
+        "local other, minor = LibStub:NewLibrary(\"AceAddon-3.0\", 13)\n",
+        "minor:EmbedLibrary(MyAddon, \"Rejected-Slot-1\")\n",
+        "local rebound, oldminor2 = LibStub:NewLibrary(\"AceAddon-3.0\", 13)\n",
+        "rebound = {}\n",
+        "rebound:EmbedLibrary(MyAddon, \"Rejected-Reassigned\")\n",
+        "local function_rebound, function_oldminor = LibStub:NewLibrary(MAJOR, MINOR)\n",
+        "function function_rebound() end\n",
+        "function_rebound:EmbedLibrary(MyAddon, \"Rejected-FunctionStatement\")\n",
+    );
+    replace_source_file(&root, &mut config, "UI/main.lua", main)?;
+
+    let stop = AtomicBool::new(false);
+    let input = LocalProjectInput::from_config_path(&root.0.join("project.json"), &stop)?;
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(input.bundle.clone(), &stop)?;
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let replay_json = serde_json::to_value(&replay)?;
+    assert_eq!(
+        replay_json["schema"],
+        "wow-project/native-project-replay/aceaddon-local-result/1"
+    );
+    let restored =
+        ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?.hydrate(&stop)?;
+    assert_eq!(
+        restored
+            .configuration()
+            .budget_policy()
+            .function_call_evidence_profile(),
+        Some(wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1)
+    );
+    assert_eq!(
+        restored
+            .snapshot()
+            .analyzer_binding()
+            .function_call_report()
+            .and_then(|report| report.local_call_result_profile()),
+        Some(wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1)
+    );
+    let report = restored
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("round-tripped AceAddon function-call report")?;
+    assert!(
+        report.named_targets().contains_key("AceAddon.EmbedLibrary"),
+        "selected {:?}; calls {:?}",
+        report.named_targets().keys().collect::<Vec<_>>(),
+        report
+            .calls()
+            .iter()
+            .map(|call| (call.resolved_callable_key(), call.target()))
+            .collect::<Vec<_>>()
+    );
+    assert!(!report.named_targets().contains_key("LibStub.EmbedLibrary"));
+    let embed_call = report
+        .calls()
+        .iter()
+        .find(|call| {
+            call.resolved_callable_key() == Some("AceAddon.EmbedLibrary")
+                && call.arguments().get(1).is_some_and(|argument| {
+                    matches!(
+                        argument.literal(),
+                        Some(wow_emmy::function_calls::SourceCallLiteral::String(value))
+                            if value == "AceConsole-3.0"
+                    )
+                })
+        })
+        .ok_or("typed AceAddon embed call")?;
+    let selected_embed_target = report
+        .named_targets()
+        .get("AceAddon.EmbedLibrary")
+        .ok_or("selected AceAddon API target")?;
+    assert!(matches!(
+        embed_call.target(),
+        wow_emmy::function_calls::SourceCallTarget::MainFunction { .. }
+            | wow_emmy::function_calls::SourceCallTarget::LibraryFunction { .. }
+    ));
+    assert_eq!(selected_embed_target, embed_call.target());
+    let receiver_binding = report
+        .call_result_binding(
+            embed_call
+                .receiver_binding_id()
+                .ok_or("AceAddon local receiver binding")?,
+        )
+        .ok_or("AceAddon result binding")?;
+    assert_eq!(receiver_binding.result_slot(), 0);
+    let initializer = report
+        .calls()
+        .iter()
+        .find(|call| call.fact_id() == receiver_binding.initializer_call_fact_id())
+        .ok_or("AceAddon receiver initializer call")?;
+    assert_eq!(
+        initializer.resolved_callable_key(),
+        Some("LibStub.NewLibrary")
+    );
+    assert!(
+        report
+            .named_targets()
+            .get("LibStub.NewLibrary")
+            .is_some_and(|selected| selected == initializer.target())
+    );
+    let function_rebound_call = report
+        .calls()
+        .iter()
+        .find(|call| {
+            call.arguments().get(1).is_some_and(|argument| {
+                matches!(
+                    argument.literal(),
+                    Some(wow_emmy::function_calls::SourceCallLiteral::String(value))
+                        if value == "Rejected-FunctionStatement"
+                )
+            })
+        })
+        .ok_or("function-statement rebinding call")?;
+    assert_eq!(function_rebound_call.receiver_binding_id(), None);
+    let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
+        .with_input_profile(&input);
+    let result = execute_graph_build(input, &request, &stop)?;
+    assert_eq!(
+        result.status(),
+        GraphReadStatus::Partial,
+        "Service graph build did not complete: {}",
+        result
+            .failure_message()
+            .unwrap_or("graph build returned no failure details")
+    );
+    let result_json: serde_json::Value = serde_json::from_slice(&result.canonical_bytes()?)?;
+    let recognition_json = result_json
+        .get("library_recognition")
+        .ok_or("W6 recognition in canonical Service result")?;
+    assert_eq!(
+        recognition_json["profile"],
+        "wow-recognizers/source-library/aceaddon-local-result/1"
+    );
+    let wire_matches = recognition_json["matches"]
+        .as_array()
+        .ok_or("W6 recognition matches")?;
+    assert!(
+        wire_matches.iter().any(|matched| {
+            matched["rule_id"] == "core.library.libstub_new"
+                && matched["library_name"] == "AceAddon-3.0"
+                && matched["minor"] == 13
+        }),
+        "exact local NewLibrary minor remains numeric"
+    );
+    assert!(
+        wire_matches
+            .iter()
+            .any(|matched| matched.get("minor").is_none()),
+        "unknown W6 minor is represented by omission"
+    );
+    let embed_match = wire_matches
+        .iter()
+        .find(|matched| matched["relation"] == "lua_embeds_library")
+        .ok_or("retained W6 embed match")?;
+    assert_eq!(
+        embed_match["receiver_binding_id"],
+        receiver_binding.binding_id()
+    );
+    assert_eq!(
+        embed_match["initializer_call_fact_id"],
+        initializer.fact_id()
+    );
+    let initializer_source_handle_id = embed_match["initializer_source_handle_id"]
+        .as_str()
+        .ok_or("retained initializer source-handle identity")?;
+    let initializer_evidence_id = embed_match["initializer_evidence_id"]
+        .as_str()
+        .ok_or("retained initializer evidence identity")?;
+    let snapshot: GraphPartitionSnapshot = serde_json::from_slice(
+        &result
+            .snapshot_bytes()?
+            .ok_or("Service graph snapshot readback")?,
+    )?;
+    let partition = snapshot
+        .partition(SOURCE_STATE_LIBRARY_PARTITION)
+        .ok_or("W6 library graph partition")?;
+    let embed_relations = partition
+        .report()
+        .accepted_relations()
+        .iter()
+        .filter(|accepted| {
+            partition
+                .batch()
+                .relation_proposal(accepted.proposal_id())
+                .is_some_and(|proposal| proposal.relation_kind_id() == "lua_embeds_library")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        embed_relations.len(),
+        1,
+        "only the exact result-zero call embeds"
+    );
+    let relation = partition
+        .batch()
+        .relation_proposal(embed_relations[0].proposal_id())
+        .ok_or("W6 embed relation proposal")?;
+    let materialized_edges = snapshot
+        .snapshot()
+        .edges()
+        .iter()
+        .filter(|edge| {
+            edge.relation() == embed_relations[0].edge().relation()
+                && edge
+                    .evidence_ids()
+                    .iter()
+                    .any(|evidence| evidence.as_ref() == initializer_evidence_id)
+        })
+        .collect::<Vec<_>>();
+    let mut explained_edge_ids = Vec::new();
+    for edge in materialized_edges {
+        let candidate = GraphExplainQuery::new(
+            snapshot.snapshot().snapshot_id().clone(),
+            GraphExplainSubject::Relation(edge.edge_id().clone()),
+            GraphExplainLimits::default(),
+        )?
+        .execute(&snapshot, &stop)?;
+        if candidate.supports().iter().any(|support| {
+            matches!(
+                support,
+                GraphAssertionSupport::ProducerRelation { proposal, .. }
+                    if proposal.proposal_id() == relation.proposal_id()
+            )
+        }) {
+            explained_edge_ids.push(edge.edge_id().clone());
+        }
+    }
+    assert_eq!(
+        explained_edge_ids.len(),
+        1,
+        "exact W6 proposal identity selects one materialized edge"
+    );
+    let explanation = GraphExplainQuery::new(
+        snapshot.snapshot().snapshot_id().clone(),
+        GraphExplainSubject::Relation(explained_edge_ids[0].clone()),
+        GraphExplainLimits::default(),
+    )?
+    .execute(&snapshot, &stop)?;
+    let explained_relation = explanation
+        .supports()
+        .iter()
+        .find_map(|support| match support {
+            GraphAssertionSupport::ProducerRelation { proposal, .. }
+                if proposal.proposal_id() == relation.proposal_id() =>
+            {
+                Some(proposal)
+            }
+            _ => None,
+        })
+        .ok_or("W6 relation support retained by graph explain")?;
+    let explained_handles = serde_json::to_value(explained_relation.source_handle_ids())?;
+    assert!(
+        explained_handles
+            .as_array()
+            .is_some_and(|handles| handles.contains(&json!(initializer_source_handle_id))),
+        "graph explain retains the validated initializer source handle"
+    );
+    let explained_evidence = serde_json::to_value(explained_relation.evidence_ids())?;
+    assert!(
+        explained_evidence
+            .as_array()
+            .is_some_and(|evidence| evidence.contains(&json!(initializer_evidence_id))),
+        "graph explain retains the validated initializer evidence"
+    );
+    let GraphExplainedRecord::Relation { edge, .. } = explanation.record() else {
+        return Err("W6 graph explain returned the exact relation record".into());
+    };
+    assert!(
+        edge.evidence_ids()
+            .iter()
+            .any(|evidence| evidence.as_ref() == initializer_evidence_id)
+    );
+    let GraphProposalEndpoint::Proposed(entity_id) = relation.endpoints()[1] else {
+        return Err("W6 embed relation target is not the exact library entity".into());
+    };
+    let entity = partition
+        .batch()
+        .entity_proposal(entity_id)
+        .ok_or("W6 embedded library entity")?;
+    assert_eq!(
+        entity.semantic_key().get("library"),
+        Some(&GraphProposalValue::String("AceConsole-3.0".into()))
+    );
+    assert!(!embed_relations[0].edge().evidence_ids().is_empty());
+    assert!(partition.coverage().iter().any(|coverage| {
+        coverage.relation() == wow_graph::GraphRelationKind::UsesApi
+            && coverage.state() == wow_graph::GraphCoverageState::Partial
+    }));
+    Ok(())
+}
+
+#[test]
+fn aceaddon_indeterminate_local_result_does_not_emit_embed() -> TestResult {
+    use crate::graph::{GraphBuildRequest, GraphReadStatus, execute_graph_build};
+    use std::sync::atomic::AtomicBool;
+    use wow_emmy::function_calls::SourceCallTarget;
+    use wow_graph::GraphPartitionSnapshot;
+    use wow_project::disk::ProjectDiskFile;
+    use wow_project::{
+        PlatformGraphCapabilities, PlatformGraphCapability, PlatformGraphProfile,
+        ProjectBudgetPolicy, ProjectPublisher,
+    };
+    use wow_recognizers::source_state::SOURCE_STATE_LIBRARY_PARTITION;
+
+    let (root, mut config) = super::native_fixture()?;
+    let capabilities = PlatformGraphCapabilities::new(&[
+        PlatformGraphCapability::InventorySpansV1,
+        PlatformGraphCapability::StructuralRolesV1,
+        PlatformGraphCapability::XmlSourceMapsV1,
+        PlatformGraphCapability::CustomSignalRelationsV1,
+    ])?;
+    config["graph_profile"] =
+        serde_json::to_value(PlatformGraphProfile::DirectCapabilitiesV1(capabilities))?;
+    let budgets = ProjectBudgetPolicy::fixture_e0()?
+        .with_function_call_budget(
+            wow_emmy::function_calls::FunctionCallBudget::default()
+                .with_global_access_budget(wow_emmy::global_access::GlobalAccessBudget::default()),
+        )
+        .with_function_call_evidence_profile(
+            wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1,
+        );
+    config["schema"] = json!(crate::local::LOCAL_PLATFORM_BUDGET_SCHEMA);
+    config["retained_package_limits"] = serde_json::to_value(
+        wow_project::platform_source::PlatformPackageRetentionLimits::new(2, 1024 * 1024)?,
+    )?;
+    config["project_budgets"] = serde_json::to_value(budgets)?;
+
+    std::fs::create_dir(root.0.join("Libs"))?;
+    let library = concat!(
+        "---@meta _\n",
+        "---@class AceAddon\n",
+        "---@field EmbedLibrary fun(addon: table, libname: string)\n",
+        "AceAddon = {}\n",
+        "---@class LibStub\n",
+        "LibStub = {}\n",
+        "---@param major string\n",
+        "---@param minor integer\n",
+        "---@return AceAddon\n",
+        "---@return integer\n",
+        "function LibStub:NewLibrary(major, minor) end\n",
+    );
+    std::fs::write(root.0.join("Libs/AceAddon.lua"), library)?;
+    config["library"] = json!({
+        "root":"Libs",
+        "files":[ProjectDiskFile::new("AceAddon.lua")]
+    });
+    super::write_json(&root, "project.json", &config)?;
+    let main = concat!(
+        "local MAJOR, MINOR = \"AceAddon-3.0\", 13\n",
+        "local AceAddon, oldminor = LibStub:NewLibrary(MAJOR, MINOR)\n",
+        "MyAddon = {}\n",
+        "AceAddon:EmbedLibrary(MyAddon, \"Uncaptured-Signature\")\n",
+    );
+    replace_source_file(&root, &mut config, "UI/main.lua", main)?;
+
+    let stop = AtomicBool::new(false);
+    let input = LocalProjectInput::from_config_path(&root.0.join("project.json"), &stop)?;
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(input.bundle.clone(), &stop)?;
+    let project = publisher.open_current()?;
+    let report = project
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("native uncertain-target function-call report")?;
+    assert!(
+        !report.named_targets().contains_key("AceAddon.EmbedLibrary"),
+        "the native doc-field route does not select an AceAddon callable"
+    );
+    let call = report
+        .calls()
+        .iter()
+        .find(|call| {
+            call.arguments().get(1).is_some_and(|argument| {
+                matches!(
+                    argument.literal(),
+                    Some(wow_emmy::function_calls::SourceCallLiteral::String(value))
+                        if value == "Uncaptured-Signature"
+                )
+            })
+        })
+        .ok_or("native doc-field call in the function-call report")?;
+    assert_eq!(call.target(), &SourceCallTarget::Indeterminate);
+    let binding = report
+        .call_result_binding(
+            call.receiver_binding_id()
+                .ok_or("result-zero receiver binding")?,
+        )
+        .ok_or("result-zero receiver receipt")?;
+    assert_eq!(binding.result_slot(), 0);
+
+    let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
+        .with_input_profile(&input);
+    let result = execute_graph_build(input, &request, &stop)?;
+    assert_eq!(
+        result.status(),
+        GraphReadStatus::Partial,
+        "uncertain API graph build did not complete: {}",
+        result
+            .failure_message()
+            .unwrap_or("graph build returned no failure details")
+    );
+    let result_json: serde_json::Value = serde_json::from_slice(&result.canonical_bytes()?)?;
+    let recognition = result_json
+        .get("library_recognition")
+        .ok_or("W6 uncertain-target recognition")?;
+    assert!(recognition["matches"].as_array().is_some_and(|matches| {
+        matches
+            .iter()
+            .all(|matched| matched["relation"] != "lua_embeds_library")
+    }));
+    let snapshot: GraphPartitionSnapshot = serde_json::from_slice(
+        &result
+            .snapshot_bytes()?
+            .ok_or("uncertain-target Service graph snapshot")?,
+    )?;
+    let partition = snapshot
+        .partition(SOURCE_STATE_LIBRARY_PARTITION)
+        .ok_or("uncertain-target W6 partition")?;
+    assert!(
+        partition
+            .report()
+            .accepted_relations()
+            .iter()
+            .all(|accepted| partition
+                .batch()
+                .relation_proposal(accepted.proposal_id())
+                .is_some_and(|proposal| proposal.relation_kind_id() != "lua_embeds_library"))
+    );
+    Ok(())
+}

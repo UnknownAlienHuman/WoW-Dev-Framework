@@ -1,11 +1,23 @@
 {
   "schema_version": 1,
   "contract_id": "wow-service/e4-c/search-lineage-impact-use-cases",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
   "work_package": "E4-C",
   "crate": "wow-service",
   "documentation_frontier": "E4-C",
-  "implementation_state": "not-started",
+  "implementation_state": "partial-functional",
+  "acceptance_status": "pending",
+  "canonical_issue": 169,
+  "availability_scope": "Only implemented_subset is executable; remaining operation lists define the target E4-C contract.",
+  "preimplementation_freeze": {"status": "missed", "evaluation": "NotEvaluated"},
+  "implemented_subset": {
+    "scope": "one exact ProjectFile metadata shard",
+    "one_shot_operation": "search_build_query",
+    "durable_operations": ["search_index_build", "search_query", "search_index_retire", "search_store_gc"],
+    "store_profile": "wow-search.durable-shard-store.v2",
+    "owner": "crates/wow-service/src/search.rs",
+    "full_e4_c_acceptance": "not-accepted"
+  },
   "direct_framework_dependencies": [
     "wow-core",
     "wow-store",
@@ -270,8 +282,9 @@
     "apps/wow/e4/CONTRACT.json"
   ],
   "freeze_gate": {
-    "implementation_state": "not-started",
-    "required_before_first_rust_implementation": [
+    "implementation_state": "partial-functional",
+    "full_e4_c_acceptance": "not-accepted",
+    "required_before_full_e4_c_acceptance": [
       "all E0 through E4-B prerequisite implementation commits and fixture bundle digests",
       "exact store project reference graph search context lineage catalog retention and idempotency owner-port IDs",
       "selector acquisition stability compatibility search lineage review migration impact context status envelope privacy security budget and error profile IDs",

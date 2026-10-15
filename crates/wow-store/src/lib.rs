@@ -14,12 +14,13 @@ mod store;
 pub use error::{StoreError, StoreErrorCode, StoreResult};
 pub use identity::{
     CatalogName, CatalogPath, LeaseId, LogicalEpoch, ObjectId, OperationId, RequestDigest,
+    StoreInstanceId,
 };
 pub mod search;
 pub use model::{
     CatalogChange, CatalogEntry, CatalogExpectation, CatalogMutation, CommitReceipt,
-    GarbageCollectionReceipt, IntegrityReport, LeaseRecord, LogicalManifest, ObjectRecord,
-    OperationBegin, OperationRecord, OperationResultMutation, OperationState, PendingObject,
-    StoreConfiguration, StoreLimits, WriteBatch,
+    GarbageCollectionOperationOutcome, GarbageCollectionReceipt, IntegrityReport, LeaseRecord,
+    LogicalManifest, ObjectRecord, OperationBegin, OperationRecord, OperationResultMutation,
+    OperationState, PendingObject, StoreConfiguration, StoreLimits, WriteBatch,
 };
 pub use store::{SealedStore, Store};

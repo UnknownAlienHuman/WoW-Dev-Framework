@@ -107,6 +107,12 @@ struct ReplayBudgets {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::configuration::present_function_call_evidence_profile"
+    )]
+    function_call_evidence_profile: Option<wow_emmy::function_calls::FunctionCallEvidenceProfile>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
         deserialize_with = "crate::configuration::present_source_graph_budget"
     )]
     source_graph: Option<crate::graph::SourceGraphBudget>,
@@ -122,6 +128,7 @@ impl ReplayBudgets {
             max_generic_findings: b.max_generic_findings(),
             max_output_bytes: b.max_output_bytes(),
             function_calls: b.function_call_budget(),
+            function_call_evidence_profile: b.function_call_evidence_profile(),
             source_graph: b.source_graph_budget(),
         }
     }
@@ -137,6 +144,10 @@ impl ReplayBudgets {
         )?;
         let policy = match self.function_calls {
             Some(budget) => policy.with_function_call_budget(budget),
+            None => policy,
+        };
+        let policy = match self.function_call_evidence_profile {
+            Some(profile) => policy.with_function_call_evidence_profile(profile),
             None => policy,
         };
         Ok(match self.source_graph {
@@ -257,6 +268,12 @@ impl ReplayConfiguration {
         &self,
     ) -> Option<wow_emmy::function_calls::FunctionCallBudget> {
         self.budgets.function_calls
+    }
+
+    pub(super) const fn function_call_evidence_profile(
+        &self,
+    ) -> Option<wow_emmy::function_calls::FunctionCallEvidenceProfile> {
+        self.budgets.function_call_evidence_profile
     }
     pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {
         config.validate()?;

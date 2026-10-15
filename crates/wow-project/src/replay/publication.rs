@@ -216,6 +216,29 @@ pub const STORAGE_SCHEMAS_V16: &[&str] = &[
     "wow-project.live-replay.v16",
     "wow-project.live-pair.v1",
 ];
+/// Exact catalog for the named AceAddon local-result replay consumer. Earlier
+/// catalogs remain frozen; this admits only their retained records plus the new
+/// explicitly selected recipe.
+pub const STORAGE_SCHEMAS_ACEADDON_LOCAL_RESULT_V1: &[&str] = &[
+    "wow-project.live-replay.v1",
+    "wow-project.live-replay.v2",
+    "wow-project.live-replay.v3",
+    "wow-project.live-replay.v4",
+    "wow-project.live-replay.v5",
+    "wow-project.live-replay.v6",
+    "wow-project.live-replay.v7",
+    "wow-project.live-replay.v8",
+    "wow-project.live-replay.v9",
+    "wow-project.live-replay.v10",
+    "wow-project.live-replay.v11",
+    "wow-project.live-replay.v12",
+    "wow-project.live-replay.v13",
+    "wow-project.live-replay.v14",
+    "wow-project.live-replay.v15",
+    "wow-project.live-replay.v16",
+    super::ACEADDON_LOCAL_RESULT_STORAGE_SCHEMA,
+    "wow-project.live-pair.v1",
+];
 /// Explicit composed classification catalog. Keep ordinary/retained epoch bytes
 /// unchanged; application selection must opt into this catalog before publishing.
 pub const STORAGE_SCHEMAS_XML_CLASSIFICATION_V1: &[&str] = &[
@@ -320,6 +343,7 @@ pub const STORAGE_SCHEMA_CATALOGS: &[&[&str]] = &[
     STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1,
     STORAGE_SCHEMAS_XML_CLASSIFICATION_V1,
     STORAGE_SCHEMAS,
+    STORAGE_SCHEMAS_ACEADDON_LOCAL_RESULT_V1,
     STORAGE_SCHEMAS_V16,
     STORAGE_SCHEMAS_V15,
     STORAGE_SCHEMAS_V14,

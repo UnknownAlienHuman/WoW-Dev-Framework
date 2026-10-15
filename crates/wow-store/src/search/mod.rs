@@ -224,6 +224,30 @@ pub struct PublishedSearchShard {
     reader: SearchStoreReader,
 }
 
+/// A validated immutable shard object before it is committed to Store.
+/// Service can publish the object, exact catalog root, and response atomically.
+pub struct PreparedSearchShard {
+    object: PendingObject,
+    search_shard_id: Box<str>,
+}
+
+impl PreparedSearchShard {
+    #[must_use]
+    pub fn object_id(&self) -> &ObjectId {
+        self.object.object_id()
+    }
+
+    #[must_use]
+    pub fn search_shard_id(&self) -> &str {
+        &self.search_shard_id
+    }
+
+    #[must_use]
+    pub fn into_object(self) -> PendingObject {
+        self.object
+    }
+}
+
 impl PublishedSearchShard {
     #[must_use]
     pub fn object_id(&self) -> &ObjectId {
@@ -257,6 +281,7 @@ pub struct SearchStoreReader {
     connection: Connection,
     profile: SearchStoreProfile,
     manifest_bytes: Box<[u8]>,
+    document_count: u32,
 }
 
 impl SearchStoreReader {
@@ -269,6 +294,11 @@ impl SearchStoreReader {
     #[must_use]
     pub fn owner_manifest_bytes(&self) -> &[u8] {
         &self.manifest_bytes
+    }
+
+    #[must_use]
+    pub const fn document_count(&self) -> u32 {
+        self.document_count
     }
 
     pub fn exact_id(&self, document_id: &str) -> StoreResult<Option<SearchStoreDocument>> {
@@ -367,35 +397,24 @@ impl SearchStoreReader {
 pub struct SearchStore;
 
 impl SearchStore {
-    /// Build into a fresh private SQLite image, validate it, persist the complete
-    /// image and owner manifest as one generic content-addressed object, lease it,
-    /// then reopen that exact object read-only/query-only before returning.
-    #[allow(clippy::too_many_arguments)]
-    pub fn build_and_publish(
-        store: &mut Store,
+    /// Builds, validates, and seals an immutable physical shard without Store
+    /// writes. Its caller publishes the object in the owning operation batch.
+    pub fn prepare(
         profile: SearchStoreProfile,
         search_shard_id: impl Into<Box<str>>,
         documents: &[SearchStoreDocument],
         owner_manifest_bytes: &[u8],
-        lease_request: SearchStoreLeaseRequest,
+        object_limits: crate::StoreLimits,
         stop: &AtomicBool,
-    ) -> StoreResult<PublishedSearchShard> {
+    ) -> StoreResult<PreparedSearchShard> {
         check_cancelled(stop)?;
         let search_shard_id = search_shard_id.into();
-        if search_shard_id.is_empty()
-            || search_shard_id.len() > 256
-            || !search_shard_id
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || b".:_-".contains(&byte))
-        {
-            return Err(invalid_profile());
-        }
+        validate_search_shard_id(&search_shard_id)?;
         if documents.is_empty()
             || documents.len() > profile.limits.max_documents as usize
             || owner_manifest_bytes.is_empty()
             || owner_manifest_bytes.len() as u64 > profile.limits.max_owner_manifest_bytes
-            || profile.limits.max_store_object_bytes
-                > store.configuration().limits().max_object_bytes
+            || profile.limits.max_store_object_bytes > object_limits.max_object_bytes
         {
             return Err(budget_refused());
         }
@@ -424,26 +443,47 @@ impl SearchStore {
             database_sha256: format!("sha256:{}", hex(&Sha256::digest(&database))),
             database_hex: hex(&database),
         };
-        let pending = PendingObject::from_json(
-            OBJECT_KIND,
-            OBJECT_SCHEMA_VERSION,
-            &stored,
-            store.configuration().limits(),
-        )?;
-        if pending.canonical_json().len() as u64 > profile.limits.max_store_object_bytes {
+        let object =
+            PendingObject::from_json(OBJECT_KIND, OBJECT_SCHEMA_VERSION, &stored, object_limits)?;
+        if object.canonical_json().len() as u64 > profile.limits.max_store_object_bytes {
             return Err(budget_refused());
         }
-        let object_id = pending.object_id().clone();
-        let mut batch = WriteBatch::new();
-        batch.add_object(pending)?;
-        store.commit(batch)?;
+        let reader = open_read_only(&stored, &profile, &search_shard_id, stop)?;
+        if reader.owner_manifest_bytes() != owner_manifest_bytes
+            || reader.document_count() != documents.len() as u32
+        {
+            return Err(integrity_failure());
+        }
+        drop(reader);
+        Ok(PreparedSearchShard {
+            object,
+            search_shard_id,
+        })
+    }
+
+    /// Opens one caller-selected object and shard ID under a fresh Store lease.
+    /// The caller must separately validate its exact catalog/root membership.
+    pub fn open_exact(
+        store: &mut Store,
+        profile: SearchStoreProfile,
+        search_shard_id: impl Into<Box<str>>,
+        object_id: &ObjectId,
+        lease_request: SearchStoreLeaseRequest,
+        stop: &AtomicBool,
+    ) -> StoreResult<PublishedSearchShard> {
+        check_cancelled(stop)?;
+        let search_shard_id = search_shard_id.into();
+        validate_search_shard_id(&search_shard_id)?;
+        if profile.limits.max_store_object_bytes > store.configuration().limits().max_object_bytes {
+            return Err(budget_refused());
+        }
         let lease = store.acquire_lease(
             lease_request.lease_id,
-            object_id,
+            object_id.clone(),
             lease_request.holder,
             lease_request.expires_after,
         )?;
-        let reader_search_shard_id = search_shard_id.clone();
+        let expected_shard_id = search_shard_id.clone();
         finish_after_lease(store, lease, search_shard_id, move |store, lease| {
             check_cancelled(stop)?;
             let record = store.object(lease.object_id())?.ok_or_else(|| {
@@ -452,14 +492,67 @@ impl SearchStore {
                     "published search shard object is missing",
                 )
             })?;
-            if record.kind() != OBJECT_KIND || record.schema_version() != OBJECT_SCHEMA_VERSION {
+            if record.object_id() != lease.object_id()
+                || record.kind() != OBJECT_KIND
+                || record.schema_version() != OBJECT_SCHEMA_VERSION
+                || record.canonical_json().len() as u64 > profile.limits.max_store_object_bytes
+            {
                 return Err(integrity_failure());
             }
             let persisted: StoredSearchArtifact = record.decode()?;
-            let reader = open_read_only(&persisted, &profile, &reader_search_shard_id, stop)?;
+            let reader = open_read_only(&persisted, &profile, &expected_shard_id, stop)?;
             check_cancelled(stop)?;
             Ok(reader)
         })
+    }
+
+    /// Build into a fresh private SQLite image, validate it, persist the complete
+    /// image and owner manifest as one generic content-addressed object, lease it,
+    /// then reopen that exact object read-only/query-only before returning.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_and_publish(
+        store: &mut Store,
+        profile: SearchStoreProfile,
+        search_shard_id: impl Into<Box<str>>,
+        documents: &[SearchStoreDocument],
+        owner_manifest_bytes: &[u8],
+        lease_request: SearchStoreLeaseRequest,
+        stop: &AtomicBool,
+    ) -> StoreResult<PublishedSearchShard> {
+        let prepared = Self::prepare(
+            profile.clone(),
+            search_shard_id,
+            documents,
+            owner_manifest_bytes,
+            store.configuration().limits(),
+            stop,
+        )?;
+        let object_id = prepared.object_id().clone();
+        let search_shard_id = prepared.search_shard_id().to_owned().into_boxed_str();
+        let mut batch = WriteBatch::new();
+        batch.add_object(prepared.into_object())?;
+        store.commit(batch)?;
+        Self::open_exact(
+            store,
+            profile,
+            search_shard_id,
+            &object_id,
+            lease_request,
+            stop,
+        )
+    }
+}
+
+fn validate_search_shard_id(search_shard_id: &str) -> StoreResult<()> {
+    if search_shard_id.is_empty()
+        || search_shard_id.len() > 256
+        || !search_shard_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b".:_-".contains(&byte))
+    {
+        Err(invalid_profile())
+    } else {
+        Ok(())
     }
 }
 
@@ -735,6 +828,7 @@ fn open_read_only(
         connection,
         profile: expected_profile.clone(),
         manifest_bytes: manifest_bytes.into_boxed_slice(),
+        document_count: u32::try_from(documents.len()).map_err(|_| budget_refused())?,
     })
 }
 

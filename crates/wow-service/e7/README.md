@@ -1,8 +1,14 @@
 # `wow-service` E7-A frontend session and transport contract
 
-**Status:** implementation-ready documentation; no Rust code exists.
+**Status:** partial executable subset; full E7-A acceptance remains open.
 
 **Contract ID:** `wow-service/e7-a/frontend-session-operation-registry`
+
+`src/frontend.rs` implements the first fixed MCP stdio profile's immutable
+registry, bounded sessions, status/capabilities and checked close operations.
+The selected application exposes `wow.status` and the exact profile resource.
+The remaining operations below are the final contract inventory; workspace,
+document, daemon and LSP functionality is not implemented by this subset.
 
 ## Mission
 

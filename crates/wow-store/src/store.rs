@@ -1,6 +1,16 @@
 mod bootstrap;
+mod gc;
+#[cfg(test)]
+mod instance_identity_tests;
 #[cfg(test)]
 mod operation_batch_tests;
+
+#[cfg(all(test, unix))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AdmissionTestPoint {
+    AfterReadOnlyProbe,
+    AfterWritableOpen,
+}
 use std::{fs, io::Cursor, path::Path, time::Duration};
 
 use rusqlite::{
@@ -10,14 +20,17 @@ use rusqlite::{
 
 use crate::{
     CatalogChange, CatalogEntry, CatalogExpectation, CatalogMutation, CatalogName, CatalogPath,
-    CommitReceipt, GarbageCollectionReceipt, IntegrityReport, LeaseId, LeaseRecord, LogicalEpoch,
-    LogicalManifest, ObjectId, ObjectRecord, OperationBegin, OperationId, OperationRecord,
-    OperationResultMutation, OperationState, RequestDigest, StoreConfiguration, StoreError,
-    StoreErrorCode, StoreResult, WriteBatch,
+    CommitReceipt, IntegrityReport, LeaseId, LeaseRecord, LogicalEpoch, LogicalManifest, ObjectId,
+    ObjectRecord, OperationBegin, OperationId, OperationRecord, OperationResultMutation,
+    OperationState, RequestDigest, StoreConfiguration, StoreError, StoreErrorCode, StoreInstanceId,
+    StoreResult, WriteBatch,
 };
 
 const APPLICATION_ID: i64 = 0x5744_4631;
 const USER_VERSION: i64 = 1;
+const INSTANCE_ID_KEY: &str = "store_instance_id";
+const PHYSICAL_ID_KEY: &str = "store_physical_id";
+const INSTANCE_ID_ADMISSION_PROBE: &str = "probe-instance:00000000000000000000000000000000";
 
 /// Busy window for the read-only admission probe of a candidate file.
 const ADMISSION_TIMEOUT_MS: u64 = 500;
@@ -157,6 +170,8 @@ enum AdmissionOutcome {
     /// The compiled schema and headers match but the configuration identity does
     /// not. This is a typed configuration refusal, distinct from a foreign file.
     ConfigMismatch,
+    /// An identity-aware profile encountered a legacy identity-free store.
+    IdentityUnavailable,
     /// The database is foreign, incompatible, or holds a mismatched identity.
     Foreign,
 }
@@ -191,6 +206,19 @@ fn inspect_candidate(
     if application_id != APPLICATION_ID || user_version != USER_VERSION {
         return Ok(AdmissionOutcome::Foreign);
     }
+    if configuration.requires_instance_identity() {
+        let instance_id: Option<Option<String>> = connection
+            .query_row(
+                "SELECT CASE WHEN length(value)<=64 THEN value END FROM store_meta WHERE key='store_instance_id'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(StoreError::database)?;
+        if instance_id.flatten().is_none() {
+            return Ok(AdmissionOutcome::IdentityUnavailable);
+        }
+    }
     let observed_configuration: Option<Option<String>> = connection
         .query_row(
             "SELECT CASE WHEN length(value)<=256 THEN value END FROM store_meta WHERE key='configuration_id'",
@@ -213,6 +241,10 @@ fn require_owned(outcome: AdmissionOutcome) -> StoreResult<()> {
             StoreErrorCode::ConfigurationInvalid,
             "store configuration does not match the durable database",
         )),
+        AdmissionOutcome::IdentityUnavailable => Err(StoreError::new(
+            StoreErrorCode::StoreInstanceIdentityUnavailable,
+            "store was created without the required instance identity",
+        )),
         AdmissionOutcome::Fresh | AdmissionOutcome::Foreign => Err(StoreError::new(
             StoreErrorCode::IntegrityViolation,
             "store file does not match the compiled store layout and identity",
@@ -229,6 +261,7 @@ enum OperationCommitBoundary {
 pub struct Store {
     connection: Connection,
     configuration: StoreConfiguration,
+    instance_id: Option<StoreInstanceId>,
 }
 
 impl Store {
@@ -289,10 +322,11 @@ impl Store {
         initialize_schema(&connection)?;
         #[cfg(test)]
         bootstrap::interrupt_at("schema");
-        validate_connection_identity(&connection, &configuration, true)?;
+        let instance_id = validate_connection_identity(&connection, &configuration, true)?;
         Ok(Self {
             connection,
             configuration,
+            instance_id,
         })
     }
 
@@ -315,10 +349,25 @@ impl Store {
             &compiled,
             false,
         )?)?;
-        validate_connection_identity(&connection, &configuration, false)?;
+        let instance_id = validate_connection_identity(&connection, &configuration, false)?;
+        if let Some(instance_id) = instance_id.as_ref() {
+            verify_identity_write_admission(&connection, instance_id)?;
+        }
         Ok(Self {
             connection,
             configuration,
+            instance_id,
+        })
+    }
+
+    /// Returns this opened store's Store-owned identity. Legacy profiles remain
+    /// usable, but have no identity and return a typed refusal here.
+    pub fn store_instance_id(&self) -> StoreResult<&StoreInstanceId> {
+        self.instance_id.as_ref().ok_or_else(|| {
+            StoreError::new(
+                StoreErrorCode::StoreInstanceIdentityUnavailable,
+                "this store profile has no instance identity",
+            )
         })
     }
     /// Serializes one complete, integrity-checked SQLite database image.
@@ -482,44 +531,13 @@ impl Store {
             operation_id,
             max_object_bytes,
         )?;
-        if read_object(&transaction, result_object_id, max_object_bytes)?.is_none() {
-            return Err(StoreError::new(
-                StoreErrorCode::ObjectMissing,
-                "operation result object does not exist",
-            ));
-        }
-        let changed = transaction
-            .execute(
-                "UPDATE store_operations
-                 SET state = 'completed', result_object_id = ?1
-                 WHERE operation_id = ?2 AND request_digest = ?3 AND state = 'prepared'",
-                params![
-                    result_object_id.as_str(),
-                    operation_id.as_str(),
-                    request_digest.as_str(),
-                ],
-            )
-            .map_err(StoreError::database)?;
-        if changed != 1 {
-            return Err(StoreError::new(
-                StoreErrorCode::OperationStateInvalid,
-                "prepared operation changed before atomic completion",
-            ));
-        }
-        let completed = read_operation(&transaction, operation_id)?.ok_or_else(|| {
-            StoreError::new(
-                StoreErrorCode::IntegrityViolation,
-                "operation disappeared during atomic completion",
-            )
-        })?;
-        if completed.state() != OperationState::Completed
-            || completed.result_object_id() != Some(result_object_id)
-        {
-            return Err(StoreError::new(
-                StoreErrorCode::IntegrityViolation,
-                "atomic operation completion did not read back",
-            ));
-        }
+        let completed = complete_prepared_operation_in_transaction(
+            &transaction,
+            operation_id,
+            request_digest,
+            result_object_id,
+            max_object_bytes,
+        )?;
         observe(OperationCommitBoundary::BeforeCommit)?;
         transaction.commit().map_err(StoreError::database)?;
         observe(OperationCommitBoundary::AfterCommit)?;
@@ -798,74 +816,6 @@ impl Store {
         Ok(())
     }
 
-    pub fn collect_garbage(
-        &mut self,
-        now: LogicalEpoch,
-        max_deletes: u32,
-    ) -> StoreResult<GarbageCollectionReceipt> {
-        if max_deletes == 0 || max_deletes > self.configuration.limits().max_gc_deletes {
-            return Err(StoreError::new(
-                StoreErrorCode::BudgetExceeded,
-                "garbage collection delete budget is invalid",
-            ));
-        }
-        let transaction = self
-            .connection
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(StoreError::database)?;
-        let expired = transaction
-            .execute(
-                "DELETE FROM store_leases WHERE expires_after <= ?1",
-                [epoch_to_i64(now)?],
-            )
-            .map_err(StoreError::database)?;
-        let query_limit = i64::from(max_deletes) + 1;
-        let mut statement = transaction
-            .prepare(
-                "SELECT object_id FROM store_objects AS object
-                 WHERE NOT EXISTS (
-                     SELECT 1 FROM store_catalog AS catalog
-                     WHERE catalog.object_id = object.object_id
-                 )
-                 AND NOT EXISTS (
-                     SELECT 1 FROM store_operations AS operation
-                     WHERE operation.result_object_id = object.object_id
-                 )
-                 AND NOT EXISTS (
-                     SELECT 1 FROM store_leases AS lease
-                     WHERE lease.object_id = object.object_id
-                 )
-                 ORDER BY object_id
-                 LIMIT ?1",
-            )
-            .map_err(StoreError::database)?;
-        let candidates = statement
-            .query_map([query_limit], |row| row.get::<_, String>(0))
-            .map_err(StoreError::database)?
-            .map(|row| row.map_err(StoreError::database).and_then(ObjectId::new))
-            .collect::<StoreResult<Vec<_>>>()?;
-        drop(statement);
-        let more_available = candidates.len() > max_deletes as usize;
-        let deleted = candidates
-            .into_iter()
-            .take(max_deletes as usize)
-            .collect::<Vec<_>>();
-        for object_id in &deleted {
-            transaction
-                .execute(
-                    "DELETE FROM store_objects WHERE object_id = ?1",
-                    [object_id.as_str()],
-                )
-                .map_err(StoreError::database)?;
-        }
-        transaction.commit().map_err(StoreError::database)?;
-        Ok(GarbageCollectionReceipt::new(
-            deleted,
-            expired as u64,
-            more_available,
-        ))
-    }
-
     pub fn validate_integrity(&self, max_objects: u32) -> StoreResult<IntegrityReport> {
         validate_connection_integrity(&self.connection, &self.configuration, max_objects)
     }
@@ -912,10 +862,14 @@ fn admit_file(path: &Path, configuration: StoreConfiguration) -> StoreResult<Sto
     let outcome = inspect_candidate(&inspect, &configuration, &compiled, false)?;
     drop(inspect);
     require_owned(outcome)?;
+    #[cfg(all(test, unix))]
+    instance_identity_tests::admission_checkpoint(path, AdmissionTestPoint::AfterReadOnlyProbe)?;
     // Reopen read-write without CREATE and re-admit as Owned only, on
     // the exact handle that will run the store.
     let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)
         .map_err(StoreError::database)?;
+    #[cfg(all(test, unix))]
+    instance_identity_tests::admission_checkpoint(path, AdmissionTestPoint::AfterWritableOpen)?;
     Store::adopt_connection(connection, configuration)
 }
 /// Read-only handle over a detached serialized store image.
@@ -1088,7 +1042,7 @@ fn validate_connection_identity(
     connection: &Connection,
     configuration: &StoreConfiguration,
     initialize: bool,
-) -> StoreResult<()> {
+) -> StoreResult<Option<StoreInstanceId>> {
     let application_id: i64 = connection
         .query_row("PRAGMA application_id", [], |row| row.get(0))
         .map_err(StoreError::database)?;
@@ -1124,11 +1078,13 @@ fn validate_connection_identity(
         .optional()
         .map_err(StoreError::database)?;
     match existing {
-        Some(value) if value != configuration.configuration_id() => Err(StoreError::new(
-            StoreErrorCode::ConfigurationInvalid,
-            "store configuration does not match the durable database",
-        )),
-        Some(_) => Ok(()),
+        Some(value) if value != configuration.configuration_id() => {
+            return Err(StoreError::new(
+                StoreErrorCode::ConfigurationInvalid,
+                "store configuration does not match the durable database",
+            ));
+        }
+        Some(_) => {}
         None if initialize => {
             connection
                 .execute(
@@ -1136,12 +1092,192 @@ fn validate_connection_identity(
                     [configuration.configuration_id()],
                 )
                 .map_err(StoreError::database)?;
-            Ok(())
         }
-        None => Err(StoreError::new(
+        None => {
+            return Err(StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                "sealed store lacks its exact configuration identity",
+            ));
+        }
+    }
+
+    let stored_instance_id: Option<String> = connection
+        .query_row(
+            "SELECT value FROM store_meta WHERE key = ?1",
+            [INSTANCE_ID_KEY],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(StoreError::database)?;
+    let stored_physical_id: Option<String> = connection
+        .query_row(
+            "SELECT value FROM store_meta WHERE key = ?1",
+            [PHYSICAL_ID_KEY],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(StoreError::database)?;
+
+    if !configuration.requires_instance_identity() {
+        if stored_instance_id.is_some() || stored_physical_id.is_some() {
+            return Err(StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                "legacy store profile contains identity-aware metadata",
+            ));
+        }
+        return Ok(None);
+    }
+
+    let instance_id = match stored_instance_id {
+        Some(value) => StoreInstanceId::from_stored(value)?,
+        None if initialize => {
+            let entropy: Vec<u8> = connection
+                .query_row("SELECT randomblob(16)", [], |row| row.get(0))
+                .map_err(StoreError::database)?;
+            let identity = StoreInstanceId::from_sqlite_entropy(&entropy)?;
+            connection
+                .execute(
+                    "INSERT INTO store_meta(key, value) VALUES (?1, ?2)",
+                    [INSTANCE_ID_KEY, identity.as_str()],
+                )
+                .map_err(StoreError::database)?;
+            identity
+        }
+        None => {
+            return Err(StoreError::new(
+                StoreErrorCode::StoreInstanceIdentityUnavailable,
+                "store was created without the required instance identity",
+            ));
+        }
+    };
+
+    let current_physical_id = physical_file_identity(connection)?;
+    match (stored_physical_id, current_physical_id) {
+        (Some(stored), Some(current)) if stored == current.as_ref() => {}
+        (None, None) => {}
+        (None, Some(current)) if initialize => {
+            connection
+                .execute(
+                    "INSERT INTO store_meta(key, value) VALUES (?1, ?2)",
+                    [PHYSICAL_ID_KEY, current.as_ref()],
+                )
+                .map_err(StoreError::database)?;
+        }
+        _ => {
+            return Err(StoreError::new(
+                StoreErrorCode::StoreInstanceIdentityMismatch,
+                "store instance identity is bound to a different physical database",
+            ));
+        }
+    }
+    Ok(Some(instance_id))
+}
+
+/// Reads an opaque OS file identity for copy refusal. The value remains private
+/// to Store and is never incorporated into the public StoreInstanceId.
+fn physical_file_identity(connection: &Connection) -> StoreResult<Option<Box<str>>> {
+    let path: String = connection
+        .query_row(
+            "SELECT file FROM pragma_database_list WHERE name='main'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(StoreError::database)?;
+    if path.is_empty() {
+        return Ok(None);
+    }
+    #[cfg(unix)]
+    {
+        let metadata = fs::metadata(path).map_err(|_| {
+            StoreError::new(
+                StoreErrorCode::StoreInstanceIdentityUnavailable,
+                "store physical identity could not be inspected",
+            )
+        })?;
+        use std::os::unix::fs::MetadataExt;
+        Ok(Some(
+            format!("unix:{:x}:{:x}", metadata.dev(), metadata.ino()).into(),
+        ))
+    }
+    #[cfg(windows)]
+    {
+        let handle = winapi_util::Handle::from_path(&path).map_err(|_| {
+            StoreError::new(
+                StoreErrorCode::StoreInstanceIdentityUnavailable,
+                "store physical identity could not be inspected",
+            )
+        })?;
+        let info = winapi_util::file::information(&handle).map_err(|_| {
+            StoreError::new(
+                StoreErrorCode::StoreInstanceIdentityUnavailable,
+                "store physical identity could not be inspected",
+            )
+        })?;
+        Ok(Some(
+            format!(
+                "windows:{:016x}:{:016x}",
+                info.volume_serial_number(),
+                info.file_index()
+            )
+            .into(),
+        ))
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = path;
+        Err(StoreError::new(
+            StoreErrorCode::StoreInstanceIdentityUnavailable,
+            "this platform cannot bind a store identity to its physical file",
+        ))
+    }
+}
+
+/// Forces an opt-in existing store through SQLite's connected-handle write
+/// path, then rolls the temporary metadata value back before the Store escapes.
+/// The distinct same-length value prevents SQLite's unchanged-cell shortcut.
+fn verify_identity_write_admission(
+    connection: &Connection,
+    instance_id: &StoreInstanceId,
+) -> StoreResult<()> {
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(map_identity_admission_error)?;
+    let changed = match transaction.execute(
+        "UPDATE store_meta SET value = ?1 WHERE key = ?2 AND value = ?3",
+        [
+            INSTANCE_ID_ADMISSION_PROBE,
+            INSTANCE_ID_KEY,
+            instance_id.as_str(),
+        ],
+    ) {
+        Ok(changed) => changed,
+        Err(error) => {
+            drop(transaction);
+            return Err(map_identity_admission_error(error));
+        }
+    };
+    transaction
+        .rollback()
+        .map_err(map_identity_admission_error)?;
+    if changed != 1 {
+        return Err(StoreError::new(
             StoreErrorCode::IntegrityViolation,
-            "sealed store lacks its exact configuration identity",
-        )),
+            "store identity row changed during write admission",
+        ));
+    }
+    Ok(())
+}
+
+fn map_identity_admission_error(error: rusqlite::Error) -> StoreError {
+    if error.sqlite_error().is_some_and(|sqlite_error| {
+        sqlite_error.extended_code == rusqlite::ffi::SQLITE_READONLY_DBMOVED
+    }) {
+        StoreError::new(
+            StoreErrorCode::StoreInstanceIdentityMismatch,
+            "SQLite reports that the opened identity store moved during admission",
+        )
+    } else {
+        StoreError::database(error)
     }
 }
 
@@ -1301,6 +1437,72 @@ fn build_logical_manifest(
         operations,
         leases,
     )
+}
+
+pub(super) fn complete_prepared_operation_in_transaction(
+    transaction: &Transaction<'_>,
+    operation_id: &OperationId,
+    request_digest: &RequestDigest,
+    result_object_id: &ObjectId,
+    max_object_bytes: u64,
+) -> StoreResult<OperationRecord> {
+    let current = read_operation(transaction, operation_id)?.ok_or_else(|| {
+        StoreError::new(
+            StoreErrorCode::OperationStateInvalid,
+            "operation was not prepared",
+        )
+    })?;
+    if current.request_digest() != request_digest {
+        return Err(StoreError::new(
+            StoreErrorCode::OperationConflict,
+            "operation request digest does not match",
+        ));
+    }
+    if current.state() != OperationState::Prepared {
+        return Err(StoreError::new(
+            StoreErrorCode::OperationStateInvalid,
+            "operation is already terminal",
+        ));
+    }
+    if read_object(transaction, result_object_id, max_object_bytes)?.is_none() {
+        return Err(StoreError::new(
+            StoreErrorCode::ObjectMissing,
+            "operation result object does not exist",
+        ));
+    }
+    let changed = transaction
+        .execute(
+            "UPDATE store_operations
+             SET state = 'completed', result_object_id = ?1
+             WHERE operation_id = ?2 AND request_digest = ?3 AND state = 'prepared'",
+            params![
+                result_object_id.as_str(),
+                operation_id.as_str(),
+                request_digest.as_str(),
+            ],
+        )
+        .map_err(StoreError::database)?;
+    if changed != 1 {
+        return Err(StoreError::new(
+            StoreErrorCode::OperationStateInvalid,
+            "prepared operation changed before atomic completion",
+        ));
+    }
+    let completed = read_operation(transaction, operation_id)?.ok_or_else(|| {
+        StoreError::new(
+            StoreErrorCode::IntegrityViolation,
+            "operation disappeared during atomic completion",
+        )
+    })?;
+    if completed.state() != OperationState::Completed
+        || completed.result_object_id() != Some(result_object_id)
+    {
+        return Err(StoreError::new(
+            StoreErrorCode::IntegrityViolation,
+            "atomic operation completion did not read back",
+        ));
+    }
+    Ok(completed)
 }
 
 fn apply_write_batch(
