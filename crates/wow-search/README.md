@@ -45,8 +45,9 @@ The explicit file-set component uses a separately named metadata profile and
 profile/manifest bytes, captures one shared owner/evidence set, retains all
 selected documents in canonical ID order and validates every physical row on
 reopen. The existing native Store owns SQLite/FTS and lease cleanup. The first
-public consumer is the optional `--file-ids` selection of one-shot build/query;
-durable file-set handles and full E4 acceptance remain open in #169.
+public consumers are explicit one-shot build/query and the selected durable
+build/query/source-hold/retire/GC lifecycle. Original single-file handles remain
+exact; full E4/fault/platform acceptance remains open in #169.
 
 E4-A defines:
 

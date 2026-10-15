@@ -117,6 +117,11 @@ pub(crate) fn owners(
 ) -> Result<(ProjectPublisher, GraphPartitionSnapshot), Box<dyn Error>> {
     owners_from_bundle(input_bundle(source)?)
 }
+pub(crate) fn owners_with_files(
+    files: Vec<ProjectInputFile>,
+) -> TestResult<(ProjectPublisher, GraphPartitionSnapshot)> {
+    owners_from_bundle(input_bundle_with_plan(files, None)?)
+}
 fn owners_from_bundle(
     bundle: ProjectInputBundle,
 ) -> TestResult<(ProjectPublisher, GraphPartitionSnapshot)> {

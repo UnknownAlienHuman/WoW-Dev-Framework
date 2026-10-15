@@ -23,6 +23,7 @@ use wow_service::{
 
 const HELP: &str = "wow search index build --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --operation-id <ID> --allow-local-metadata-only <finite bounds>\nwow search query --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --literal-query <UTF-8-LITERAL> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index retire --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --build-operation-id <BuildOperationId> --source-store-epoch-id <ExactEpochId> --source-generation-hold-id <ExactRetentionRootId> --source-generation-hold-digest <sha256:...> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index gc --search-store <SEARCH-STORE-FILE> --target-object-id <ExactObjectId> --operation-id <ID> --gc-now <epoch> --gc-max-deletes <positive-u32> <Store limits>\nwow search build-query --store-root <PROJECT-STORE> <existing one-shot route; it does not claim durable SearchStore persistence>\nAll durable commands require --max-output-bytes <positive-u64> and Store limits: --store-max-object-bytes <positive-u64> --store-max-batch-objects <positive-u32> --store-max-catalog-mutations <positive-u32> --store-max-manifest-records <positive-u32> --store-max-gc-deletes <positive-u32>.\nBuild/query/retire also require Search bounds: --max-documents <positive-u32> --max-document-id-bytes <positive-u32> --max-owner-metadata-label-bytes <positive-u32> --max-literal-query-bytes <positive-u32> --max-candidate-results <positive-u32> --max-owner-evidence-records <positive-u32> --max-owner-manifest-bytes <positive-u64> --max-database-bytes <positive-u64> --max-search-object-bytes <positive-u64>.\n";
 const MAX_ARGUMENTS: usize = 64;
+const DURABLE_FILE_SET_HELP: &str = "Durable index build/retire accept either --file-id <ID> or --file-ids <JSON-array-of-exact-IDs>. Durable query uses its real --file-id plus --file-set for that component. Preserve the full original selection and source-hold receipt for retirement.\n";
 const FILE_SET_HELP: &str = "For one-shot build-query, optional --file-ids <JSON-array-of-exact-ProjectFileIds> selects a finite set. --file-id must belong to it. Empty/duplicate/absent/over-cap selections refuse; --max-documents caps the raw set. No durable file-set handle is returned.\n";
 const MAX_ARGUMENT_BYTES: usize = 128 * 1024;
 const MAX_VALUE_BYTES: usize = 32 * 1024;
@@ -98,6 +99,7 @@ fn run_with_io<W: Write, E: Write>(
         return match stdout
             .write_all(HELP.as_bytes())
             .and_then(|()| stdout.write_all(FILE_SET_HELP.as_bytes()))
+            .and_then(|()| stdout.write_all(DURABLE_FILE_SET_HELP.as_bytes()))
             .and_then(|()| stdout.flush())
         {
             Ok(()) => 0,
@@ -307,7 +309,9 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
     ];
     let mut allowed = vec!["--search-store", "--operation-id", "--max-output-bytes"];
     match command {
-        "build" => allowed.extend_from_slice(&["--store-root", "--generation", "--file-id"]),
+        "build" => {
+            allowed.extend_from_slice(&["--store-root", "--generation", "--file-id", "--file-ids"])
+        }
         "query" => allowed.extend_from_slice(&[
             "--generation",
             "--file-id",
@@ -316,11 +320,13 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             "--profile-digest",
             "--literal-query",
             "--lease-expires-after",
+            "--file-set",
         ]),
         "retire" => allowed.extend_from_slice(&[
             "--store-root",
             "--generation",
             "--file-id",
+            "--file-ids",
             "--search-shard-id",
             "--object-id",
             "--profile-digest",
@@ -349,10 +355,23 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
         "build" => {
             let project_store_root = PathBuf::from(required(&options, "--store-root")?);
             let bounds = parse_search_bounds(&options)?;
-            DurableCommand::Build(
-                SearchIndexBuildRequest::new(
-                    OperationId::new(required_text(&options, "--operation-id")?)
-                        .map_err(|_| "invalid --operation-id")?,
+            let operation_id = OperationId::new(required_text(&options, "--operation-id")?)
+                .map_err(|_| "invalid --operation-id")?;
+            let request = match durable_file_ids(&options)? {
+                Some(ids) => SearchIndexBuildRequest::new_file_set(
+                    operation_id,
+                    project_store_root,
+                    store_path,
+                    required_text(&options, "--generation")?,
+                    ids,
+                    bounds,
+                    store_limits,
+                    max_output_bytes,
+                    LocalMetadataPermission::authorize_local_metadata_only(),
+                    &AtomicBool::new(false),
+                ),
+                None => SearchIndexBuildRequest::new(
+                    operation_id,
                     project_store_root,
                     store_path,
                     required_text(&options, "--generation")?,
@@ -361,9 +380,10 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
                     store_limits,
                     max_output_bytes,
                     LocalMetadataPermission::authorize_local_metadata_only(),
-                )
-                .map_err(|_| "invalid exact search build request")?,
-            )
+                ),
+            }
+            .map_err(|_| "invalid exact search build request")?;
+            DurableCommand::Build(request)
         }
         "query" => {
             let bounds = parse_search_bounds(&options)?;
@@ -371,25 +391,28 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             if literal_query.trim().is_empty() {
                 return Err("--literal-query must be nonempty");
             }
-            DurableCommand::Query(
-                SearchShardQueryRequest::new(
-                    OperationId::new(required_text(&options, "--operation-id")?)
-                        .map_err(|_| "invalid --operation-id")?,
-                    store_path,
-                    required_text(&options, "--generation")?,
-                    required_text(&options, "--file-id")?,
-                    required_text(&options, "--search-shard-id")?,
-                    required_text(&options, "--object-id")?,
-                    required_text(&options, "--profile-digest")?,
-                    literal_query,
-                    bounds,
-                    store_limits,
-                    max_output_bytes,
-                    positive_u64(&options, "--lease-expires-after")?.get(),
-                    LocalMetadataPermission::authorize_local_metadata_only(),
-                )
-                .map_err(|_| "invalid exact search query request")?,
+            let request = SearchShardQueryRequest::new(
+                OperationId::new(required_text(&options, "--operation-id")?)
+                    .map_err(|_| "invalid --operation-id")?,
+                store_path,
+                required_text(&options, "--generation")?,
+                required_text(&options, "--file-id")?,
+                required_text(&options, "--search-shard-id")?,
+                required_text(&options, "--object-id")?,
+                required_text(&options, "--profile-digest")?,
+                literal_query,
+                bounds,
+                store_limits,
+                max_output_bytes,
+                positive_u64(&options, "--lease-expires-after")?.get(),
+                LocalMetadataPermission::authorize_local_metadata_only(),
             )
+            .map_err(|_| "invalid exact search query request")?;
+            DurableCommand::Query(if options.contains_key("--file-set") {
+                request.with_file_set_component()
+            } else {
+                request
+            })
         }
         "retire" => {
             let bounds = parse_search_bounds(&options)?;
@@ -402,10 +425,32 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
                 required_text(&options, "--source-generation-hold-digest")?,
             )
             .map_err(|_| "invalid exact source hold binding")?;
-            DurableCommand::Retire(
-                SearchShardRetireRequest::new(
-                    OperationId::new(required_text(&options, "--operation-id")?)
-                        .map_err(|_| "invalid --operation-id")?,
+            let operation_id = OperationId::new(required_text(&options, "--operation-id")?)
+                .map_err(|_| "invalid --operation-id")?;
+            let permission = if local_permission {
+                LocalMetadataPermission::authorize_local_metadata_only()
+            } else {
+                return Err("search retirement requires --allow-local-metadata-only");
+            };
+            let request = match durable_file_ids(&options)? {
+                Some(ids) => SearchShardRetireRequest::new_file_set(
+                    operation_id,
+                    store_path,
+                    source_hold,
+                    required_text(&options, "--generation")?,
+                    ids,
+                    required_text(&options, "--search-shard-id")?,
+                    required_text(&options, "--object-id")?,
+                    required_text(&options, "--profile-digest")?,
+                    bounds,
+                    store_limits,
+                    max_output_bytes,
+                    positive_u64(&options, "--lease-expires-after")?.get(),
+                    permission,
+                    &AtomicBool::new(false),
+                ),
+                None => SearchShardRetireRequest::new(
+                    operation_id,
                     store_path,
                     source_hold,
                     required_text(&options, "--generation")?,
@@ -417,14 +462,11 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
                     store_limits,
                     max_output_bytes,
                     positive_u64(&options, "--lease-expires-after")?.get(),
-                    if local_permission {
-                        LocalMetadataPermission::authorize_local_metadata_only()
-                    } else {
-                        return Err("search retirement requires --allow-local-metadata-only");
-                    },
-                )
-                .map_err(|_| "invalid exact search retirement request")?,
-            )
+                    permission,
+                ),
+            }
+            .map_err(|_| "invalid exact search retirement request")?;
+            DurableCommand::Retire(request)
         }
         "gc" => DurableCommand::Gc(
             SearchStoreGcRequest::new(
@@ -457,6 +499,18 @@ fn parse_durable_options(
     let mut values = values.iter();
     while let Some(option) = values.next() {
         let option = option.to_str().ok_or("invalid option encoding")?;
+        if option == "--file-set" {
+            if !allowed.contains(&"--file-set") {
+                return Err("--file-set is only valid for durable query");
+            }
+            if options
+                .insert("--file-set", OsString::from("true"))
+                .is_some()
+            {
+                return Err("duplicate --file-set");
+            }
+            continue;
+        }
         if option == "--allow-local-metadata-only" {
             if allow_local_metadata {
                 return Err("duplicate local metadata permission");
@@ -487,6 +541,22 @@ fn parse_durable_options(
         return Err("GC does not accept metadata permission flags");
     }
     Ok((options, allow_local_metadata))
+}
+
+fn durable_file_ids(
+    options: &BTreeMap<&'static str, OsString>,
+) -> Result<Option<Vec<String>>, &'static str> {
+    if options.contains_key("--file-id") && options.contains_key("--file-ids") {
+        return Err("choose --file-id or --file-ids, never both");
+    }
+    options
+        .get("--file-ids")
+        .map(|value| {
+            let text = value.to_str().ok_or("--file-ids must be UTF-8 JSON")?;
+            serde_json::from_str(text)
+                .map_err(|_| "--file-ids must be an explicit JSON array of exact ProjectFile IDs")
+        })
+        .transpose()
 }
 
 fn parse_search_bounds(

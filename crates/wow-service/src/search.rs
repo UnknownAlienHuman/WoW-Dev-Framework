@@ -3,7 +3,9 @@
 //! The first route returns an inline result only. It never returns a continuation,
 //! and it requires explicit finite owner, Store, lease, and output bounds.
 
+mod documents;
 mod file_set;
+use documents::{Documents, Profile as DurableProfile, Selection as DurableSelection};
 
 use std::{
     num::NonZeroU64,
@@ -143,7 +145,7 @@ pub struct SearchIndexBuildRequest {
     project_store_root: PathBuf,
     search_store_path: PathBuf,
     store_generation_id: Box<str>,
-    file_id: Box<str>,
+    selection: DurableSelection,
     bounds: SearchBounds,
     store_limits: SearchStoreLimits,
     max_output_bytes: NonZeroU64,
@@ -174,7 +176,7 @@ impl SearchIndexBuildRequest {
             project_store_root,
             search_store_path,
             store_generation_id: store_generation_id.into(),
-            file_id: file_id.into(),
+            selection: DurableSelection::Single(file_id.into()),
             bounds,
             store_limits,
             max_output_bytes,
@@ -197,9 +199,16 @@ pub struct SearchShardQueryRequest {
     max_output_bytes: NonZeroU64,
     lease_expires_after: u64,
     permission: LocalMetadataPermission,
+    file_set_component: bool,
 }
 
 impl SearchShardQueryRequest {
+    /// Select the exact file-set reader; profile mismatches are refused.
+    #[must_use]
+    pub fn with_file_set_component(mut self) -> Self {
+        self.file_set_component = true;
+        self
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         operation_id: OperationId,
@@ -236,6 +245,7 @@ impl SearchShardQueryRequest {
             max_output_bytes,
             lease_expires_after,
             permission,
+            file_set_component: false,
         })
     }
 }
@@ -245,7 +255,7 @@ pub struct SearchShardRetireRequest {
     search_store_path: PathBuf,
     source_hold: SearchSourceHoldBinding,
     store_generation_id: Box<str>,
-    file_id: Box<str>,
+    selection: DurableSelection,
     logical_shard_id: Box<str>,
     object_id: Box<str>,
     profile_digest: Box<str>,
@@ -327,7 +337,7 @@ impl SearchShardRetireRequest {
             search_store_path,
             source_hold,
             store_generation_id: store_generation_id.into(),
-            file_id: file_id.into(),
+            selection: DurableSelection::Single(file_id.into()),
             logical_shard_id: logical_shard_id.into(),
             object_id: object_id.into(),
             profile_digest: profile_digest.into(),
@@ -579,7 +589,8 @@ struct DurableResponseEnvelope<'a, T> {
 #[derive(Serialize)]
 struct DurableBuildInput<'a> {
     store_generation_id: &'a str,
-    file_id: &'a str,
+    #[serde(flatten)]
+    selection: documents::Identity<'a>,
     search_profile_digest: &'a str,
     source_store_epoch_id: &'a str,
     source_generation_hold_id: &'a str,
@@ -595,7 +606,8 @@ struct SearchSourceHoldIdentity<'a> {
     build_operation_id: &'a str,
     source_store_epoch_id: &'a str,
     store_generation_id: &'a str,
-    file_id: &'a str,
+    #[serde(flatten)]
+    selection: documents::Identity<'a>,
     search_profile_digest: &'a str,
     store_limits: SearchStoreLimits,
 }
@@ -612,12 +624,15 @@ struct DurableQueryInput<'a> {
     max_output_bytes: u64,
     lease_expires_after: u64,
     privacy_scope: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document_component: Option<&'static str>,
 }
 
 #[derive(Serialize)]
 struct DurableRetireInput<'a> {
     store_generation_id: &'a str,
-    file_id: &'a str,
+    #[serde(flatten)]
+    selection: documents::Identity<'a>,
     logical_shard_id: &'a str,
     object_id: &'a str,
     search_profile_digest: &'a str,
@@ -666,8 +681,14 @@ struct DurableBuildPayload<'a> {
     logical_shard_id: &'a str,
     object_id: &'a str,
     search_profile_digest: &'a str,
-    entity_id: &'a str,
-    owner_metadata_label: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entity_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    owner_metadata_label: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    documents: Option<Vec<DurableDocument<'a>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document_component: Option<&'static str>,
     privacy_scope: &'static str,
     license_state: &'static str,
 }
@@ -688,6 +709,8 @@ struct DurableQueryPayload<'a> {
     literal_fts_candidates: &'a [SearchCandidateRecord],
     privacy_scope: &'static str,
     license_state: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document_component: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -703,6 +726,14 @@ struct DurableRetirePayload<'a> {
     object_id: &'a str,
     search_profile_digest: &'a str,
     privacy_scope: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document_component: Option<&'static str>,
+}
+
+#[derive(Serialize)]
+struct DurableDocument<'a> {
+    entity_id: &'a str,
+    owner_metadata_label: &'a str,
 }
 
 #[derive(Serialize)]
@@ -756,8 +787,8 @@ fn search_source_hold_root(
     search_store_instance_id: &wow_store::StoreInstanceId,
     build_operation_id: &OperationId,
     generation: &StoreGenerationId,
-    file_id: &ProjectFileId,
-    profile: &SearchBuildProfile,
+    documents: &Documents<'_>,
+    profile: &DurableProfile,
     store_limits: SearchStoreLimits,
 ) -> ServiceResult<RetentionRoot> {
     let source_store_epoch_id = project_store.epoch().epoch_id();
@@ -768,7 +799,7 @@ fn search_source_hold_root(
             build_operation_id: build_operation_id.as_str(),
             source_store_epoch_id: source_store_epoch_id.as_str(),
             store_generation_id: generation.as_str(),
-            file_id: file_id.as_str(),
+            selection: documents.identity(),
             search_profile_digest: profile.digest(),
             store_limits,
         },
@@ -796,12 +827,12 @@ fn search_source_hold_root(
 
 fn durable_build_identity(
     request: &SearchIndexBuildRequest,
-    profile: &SearchBuildProfile,
+    profile: &DurableProfile,
     source_hold: &RetentionRoot,
 ) -> ServiceResult<(StoreOperationId, RequestDigest, Box<str>)> {
     let input = DurableBuildInput {
         store_generation_id: &request.store_generation_id,
-        file_id: &request.file_id,
+        selection: request.selection.identity(),
         search_profile_digest: profile.digest(),
         source_store_epoch_id: source_hold.epoch_id().as_str(),
         source_generation_hold_id: source_hold.root_id().as_str(),
@@ -884,8 +915,8 @@ fn validate_retirement_source_hold(
     search_store_instance_id: &wow_store::StoreInstanceId,
     request: &SearchShardRetireRequest,
     generation: &StoreGenerationId,
-    file_id: &ProjectFileId,
-    profile: &SearchBuildProfile,
+    documents: &Documents<'_>,
+    profile: &DurableProfile,
 ) -> ServiceResult<RetentionRoot> {
     let binding = &request.source_hold;
     let source_store_epoch_id = project_store.epoch().epoch_id().as_str();
@@ -900,7 +931,7 @@ fn validate_retirement_source_hold(
         search_store_instance_id,
         &binding.build_operation_id,
         generation,
-        file_id,
+        documents,
         profile,
         request.store_limits,
     )?;
@@ -1376,10 +1407,10 @@ fn durable_build_shard(
     stop: &AtomicBool,
 ) -> ServiceResult<Box<[u8]>> {
     check_cancelled(stop)?;
-    let profile = SearchBuildProfile::new(request.bounds).map_err(map_search_error)?;
+    let profile = DurableProfile::new(request.bounds, request.selection.is_file_set())?;
     let generation = StoreGenerationId::parse(request.store_generation_id.to_string())
         .map_err(map_store_error)?;
-    let file_id = ProjectFileId::parse(request.file_id.as_ref()).map_err(map_project_error)?;
+    let documents = request.selection.normalize()?;
     let mut store = open_durable_search_store(&request.search_store_path, request.store_limits)?;
     let search_store_instance_id = store.store_instance_id().map_err(map_store_error)?.clone();
     let identity_store = crate::live_project::LiveProjectStore::open_retained_owner_store(
@@ -1390,7 +1421,7 @@ fn durable_build_shard(
         &search_store_instance_id,
         &request.operation_id,
         &generation,
-        &file_id,
+        &documents,
         &profile,
         request.store_limits,
     );
@@ -1431,7 +1462,7 @@ fn durable_build_shard(
                 CompletedBuildReconciliation {
                     request,
                     generation: &generation,
-                    file_id: &file_id,
+                    documents: &documents,
                     profile: &profile,
                     source_hold: &source_hold,
                     request_digest: &request_digest,
@@ -1465,11 +1496,11 @@ fn durable_build_shard(
         let _ = project_store.close();
         return Err(source_hold_outcome_unknown(&source_hold));
     }
-    let prepared = match prepare_exact_project_file_from_store(
+    let prepared = match prepare_exact_documents_from_store(
         &project_store,
         generation.clone(),
-        file_id.clone(),
-        profile.clone(),
+        &documents,
+        &profile,
         request.permission,
         request.store_limits,
         stop,
@@ -1513,7 +1544,10 @@ fn durable_build_shard(
 
     let logical_id = prepared.logical_id().to_owned();
     let object_id = prepared.object_id().clone();
-    let document = prepared.document();
+    let single_document = match &prepared {
+        documents::Prepared::Single(value) => Some(value.document()),
+        documents::Prepared::FileSet(_) => None,
+    };
     let payload = DurableBuildPayload {
         status: "retained",
         resource_closure: "closed",
@@ -1524,8 +1558,24 @@ fn durable_build_shard(
         logical_shard_id: &logical_id,
         object_id: object_id.as_str(),
         search_profile_digest: prepared.profile_digest(),
-        entity_id: document.entity_id().as_str(),
-        owner_metadata_label: document.owner_metadata_label().as_str(),
+        entity_id: single_document.map(|document| document.entity_id().as_str()),
+        owner_metadata_label: single_document
+            .map(|document| document.owner_metadata_label().as_str()),
+        documents: if profile.component().is_some() {
+            Some(
+                prepared
+                    .documents()
+                    .iter()
+                    .map(|document| DurableDocument {
+                        entity_id: document.entity_id().as_str(),
+                        owner_metadata_label: document.owner_metadata_label().as_str(),
+                    })
+                    .collect(),
+            )
+        } else {
+            None
+        },
+        document_component: profile.component(),
         privacy_scope: "local_metadata_only",
         license_state: "not_evaluated",
     };
@@ -1681,25 +1731,26 @@ fn durable_build_shard(
     }
 }
 
-fn prepare_exact_project_file_from_store(
+fn prepare_exact_documents_from_store(
     project_store: &ProjectStore,
     generation: StoreGenerationId,
-    file_id: ProjectFileId,
-    profile: SearchBuildProfile,
+    documents: &Documents<'_>,
+    profile: &DurableProfile,
     permission: LocalMetadataPermission,
     object_limits: SearchStoreLimits,
     stop: &AtomicBool,
-) -> ServiceResult<PreparedProjectFileShard> {
+) -> ServiceResult<documents::Prepared> {
     let read = project_store
         .read(&ReadSelector::Exact(generation.clone()), stop)
         .map_err(map_store_error)?;
-    let prepared = prepare_project_file_shard(
+    let prepared = profile.prepare(
         &read,
-        SearchShardPrepareRequest::new(generation, file_id, profile, permission),
+        &generation,
+        documents,
+        permission,
         object_limits,
         stop,
-    )
-    .map_err(map_search_error);
+    );
     let read_close = read.close();
     if read_close.is_err() {
         return Err(outcome_unknown());
@@ -1710,8 +1761,8 @@ fn prepare_exact_project_file_from_store(
 struct CompletedBuildReconciliation<'a> {
     request: &'a SearchIndexBuildRequest,
     generation: &'a StoreGenerationId,
-    file_id: &'a ProjectFileId,
-    profile: &'a SearchBuildProfile,
+    documents: &'a Documents<'a>,
+    profile: &'a DurableProfile,
     source_hold: &'a RetentionRoot,
     request_digest: &'a RequestDigest,
     stop: &'a AtomicBool,
@@ -1726,7 +1777,7 @@ fn reconcile_completed_build(
     let CompletedBuildReconciliation {
         request,
         generation,
-        file_id,
+        documents,
         profile,
         source_hold,
         request_digest,
@@ -1771,11 +1822,11 @@ fn reconcile_completed_build(
     {
         Some(entry) if entry.object_id() == &object_id => {
             if !held {
-                let prepared = prepare_exact_project_file_from_store(
+                let prepared = prepare_exact_documents_from_store(
                     project_store,
                     generation.clone(),
-                    file_id.clone(),
-                    profile.clone(),
+                    documents,
+                    profile,
                     request.permission,
                     request.store_limits,
                     stop,
@@ -1809,7 +1860,7 @@ fn durable_query_shard(
     stop: &AtomicBool,
 ) -> ServiceResult<Box<[u8]>> {
     check_cancelled(stop)?;
-    let profile = SearchBuildProfile::new(request.bounds).map_err(map_search_error)?;
+    let profile = DurableProfile::new(request.bounds, request.file_set_component)?;
     if profile.digest() != request.profile_digest.as_ref()
         || request.literal_query.trim().is_empty()
     {
@@ -1838,6 +1889,7 @@ fn durable_query_shard(
         max_output_bytes: request.max_output_bytes.get(),
         lease_expires_after: request.lease_expires_after,
         privacy_scope: "local_metadata_only",
+        document_component: profile.component(),
     };
     let (operation_id, request_digest, digest_bytes) = durable_identity(
         "wow-service/search-query-request/1",
@@ -1926,22 +1978,19 @@ fn durable_query_shard(
             ));
         }
     };
-    let shard = match open_project_file_shard(
+    let shard = match profile.open(
         &mut store,
-        SearchShardOpenRequest::new(
-            generation,
-            file_id.clone(),
-            profile.clone(),
-            request.logical_shard_id.to_string(),
-            object_id,
-            lease,
-            request.permission,
-        ),
+        generation,
+        Some(&file_id),
+        None,
+        &request.logical_shard_id,
+        object_id,
+        lease,
+        request.permission,
         stop,
     ) {
         Ok(shard) => shard,
         Err(error) => {
-            let error = map_search_error(error);
             let error = if error.code() == ServiceErrorCode::StoreOutcomeUnknown {
                 let _ = store.mark_outcome_unknown(&operation_id, &request_digest);
                 error
@@ -1991,7 +2040,7 @@ fn durable_query_shard(
 }
 
 fn durable_query_response(
-    shard: &wow_search::SearchShard,
+    shard: &documents::Opened,
     file_id: &ProjectFileId,
     request: &SearchShardQueryRequest,
     literal_query_digest: &str,
@@ -2026,8 +2075,9 @@ fn durable_query_response(
         .into_iter()
         .map(|candidate| {
             if candidate.evidence() != SearchEvidenceClass::Candidate
-                || candidate.entity_id() != file_id
-                || candidate.owner_metadata_label().as_str() != label
+                || (!shard.is_file_set()
+                    && (candidate.entity_id() != file_id
+                        || candidate.owner_metadata_label().as_str() != label))
             {
                 return Err(failure(
                     ServiceErrorCode::IdentityMismatch,
@@ -2058,6 +2108,7 @@ fn durable_query_response(
         literal_fts_candidates: &candidates,
         privacy_scope: "local_metadata_only",
         license_state: "not_evaluated",
+        document_component: shard.is_file_set().then_some(documents::FILE_SET_COMPONENT),
     };
     durable_response(
         "search_query",
@@ -2126,7 +2177,7 @@ fn durable_retire_shard(
     stop: &AtomicBool,
 ) -> ServiceResult<Box<[u8]>> {
     check_cancelled(stop)?;
-    let profile = SearchBuildProfile::new(request.bounds).map_err(map_search_error)?;
+    let profile = DurableProfile::new(request.bounds, request.selection.is_file_set())?;
     if profile.digest() != request.profile_digest.as_ref() {
         return Err(failure(
             ServiceErrorCode::IdentityMismatch,
@@ -2135,13 +2186,13 @@ fn durable_retire_shard(
     }
     let generation = StoreGenerationId::parse(request.store_generation_id.to_string())
         .map_err(map_store_error)?;
-    let file_id = ProjectFileId::parse(request.file_id.as_ref()).map_err(map_project_error)?;
+    let documents = request.selection.normalize()?;
     let object_id =
         wow_store::ObjectId::new(request.object_id.to_string()).map_err(map_store_error)?;
     let binding = &request.source_hold;
     let input = DurableRetireInput {
         store_generation_id: &request.store_generation_id,
-        file_id: &request.file_id,
+        selection: request.selection.identity(),
         logical_shard_id: &request.logical_shard_id,
         object_id: &request.object_id,
         search_profile_digest: profile.digest(),
@@ -2176,7 +2227,7 @@ fn durable_retire_shard(
         &search_store_instance_id,
         request,
         &generation,
-        &file_id,
+        &documents,
         &profile,
     ) {
         Ok(root) => root,
@@ -2225,11 +2276,11 @@ fn durable_retire_shard(
     match source_hold_present(&project_store, &source_hold, stop) {
         Ok(true) => {}
         Ok(false) => {
-            let prepared = prepare_exact_project_file_from_store(
+            let prepared = prepare_exact_documents_from_store(
                 &project_store,
                 generation.clone(),
-                file_id.clone(),
-                profile.clone(),
+                &documents,
+                &profile,
                 request.permission,
                 request.store_limits,
                 stop,
@@ -2377,22 +2428,19 @@ fn durable_retire_shard(
             ));
         }
     };
-    let shard = match open_project_file_shard(
+    let shard = match profile.open(
         &mut store,
-        SearchShardOpenRequest::new(
-            generation,
-            file_id,
-            profile.clone(),
-            request.logical_shard_id.to_string(),
-            object_id.clone(),
-            lease,
-            request.permission,
-        ),
+        generation,
+        documents.single_id(),
+        Some(&documents),
+        &request.logical_shard_id,
+        object_id.clone(),
+        lease,
+        request.permission,
         stop,
     ) {
         Ok(shard) => shard,
         Err(error) => {
-            let error = map_search_error(error);
             let error = if error.code() == ServiceErrorCode::StoreOutcomeUnknown {
                 let _ = store.mark_outcome_unknown(&operation_id, &request_digest);
                 error
@@ -2448,6 +2496,7 @@ fn durable_retire_shard(
         object_id: object_id.as_str(),
         search_profile_digest: profile.digest(),
         privacy_scope: "local_metadata_only",
+        document_component: profile.component(),
     };
     let response_bytes = match durable_response(
         "search_index_retire",
@@ -3097,10 +3146,21 @@ mod durable_source_retention_tests {
     #[test]
     fn prepared_build_reconciles_persistent_source_hold_through_exact_retirement()
     -> Result<(), Box<dyn Error>> {
+        assert_source_hold_lifecycle(false)
+    }
+
+    #[test]
+    fn prepared_file_set_build_reconciles_source_holds_and_exact_retirement()
+    -> Result<(), Box<dyn Error>> {
+        assert_source_hold_lifecycle(true)
+    }
+
+    fn assert_source_hold_lifecycle(file_set: bool) -> Result<(), Box<dyn Error>> {
         let stop = AtomicBool::new(false);
         let root = std::env::temp_dir().join(format!(
-            "wow-search-source-hold-{}-{}",
+            "wow-search-source-hold-{}-{}-{}",
             std::process::id(),
+            file_set,
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
                 .as_nanos()
@@ -3109,8 +3169,18 @@ mod durable_source_retention_tests {
         let project_root = root.join("project-store");
         let search_path = root.join("search-store.sqlite");
 
-        let (publisher_a, graph_a) = owners("return External()")?;
-        let (publisher_b, graph_b) = owners("return External() + 1")?;
+        let owner = |source: &str| {
+            if file_set {
+                crate::live_project::tests::owners_with_files(vec![
+                    wow_project::ProjectInputFile::new("main.lua", source)?,
+                    wow_project::ProjectInputFile::new("other.lua", "local other = true")?,
+                ])
+            } else {
+                owners(source)
+            }
+        };
+        let (publisher_a, graph_a) = owner("return External()")?;
+        let (publisher_b, graph_b) = owner("return External() + 1")?;
         assert_eq!(graph_a.snapshot().universe(), graph_b.snapshot().universe());
         let mut project =
             LiveProjectStore::create(&project_root, graph_a.snapshot().universe().as_str())?;
@@ -3162,7 +3232,7 @@ mod durable_source_retention_tests {
         project.close()?;
 
         let bounds = SearchBounds::new(
-            NonZeroU32::new(1).ok_or("zero document bound")?,
+            NonZeroU32::new(if file_set { 2 } else { 1 }).ok_or("zero document bound")?,
             NonZeroU32::new(256).ok_or("zero document ID bound")?,
             NonZeroU32::new(1024).ok_or("zero label bound")?,
             NonZeroU32::new(128).ok_or("zero literal bound")?,
@@ -3176,30 +3246,88 @@ mod durable_source_retention_tests {
         let max_output_bytes = NonZeroU64::new(65_536).ok_or("invalid output bound")?;
         let build_operation_id = OperationId::new("fixture:search-source-hold-build")?;
         let search_path_b = root.join("search-store-b.sqlite");
-        let build_request = SearchIndexBuildRequest::new(
-            build_operation_id.clone(),
-            project_root.clone(),
-            search_path.clone(),
-            publication_a.generation_id.as_str(),
-            "project-file:main.lua",
-            bounds,
-            limits,
-            max_output_bytes,
-            LocalMetadataPermission::authorize_local_metadata_only(),
-        )?;
-        let build_request_b = SearchIndexBuildRequest::new(
-            build_operation_id.clone(),
-            project_root.clone(),
-            search_path_b.clone(),
-            publication_a.generation_id.as_str(),
-            "project-file:main.lua",
-            bounds,
-            limits,
-            max_output_bytes,
-            LocalMetadataPermission::authorize_local_metadata_only(),
-        )?;
-        let profile = SearchBuildProfile::new(bounds)?;
+        let make_build = |search_store_path| -> ServiceResult<SearchIndexBuildRequest> {
+            if file_set {
+                SearchIndexBuildRequest::new_file_set(
+                    build_operation_id.clone(),
+                    project_root.clone(),
+                    search_store_path,
+                    publication_a.generation_id.as_str(),
+                    vec![
+                        "project-file:other.lua".into(),
+                        "project-file:main.lua".into(),
+                    ],
+                    bounds,
+                    limits,
+                    max_output_bytes,
+                    LocalMetadataPermission::authorize_local_metadata_only(),
+                    &stop,
+                )
+            } else {
+                SearchIndexBuildRequest::new(
+                    build_operation_id.clone(),
+                    project_root.clone(),
+                    search_store_path,
+                    publication_a.generation_id.as_str(),
+                    "project-file:main.lua",
+                    bounds,
+                    limits,
+                    max_output_bytes,
+                    LocalMetadataPermission::authorize_local_metadata_only(),
+                )
+            }
+        };
+        let build_request = make_build(search_path.clone())?;
+        let build_request_b = make_build(search_path_b.clone())?;
+        let profile = DurableProfile::new(bounds, file_set)?;
         let file_id = ProjectFileId::parse("project-file:main.lua")?;
+        let documents = build_request.selection.normalize()?;
+        let make_retire = |operation: &str,
+                           path: PathBuf,
+                           binding: SearchSourceHoldBinding,
+                           payload: &Value,
+                           expires|
+         -> Result<SearchShardRetireRequest, Box<dyn Error>> {
+            let logical = payload["logical_shard_id"].as_str().ok_or("shard ID")?;
+            let object = payload["object_id"].as_str().ok_or("object ID")?;
+            Ok(if file_set {
+                SearchShardRetireRequest::new_file_set(
+                    OperationId::new(operation)?,
+                    path,
+                    binding,
+                    publication_a.generation_id.as_str(),
+                    vec![
+                        "project-file:main.lua".into(),
+                        "project-file:other.lua".into(),
+                    ],
+                    logical,
+                    object,
+                    profile.digest(),
+                    bounds,
+                    limits,
+                    max_output_bytes,
+                    expires,
+                    LocalMetadataPermission::authorize_local_metadata_only(),
+                    &stop,
+                )?
+            } else {
+                SearchShardRetireRequest::new(
+                    OperationId::new(operation)?,
+                    path,
+                    binding,
+                    publication_a.generation_id.as_str(),
+                    file_id.as_str(),
+                    logical,
+                    object,
+                    profile.digest(),
+                    bounds,
+                    limits,
+                    max_output_bytes,
+                    expires,
+                    LocalMetadataPermission::authorize_local_metadata_only(),
+                )?
+            })
+        };
 
         let search_store_a = open_durable_search_store(&search_path, limits)?;
         let search_store_instance_id_a = search_store_a.store_instance_id()?.clone();
@@ -3216,7 +3344,7 @@ mod durable_source_retention_tests {
             &search_store_instance_id_a,
             &build_operation_id,
             &publication_a.generation_id,
-            &file_id,
+            &documents,
             &profile,
             limits,
         )?;
@@ -3225,7 +3353,7 @@ mod durable_source_retention_tests {
             &search_store_instance_id_b,
             &build_operation_id,
             &publication_a.generation_id,
-            &file_id,
+            &documents,
             &profile,
             limits,
         )?;
@@ -3272,6 +3400,20 @@ mod durable_source_retention_tests {
         let build_result_b: Value = serde_json::from_slice(&built_b)?;
         let build_payload_a = &build_result_a["payload"];
         let build_payload_b = &build_result_b["payload"];
+        if file_set {
+            assert_eq!(
+                build_payload_a["document_component"],
+                documents::FILE_SET_COMPONENT
+            );
+            assert_eq!(
+                build_payload_a["documents"]
+                    .as_array()
+                    .ok_or("full set documents")?
+                    .len(),
+                2
+            );
+            assert!(build_payload_a.get("entity_id").is_none());
+        }
         assert_eq!(
             build_payload_a["source_store_epoch_id"],
             source_hold_a.epoch_id().as_str()
@@ -3334,24 +3476,86 @@ mod durable_source_retention_tests {
             source_hold_a.root_id().as_str(),
             source_hold_a.pin_digest(),
         )?;
-        let retire_request_a = SearchShardRetireRequest::new(
-            OperationId::new("fixture:search-source-hold-retire-a")?,
+        if file_set {
+            // A genuine hold for a different complete selection cannot retire
+            // this shard, even when its epoch/build operation/profile match.
+            let smaller_request = SearchIndexBuildRequest::new_file_set(
+                build_operation_id.clone(),
+                project_root.clone(),
+                search_path.clone(),
+                publication_a.generation_id.as_str(),
+                vec![file_id.as_str().into()],
+                bounds,
+                limits,
+                max_output_bytes,
+                LocalMetadataPermission::authorize_local_metadata_only(),
+                &stop,
+            )?;
+            let smaller_documents = smaller_request.selection.normalize()?;
+            let mut source_store = LiveProjectStore::open_retained_owner_store(&project_root)?;
+            let wrong_hold = search_source_hold_root(
+                &source_store,
+                &search_store_instance_id_a,
+                &build_operation_id,
+                &publication_a.generation_id,
+                &smaller_documents,
+                &profile,
+                limits,
+            )?;
+            source_store.put_retention_root(&wrong_hold, &stop)?;
+            source_store.close()?;
+            let wrong_binding = SearchSourceHoldBinding::new(
+                project_root.clone(),
+                build_operation_id.clone(),
+                wrong_hold.epoch_id().as_str(),
+                wrong_hold.root_id().as_str(),
+                wrong_hold.pin_digest(),
+            )?;
+            let wrong_retire = SearchShardRetireRequest::new_file_set(
+                OperationId::new("fixture:wrong-set-retirement")?,
+                search_path.clone(),
+                wrong_binding,
+                publication_a.generation_id.as_str(),
+                vec![file_id.as_str().into()],
+                build_payload_a["logical_shard_id"]
+                    .as_str()
+                    .ok_or("shard")?,
+                build_payload_a["object_id"].as_str().ok_or("object")?,
+                profile.digest(),
+                bounds,
+                limits,
+                max_output_bytes,
+                10,
+                LocalMetadataPermission::authorize_local_metadata_only(),
+                &stop,
+            )?;
+            assert_eq!(
+                service
+                    .retire_shard(&wrong_retire, &stop)
+                    .err()
+                    .ok_or("wrong set accepted")?
+                    .code(),
+                ServiceErrorCode::IdentityMismatch
+            );
+            let mut source_store = LiveProjectStore::open_retained_owner_store(&project_root)?;
+            assert!(
+                source_store
+                    .retention_roots(&stop)?
+                    .contains(&source_hold_a)
+            );
+            source_store.remove_retention_root(
+                wrong_hold.root_id(),
+                wrong_hold.pin_digest(),
+                &stop,
+            )?;
+            source_store.close()?;
+        }
+        let retire_request_a = make_retire(
+            "fixture:search-source-hold-retire-a",
             search_path.clone(),
             source_binding_a,
-            publication_a.generation_id.as_str(),
-            file_id.as_str(),
-            build_payload_a["logical_shard_id"]
-                .as_str()
-                .ok_or("missing shard ID")?,
-            build_payload_a["object_id"]
-                .as_str()
-                .ok_or("missing object ID")?,
-            profile.digest(),
-            bounds,
-            limits,
-            max_output_bytes,
+            build_payload_a,
             10,
-            LocalMetadataPermission::authorize_local_metadata_only(),
         )?;
         let retired_a = service.retire_shard(&retire_request_a, &stop)?;
         let retire_result_a: Value = serde_json::from_slice(&retired_a)?;
@@ -3386,11 +3590,11 @@ mod durable_source_retention_tests {
         )?;
         project.close()?;
         let source_owner = LiveProjectStore::open_retained_owner_store(&project_root)?;
-        let rebuilt_from_b_hold = prepare_exact_project_file_from_store(
+        let rebuilt_from_b_hold = prepare_exact_documents_from_store(
             &source_owner,
             publication_a.generation_id.clone(),
-            file_id.clone(),
-            profile.clone(),
+            &documents,
+            &profile,
             LocalMetadataPermission::authorize_local_metadata_only(),
             limits,
             &stop,
@@ -3426,16 +3630,30 @@ mod durable_source_retention_tests {
                 .as_str()
                 .ok_or("missing B object ID")?,
             profile.digest(),
-            "External",
+            if file_set { "lua" } else { "External" },
             bounds,
             limits,
             max_output_bytes,
             11,
             LocalMetadataPermission::authorize_local_metadata_only(),
         )?;
+        let query_request_b = if file_set {
+            query_request_b.with_file_set_component()
+        } else {
+            query_request_b
+        };
         let queried_b = service.query_shard(&query_request_b, &stop)?;
         let query_result_b: Value = serde_json::from_slice(&queried_b)?;
         assert_eq!(query_result_b["payload"]["resource_closure"], "closed");
+        if file_set {
+            assert_eq!(
+                query_result_b["payload"]["literal_fts_candidates"]
+                    .as_array()
+                    .ok_or("set candidates")?
+                    .len(),
+                2
+            );
+        }
         assert_eq!(
             query_result_b["payload"]["source_store_generation_id"],
             publication_a.generation_id.as_str()
@@ -3448,24 +3666,12 @@ mod durable_source_retention_tests {
             source_hold_b.root_id().as_str(),
             source_hold_b.pin_digest(),
         )?;
-        let retire_request_b = SearchShardRetireRequest::new(
-            OperationId::new("fixture:search-source-hold-retire-b")?,
+        let retire_request_b = make_retire(
+            "fixture:search-source-hold-retire-b",
             search_path_b,
             source_binding_b,
-            publication_a.generation_id.as_str(),
-            file_id.as_str(),
-            build_payload_b["logical_shard_id"]
-                .as_str()
-                .ok_or("missing B shard ID")?,
-            build_payload_b["object_id"]
-                .as_str()
-                .ok_or("missing B object ID")?,
-            profile.digest(),
-            bounds,
-            limits,
-            max_output_bytes,
+            build_payload_b,
             12,
-            LocalMetadataPermission::authorize_local_metadata_only(),
         )?;
         let retired_b = service.retire_shard(&retire_request_b, &stop)?;
         let retire_result_b: Value = serde_json::from_slice(&retired_b)?;

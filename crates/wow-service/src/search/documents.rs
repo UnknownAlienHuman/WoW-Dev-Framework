@@ -1,0 +1,443 @@
+//! Closed document selection for the existing durable Search lifecycle.
+use super::*;
+use wow_search::{
+    PreparedProjectFileSetShard, ProjectFileSetSelection, SearchFileSetBuildProfile,
+    SearchFileSetOpenRequest, SearchFileSetPrepareRequest, SearchFileSetShard,
+    open_project_file_set_shard, prepare_project_file_set_shard,
+};
+
+pub(super) const FILE_SET_COMPONENT: &str = "project_file_set_v1";
+
+impl SearchIndexBuildRequest {
+    /// Build the explicitly selected set; no representative query file is required.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_file_set(
+        operation_id: OperationId,
+        project_store_root: PathBuf,
+        search_store_path: PathBuf,
+        store_generation_id: impl Into<Box<str>>,
+        ids: Vec<String>,
+        bounds: SearchBounds,
+        store_limits: SearchStoreLimits,
+        max_output_bytes: NonZeroU64,
+        permission: LocalMetadataPermission,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Self> {
+        if !project_store_root.is_absolute() || !search_store_path.is_absolute() {
+            return Err(failure(
+                ServiceErrorCode::InvalidRequest,
+                "search requires explicit absolute source and SearchStore paths",
+            ));
+        }
+        Ok(Self {
+            operation_id,
+            project_store_root,
+            search_store_path,
+            store_generation_id: store_generation_id.into(),
+            selection: Selection::file_set(ids, bounds, stop)?,
+            bounds,
+            store_limits,
+            max_output_bytes,
+            permission,
+        })
+    }
+}
+
+impl SearchShardRetireRequest {
+    /// Retire the exact complete set bound by the original source hold.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_file_set(
+        operation_id: OperationId,
+        search_store_path: PathBuf,
+        source_hold: SearchSourceHoldBinding,
+        store_generation_id: impl Into<Box<str>>,
+        ids: Vec<String>,
+        logical_shard_id: impl Into<Box<str>>,
+        object_id: impl Into<Box<str>>,
+        profile_digest: impl Into<Box<str>>,
+        bounds: SearchBounds,
+        store_limits: SearchStoreLimits,
+        max_output_bytes: NonZeroU64,
+        lease_expires_after: u64,
+        permission: LocalMetadataPermission,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Self> {
+        if !search_store_path.is_absolute() || lease_expires_after == 0 {
+            return Err(failure(
+                ServiceErrorCode::InvalidRequest,
+                "search retirement requires an absolute path and positive lease epoch",
+            ));
+        }
+        Ok(Self {
+            operation_id,
+            search_store_path,
+            source_hold,
+            store_generation_id: store_generation_id.into(),
+            selection: Selection::file_set(ids, bounds, stop)?,
+            logical_shard_id: logical_shard_id.into(),
+            object_id: object_id.into(),
+            profile_digest: profile_digest.into(),
+            bounds,
+            store_limits,
+            max_output_bytes,
+            lease_expires_after,
+            permission,
+        })
+    }
+}
+
+pub(super) enum Selection {
+    Single(Box<str>),
+    FileSet(ProjectFileSetSelection),
+}
+
+#[derive(Serialize)]
+pub(super) struct Identity<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file_ids: Option<&'a [ProjectFileId]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document_component: Option<&'static str>,
+}
+
+impl Selection {
+    pub(super) fn file_set(
+        ids: Vec<String>,
+        bounds: SearchBounds,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Self> {
+        check_cancelled(stop)?;
+        if ids.len() > bounds.max_documents() as usize {
+            return Err(failure(
+                ServiceErrorCode::BudgetExceeded,
+                "ProjectFile set exceeds document cap",
+            ));
+        }
+        let profile = SearchFileSetBuildProfile::new(bounds).map_err(map_search_error)?;
+        let ids = ids
+            .into_iter()
+            .map(|id| {
+                check_cancelled(stop)?;
+                ProjectFileId::parse(&id).map_err(map_project_error)
+            })
+            .collect::<ServiceResult<Vec<_>>>()?;
+        Ok(Self::FileSet(
+            ProjectFileSetSelection::new(ids, &profile, stop).map_err(map_search_error)?,
+        ))
+    }
+
+    pub(super) fn is_file_set(&self) -> bool {
+        matches!(self, Self::FileSet(_))
+    }
+
+    pub(super) fn identity(&self) -> Identity<'_> {
+        match self {
+            Self::Single(id) => Identity {
+                file_id: Some(id),
+                file_ids: None,
+                document_component: None,
+            },
+            Self::FileSet(selection) => Identity {
+                file_id: None,
+                file_ids: Some(selection.ids()),
+                document_component: Some(FILE_SET_COMPONENT),
+            },
+        }
+    }
+
+    pub(super) fn normalize(&self) -> ServiceResult<Documents<'_>> {
+        match self {
+            Self::Single(id) => Ok(Documents::Single(
+                ProjectFileId::parse(id).map_err(map_project_error)?,
+            )),
+            Self::FileSet(selection) => Ok(Documents::FileSet(selection)),
+        }
+    }
+}
+
+pub(super) enum Documents<'a> {
+    Single(ProjectFileId),
+    FileSet(&'a ProjectFileSetSelection),
+}
+
+impl Documents<'_> {
+    pub(super) fn identity(&self) -> Identity<'_> {
+        match self {
+            Self::Single(id) => Identity {
+                file_id: Some(id.as_str()),
+                file_ids: None,
+                document_component: None,
+            },
+            Self::FileSet(selection) => Identity {
+                file_id: None,
+                file_ids: Some(selection.ids()),
+                document_component: Some(FILE_SET_COMPONENT),
+            },
+        }
+    }
+    pub(super) fn single_id(&self) -> Option<&ProjectFileId> {
+        match self {
+            Self::Single(id) => Some(id),
+            Self::FileSet(_) => None,
+        }
+    }
+}
+
+pub(super) enum Profile {
+    Single(SearchBuildProfile),
+    FileSet(SearchFileSetBuildProfile),
+}
+
+impl Profile {
+    pub(super) fn new(bounds: SearchBounds, file_set: bool) -> ServiceResult<Self> {
+        if file_set {
+            Ok(Self::FileSet(
+                SearchFileSetBuildProfile::new(bounds).map_err(map_search_error)?,
+            ))
+        } else {
+            Ok(Self::Single(
+                SearchBuildProfile::new(bounds).map_err(map_search_error)?,
+            ))
+        }
+    }
+    pub(super) fn digest(&self) -> &str {
+        match self {
+            Self::Single(profile) => profile.digest(),
+            Self::FileSet(profile) => profile.digest(),
+        }
+    }
+    pub(super) fn component(&self) -> Option<&'static str> {
+        match self {
+            Self::Single(_) => None,
+            Self::FileSet(_) => Some(FILE_SET_COMPONENT),
+        }
+    }
+    pub(super) fn prepare(
+        &self,
+        read: &wow_store::project::ReadSnapshot,
+        generation: &StoreGenerationId,
+        documents: &Documents<'_>,
+        permission: LocalMetadataPermission,
+        object_limits: SearchStoreLimits,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Prepared> {
+        match (self, documents) {
+            (Self::Single(profile), Documents::Single(id)) => Ok(Prepared::Single(
+                prepare_project_file_shard(
+                    read,
+                    SearchShardPrepareRequest::new(
+                        generation.clone(),
+                        id.clone(),
+                        profile.clone(),
+                        permission,
+                    ),
+                    object_limits,
+                    stop,
+                )
+                .map_err(map_search_error)?,
+            )),
+            (Self::FileSet(profile), Documents::FileSet(selection)) => Ok(Prepared::FileSet(
+                prepare_project_file_set_shard(
+                    read,
+                    SearchFileSetPrepareRequest::new(
+                        generation.clone(),
+                        (*selection).clone(),
+                        profile.clone(),
+                        permission,
+                    ),
+                    object_limits,
+                    stop,
+                )
+                .map_err(map_search_error)?,
+            )),
+            _ => Err(failure(
+                ServiceErrorCode::IdentityMismatch,
+                "Search component and document selection disagree",
+            )),
+        }
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn open(
+        &self,
+        store: &mut Store,
+        generation: StoreGenerationId,
+        file_id: Option<&ProjectFileId>,
+        expected: Option<&Documents<'_>>,
+        logical_id: &str,
+        object_id: wow_store::ObjectId,
+        lease: SearchStoreLeaseRequest,
+        permission: LocalMetadataPermission,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Opened> {
+        let opened = match self {
+            Self::Single(profile) => Ok(Opened::Single(
+                open_project_file_shard(
+                    store,
+                    SearchShardOpenRequest::new(
+                        generation,
+                        file_id.cloned().ok_or_else(|| {
+                            failure(
+                                ServiceErrorCode::InvalidRequest,
+                                "single-file reader requires its exact file",
+                            )
+                        })?,
+                        profile.clone(),
+                        logical_id.to_owned(),
+                        object_id,
+                        lease,
+                        permission,
+                    ),
+                    stop,
+                )
+                .map_err(map_search_error)?,
+            )),
+            Self::FileSet(profile) => Ok(Opened::FileSet(
+                open_project_file_set_shard(
+                    store,
+                    SearchFileSetOpenRequest::new(
+                        logical_id.into(),
+                        object_id,
+                        generation,
+                        profile.clone(),
+                        permission,
+                        lease,
+                    ),
+                    stop,
+                )
+                .map_err(map_search_error)?,
+            )),
+        }?;
+        if let Some(expected) = expected {
+            let matches = match (&opened, expected) {
+                (Opened::Single(shard), Documents::Single(id)) => {
+                    shard.document().entity_id() == id
+                }
+                (Opened::FileSet(shard), Documents::FileSet(selection)) => shard
+                    .documents()
+                    .iter()
+                    .map(|document| document.entity_id())
+                    .eq(selection.ids().iter()),
+                _ => false,
+            };
+            if !matches {
+                opened.release(store).map_err(map_search_error)?;
+                return Err(failure(
+                    ServiceErrorCode::IdentityMismatch,
+                    "retiring selection differs from the exact stored document set",
+                ));
+            }
+        }
+        Ok(opened)
+    }
+}
+
+pub(super) enum Prepared {
+    Single(PreparedProjectFileShard),
+    FileSet(PreparedProjectFileSetShard),
+}
+impl Prepared {
+    pub(super) fn logical_id(&self) -> &str {
+        match self {
+            Self::Single(value) => value.logical_id(),
+            Self::FileSet(value) => value.logical_id(),
+        }
+    }
+    pub(super) fn object_id(&self) -> &wow_store::ObjectId {
+        match self {
+            Self::Single(value) => value.object_id(),
+            Self::FileSet(value) => value.object_id(),
+        }
+    }
+    pub(super) fn source_generation(&self) -> &str {
+        match self {
+            Self::Single(value) => value.source_generation(),
+            Self::FileSet(value) => value.source_generation(),
+        }
+    }
+    pub(super) fn profile_digest(&self) -> &str {
+        match self {
+            Self::Single(value) => value.profile_digest(),
+            Self::FileSet(value) => value.profile_digest(),
+        }
+    }
+    pub(super) fn documents(&self) -> &[wow_search::ProjectFileSearchDocument] {
+        match self {
+            Self::Single(value) => std::slice::from_ref(value.document()),
+            Self::FileSet(value) => value.documents(),
+        }
+    }
+    pub(super) fn into_object(self) -> PendingObject {
+        match self {
+            Self::Single(value) => value.into_object(),
+            Self::FileSet(value) => value.into_object(),
+        }
+    }
+}
+
+pub(super) enum Opened {
+    Single(wow_search::SearchShard),
+    FileSet(SearchFileSetShard),
+}
+impl Opened {
+    pub(super) fn logical_id(&self) -> &str {
+        match self {
+            Self::Single(value) => value.logical_id(),
+            Self::FileSet(value) => value.logical_id(),
+        }
+    }
+    pub(super) fn object_id(&self) -> &wow_store::ObjectId {
+        match self {
+            Self::Single(value) => value.object_id(),
+            Self::FileSet(value) => value.object_id(),
+        }
+    }
+    pub(super) fn source_generation(&self) -> &str {
+        match self {
+            Self::Single(value) => value.source_generation(),
+            Self::FileSet(value) => value.source_generation(),
+        }
+    }
+    pub(super) fn profile_digest(&self) -> &str {
+        match self {
+            Self::Single(value) => value.profile_digest(),
+            Self::FileSet(value) => value.profile_digest(),
+        }
+    }
+    pub(super) fn is_file_set(&self) -> bool {
+        matches!(self, Self::FileSet(_))
+    }
+    pub(super) fn exact_id_lookup(
+        &self,
+        id: &ProjectFileId,
+    ) -> wow_search::SearchResult<Option<wow_search::SearchExactHit>> {
+        match self {
+            Self::Single(value) => value.exact_id_lookup(id),
+            Self::FileSet(value) => value.exact_id_lookup(id),
+        }
+    }
+    pub(super) fn exact_label_lookup(
+        &self,
+        label: &str,
+    ) -> wow_search::SearchResult<Vec<wow_search::SearchExactHit>> {
+        match self {
+            Self::Single(value) => value.exact_label_lookup(label),
+            Self::FileSet(value) => value.exact_label_lookup(label),
+        }
+    }
+    pub(super) fn literal_candidates(
+        &self,
+        query: &str,
+    ) -> wow_search::SearchResult<Vec<wow_search::SearchCandidate>> {
+        match self {
+            Self::Single(value) => value.literal_candidates(query),
+            Self::FileSet(value) => value.literal_candidates(query),
+        }
+    }
+    pub(super) fn release(self, store: &mut Store) -> wow_search::SearchResult<()> {
+        match self {
+            Self::Single(value) => value.release(store),
+            Self::FileSet(value) => value.release(store),
+        }
+    }
+}

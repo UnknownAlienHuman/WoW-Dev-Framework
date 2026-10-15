@@ -2,7 +2,18 @@
 
 ## Durable selected shard
 
-`wow search index build` prepares one exact ProjectFile metadata shard from an
+`index build` and `index retire` also accept an explicit `--file-ids` JSON array
+instead of `--file-id`. The two options are mutually exclusive. The set is finite,
+nonempty, duplicate-free and canonically ordered; index build needs no query or
+representative document. Its response retains all selected exact IDs/relative
+labels, the `project_file_set_v1` component and the original source-hold receipt.
+`query --file-set` explicitly selects that component and keeps `--file-id` as an
+actual query member. An omitted/wrong component refuses rather than trying hashes.
+Retirement requires the complete original set and exact hold receipt; another
+valid selection/hold cannot retire that stored shard. The same native Store v2,
+operation replay, source-generation holds, catalog/lease closure and GC apply.
+
+`wow search index build` prepares one exact ProjectFile or explicit finite-set metadata shard from an
 explicit retained ProjectStore generation and publishes it into a separate
 explicit SearchStore file. Publication atomically commits the immutable shard,
 its direct catalog root, response object and completed operation journal entry.
@@ -54,9 +65,9 @@ This selection uses the named file-set profile/manifest/reader and
 `wow-service/search-file-set-result-envelope/1`. Its ordered `documents` retain
 only exact IDs/relative labels; literal FTS can return candidates from any member.
 No FTS result or miss gains exact or negative authority. Omitting `--file-ids`
-preserves the original single-file request/result identities. This first file-set
-consumer remains one-shot; durable file-set handles and lifecycle qualification
-remain open in #169 alongside the other E4 obligations.
+preserves the original single-file request/result identities. This operation
+remains one-shot; use the separate durable commands for retained file-set handles.
+Full E4/fault/platform qualification remains open in #169.
 
 `wow search build-query` builds and queries one immutable ProjectFile metadata
 shard through the Search, Store and Service owners. Use `wow search --help` for
