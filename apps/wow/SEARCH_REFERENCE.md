@@ -72,8 +72,11 @@ All selectors are optional, but at least one must be present and its lane must
 be enabled. Other selectors are `entity_key` and `literal_text`. Unknown fields,
 duplicate lanes, required-but-disabled lanes, zero bounds, control-bearing text,
 unbounded text, prefixes shorter than two UTF-8 bytes and empty shape filters
-reject. Alias/similarity/seeded-graph lanes remain explicitly unavailable in this
-component. A required unavailable lane cannot be hidden by a positive name hit.
+reject. Explicit-alias and seeded-graph lanes remain unavailable in this
+component. Explicit [identifier similarity](SEARCH_IDENTIFIER_SIMILARITY.md) is
+available only with its own selector and named query/ranking profiles; an old
+request with no such selector retains its unavailable-lane behavior. A required
+unavailable lane cannot be hidden by a positive name hit.
 
 Exact comparisons preserve case. Qualified names are the frozen projection of
 the explicit namespace plus `.` plus name, or the original name for a global
@@ -148,5 +151,5 @@ The default query returns one bounded immutable result manifest. Explicit
 `--page-json` selects [Reference pages and continuation](SEARCH_REFERENCE_PAGINATION.md)
 with independent result, shard and original ReferenceView retention.
 Federation, other Reference/project/Blizzard document
-kinds, explicit aliases, similarity/graph lanes, full corpus/fault/platform
+kinds, explicit aliases, graph lanes, full corpus/fault/platform
 qualification and current Tier X/runtime acceptance remain in Issue #169.

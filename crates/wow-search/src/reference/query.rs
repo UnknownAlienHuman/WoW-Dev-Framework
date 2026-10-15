@@ -2,10 +2,38 @@
 use super::*;
 use crate::SearchRetrievalLane as Lane;
 mod pagination;
+mod similar_lane;
+mod similarity;
 pub use pagination::{ReferencePage, ReferencePageCursor, ReferencePagePolicy};
 const REQUEST_SCHEMA: &str = "wow-search/native-reference-query/1";
 const QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape/1";
 const RANK_PROFILE: &str = "wow-search/reference-authority-ordinal-fusion/1";
+const SIM_QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape-similarity/1";
+const SIM_RANK_PROFILE: &str = "wow-search/reference-authority-ordinal-fusion-similarity/1";
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SimilarityField {
+    QualifiedName,
+    ShortName,
+    Both,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SimilarityCase {
+    Preserve,
+    AsciiFold,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SimilaritySelector {
+    identifier: String,
+    field: SimilarityField,
+    case_policy: SimilarityCase,
+    max_distance: u32,
+    max_prefiltered_documents: NonZeroU32,
+    max_distance_cells: NonZeroU64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -41,6 +69,8 @@ enum Nilability {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Selectors {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    identifier_similarity: Option<SimilaritySelector>,
     #[serde(skip_serializing_if = "Option::is_none")]
     entity_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -106,6 +136,10 @@ impl ReferenceQueryRequest {
             (s.prefix.is_some(), Lane::IdentifierPrefix),
             (s.literal_text.is_some(), Lane::LiteralText),
             (s.shape.is_some(), Lane::StructuredShape),
+            (
+                s.identifier_similarity.is_some(),
+                Lane::IdentifierSimilarity,
+            ),
         ];
         if !present.iter().any(|(p, _)| *p)
             || present
@@ -149,6 +183,16 @@ impl ReferenceQueryRequest {
                 }
             }
         }
+        if let Some(similarity) = &s.identifier_similarity {
+            valid_text(&similarity.identifier)?;
+            let length = similarity.identifier.chars().count();
+            if !(2..=128).contains(&length)
+                || similarity.max_distance > 4
+                || similarity.max_distance > length as u32
+            {
+                return Err(SearchError::InvalidProfile);
+            }
+        }
         check(stop)?;
         Ok(request)
     }
@@ -172,6 +216,8 @@ struct Origin {
 }
 #[derive(Serialize)]
 struct Signal {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    identifier_similarity: Option<similar_lane::SimilarityEvidence>,
     lane: Lane,
     match_class: &'static str,
     authority_band: u32,
@@ -231,9 +277,19 @@ impl ReferenceSearchShard {
                 &self.manifest.reference_view_digest,
             ),
         )?;
+        let query_profile = if request.selectors.identifier_similarity.is_some() {
+            SIM_QUERY_PROFILE
+        } else {
+            QUERY_PROFILE
+        };
+        let ranking_profile = if request.selectors.identifier_similarity.is_some() {
+            SIM_RANK_PROFILE
+        } else {
+            RANK_PROFILE
+        };
         let query_id = identity(
             "reference-search-query:",
-            &(QUERY_PROFILE, shard_id, request),
+            &(query_profile, shard_id, request),
         )?;
         let mut candidates = BTreeMap::<&str, Candidate<'_>>::new();
         let mut lanes = Vec::new();
@@ -242,6 +298,7 @@ impl ReferenceSearchShard {
         let mut omitted = 0u32;
         let mut truncated = false;
         let mut missing = false;
+        let mut similarity_work = None;
         for lane in [
             Lane::ExactIdentity,
             Lane::ExactCanonicalName,
@@ -267,19 +324,33 @@ impl ReferenceSearchShard {
                     Lane::IdentifierPrefix => s.prefix.is_some(),
                     Lane::LiteralText => s.literal_text.is_some(),
                     Lane::StructuredShape => s.shape.is_some(),
+                    Lane::IdentifierSimilarity => s.identifier_similarity.is_some(),
                     _ => false,
                 };
-                state = if matches!(
-                    lane,
-                    Lane::ExactExplicitAlias | Lane::IdentifierSimilarity | Lane::SeededGraph
-                ) {
+                state = if matches!(lane, Lane::ExactExplicitAlias | Lane::SeededGraph)
+                    || (lane == Lane::IdentifierSimilarity && s.identifier_similarity.is_none())
+                {
                     "missing_shard_capability"
                 } else if !supported {
                     "unsupported_query_class"
                 } else {
                     "complete"
                 };
-                if state == "complete" {
+                if state == "complete" && lane == Lane::IdentifierSimilarity {
+                    let (lane_state, work) = similar_lane::run(
+                        &self.manifest.documents,
+                        request,
+                        &universe,
+                        &query_id,
+                        &mut candidates,
+                        &mut scanned,
+                        &mut signals,
+                        &mut omitted,
+                        stop,
+                    )?;
+                    state = lane_state;
+                    similarity_work = Some(work);
+                } else if state == "complete" {
                     let mut text_ids = std::collections::BTreeSet::new();
                     if lane == Lane::LiteralText {
                         match self.physical.reader().literal_candidates(
@@ -435,70 +506,21 @@ impl ReferenceSearchShard {
                                     state = "truncated";
                                     break;
                                 }
-                                if !candidates.contains_key(document.entity_key.as_str())
-                                    && candidates.len() >= request.max_candidates.get() as usize
-                                {
-                                    omitted = omitted
-                                        .checked_add(1)
-                                        .ok_or(SearchError::FileSetBudgetExceeded)?;
-                                    state = "truncated";
-                                    continue;
-                                }
-                                let candidate_id = identity(
-                                    "reference-search-candidate:",
-                                    &(&universe, &query_id, &document.entity_key),
-                                )?;
-                                let candidate =
-                                    candidates.entry(&document.entity_key).or_insert(Candidate {
-                                        candidate_id,
-                                        document,
-                                        rank_tuple: [band, u32::MAX, u32::MAX],
-                                        stable_tie_key: &document.entity_key,
-                                        signals: Vec::new(),
-                                    });
-                                let rr = 1_000_000
-                                    / (60u32
-                                        .checked_add(rank)
-                                        .ok_or(SearchError::FileSetBudgetExceeded)?);
-                                candidate.rank_tuple[0] = candidate.rank_tuple[0].min(band);
-                                candidate.rank_tuple[1] = candidate.rank_tuple[1].min(rank);
-                                candidate.rank_tuple[2] =
-                                    candidate.rank_tuple[2]
-                                        .checked_sub(rr)
-                                        .ok_or(SearchError::FileSetBudgetExceeded)?;
-                                candidate.signals.push(Signal {
+                                if !include_signal(
+                                    &mut candidates,
+                                    document,
                                     lane,
-                                    match_class: class,
-                                    authority_band: band,
-                                    lane_rank: rank,
-                                    reciprocal_rank_contribution: rr,
-                                    origin: Origin {
-                                        owner_field: field,
-                                        owner_record_digest: document.owner_record_digest.clone(),
-                                        source_id: document.source.source_id.clone(),
-                                        original_value_digest: original,
-                                        normalized_value_digest: normalized,
-                                        normalization: if field
-                                            == "NativeCallableSignature.namespace()+name()"
-                                        {
-                                            "owner-namespace-dot-name/1"
-                                        } else {
-                                            "case-preserving-owner-fields/1"
-                                        },
-                                    },
-                                    prefix_byte_range: if lane == Lane::IdentifierPrefix {
-                                        Some([
-                                            0,
-                                            s.prefix
-                                                .as_ref()
-                                                .ok_or(SearchError::InvalidProfile)?
-                                                .len(),
-                                        ])
-                                    } else {
-                                        None
-                                    },
-                                });
-                                signals += 1;
+                                    rank,
+                                    (band, class, field, original, normalized),
+                                    request,
+                                    &universe,
+                                    &query_id,
+                                    &mut signals,
+                                    &mut omitted,
+                                    None,
+                                )? {
+                                    state = "truncated";
+                                }
                             }
                         }
                     }
@@ -618,13 +640,15 @@ impl ReferenceSearchShard {
             rr_scale: u32,
             rr_offset: u32,
             candidates: &'a [Candidate<'a>],
+            #[serde(skip_serializing_if = "Option::is_none")]
+            identifier_similarity_work: Option<similar_lane::SimilarityWork>,
         }
         // Owner summary excludes the full document list; each selected candidate
         // carries its whole document. Nonmatching source fields are not delivered.
         let payload = Payload {
             schema: "wow-search/native-reference-result-set/1",
-            query_profile: QUERY_PROFILE,
-            ranking_profile: RANK_PROFILE,
+            query_profile,
+            ranking_profile,
             normalized_query_id: &query_id,
             universe_id: &universe,
             shard_id,
@@ -638,6 +662,7 @@ impl ReferenceSearchShard {
             rr_scale: 1_000_000,
             rr_offset: 60,
             candidates: &candidates,
+            identifier_similarity_work: similarity_work,
         };
         let result_set_id = identity("reference-search-result-set:", &payload)?;
         #[derive(Serialize)]
@@ -661,6 +686,94 @@ impl ReferenceSearchShard {
     }
 }
 type MatchMaterial = (u32, &'static str, &'static str, Box<str>, Box<str>);
+#[allow(clippy::too_many_arguments)]
+fn include_signal<'a>(
+    candidates: &mut BTreeMap<&'a str, Candidate<'a>>,
+    document: &'a Document,
+    lane: Lane,
+    rank: u32,
+    material: MatchMaterial,
+    request: &ReferenceQueryRequest,
+    universe: &str,
+    query_id: &str,
+    signals: &mut u32,
+    omitted: &mut u32,
+    similarity: Option<similar_lane::SimilarityEvidence>,
+) -> SearchResult<bool> {
+    if *signals >= request.max_signals.get() {
+        return Ok(false);
+    }
+    if !candidates.contains_key(document.entity_key.as_str())
+        && candidates.len() >= request.max_candidates.get() as usize
+    {
+        *omitted = omitted
+            .checked_add(1)
+            .ok_or(SearchError::FileSetBudgetExceeded)?;
+        return Ok(false);
+    }
+    let (band, class, field, original, normalized) = material;
+    let candidate_id = identity(
+        "reference-search-candidate:",
+        &(universe, query_id, &document.entity_key),
+    )?;
+    let candidate = candidates.entry(&document.entity_key).or_insert(Candidate {
+        candidate_id,
+        document,
+        rank_tuple: [band, u32::MAX, u32::MAX],
+        stable_tie_key: &document.entity_key,
+        signals: Vec::new(),
+    });
+    let rr = 1_000_000
+        / (60u32
+            .checked_add(rank)
+            .ok_or(SearchError::FileSetBudgetExceeded)?);
+    candidate.rank_tuple[0] = candidate.rank_tuple[0].min(band);
+    candidate.rank_tuple[1] = candidate.rank_tuple[1].min(rank);
+    candidate.rank_tuple[2] = candidate.rank_tuple[2]
+        .checked_sub(rr)
+        .ok_or(SearchError::FileSetBudgetExceeded)?;
+    let normalization = similarity.as_ref().map_or_else(
+        || {
+            if field == "NativeCallableSignature.namespace()+name()" {
+                "owner-namespace-dot-name/1"
+            } else {
+                "case-preserving-owner-fields/1"
+            }
+        },
+        |proof| proof.normalization_profile,
+    );
+    candidate.signals.push(Signal {
+        lane,
+        match_class: class,
+        authority_band: band,
+        lane_rank: rank,
+        reciprocal_rank_contribution: rr,
+        origin: Origin {
+            owner_field: field,
+            owner_record_digest: document.owner_record_digest.clone(),
+            source_id: document.source.source_id.clone(),
+            original_value_digest: original,
+            normalized_value_digest: normalized,
+            normalization,
+        },
+        prefix_byte_range: if lane == Lane::IdentifierPrefix {
+            Some([
+                0,
+                request
+                    .selectors
+                    .prefix
+                    .as_ref()
+                    .ok_or(SearchError::InvalidProfile)?
+                    .len(),
+            ])
+        } else {
+            None
+        },
+        identifier_similarity: similarity,
+    });
+    *signals += 1;
+    Ok(true)
+}
 fn name_digest(document: &Document) -> SearchResult<Box<str>> {
     #[derive(Serialize)]
     struct Name<'a> {

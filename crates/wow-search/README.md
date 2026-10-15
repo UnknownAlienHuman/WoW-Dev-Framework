@@ -49,6 +49,9 @@ Its [Reference pages](../../apps/wow/SEARCH_REFERENCE_PAGINATION.md) preserve th
 exact ordered result and owner state; Service independently retains all three
 required objects. Private budget accounting is shared with Project pages while
 their published wire identities remain distinct.
+An explicit [identifier-similarity query](../../apps/wow/SEARCH_IDENTIFIER_SIMILARITY.md)
+uses captured native names with frozen scalar distance, charged work and band-8
+Candidate signals. Legacy requests retain their original profiles and bytes.
 The historical preimplementation freeze is not accepted.
 
 The explicit file-set component uses a separately named metadata profile and
