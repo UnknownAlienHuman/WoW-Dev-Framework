@@ -541,7 +541,7 @@ fn unselected_primary_keeps_v4_and_ordinary_catalog() -> TestResult {
 }
 
 #[test]
-fn core_library_queries_exclude_synthetic_embed_and_keep_libstub_accessors() -> TestResult {
+fn legacy_non_global_queries_preserve_lookup_data_and_libstub_accessors() -> TestResult {
     let stop = AtomicBool::new(false);
     let config = configuration(None, None)?;
     let library = library(config.analyzer_binding().backend().clone())?;
@@ -559,7 +559,7 @@ fn core_library_queries_exclude_synthetic_embed_and_keep_libstub_accessors() -> 
     let bundle = ProjectInputBundle::closed(
         config,
         vec![ProjectInputFile::new("main/library-queries.lua", source)?],
-        vec![library],
+        vec![library.clone()],
     )?;
     let mut publisher = ProjectPublisher::with_function_call_facts();
     publisher.publish_initial_cancellable(bundle, &stop)?;
@@ -574,9 +574,37 @@ fn core_library_queries_exclude_synthetic_embed_and_keep_libstub_accessors() -> 
             Some(wow_emmy::function_calls::SourceCallTarget::MainFunction { .. })
         ));
     }
-    assert!(
-        !report.named_targets().contains_key("LibStub.EmbedLibrary"),
-        "the unsupported synthetic embed member must not be selected as a core API"
+    // This unchanged non-global recipe retains its original lookup inputs.
+    // Named target data does not activate a W6 embed rule. Report10's global
+    // recipe selects a separate query set; deleting legacy lookup inputs here
+    // would change the old analyzer session and invalidate retained snapshots.
+    assert!(matches!(
+        report.named_targets().get("LibStub.EmbedLibrary"),
+        Some(wow_emmy::function_calls::SourceCallTarget::MainFunction { .. })
+    ));
+    let archive = ProjectReplay::capture(&publisher, &stop)?;
+    let restored = archive.hydrate(&stop)?;
+    assert_eq!(restored.snapshot_id(), view.snapshot_id());
+    assert_eq!(
+        restored.snapshot().analyzer_binding(),
+        view.snapshot().analyzer_binding()
+    );
+    let files = restored
+        .snapshot()
+        .analyzer_binding()
+        .main_workspace()
+        .files()
+        .iter()
+        .map(|file| ProjectInputFile::new(file.path(), file.text()))
+        .collect::<wow_project::ProjectResult<Vec<_>>>()?;
+    let mut restored_owner = ProjectPublisher::with_function_call_facts();
+    restored_owner.publish_initial_cancellable(
+        ProjectInputBundle::closed(restored.configuration().clone(), files, vec![library])?,
+        &stop,
+    )?;
+    assert_eq!(
+        serde_json::to_value(ProjectReplay::capture(&restored_owner, &stop)?)?,
+        serde_json::to_value(&archive)?
     );
     assert!(report.calls().iter().any(|call| {
         call.arguments().get(1).is_some_and(|argument| {

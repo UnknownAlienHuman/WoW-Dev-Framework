@@ -119,7 +119,12 @@ No table-overload assumption. Secret-capable payload accessibility is outside th
 
 ### `core.signal.native_event_registry_bridge@1`
 
-Match exact `EventRegistry:RegisterFrameEventAndCallback*` family. Emit a distinct native-frame-event bridge subscription and handle/owner relations when exact.
+Match the exact `EventRegistry:RegisterFrameEventAndCallback` callable with an
+exact event key and a callback that resolves to an exact Main declaration. Emit a
+caller-to-native-event registration-site bridge relation whose support and
+receipt carry that callback identity. No handle or owner-graph endpoint is
+promised. `RegisterFrameEventAndCallbackWithHandle` remains NotEvaluated because
+the W2 allowlist admits only the plain AndCallback method.
 
 It is not a plain custom callback.
 
