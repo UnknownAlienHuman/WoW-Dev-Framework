@@ -30,6 +30,7 @@ use wow_store::{
 pub use wow_store::search::SearchStoreLeaseRequest;
 
 mod file_set;
+mod page_budget;
 pub mod reference;
 pub use file_set::{
     PreparedProjectFileSetShard, ProjectFileSetSelection, RetrievalCursor, RetrievalPage,

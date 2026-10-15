@@ -1,5 +1,6 @@
 //! Whole-candidate pages over one immutable result; no mutable selectors.
 use super::*;
+use crate::page_budget::{PageBudget, PageLimits};
 
 const POLICY_SCHEMA: &str = "wow-search/project-file-result-page-policy/1";
 const PAGE_SCHEMA: &str = "wow-search/project-file-result-page/1";
@@ -30,16 +31,18 @@ impl RetrievalPagePolicy {
         }
         Ok(policy)
     }
-}
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PageBudget {
-    pages: u32,
-    delivered_candidates: u32,
-    delivered_candidate_bytes: u64,
-    delivered_page_bytes: u64,
-    replayed_manifest_bytes: u64,
+    /// Plain-unit charge view of this exact policy. The policy stays the public
+    /// typed profile; a budget charge compares counters against plain units.
+    fn limits(&self) -> PageLimits {
+        PageLimits {
+            max_pages: self.max_pages.get(),
+            max_delivered_candidates: self.max_delivered_candidates.get(),
+            max_candidate_bytes: self.max_delivered_candidate_bytes.get(),
+            max_page_bytes: self.max_delivered_page_bytes.get(),
+            max_replayed_manifest_bytes: self.max_replayed_manifest_bytes.get(),
+        }
+    }
 }
 
 /// Integrity is supplemented by the service's exact prior completion receipt.
@@ -68,19 +71,7 @@ impl RetrievalCursor {
         if &self.page_policy != policy || self.cursor_id != self.id()? {
             return Err(SearchError::OwnerEvidenceInvalid);
         }
-        if self.budget.pages >= policy.max_pages.get()
-            || self.budget.delivered_candidates >= policy.max_delivered_candidates.get()
-            || self.budget.delivered_candidate_bytes >= policy.max_delivered_candidate_bytes.get()
-            || self.budget.delivered_page_bytes >= policy.max_delivered_page_bytes.get()
-            || self
-                .budget
-                .replayed_manifest_bytes
-                .checked_add(manifest_bytes)
-                .is_none_or(|bytes| bytes > policy.max_replayed_manifest_bytes.get())
-        {
-            return Err(SearchError::FileSetBudgetExceeded);
-        }
-        Ok(())
+        self.budget.admit_replay(policy.limits(), manifest_bytes)
     }
 
     fn id(&self) -> SearchResult<Box<str>> {
@@ -190,26 +181,12 @@ impl RetrievalResult {
         let candidates = &self.payload.candidates[first as usize..next as usize];
         let candidate_bytes = wow_core::canonical_json_bytes(candidates)
             .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
-        budget.pages = budget
-            .pages
-            .checked_add(1)
-            .ok_or(SearchError::FileSetBudgetExceeded)?;
-        budget.delivered_candidates = next;
-        budget.delivered_candidate_bytes = budget
-            .delivered_candidate_bytes
-            .checked_add(candidate_bytes.len() as u64)
-            .ok_or(SearchError::FileSetBudgetExceeded)?;
-        budget.replayed_manifest_bytes = budget
-            .replayed_manifest_bytes
-            .checked_add(self.bytes.len() as u64)
-            .ok_or(SearchError::FileSetBudgetExceeded)?;
-        if budget.pages > policy.max_pages.get()
-            || budget.delivered_candidates > policy.max_delivered_candidates.get()
-            || budget.delivered_candidate_bytes > policy.max_delivered_candidate_bytes.get()
-            || budget.replayed_manifest_bytes > policy.max_replayed_manifest_bytes.get()
-        {
-            return Err(SearchError::FileSetBudgetExceeded);
-        }
+        budget = budget.next(
+            policy.limits(),
+            next,
+            candidate_bytes.len() as u64,
+            self.bytes.len() as u64,
+        )?;
         let prior_page_bytes = budget.delivered_page_bytes;
         // Charge the exact canonical page, including repeated owner metadata,
         // budget and cursor. Only decimal widths can change its byte length;
@@ -269,9 +246,7 @@ impl RetrievalResult {
             let charged = prior_page_bytes
                 .checked_add(bytes.len() as u64)
                 .ok_or(SearchError::FileSetBudgetExceeded)?;
-            if charged > policy.max_delivered_page_bytes.get() {
-                return Err(SearchError::FileSetBudgetExceeded);
-            }
+            PageBudget::check_page_bytes(policy.limits(), charged)?;
             if charged == budget.delivered_page_bytes {
                 return Ok(RetrievalPage {
                     bytes: bytes.into_boxed_slice(),
