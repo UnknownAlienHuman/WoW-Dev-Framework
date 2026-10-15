@@ -40,6 +40,14 @@ catalog roots and leases. Other document/lane classes, ranking, misses,
 continuation and full durability/fault qualification remain separate work.
 The historical preimplementation freeze is not accepted.
 
+The explicit file-set component uses a separately named metadata profile and
+`wow-search/project-file-set-shard-manifest/1`. It preserves the single-file
+profile/manifest bytes, captures one shared owner/evidence set, retains all
+selected documents in canonical ID order and validates every physical row on
+reopen. The existing native Store owns SQLite/FTS and lease cleanup. The first
+public consumer is the optional `--file-ids` selection of one-shot build/query;
+durable file-set handles and full E4 acceptance remain open in #169.
+
 E4-A defines:
 
 - separate immutable user-project, Blizzard UI source, and ReferenceView search shards;

@@ -23,6 +23,7 @@ use wow_service::{
 
 const HELP: &str = "wow search index build --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --operation-id <ID> --allow-local-metadata-only <finite bounds>\nwow search query --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --literal-query <UTF-8-LITERAL> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index retire --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --build-operation-id <BuildOperationId> --source-store-epoch-id <ExactEpochId> --source-generation-hold-id <ExactRetentionRootId> --source-generation-hold-digest <sha256:...> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index gc --search-store <SEARCH-STORE-FILE> --target-object-id <ExactObjectId> --operation-id <ID> --gc-now <epoch> --gc-max-deletes <positive-u32> <Store limits>\nwow search build-query --store-root <PROJECT-STORE> <existing one-shot route; it does not claim durable SearchStore persistence>\nAll durable commands require --max-output-bytes <positive-u64> and Store limits: --store-max-object-bytes <positive-u64> --store-max-batch-objects <positive-u32> --store-max-catalog-mutations <positive-u32> --store-max-manifest-records <positive-u32> --store-max-gc-deletes <positive-u32>.\nBuild/query/retire also require Search bounds: --max-documents <positive-u32> --max-document-id-bytes <positive-u32> --max-owner-metadata-label-bytes <positive-u32> --max-literal-query-bytes <positive-u32> --max-candidate-results <positive-u32> --max-owner-evidence-records <positive-u32> --max-owner-manifest-bytes <positive-u64> --max-database-bytes <positive-u64> --max-search-object-bytes <positive-u64>.\n";
 const MAX_ARGUMENTS: usize = 64;
+const FILE_SET_HELP: &str = "For one-shot build-query, optional --file-ids <JSON-array-of-exact-ProjectFileIds> selects a finite set. --file-id must belong to it. Empty/duplicate/absent/over-cap selections refuse; --max-documents caps the raw set. No durable file-set handle is returned.\n";
 const MAX_ARGUMENT_BYTES: usize = 128 * 1024;
 const MAX_VALUE_BYTES: usize = 32 * 1024;
 
@@ -30,6 +31,7 @@ const VALUE_OPTIONS: &[&str] = &[
     "--store-root",
     "--generation",
     "--file-id",
+    "--file-ids",
     "--literal-query",
     "--operation-id",
     "--lease-expires-after",
@@ -95,6 +97,7 @@ fn run_with_io<W: Write, E: Write>(
     if is_help(&arguments) {
         return match stdout
             .write_all(HELP.as_bytes())
+            .and_then(|()| stdout.write_all(FILE_SET_HELP.as_bytes()))
             .and_then(|()| stdout.flush())
         {
             Ok(()) => 0,
@@ -618,6 +621,17 @@ fn parse(arguments: Vec<OsString>) -> Result<ParsedSearch, &'static str> {
         lease_expires_after,
     )
     .map_err(|_| "invalid exact search request")?;
+    let request = match options.get("--file-ids") {
+        Some(value) => {
+            let text = value.to_str().ok_or("--file-ids must be UTF-8 JSON")?;
+            let ids: Vec<String> = serde_json::from_str(text)
+                .map_err(|_| "--file-ids must be an explicit JSON array of ProjectFile IDs")?;
+            request
+                .with_file_set(ids, &AtomicBool::new(false))
+                .map_err(|_| "invalid explicit ProjectFile set")?
+        }
+        None => request,
+    };
     Ok(ParsedSearch {
         request,
         max_output_bytes: max_output_bytes.get(),

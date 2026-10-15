@@ -3,6 +3,8 @@
 //! The first route returns an inline result only. It never returns a continuation,
 //! and it requires explicit finite owner, Store, lease, and output bounds.
 
+mod file_set;
+
 use std::{
     num::NonZeroU64,
     path::PathBuf,
@@ -63,6 +65,10 @@ pub struct SearchBuildQueryRequest {
     max_output_bytes: NonZeroU64,
     permission: LocalMetadataPermission,
     lease_expires_after: u64,
+    file_set: Option<(
+        wow_search::ProjectFileSetSelection,
+        wow_search::SearchFileSetBuildProfile,
+    )>,
 }
 
 impl SearchBuildQueryRequest {
@@ -96,7 +102,39 @@ impl SearchBuildQueryRequest {
             max_output_bytes,
             permission,
             lease_expires_after,
+            file_set: None,
         })
+    }
+
+    /// Select an explicit finite set while keeping file_id as the exact query root.
+    pub fn with_file_set(mut self, ids: Vec<String>, stop: &AtomicBool) -> ServiceResult<Self> {
+        check_cancelled(stop)?;
+        if ids.len() > self.bounds.max_documents() as usize {
+            return Err(failure(
+                ServiceErrorCode::BudgetExceeded,
+                "ProjectFile set exceeds the document cap",
+            ));
+        }
+        let profile =
+            wow_search::SearchFileSetBuildProfile::new(self.bounds).map_err(map_search_error)?;
+        let ids = ids
+            .into_iter()
+            .map(|id| {
+                check_cancelled(stop)?;
+                ProjectFileId::parse(&id).map_err(map_project_error)
+            })
+            .collect::<ServiceResult<Vec<_>>>()?;
+        let selection = wow_search::ProjectFileSetSelection::new(ids, &profile, stop)
+            .map_err(map_search_error)?;
+        let query_id = ProjectFileId::parse(&self.file_id).map_err(map_project_error)?;
+        if selection.ids().binary_search(&query_id).is_err() {
+            return Err(failure(
+                ServiceErrorCode::InvalidRequest,
+                "query file must belong to the explicit set",
+            ));
+        }
+        self.file_set = Some((selection, profile));
+        Ok(self)
     }
 }
 
@@ -415,20 +453,24 @@ impl SearchOperationService {
     ) -> ServiceResult<Arc<SearchBuildQueryResult>> {
         check_cancelled(stop)?;
         let profile = SearchBuildProfile::new(request.bounds).map_err(map_search_error)?;
-        let request_digest = canonical_digest(
-            "wow-service/search-build-query-request/1:",
-            &SearchRequestIdentity {
-                operation_id: request.operation_id.as_str(),
-                store_generation_id: &request.store_generation_id,
-                file_id: &request.file_id,
-                literal_query: &request.literal_query,
-                search_profile_digest: profile.digest(),
-                store_limits: request.store_limits,
-                max_output_bytes: request.max_output_bytes.get(),
-                lease_expires_after: request.lease_expires_after,
-                privacy_scope: "local_metadata_only",
-            },
-        )?;
+        let request_digest = if let Some((selection, selected_profile)) = &request.file_set {
+            file_set::request_digest(request, selection, selected_profile)?
+        } else {
+            canonical_digest(
+                "wow-service/search-build-query-request/1:",
+                &SearchRequestIdentity {
+                    operation_id: request.operation_id.as_str(),
+                    store_generation_id: &request.store_generation_id,
+                    file_id: &request.file_id,
+                    literal_query: &request.literal_query,
+                    search_profile_digest: profile.digest(),
+                    store_limits: request.store_limits,
+                    max_output_bytes: request.max_output_bytes.get(),
+                    lease_expires_after: request.lease_expires_after,
+                    privacy_scope: "local_metadata_only",
+                },
+            )?
+        };
         match self.operations.begin(
             &request.operation_id,
             &request_digest,
@@ -445,7 +487,12 @@ impl SearchOperationService {
             RegistryDecision::Started => {}
         }
 
-        let outcome = execute_build_query(request, &profile, &request_digest, stop);
+        let outcome = match &request.file_set {
+            Some((selection, selected_profile)) => {
+                file_set::execute(request, selection, selected_profile, &request_digest, stop)
+            }
+            None => execute_build_query(request, &profile, &request_digest, stop),
+        };
         match outcome {
             Ok(result) => {
                 let result = Arc::new(result);
@@ -2939,6 +2986,14 @@ fn map_search_error(error: SearchError) -> ServiceError {
         SearchError::InvalidProfile | SearchError::LocalMetadataPermissionRequired => failure(
             ServiceErrorCode::InvalidRequest,
             "search profile or permission is invalid",
+        ),
+        SearchError::FileSetEmpty | SearchError::FileSetDuplicate => failure(
+            ServiceErrorCode::InvalidRequest,
+            "explicit ProjectFile set is empty or contains duplicate IDs",
+        ),
+        SearchError::FileSetOverCapacity | SearchError::FileSetBudgetExceeded => failure(
+            ServiceErrorCode::BudgetExceeded,
+            "ProjectFile set exceeds its selected bound",
         ),
         SearchError::OwnerEvidenceInvalid => failure(
             ServiceErrorCode::IdentityMismatch,

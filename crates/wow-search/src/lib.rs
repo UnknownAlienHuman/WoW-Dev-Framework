@@ -28,6 +28,13 @@ use wow_store::{
 
 pub use wow_store::search::SearchStoreLeaseRequest;
 
+mod file_set;
+pub use file_set::{
+    PreparedProjectFileSetShard, ProjectFileSetSelection, SearchFileSetBuildProfile,
+    SearchFileSetOpenRequest, SearchFileSetPrepareRequest, SearchFileSetShard,
+    open_project_file_set_shard, prepare_project_file_set_shard,
+};
+
 const SEARCH_PROFILE_SCHEMA: &str = "wow-search/project-file-local-metadata-profile/1";
 const SEARCH_MANIFEST_SCHEMA: &str = "wow-search/project-file-shard-manifest/1";
 const SEARCH_DOCUMENT_SCHEMA: &str = "wow-search/project-file-document/1";
@@ -50,6 +57,10 @@ pub enum SearchError {
         release_error: StoreErrorCode,
     },
     SelectedFileUnavailable,
+    FileSetEmpty,
+    FileSetDuplicate,
+    FileSetOverCapacity,
+    FileSetBudgetExceeded,
     Cancelled,
     LocalMetadataPermissionRequired,
 }
@@ -67,6 +78,10 @@ impl fmt::Display for SearchError {
             Self::SelectedFileUnavailable => {
                 "selected ProjectFile is absent from the exact owner generation"
             }
+            Self::FileSetEmpty => "explicit ProjectFile set is empty",
+            Self::FileSetDuplicate => "explicit ProjectFile set contains a duplicate ID",
+            Self::FileSetOverCapacity => "explicit ProjectFile set exceeds the document cap",
+            Self::FileSetBudgetExceeded => "ProjectFile set exceeds its continuing metadata bound",
             Self::Cancelled => "search shard operation was cancelled",
             Self::LocalMetadataPermissionRequired => {
                 "explicit local metadata permission is required"
@@ -105,6 +120,11 @@ pub struct SearchBounds {
 }
 
 impl SearchBounds {
+    #[must_use]
+    pub const fn max_documents(&self) -> u32 {
+        self.max_documents.get()
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         max_documents: NonZeroU32,
@@ -643,7 +663,69 @@ pub fn prepare_project_file_shard(
         .file_by_id(&request.file_id)
         .ok_or(SearchError::SelectedFileUnavailable)?;
     let document = project_file_document(file, request.profile.bounds)?;
+    let evidence = owner_manifest_evidence(read, &pair, request.profile.bounds, stop)?;
+    let manifest = SearchShardManifest {
+        schema: SEARCH_MANIFEST_SCHEMA.into(),
+        profile_digest: request.profile.digest.clone(),
+        source: evidence.source,
+        document: document.clone(),
+        project_coverage_and_conflicts: evidence.project_coverage_and_conflicts,
+        graph_coverage: evidence.graph_coverage,
+        graph_partitions: evidence.graph_partitions,
+        graph_conflict_manifest: evidence.graph_conflict_manifest,
+        source_provenance_present: evidence.source_provenance_present,
+    };
+    let manifest_bytes =
+        wow_core::canonical_json_bytes(&manifest).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+    if manifest_bytes.len() as u64 > request.profile.bounds.max_owner_manifest_bytes.get() {
+        return Err(SearchError::OwnerEvidenceInvalid);
+    }
+    let logical_id = format!(
+        "search-shard:sha256:{}",
+        hex(&Sha256::digest(&manifest_bytes))
+    )
+    .into_boxed_str();
+    let physical_profile = SearchStoreProfile::new(
+        request.profile.digest.to_string(),
+        request.profile.bounds.physical()?,
+    )?;
+    let physical = SearchStore::prepare(
+        physical_profile,
+        logical_id.to_string(),
+        &[SearchStoreDocument::new(
+            document.entity_id.as_str(),
+            document.owner_metadata_label.as_str(),
+        )],
+        &manifest_bytes,
+        object_limits,
+        stop,
+    )?;
+    Ok(PreparedProjectFileShard {
+        logical_id,
+        manifest,
+        manifest_bytes: manifest_bytes.into_boxed_slice(),
+        physical,
+    })
+}
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OwnerManifestEvidence {
+    source: SearchSourceBinding,
+    project_coverage_and_conflicts: Vec<serde_json::Value>,
+    graph_coverage: Vec<serde_json::Value>,
+    graph_partitions: Vec<GraphPartitionEvidence>,
+    graph_conflict_manifest: GraphConflictManifestState,
+    source_provenance_present: bool,
+}
+
+fn owner_manifest_evidence(
+    read: &ReadSnapshot,
+    pair: &AcquiredProjectPair,
+    bounds: SearchBounds,
+    stop: &AtomicBool,
+) -> SearchResult<OwnerManifestEvidence> {
+    let project = pair.project();
     let project_coverage = project.project_coverage_records();
     let graph = pair.graph();
     let graph_coverage = graph.snapshot().coverage();
@@ -658,8 +740,8 @@ pub fn prepare_project_file_shard(
             .and_then(|value| value.checked_add(1))
             .ok_or(SearchError::OwnerEvidenceInvalid)?;
     }
-    if evidence_count > request.profile.bounds.max_owner_evidence_records.get() as usize
-        || graph_partitions.len() > request.profile.bounds.max_owner_evidence_records.get() as usize
+    if evidence_count > bounds.max_owner_evidence_records.get() as usize
+        || graph_partitions.len() > bounds.max_owner_evidence_records.get() as usize
     {
         return Err(SearchError::OwnerEvidenceInvalid);
     }
@@ -700,47 +782,13 @@ pub fn prepare_project_file_shard(
             coverage: serialize_owner_records(partition.coverage())?,
         });
     }
-    let manifest = SearchShardManifest {
-        schema: SEARCH_MANIFEST_SCHEMA.into(),
-        profile_digest: request.profile.digest.clone(),
+    Ok(OwnerManifestEvidence {
         source,
-        document: document.clone(),
         project_coverage_and_conflicts,
         graph_coverage,
         graph_partitions: partition_evidence,
         graph_conflict_manifest: GraphConflictManifestState::NotExposedByTypedOwnerRead,
         source_provenance_present: pair.source_provenance().is_some(),
-    };
-    let manifest_bytes =
-        wow_core::canonical_json_bytes(&manifest).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
-    if manifest_bytes.len() as u64 > request.profile.bounds.max_owner_manifest_bytes.get() {
-        return Err(SearchError::OwnerEvidenceInvalid);
-    }
-    let logical_id = format!(
-        "search-shard:sha256:{}",
-        hex(&Sha256::digest(&manifest_bytes))
-    )
-    .into_boxed_str();
-    let physical_profile = SearchStoreProfile::new(
-        request.profile.digest.to_string(),
-        request.profile.bounds.physical()?,
-    )?;
-    let physical = SearchStore::prepare(
-        physical_profile,
-        logical_id.to_string(),
-        &[SearchStoreDocument::new(
-            document.entity_id.as_str(),
-            document.owner_metadata_label.as_str(),
-        )],
-        &manifest_bytes,
-        object_limits,
-        stop,
-    )?;
-    Ok(PreparedProjectFileShard {
-        logical_id,
-        manifest,
-        manifest_bytes: manifest_bytes.into_boxed_slice(),
-        physical,
     })
 }
 

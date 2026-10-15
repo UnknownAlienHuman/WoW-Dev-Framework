@@ -43,6 +43,21 @@ E4-A/E4-C acceptance remain outside this selected route in
 
 ## One-shot build/query
 
+The optional `--file-ids '["project-file:a.lua","project-file:b.lua"]'` selects
+one explicit finite file set for `search build-query`. `--file-id` remains the
+exact query root and must belong to that set. The service rejects empty,
+duplicate, over-capacity and absent IDs; selection never discovers files.
+`--max-documents` caps the raw selection before ordered-set work. All documents
+share one exact Project/Graph acquisition and one continuing manifest-byte bound.
+
+This selection uses the named file-set profile/manifest/reader and
+`wow-service/search-file-set-result-envelope/1`. Its ordered `documents` retain
+only exact IDs/relative labels; literal FTS can return candidates from any member.
+No FTS result or miss gains exact or negative authority. Omitting `--file-ids`
+preserves the original single-file request/result identities. This first file-set
+consumer remains one-shot; durable file-set handles and lifecycle qualification
+remain open in #169 alongside the other E4 obligations.
+
 `wow search build-query` builds and queries one immutable ProjectFile metadata
 shard through the Search, Store and Service owners. Use `wow search --help` for
 the closed grammar and required finite bounds. The command requires an explicit
