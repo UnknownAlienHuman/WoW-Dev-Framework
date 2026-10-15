@@ -73,7 +73,7 @@ fn native_library_frame_event_reaches_service_graph_and_readback() -> TestResult
     use crate::graph::GraphBuildRequest;
     use crate::live_project::{LiveProjectPublishRequest, LiveProjectStore, publish_local_project};
     use std::sync::atomic::AtomicBool;
-    use wow_graph::GraphProposalValue;
+    use wow_graph::{GraphCoverageState, GraphProposalValue, GraphRelationKind};
     use wow_recognizers::source_signals::W1_SIGNAL_PARTITION;
     use wow_store::project::ReadSelector;
 
@@ -220,6 +220,26 @@ end
     let (event, event_proposal) = event;
     assert_eq!(event_proposal.entity_kind_id(), "native_event");
     assert!(!event.proposal_id().is_empty());
+    let handle_coverage = partition
+        .coverage()
+        .iter()
+        .find(|coverage| coverage.relation() == GraphRelationKind::HandlesNativeEvent)
+        .ok_or("W1 HandlesNativeEvent coverage")?;
+    assert_eq!(handle_coverage.state(), GraphCoverageState::NotEvaluated);
+    assert!(
+        partition
+            .report()
+            .accepted_relations()
+            .iter()
+            .all(|accepted| {
+                partition
+                    .batch()
+                    .relation_proposal(accepted.proposal_id())
+                    .is_some_and(|proposal| {
+                        proposal.relation_kind_id() != "lua_handles_native_event"
+                    })
+            })
+    );
     let relation = partition
         .report()
         .accepted_relations()

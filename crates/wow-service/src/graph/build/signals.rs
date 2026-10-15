@@ -109,21 +109,6 @@ pub(super) fn publish_signals(
             )
         })
         .collect::<BTreeMap<_, _>>();
-    // Main-declaration crosswalk. W1 borrows the path, so the owned map is
-    // materialized once and reused by the later adapters.
-    let declarations = provenance
-        .lua_declarations()
-        .iter()
-        .map(|declaration| {
-            (
-                declaration.path.clone(),
-                declaration.span,
-                declaration.proposal_id.clone(),
-            )
-        })
-        .collect::<Vec<_>>();
-    // The hook adapters borrow the path, so the borrowing crosswalk is materialized
-    // once from the owned declarations and reused by every later adapter.
     // core.signal.native_frame_event@1
     let frame = w1_recognize_native_frame_events(
         W1Input {
@@ -132,10 +117,6 @@ pub(super) fn publish_signals(
             report,
             context: provenance.context(),
             function_proposals: function_proposals.clone(),
-            declaration_proposals: declarations
-                .iter()
-                .map(|(path, span, proposal)| ((path.as_str(), *span), proposal.as_str()))
-                .collect(),
             call_support: call_support.clone(),
             source_handles: provenance.source_handles(),
             evidence: provenance.evidence(),
@@ -148,17 +129,23 @@ pub(super) fn publish_signals(
     let frame_snapshot = replacement(source, frame.batch, frame.coverage, stop)?;
     let owner_view = &frame_snapshot;
 
+    // Declaration crosswalks belong to later producers that resolve exact Main
+    // declaration addresses. W1 has no declaration input; build these views only
+    // after its event partition has been admitted.
+    let mut string_declarations = BTreeMap::new();
+    let mut hook_declarations = BTreeMap::new();
+    for declaration in provenance.lua_declarations() {
+        string_declarations.insert(
+            (declaration.path.clone(), declaration.span),
+            declaration.proposal_id.as_str(),
+        );
+        hook_declarations.insert(
+            (declaration.path.as_str(), declaration.span),
+            declaration.proposal_id.as_str(),
+        );
+    }
+
     // core.signal.native_event_registry_bridge@1
-    let string_declarations = declarations
-        .iter()
-        .map(|(path, span, proposal)| ((path.clone(), *span), proposal.as_str()))
-        .collect::<BTreeMap<_, _>>();
-    // The hook adapters borrow the path, so the borrowing crosswalk is materialized
-    // once here and reused by every later family.
-    let hook_declarations = declarations
-        .iter()
-        .map(|(path, span, proposal)| ((path.as_str(), *span), proposal.as_str()))
-        .collect::<BTreeMap<_, _>>();
     let hook_function_proposals = function_proposals.clone();
     let hook_call_support = call_support.clone();
     let bridge = w2_recognize_native_event_bridges(

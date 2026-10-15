@@ -148,7 +148,6 @@ pub struct W1Input<'a> {
     pub report: &'a FunctionCallReport,
     pub context: &'a GenerationContext,
     pub function_proposals: BTreeMap<&'a str, &'a str>,
-    pub declaration_proposals: BTreeMap<(&'a str, SourceSpan), &'a str>,
     pub call_support: BTreeMap<&'a str, (StableHandleId, EvidenceId)>,
     pub source_handles: &'a BTreeMap<StableHandleId, SourceHandle>,
     pub evidence: &'a BTreeMap<EvidenceId, EvidenceRecord>,
