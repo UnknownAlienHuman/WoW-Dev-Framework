@@ -205,6 +205,11 @@ impl LiveProjectStore {
     pub fn open(root: &Path) -> ServiceResult<Self> {
         Self::open_selected(root, None, None)
     }
+    /// Retained Service consumers share the same exact registered-catalog
+    /// admission. Extracting this typed Store owner does not relabel its epoch.
+    pub(crate) fn open_retained_owner_store(root: &Path) -> ServiceResult<ProjectStore> {
+        Self::open(root).map(|owner| owner.store)
+    }
     // None preserves general open/recovery across every registered catalog.
     // Old catalogs bind the XML/declaration pair; selected-component catalogs
     // retain exact recipes in configuration, validated on native pair readback.

@@ -36,9 +36,9 @@ const CORE_RECOGNIZER_CALLABLE_QUERIES: &[&str] = &[
     "LibStub.GetLibrary",
     "LibStub.NewLibrary",
 ];
-/// Schema13/14/15 report9 used this former W6 callable query only as retained
-/// lookup data. It is intentionally absent from current recognizer admission.
-const LEGACY_GLOBAL_ACCESS_PROFILE9_CALLABLE_QUERIES: &[&str] = &["LibStub.EmbedLibrary"];
+/// Original non-global recipes and schema13/14/15 report9 used this former W6
+/// callable query as retained lookup data. It grants no recognizer admission.
+const LEGACY_CALLABLE_LOOKUP_QUERIES: &[&str] = &["LibStub.EmbedLibrary"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FunctionCallAnalysisMode {
@@ -400,9 +400,16 @@ pub(crate) fn build_analyzer_binding(
             .map(|query| (*query).to_owned())
             .collect::<Vec<_>>();
         queries_to_resolve.extend(queries.iter().cloned());
-        if legacy_global_access_profile9 {
+        // Only report10's explicitly versioned global-access recipe changed this
+        // query set. Earlier non-global namespaces retain their original session
+        // inputs, even when this lookup has no resolved target.
+        let report10_global_access = !legacy_global_access_profile9
+            && budget
+                .function_call_budget()
+                .is_some_and(|budget| budget.global_access_budget().is_some());
+        if !report10_global_access {
             queries_to_resolve.extend(
-                LEGACY_GLOBAL_ACCESS_PROFILE9_CALLABLE_QUERIES
+                LEGACY_CALLABLE_LOOKUP_QUERIES
                     .iter()
                     .map(|query| (*query).to_owned()),
             );

@@ -14,15 +14,14 @@ use std::{
 
 use serde::Serialize;
 use wow_core::canonical_json_bytes;
-use wow_graph::GraphPartitionSnapshot;
-use wow_project::{ProjectErrorCode, ProjectFileId, replay::publication};
+use wow_project::{ProjectErrorCode, ProjectFileId};
 use wow_search::{
     SearchBuildProfile, SearchError, SearchEvidenceClass, SearchShardBuildRequest,
     SearchStoreLeaseRequest, build_project_file_shard,
 };
 use wow_store::{
     LeaseId, LogicalEpoch, Store, StoreConfiguration, StoreError, StoreErrorCode,
-    project::{ProjectStore, ReadSelector, RecordCatalog, StoreGenerationId},
+    project::{ReadSelector, StoreGenerationId},
 };
 
 pub use wow_search::{LocalMetadataPermission, SearchBounds};
@@ -277,9 +276,9 @@ fn execute_build_query(
         StoreConfiguration::new(SEARCH_STORE_PROFILE_ID, request.store_limits)
             .map_err(map_store_error)?;
     let mut search_store = Store::open_in_memory(store_configuration).map_err(map_store_error)?;
-    let catalog = project_catalog()?;
-    let project_store =
-        ProjectStore::open(&request.project_store_root, &catalog).map_err(map_store_error)?;
+    let project_store = crate::live_project::LiveProjectStore::open_retained_owner_store(
+        &request.project_store_root,
+    )?;
     let read = match project_store.read(&ReadSelector::Exact(generation.clone()), stop) {
         Ok(read) => read,
         Err(error) => {
@@ -468,19 +467,6 @@ fn execute_read_and_query(
         ));
     }
     query
-}
-
-fn project_catalog() -> ServiceResult<RecordCatalog> {
-    let mut schemas = GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();
-    schemas.extend_from_slice(publication::STORAGE_SCHEMAS);
-    RecordCatalog::new(
-        &schemas,
-        &[
-            GraphPartitionSnapshot::STORAGE_CHECK,
-            publication::STORAGE_CHECK,
-        ],
-    )
-    .map_err(map_store_error)
 }
 
 fn map_search_error(error: SearchError) -> ServiceError {

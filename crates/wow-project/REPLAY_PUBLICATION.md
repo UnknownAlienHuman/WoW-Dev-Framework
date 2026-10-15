@@ -124,11 +124,23 @@ remain absent from `named_targets`; this compatibility lookup does not assert th
 the target exists. Hydration still compares the captured project/analyzer IDs and
 exact recaptured archive, without rewriting expected identities.
 
+Non-global report7/8 and selected-component replay recipes also retain their
+original callable lookup set. Removing an unresolved lookup still changes the
+shared analyzer session inputs, so these existing namespaces must not silently
+adopt report10's query set. The retained `LibStub.EmbedLibrary` lookup is data;
+W6 does not admit an embed rule from it. Intermediate unversioned captures made
+with the changed non-global query set remain unqualified; the reader never tries
+multiple recipes against an expected hash.
+
 Current report10 global-access archives use
 `wow-project/native-project-replay/16` / `wow-project.live-replay.v16`, including
 when a graph budget is composed. `STORAGE_SCHEMAS_V16` admits this new recipe;
 schema13/14 catalogs retain their prior membership and reject v16 writes. The
-compatibility consumer is the native `ProjectReplay::hydrate_owner` path used by
+complete pre-report10 catalog, including replay15, is frozen separately as
+`STORAGE_SCHEMAS_V15` and remains in the exact open/recovery/migration catalog
+roster. `LiveProjectStore` and retained Search acquisition use this same admission;
+neither the narrower V14 catalog nor a widened V16 catalog can relabel a V15 epoch.
+The compatibility consumer is the native `ProjectReplay::hydrate_owner` path used by
 `ProjectReplay::hydrate` and `AcquiredProjectPair::read`.
 
 The retained report9 witness is the 8,010-byte schema13 archive captured and

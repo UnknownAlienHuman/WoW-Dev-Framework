@@ -839,43 +839,54 @@ fn platform_pair_publishes_retained_source_and_old_catalog_refuses_v5() -> TestR
 }
 
 #[test]
-fn original_v4_catalog_reopens_exactly_without_relabeling() -> TestResult {
+fn original_v4_and_v15_catalogs_reopen_exactly_without_relabeling() -> TestResult {
     let stop = AtomicBool::new(false);
-    let path = root("legacy-v4-catalog")?;
-    let (publisher, graph) = owners("return External()")?;
-    let mut store = LiveProjectStore {
-        store: ProjectStore::create_with_gc(
-            &path,
-            graph.snapshot().universe().as_str(),
-            catalog_for(publication::STORAGE_SCHEMAS_V4)?,
-        )?,
-    };
-    let epoch = store.store.epoch().clone();
-    let operation = store.publish(&publisher, &graph, "fixture:original-v4", None, &stop)?;
-    let current = store.current()?.ok_or("missing v4 current")?;
-    let read = store.read(&ReadSelector::Current, &stop)?;
-    let snapshot_id = read.project().snapshot_id().to_owned();
-    let publication_set_id = read.publication_set_id().to_owned();
-    drop(read);
-    drop(store);
-    assert_eq!(
-        ProjectStore::open(&path, &catalog()?)
-            .err()
-            .ok_or("latest catalog opened an original v4 epoch")?
-            .code(),
-        StoreErrorCode::IntegrityViolation
-    );
-    let store = LiveProjectStore::open(&path)?;
-    assert_eq!(store.store.epoch(), &epoch);
-    assert_eq!(store.current()?, Some(current.clone()));
-    let read = store.read(&ReadSelector::Publication(current.record_id), &stop)?;
-    assert_eq!(read.store_generation_id(), &operation.generation_id);
-    assert_eq!(read.project().snapshot_id(), snapshot_id);
-    assert_eq!(read.graph(), &graph);
-    assert_eq!(read.publication_set_id(), publication_set_id);
-    drop(read);
-    drop(store);
-    std::fs::remove_dir_all(path)?;
+    for (name, schemas) in [
+        ("v4", publication::STORAGE_SCHEMAS_V4),
+        ("v15", publication::STORAGE_SCHEMAS_V15),
+    ] {
+        let path = root(&format!("legacy-{name}-catalog"))?;
+        let (publisher, graph) = owners("return External()")?;
+        let mut store = LiveProjectStore {
+            store: ProjectStore::create_with_gc(
+                &path,
+                graph.snapshot().universe().as_str(),
+                catalog_for(schemas)?,
+            )?,
+        };
+        let epoch = store.store.epoch().clone();
+        let operation = store.publish(
+            &publisher,
+            &graph,
+            &format!("fixture:original-{name}"),
+            None,
+            &stop,
+        )?;
+        let current = store.current()?.ok_or("missing frozen-catalog current")?;
+        let read = store.read(&ReadSelector::Current, &stop)?;
+        let snapshot_id = read.project().snapshot_id().to_owned();
+        let publication_set_id = read.publication_set_id().to_owned();
+        read.close()?;
+        store.close()?;
+        assert_eq!(
+            ProjectStore::open(&path, &catalog()?)
+                .err()
+                .ok_or("latest catalog opened a frozen epoch")?
+                .code(),
+            StoreErrorCode::IntegrityViolation
+        );
+        let store = LiveProjectStore::open(&path)?;
+        assert_eq!(store.store.epoch(), &epoch);
+        assert_eq!(store.current()?, Some(current.clone()));
+        let read = store.read(&ReadSelector::Publication(current.record_id), &stop)?;
+        assert_eq!(read.store_generation_id(), &operation.generation_id);
+        assert_eq!(read.project().snapshot_id(), snapshot_id);
+        assert_eq!(read.graph(), &graph);
+        assert_eq!(read.publication_set_id(), publication_set_id);
+        read.close()?;
+        store.close()?;
+        std::fs::remove_dir_all(path)?;
+    }
     Ok(())
 }
 
