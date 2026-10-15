@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use wow_core::{
     CoverageId, EvidenceId, GenerationContext, GenerationContextId, StableHandleId,
@@ -30,12 +30,60 @@ pub enum RecognizerRuleOutcomeState {
     Cancelled,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(tag = "cardinality", content = "value", rename_all = "snake_case")]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RecognizerCapturedValue {
     One(RecognizerFactValue),
     Optional(Option<RecognizerFactValue>),
     BoundedMany(Vec<RecognizerFactValue>),
+}
+
+#[derive(Serialize)]
+#[serde(tag = "cardinality", content = "value", rename_all = "snake_case")]
+enum RecognizerCapturedValueRef<'a> {
+    One(&'a RecognizerFactValue),
+    Optional(&'a RecognizerFactValue),
+    OptionalAbsent,
+    BoundedMany(&'a [RecognizerFactValue]),
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "cardinality", content = "value", rename_all = "snake_case")]
+enum RecognizerCapturedValueOwned {
+    One(RecognizerFactValue),
+    Optional(RecognizerFactValue),
+    OptionalAbsent,
+    BoundedMany(Vec<RecognizerFactValue>),
+}
+
+impl Serialize for RecognizerCapturedValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let encoded = match self {
+            Self::One(value) => RecognizerCapturedValueRef::One(value),
+            Self::Optional(Some(value)) => RecognizerCapturedValueRef::Optional(value),
+            Self::Optional(None) => RecognizerCapturedValueRef::OptionalAbsent,
+            Self::BoundedMany(values) => RecognizerCapturedValueRef::BoundedMany(values),
+        };
+        encoded.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for RecognizerCapturedValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(
+            match RecognizerCapturedValueOwned::deserialize(deserializer)? {
+                RecognizerCapturedValueOwned::One(value) => Self::One(value),
+                RecognizerCapturedValueOwned::Optional(value) => Self::Optional(Some(value)),
+                RecognizerCapturedValueOwned::OptionalAbsent => Self::Optional(None),
+                RecognizerCapturedValueOwned::BoundedMany(values) => Self::BoundedMany(values),
+            },
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

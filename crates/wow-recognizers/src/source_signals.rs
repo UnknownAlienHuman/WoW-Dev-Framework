@@ -60,7 +60,7 @@ const W1_MAX_UNIT_TOKENS: usize = 16;
 const W1_MAX_MATCHES: usize = 8192;
 const W1_MAX_EVENT_BYTES: usize = 1024;
 const W1_EVENT_ENTITY: &str = "native_event";
-const W1_REGISTERS_DEFINITION: &str = "lua_register_native_event";
+const W1_REGISTERS_DEFINITION: &str = "lua_registers_native_event";
 const W1_REGISTERS_BLOCKER: &str =
     "lua_native_frame_events.exact_resolved_registerevent_calls_only";
 const W1_HANDLES_BLOCKER: &str =

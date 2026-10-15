@@ -69,6 +69,174 @@ fn custom_relation<'a>(
 }
 
 #[test]
+fn native_library_frame_event_reaches_service_graph_and_readback() -> TestResult {
+    use crate::graph::GraphBuildRequest;
+    use crate::live_project::{LiveProjectPublishRequest, LiveProjectStore, publish_local_project};
+    use std::sync::atomic::AtomicBool;
+    use wow_graph::GraphProposalValue;
+    use wow_recognizers::source_signals::W1_SIGNAL_PARTITION;
+    use wow_store::project::ReadSelector;
+
+    let (root, mut config) = super::native_fixture()?;
+    let api_path = "Blizzard_APIDocumentationGenerated/API.lua";
+    let api = r#"APIDocumentation:AddDocumentationTable({Name="Frame",Type="System",Namespace="Frame",Environment="All",Functions={{Name="RegisterEvent",Type="Function",Arguments={{Name="self",Type="Frame",Nilable=false},{Name="event",Type="string",Nilable=false}}}}})
+APIDocumentation:AddDocumentationTable({Name="Global",Type="System",Environment="All",Functions={{Name="CreateFrame",Type="Function",Arguments={{Name="frameType",Type="string",Nilable=false}},Returns={{Name="frame",Type="Frame",Nilable=false}}}}})"#;
+    replace_source_file(&root, &mut config, api_path, api)?;
+    // This synthetic namespace receiver is source-resolved from Library; no client/runtime claim is made.
+    let main = r#"function Main()
+    CreateFrame("Frame")
+    Frame:RegisterEvent("PLAYER_LOGIN")
+end
+"#;
+    replace_source_file(&root, &mut config, "UI/main.lua", main)?;
+    let native_manifest = json!({
+        "schema": crate::local::LOCAL_NATIVE_SCHEMA,
+        "project_id": config["project_id"],
+        "workspace_id": config["workspace_id"],
+        "source_origin_id": config["source_origin_id"],
+        "logical_root": config["logical_root"],
+        "profile": config["native_reference"]["profile"],
+        "analyzer": config["analyzer"],
+        "main": {"root": "UI", "files": [ProjectDiskFile::new("main.lua")]},
+        "native_source": config["native_reference"]["native_source"]
+    });
+    super::write_json(&root, "native-project.json", &native_manifest)?;
+    let stop = AtomicBool::new(false);
+    let input = LocalProjectInput::from_config_path(&root.0.join("native-project.json"), &stop)?;
+    assert!(
+        input
+            .bundle
+            .configuration()
+            .native_library_input()
+            .is_some()
+    );
+
+    let mut publisher = wow_project::ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(input.bundle.clone(), &stop)?;
+    let project = publisher.open_current()?;
+    let report = project
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("native Library function-call report")?;
+    let report_id = report.analysis_id().to_owned();
+    let report_json = serde_json::to_string(report)?;
+    let event_call = report
+        .calls()
+        .iter()
+        .find(|call| {
+            call.is_colon_call() && call.resolved_callable_key() == Some("Frame.RegisterEvent")
+        })
+        .ok_or_else(|| format!("native Frame call missing: {report_json}"))?;
+    assert_eq!(
+        event_call.resolved_callable_key(),
+        Some("Frame.RegisterEvent"),
+        "native Frame call was not resolved: {report_json}"
+    );
+    let event_target = match event_call.target() {
+        wow_emmy::function_calls::SourceCallTarget::LibraryFunction { target } => target,
+        target => {
+            return Err(format!("Frame receiver did not resolve in Library: {target:?}").into());
+        }
+    };
+    assert_eq!(event_target.role, "library");
+    assert!(
+        report
+            .library_snapshot_ids()
+            .contains(&event_target.workspace_id)
+    );
+    let create_call = report
+        .calls()
+        .iter()
+        .find(|call| call.resolved_callable_key() == Some("CreateFrame"))
+        .ok_or_else(|| format!("native CreateFrame call missing: {report_json}"))?;
+    assert!(matches!(
+        create_call.target(),
+        wow_emmy::function_calls::SourceCallTarget::LibraryFunction { target }
+            if target.role == "library"
+                && report.library_snapshot_ids().contains(&target.workspace_id)
+    ));
+    assert!(matches!(
+        event_call
+            .arguments()
+            .first()
+            .and_then(|argument| argument.literal()),
+        Some(wow_emmy::function_calls::SourceCallLiteral::String(value))
+            if value == "PLAYER_LOGIN"
+    ));
+    let call_id = event_call.fact_id().to_owned();
+    let caller_id = event_call.caller_function_id().to_owned();
+    assert!(
+        report
+            .functions()
+            .iter()
+            .any(|function| function.fact_id() == caller_id)
+    );
+
+    let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
+        .with_input_profile(&input);
+    let store_path = root.0.join("native-w1-store");
+    assert!(!store_path.exists());
+    let publication = publish_local_project(
+        &root.0.join("native-project.json"),
+        &request,
+        &store_path,
+        &LiveProjectPublishRequest::new("fixture-native-w1-positive", "absent", true, true)?,
+        &stop,
+    )?;
+    assert_eq!(serde_json::to_value(publication)?["status"], "activated");
+    let store = LiveProjectStore::open(&store_path)?;
+    let read = store.read(&ReadSelector::Current, &stop)?;
+    let stored_report = read
+        .project()
+        .snapshot()
+        .analyzer_binding()
+        .function_call_report()
+        .ok_or("read-back function-call report")?;
+    assert_eq!(stored_report.analysis_id(), report_id);
+    assert!(stored_report.calls().iter().any(|call| {
+        call.fact_id() == call_id
+            && call.caller_function_id() == caller_id
+            && call.resolved_callable_key() == Some("Frame.RegisterEvent")
+    }));
+    let partition = read
+        .graph()
+        .partition(W1_SIGNAL_PARTITION)
+        .ok_or("native W1 graph partition")?;
+    let event = partition
+        .report()
+        .accepted_entities()
+        .iter()
+        .find_map(|accepted| {
+            let proposal = partition.batch().entity_proposal(accepted.proposal_id())?;
+            match proposal.semantic_key().get("event") {
+                Some(GraphProposalValue::String(event)) if event.as_ref() == "PLAYER_LOGIN" => {
+                    Some((accepted, proposal))
+                }
+                _ => None,
+            }
+        })
+        .ok_or("W1 event entity read back from the Service graph")?;
+    let (event, event_proposal) = event;
+    assert_eq!(event_proposal.entity_kind_id(), "native_event");
+    assert!(!event.proposal_id().is_empty());
+    let relation = partition
+        .report()
+        .accepted_relations()
+        .iter()
+        .find_map(|accepted| {
+            let proposal = partition
+                .batch()
+                .relation_proposal(accepted.proposal_id())?;
+            (proposal.relation_kind_id() == "lua_registers_native_event").then_some(accepted)
+        })
+        .ok_or("W1 registration relation read back from the Service graph")?;
+    assert!(!relation.edge().evidence_ids().is_empty());
+    read.close()?;
+    Ok(())
+}
+
+#[test]
 fn native_service_graph_keeps_main_registry_shadows_out_of_donor_adapters() -> TestResult {
     use crate::graph::{GraphBuildRequest, GraphReadStatus, execute_graph_build};
     use std::sync::atomic::AtomicBool;

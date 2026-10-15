@@ -12,13 +12,14 @@ use wow_core::{
 use wow_graph::GraphConfidence;
 use wow_recognizers::{
     RECOGNIZER_PACK_SCHEMA_VERSION, RecognizerCapture, RecognizerCaptureCardinality,
-    RecognizerClause, RecognizerFact, RecognizerFactBundle, RecognizerFactCoverage,
-    RecognizerFactCoverageInput, RecognizerFactCoverageState, RecognizerFactInput,
-    RecognizerFactLimits, RecognizerFactScope, RecognizerFactScopeKind, RecognizerFactValue,
-    RecognizerOutput, RecognizerOutputConfidence, RecognizerPack, RecognizerPackBudgets,
-    RecognizerPackDocument, RecognizerPackLiteral, RecognizerPackRollout, RecognizerPackTrustClass,
-    RecognizerProposedAssertion, RecognizerRule, RecognizerRuleOutcomeState,
-    compile_recognizer_plan, execute_recognizer_plan, parse_recognizer_pack,
+    RecognizerCapturedValue, RecognizerClause, RecognizerFact, RecognizerFactBundle,
+    RecognizerFactCoverage, RecognizerFactCoverageInput, RecognizerFactCoverageState,
+    RecognizerFactInput, RecognizerFactLimits, RecognizerFactScope, RecognizerFactScopeKind,
+    RecognizerFactValue, RecognizerOutput, RecognizerOutputConfidence, RecognizerOutputPartition,
+    RecognizerPack, RecognizerPackBudgets, RecognizerPackDocument, RecognizerPackLiteral,
+    RecognizerPackRollout, RecognizerPackTrustClass, RecognizerProposedAssertion, RecognizerRule,
+    RecognizerRuleOutcomeState, compile_recognizer_plan, execute_recognizer_plan,
+    parse_recognizer_pack,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -262,6 +263,92 @@ fn exact_selector_predicate_capture_and_output_match() -> TestResult {
         RecognizerOutputConfidence::Derived
     );
     output.validate()?;
+    Ok(())
+}
+
+#[test]
+fn optional_absent_capture_has_typed_identity_and_roundtrips() -> TestResult {
+    let absent = RecognizerCapturedValue::Optional(None);
+    let absent_bytes = serde_json::to_vec(&absent)?;
+    assert_eq!(absent_bytes, br#"{"cardinality":"optional_absent"}"#);
+    assert_eq!(
+        serde_json::from_slice::<RecognizerCapturedValue>(&absent_bytes)?,
+        absent
+    );
+
+    let optional_nil = RecognizerCapturedValue::Optional(Some(RecognizerFactValue::Nil));
+    let one_nil = RecognizerCapturedValue::One(RecognizerFactValue::Nil);
+    let empty_many = RecognizerCapturedValue::BoundedMany(Vec::new());
+    assert_eq!(
+        serde_json::to_vec(&optional_nil)?,
+        br#"{"cardinality":"optional","value":{"type":"nil"}}"#
+    );
+    assert_eq!(
+        serde_json::to_vec(&one_nil)?,
+        br#"{"cardinality":"one","value":{"type":"nil"}}"#
+    );
+    assert_eq!(
+        serde_json::to_vec(&empty_many)?,
+        br#"{"cardinality":"bounded_many","value":[]}"#
+    );
+    assert_ne!(absent_bytes, serde_json::to_vec(&optional_nil)?);
+    assert_ne!(absent_bytes, serde_json::to_vec(&empty_many)?);
+    assert!(
+        serde_json::from_slice::<RecognizerCapturedValue>(
+            br#"{"cardinality":"optional","value":null}"#
+        )
+        .is_err()
+    );
+
+    let mut rule = direct_rule(Vec::new());
+    rule.captures.push(RecognizerCapture {
+        name: "unit_token".into(),
+        value_type: "bounded_string".into(),
+        source: "call.unit_token".into(),
+        cardinality: RecognizerCaptureCardinality::Optional,
+    });
+    let (pack, plan) = compiled(rule, 100, 100)?;
+    let context = context()?;
+    let facts = bundle(
+        &context,
+        vec![fact(
+            &context,
+            "emmy.member_call",
+            "KnownApi",
+            "direct",
+            1,
+            GraphConfidence::Derived,
+        )?],
+        vec![coverage(
+            &context,
+            "emmy.member_call.complete",
+            RecognizerFactCoverageState::Complete,
+        )?],
+    )?;
+    let output = execute_recognizer_plan(
+        &context,
+        &pack,
+        &plan,
+        &facts,
+        RecognizerFactLimits::default(),
+        &AtomicBool::new(false),
+    )?;
+    let matched = &output.outcomes()[0].matches()[0];
+    assert_eq!(
+        matched.captures().get("unit_token"),
+        Some(&RecognizerCapturedValue::Optional(None))
+    );
+    assert!(matched.captures().contains_key("unit_token"));
+
+    let encoded = serde_json::to_value(&output)?;
+    assert_eq!(
+        encoded["outcomes"][0]["matches"][0]["captures"]["unit_token"],
+        serde_json::json!({"cardinality":"optional_absent"})
+    );
+    let decoded: RecognizerOutputPartition = serde_json::from_value(encoded.clone())?;
+    decoded.validate()?;
+    assert_eq!(decoded.partition_id(), output.partition_id());
+    assert_eq!(serde_json::to_value(&decoded)?, encoded);
     Ok(())
 }
 

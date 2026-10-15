@@ -109,6 +109,18 @@ output semantic declaration ID
 
 Evidence-only duplicate facts may merge supporting refs into one match when the rule profile declares them semantically identical.
 
+## Captured-value identity encoding
+
+Captured values use an adjacent `cardinality`/`value` representation. `One`,
+`Optional(Some(value))`, and `BoundedMany(values)` retain their existing tagged
+bytes. An absent optional capture is encoded as the typed unit variant
+`{"cardinality":"optional_absent"}`; its capture-map key remains present. This
+keeps it distinct from an omitted key, `Optional(Some(Nil))`, and an empty
+`BoundedMany` value. The decoder rejects the former `optional` plus JSON `null`
+shape, which could not participate in a valid canonical match identity.
+
+The wire consumer is `RECOGNIZER_OUTPUT_PARTITION_SCHEMA` (`wow-recognizers/output-partition/e2-b/1`). It does not need a version change: no valid prior partition could contain an absent optional capture because canonical match and partition identity rejected null, while all previously valid capture encodings remain byte-identical.
+
 ## Output amplification
 
 Bound:
