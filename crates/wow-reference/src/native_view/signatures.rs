@@ -20,6 +20,28 @@ pub struct NativeCallableField {
 }
 
 impl NativeCallableField {
+    /// Original captured member name, exactly as admitted from the source payload.
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+    /// Original captured member type text. This is the source-normalized type
+    /// identity exactly as captured; it stays unresolved because this reader
+    /// performs no type resolution or annotation lowering, and any Resolution
+    /// overlay is owned by `NativeCallableTypeResolution`, not by this field.
+    pub fn type_name(&self) -> &str {
+        self.type_name.as_str()
+    }
+    /// Original inner type text when the source stated one; `None` is not a claim
+    /// that the member has no inner type.
+    pub fn inner_type(&self) -> Option<&str> {
+        self.inner_type.as_deref()
+    }
+    /// Tri-state nilability exactly as captured: `None` when the source stated
+    /// nothing, `Some(true)` when it explicitly allowed nil, `Some(false)` when
+    /// it explicitly disallowed nil.
+    pub fn nilable(&self) -> Option<bool> {
+        self.nilable
+    }
     /// Original raw member range; it may refer to an explicitly reused local table.
     pub const fn source_span(&self) -> Span {
         self.source_span
@@ -60,6 +82,16 @@ pub struct NativeCallableSignature<'a> {
     type_resolution: Option<&'a NativeCallableTypeResolution>,
 }
 impl NativeCallableSignature<'_> {
+    /// Original captured callable name from the sealed signature catalog;
+    /// it is not a resolved or corrected identity.
+    pub fn name(&self) -> &str {
+        self.signature.name.as_str()
+    }
+    /// Original captured callable namespace when the source stated one;
+    /// `None` is not a claim that the callable is unnested.
+    pub fn namespace(&self) -> Option<&str> {
+        self.signature.namespace.as_deref()
+    }
     pub const fn reference_generation(&self) -> &str {
         self.reference_generation
     }
