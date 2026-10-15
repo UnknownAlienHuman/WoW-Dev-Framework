@@ -18,7 +18,7 @@ use wow_project::{
     ProjectError, ProjectFileId, ProjectFileRecord, replay::publication::AcquiredProjectPair,
 };
 use wow_store::{
-    LeaseRecord, ObjectId, Store, StoreError,
+    LeaseId, LeaseRecord, LogicalEpoch, ObjectId, Store, StoreError, StoreErrorCode,
     project::{ReadSnapshot, StoreGenerationId},
     search::{
         PublishedSearchShard, SearchStore, SearchStoreDocument, SearchStoreLimits,
@@ -41,6 +41,14 @@ pub enum SearchError {
     Project(ProjectError),
     InvalidProfile,
     OwnerEvidenceInvalid,
+    ShardLeaseCleanupOutcomeUnknown {
+        lease_id: LeaseId,
+        holder: Box<str>,
+        object_id: ObjectId,
+        shard_id: Box<str>,
+        expires_after: LogicalEpoch,
+        release_error: StoreErrorCode,
+    },
     SelectedFileUnavailable,
     Cancelled,
     LocalMetadataPermissionRequired,
@@ -53,6 +61,9 @@ impl fmt::Display for SearchError {
             Self::Project(_) => "retained project owner read failed",
             Self::InvalidProfile => "search profile is invalid",
             Self::OwnerEvidenceInvalid => "typed owner evidence is invalid or exceeds its bound",
+            Self::ShardLeaseCleanupOutcomeUnknown { .. } => {
+                "search shard lease cleanup outcome is unknown"
+            }
             Self::SelectedFileUnavailable => {
                 "selected ProjectFile is absent from the exact owner generation"
             }
@@ -581,14 +592,40 @@ pub fn build_project_file_shard(
         request.lease,
         stop,
     )?;
-    if physical.reader().owner_manifest_bytes() != manifest_bytes {
-        return Err(SearchError::OwnerEvidenceInvalid);
-    }
+    let physical = verify_reopened_owner_manifest(physical, &manifest_bytes, store)?;
     Ok(SearchShard {
         logical_id,
         manifest,
         physical,
     })
+}
+
+fn verify_reopened_owner_manifest(
+    physical: PublishedSearchShard,
+    expected_manifest: &[u8],
+    store: &mut Store,
+) -> SearchResult<PublishedSearchShard> {
+    if physical.reader().owner_manifest_bytes() == expected_manifest {
+        return Ok(physical);
+    }
+
+    let lease_id = physical.lease().lease_id().clone();
+    let holder = physical.lease().holder().into();
+    let object_id = physical.object_id().clone();
+    let shard_id = physical.search_shard_id().into();
+    let expires_after = physical.lease().expires_after();
+
+    match physical.release(store) {
+        Ok(()) => Err(SearchError::OwnerEvidenceInvalid),
+        Err(error) => Err(SearchError::ShardLeaseCleanupOutcomeUnknown {
+            lease_id,
+            holder,
+            object_id,
+            shard_id,
+            expires_after,
+            release_error: error.code(),
+        }),
+    }
 }
 
 fn project_file_document(
@@ -640,9 +677,18 @@ mod tests {
     use std::{
         error::Error,
         num::{NonZeroU32, NonZeroU64},
+        sync::atomic::AtomicBool,
     };
 
-    use super::{SearchBounds, SearchBuildProfile};
+    use wow_store::{
+        LeaseId, LogicalEpoch, Store, StoreConfiguration, StoreErrorCode, StoreLimits,
+    };
+
+    use super::{
+        PublishedSearchShard, SearchBounds, SearchBuildProfile, SearchError, SearchStore,
+        SearchStoreDocument, SearchStoreLeaseRequest, SearchStoreLimits, SearchStoreProfile,
+        verify_reopened_owner_manifest,
+    };
 
     type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
@@ -661,9 +707,109 @@ mod tests {
         Ok(SearchBuildProfile::new(bounds)?)
     }
 
+    fn physical_profile() -> TestResult<SearchStoreProfile> {
+        let limits = SearchStoreLimits::new(1, 128, 256, 64, 1, 16_384, 256_000, 800_000)?;
+        Ok(SearchStoreProfile::new(
+            format!("sha256:{}", "a".repeat(64)),
+            limits,
+        )?)
+    }
+
+    fn test_store() -> TestResult<Store> {
+        let limits = StoreLimits::new(1_000_000, 8, 8, 128, 8)?;
+        Ok(Store::open_in_memory(StoreConfiguration::new(
+            "search-owner-cleanup-test-v1",
+            limits,
+        )?)?)
+    }
+
+    fn physical_shard(
+        store: &mut Store,
+        shard_id: &str,
+        lease_id: &str,
+        owner_manifest: &[u8],
+    ) -> TestResult<PublishedSearchShard> {
+        Ok(SearchStore::build_and_publish(
+            store,
+            physical_profile()?,
+            shard_id,
+            &[SearchStoreDocument::new(
+                "project-file:state.lua",
+                "state.lua",
+            )],
+            owner_manifest,
+            SearchStoreLeaseRequest::new(
+                LeaseId::new(lease_id)?,
+                "search-cleanup-test",
+                LogicalEpoch::new(10),
+            )?,
+            &AtomicBool::new(false),
+        )?)
+    }
+
     #[test]
     fn profile_digest_binds_every_caller_supplied_bound() -> TestResult {
         assert_ne!(profile(1)?.digest(), profile(2)?.digest());
+        Ok(())
+    }
+
+    #[test]
+    fn post_acquire_owner_manifest_mismatch_cleans_lease_or_reports_identity() -> TestResult {
+        let mut store = test_store()?;
+        let physical = physical_shard(
+            &mut store,
+            "search-shard:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "search-owner-mismatch-release",
+            br#"{"owner":"exact"}"#,
+        )?;
+        let object_id = physical.object_id().clone();
+        assert_eq!(physical.lease().expires_after().get(), 10);
+
+        let mismatch =
+            verify_reopened_owner_manifest(physical, br#"{"owner":"different"}"#, &mut store);
+        assert!(matches!(mismatch, Err(SearchError::OwnerEvidenceInvalid)));
+        let collected = store.collect_garbage(LogicalEpoch::new(1), 8)?;
+        assert_eq!(collected.expired_leases_deleted(), 0);
+        assert!(collected.deleted().contains(&object_id));
+        assert!(store.object(&object_id)?.is_none());
+
+        let physical = physical_shard(
+            &mut store,
+            "search-shard:sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "search-owner-mismatch-unknown",
+            br#"{"owner":"exact"}"#,
+        )?;
+        let lease_id = physical.lease().lease_id().clone();
+        let holder = physical.lease().holder().to_owned();
+        let expected_object = physical.object_id().clone();
+        let expected_shard = physical.search_shard_id().to_owned();
+        let expected_expiry = physical.lease().expires_after();
+        store.release_lease(&lease_id, &holder)?;
+
+        let error =
+            match verify_reopened_owner_manifest(physical, br#"{"owner":"different"}"#, &mut store)
+            {
+                Err(error) => error,
+                Ok(_) => return Err("mismatched owner manifest returned a shard".into()),
+            };
+        match error {
+            SearchError::ShardLeaseCleanupOutcomeUnknown {
+                lease_id: actual_lease,
+                holder: actual_holder,
+                object_id: actual_object,
+                shard_id: actual_shard,
+                expires_after: actual_expiry,
+                release_error,
+            } => {
+                assert_eq!(actual_lease, lease_id);
+                assert_eq!(actual_holder.as_ref(), holder.as_str());
+                assert_eq!(actual_object, expected_object);
+                assert_eq!(actual_shard.as_ref(), expected_shard.as_str());
+                assert_eq!(actual_expiry, expected_expiry);
+                assert_eq!(release_error, StoreErrorCode::LeaseConflict);
+            }
+            other => return Err(format!("unexpected mismatch cleanup error: {other:?}").into()),
+        }
         Ok(())
     }
 }

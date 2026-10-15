@@ -498,6 +498,24 @@ fn map_search_error(error: SearchError) -> ServiceError {
             ServiceErrorCode::IdentityMismatch,
             "typed owner evidence failed validation",
         ),
+        SearchError::ShardLeaseCleanupOutcomeUnknown {
+            lease_id,
+            holder,
+            object_id,
+            shard_id,
+            expires_after,
+            release_error,
+        } => ServiceError::new(
+            ServiceErrorCode::StoreOutcomeUnknown,
+            format!(
+                "search shard lease cleanup outcome is unknown; reconcile lease={} holder={} object={} shard={} expires_after={} release_error={release_error:?}",
+                lease_id.as_str(),
+                holder,
+                object_id.as_str(),
+                shard_id,
+                expires_after.get(),
+            ),
+        ),
         SearchError::SelectedFileUnavailable => failure(
             ServiceErrorCode::ExactGenerationUnavailable,
             "selected ProjectFile is absent from the exact generation",
