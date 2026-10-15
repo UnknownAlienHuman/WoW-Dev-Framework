@@ -1,10 +1,11 @@
 #![forbid(unsafe_code)]
 
-//! Exact-generation, metadata-only search for one retained project file.
+//! Exact-generation, metadata-only search for retained project files.
 //!
-//! This first slice owns a deterministic document projection and exact/literal
-//! retrieval over a leased immutable `wow-store` SQLite/FTS5 object. It does not
-//! establish corpus completeness, negative authority, ranking, or continuation.
+//! Single-file and explicit-set projections use leased immutable `wow-store`
+//! SQLite/FTS5 objects. The explicit-set component also provides ranked retrieval
+//! and whole-candidate pages; service secures continuation retention. These
+//! metadata profiles establish neither corpus completeness nor negative authority.
 
 use std::{
     fmt,
@@ -30,10 +31,11 @@ pub use wow_store::search::SearchStoreLeaseRequest;
 
 mod file_set;
 pub use file_set::{
-    PreparedProjectFileSetShard, ProjectFileSetSelection, RetrievalRequest, RetrievalResult,
-    RetrievalState, SearchFileSetBuildProfile, SearchFileSetOpenRequest,
-    SearchFileSetPrepareRequest, SearchFileSetShard, SearchQuery, SearchRetrievalLane,
-    open_project_file_set_shard, prepare_project_file_set_shard,
+    PreparedProjectFileSetShard, ProjectFileSetSelection, RetrievalCursor, RetrievalPage,
+    RetrievalPagePolicy, RetrievalRequest, RetrievalResult, RetrievalState,
+    SearchFileSetBuildProfile, SearchFileSetOpenRequest, SearchFileSetPrepareRequest,
+    SearchFileSetShard, SearchQuery, SearchRetrievalLane, open_project_file_set_shard,
+    prepare_project_file_set_shard,
 };
 
 const SEARCH_PROFILE_SCHEMA: &str = "wow-search/project-file-local-metadata-profile/1";

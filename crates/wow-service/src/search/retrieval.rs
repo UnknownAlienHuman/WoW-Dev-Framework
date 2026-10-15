@@ -6,6 +6,9 @@ use wow_search::{
 };
 use wow_store::ObjectId;
 
+pub(super) mod pagination;
+pub use pagination::{SearchContinueRequest, SearchResultReleaseRequest};
+
 pub struct SearchRetrievalRequest {
     operation_id: OperationId,
     search_store_path: PathBuf,
@@ -18,6 +21,7 @@ pub struct SearchRetrievalRequest {
     max_output_bytes: NonZeroU64,
     lease_expires_after: u64,
     permission: LocalMetadataPermission,
+    page_policy: Option<wow_search::RetrievalPagePolicy>,
 }
 
 impl SearchRetrievalRequest {
@@ -66,7 +70,16 @@ impl SearchRetrievalRequest {
             max_output_bytes,
             lease_expires_after,
             permission,
+            page_policy: None,
         })
+    }
+
+    pub fn with_pagination_json(mut self, bytes: &[u8], stop: &AtomicBool) -> ServiceResult<Self> {
+        self.page_policy = Some(
+            wow_search::RetrievalPagePolicy::from_json_slice(bytes, stop)
+                .map_err(map_search_error)?,
+        );
+        Ok(self)
     }
 }
 
@@ -81,6 +94,8 @@ struct Identity<'a> {
     max_output_bytes: u64,
     lease_expires_after: u64,
     privacy_scope: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    page_policy: Option<&'a wow_search::RetrievalPagePolicy>,
 }
 
 #[derive(Serialize)]
@@ -109,6 +124,7 @@ pub(super) fn execute(
             max_output_bytes: request.max_output_bytes.get(),
             lease_expires_after: request.lease_expires_after,
             privacy_scope: "local_metadata_only",
+            page_policy: request.page_policy.as_ref(),
         },
     )?;
     let mut store = open_durable_search_store(&request.search_store_path, request.store_limits)?;
@@ -121,6 +137,7 @@ pub(super) fn execute(
         DurableOperationStart::Replay(bytes) => return Ok(bytes),
         DurableOperationStart::Started => {}
     }
+    let mut batch = WriteBatch::new();
     let outcome = (|| {
         let (catalog, path) = search_catalog_key(&request.logical_id)?;
         let entry = store
@@ -163,14 +180,18 @@ pub(super) fn execute(
         // Checked closure takes precedence over a query/serialization error.
         shard.release(&mut store).map_err(map_search_error)?;
         let result = query?;
-        let status = match result.state() {
-            RetrievalState::ExactFound => "exact_found",
-            RetrievalState::ExactNotFoundPartial => "exact_not_found_partial",
-            RetrievalState::CandidateOnly => "candidate_only",
-            RetrievalState::NoCandidatesUnderExecutedLanes => "no_candidates_under_executed_lanes",
-            RetrievalState::LaneUnavailable => "lane_unavailable",
-            RetrievalState::Truncated => "truncated",
-        };
+        if let Some(policy) = &request.page_policy {
+            return pagination::start(
+                request,
+                policy,
+                &result,
+                &digest_bytes,
+                &mut store,
+                &mut batch,
+                stop,
+            );
+        }
+        let status = status(result.state());
         let payload = Payload {
             status,
             resource_closure: "closed",
@@ -212,9 +233,20 @@ pub(super) fn execute(
         &mut store,
         &operation_id,
         &request_digest,
-        WriteBatch::new(),
+        batch,
         &bytes,
         request.max_output_bytes.get(),
     )
     .map_err(|error| operation_failure(error, &request.operation_id))
+}
+
+fn status(state: RetrievalState) -> &'static str {
+    match state {
+        RetrievalState::ExactFound => "exact_found",
+        RetrievalState::ExactNotFoundPartial => "exact_not_found_partial",
+        RetrievalState::CandidateOnly => "candidate_only",
+        RetrievalState::NoCandidatesUnderExecutedLanes => "no_candidates_under_executed_lanes",
+        RetrievalState::LaneUnavailable => "lane_unavailable",
+        RetrievalState::Truncated => "truncated",
+    }
 }

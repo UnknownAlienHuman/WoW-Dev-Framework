@@ -3,6 +3,9 @@ use std::collections::BTreeMap;
 
 use super::*;
 
+mod pagination;
+pub use pagination::{RetrievalCursor, RetrievalPage, RetrievalPagePolicy};
+
 const REQUEST_SCHEMA: &str = "wow-search/project-file-set-retrieval-request/1";
 const RESULT_SCHEMA: &str = "wow-search/project-file-set-result-set/1";
 const QUERY_PROFILE: &str = "wow-search/project-file-metadata-identity-prefix-literal/1";
@@ -38,8 +41,11 @@ pub enum SearchQuery {
         text: String,
     },
     Mixed {
+        #[serde(skip_serializing_if = "Option::is_none")]
         entity_id: Option<ProjectFileId>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         prefix: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         text: Option<String>,
     },
 }
@@ -621,6 +627,25 @@ mod tests {
         let mut value = request();
         value["required_lanes"] = json!(["exact_explicit_alias"]);
         assert!(parse(&value).is_err());
+    }
+
+    #[test]
+    fn optional_mixed_fields_remain_absent_in_canonical_request() -> SearchResult<()> {
+        let mut value = request();
+        value["query"] = json!({"class":"mixed","prefix":"a."});
+        value["enabled_lanes"] = json!(["identifier_prefix"]);
+        value["required_lanes"] = json!(["identifier_prefix"]);
+        let parsed = parse(&value)?;
+        let bytes = wow_core::canonical_json_bytes(&parsed)
+            .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+        let encoded: serde_json::Value =
+            serde_json::from_slice(&bytes).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+        assert_eq!(encoded["query"], value["query"]);
+        assert_eq!(
+            RetrievalRequest::from_json_slice(&bytes, &AtomicBool::new(false))?,
+            parsed
+        );
+        Ok(())
     }
 
     #[test]

@@ -1,9 +1,10 @@
 # `wow-service` E4-C search, lineage, migration, impact, and context-handoff contract
 
 **Status:** partial functional ProjectFile/set Search, durable lifecycle and
-explicit retained identity/prefix/literal retrieval with ranked result manifests.
-Only the implemented subset is active; broader E4-C, projections/lanes and
-retained continuation remain unaccepted in #169/#125. See
+explicit retained identity/prefix/literal retrieval with ranked result manifests,
+plus opt-in retained whole-candidate pages, exact continuation and root release.
+Only the implemented subset is active; broader E4-C and projections/lanes
+remain unaccepted in #169/#125. See [pagination](../../../apps/wow/SEARCH_PAGINATION.md) and
 [native Search commands](../../../apps/wow/SEARCH_BUILD_QUERY.md).
 
 **Contract ID:** `wow-service/e4-c/search-lineage-impact-use-cases`

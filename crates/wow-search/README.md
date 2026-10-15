@@ -36,8 +36,11 @@ owner's file ID and relative-path label, and exposes exact ID/label lookups plus
 Candidate-only literal FTS. The one-shot CLI uses an in-memory generic Store.
 The separate durable CLI builds a retained shard, reopens its exact handle in a
 later process, and explicitly retires/collects it through the operation journal,
-catalog roots and leases. Other document/lane classes, ranking, misses,
-continuation and full durability/fault qualification remain separate work.
+catalog roots and leases. Explicit retained file-set queries add identity,
+case-sensitive metadata-prefix and literal lanes, ranked explanations and honest
+misses. Opt-in [whole-candidate pages](../../apps/wow/SEARCH_PAGINATION.md) preserve
+an exact result/shard and cumulative budgets through continuation and release.
+Other document/lane classes and full durability/fault qualification remain open.
 The historical preimplementation freeze is not accepted.
 
 The explicit file-set component uses a separately named metadata profile and

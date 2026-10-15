@@ -43,8 +43,9 @@ prefix byte range where applicable, and source coverage/conflicts.
 empty, unavailable required lanes and explicit truncation exit2; all keep
 `absence_authoritative=false`. Candidate/work caps are distinct from paging.
 The immutable `search-result-set` manifest and journal response replay exactly;
-this operation advertises no cursor or continuation. Full E4 projections/lanes,
-corpus/fault/platform qualification and retained continuation remain #169.
+the default operation advertises no cursor. Explicit `--page-json` enables
+[retained whole-candidate pages and continuation](SEARCH_PAGINATION.md).
+Full E4 projections/lanes and corpus/fault/platform qualification remain #169.
 
 ## Durable selected shard
 

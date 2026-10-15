@@ -5,7 +5,7 @@
 
 mod documents;
 mod retrieval;
-pub use retrieval::SearchRetrievalRequest;
+pub use retrieval::{SearchContinueRequest, SearchResultReleaseRequest, SearchRetrievalRequest};
 mod file_set;
 use documents::{Documents, Profile as DurableProfile, Selection as DurableSelection};
 
@@ -449,6 +449,22 @@ pub struct SearchOperationService {
 }
 
 impl SearchOperationService {
+    pub fn continue_results(
+        &self,
+        request: &SearchContinueRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        retrieval::pagination::continue_result(request, stop)
+    }
+
+    pub fn release_results(
+        &self,
+        request: &SearchResultReleaseRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        retrieval::pagination::release_result(request, stop)
+    }
+
     pub fn retrieve_shard(
         &self,
         request: &SearchRetrievalRequest,
