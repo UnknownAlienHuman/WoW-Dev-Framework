@@ -144,7 +144,9 @@ two roots plus records its completed response. Other shard/generation roots
 remain independent. Existing explicit `search index gc` collects unrooted objects;
 completed response replay remains historical and recreates no roots.
 
-This Reference query currently returns one bounded immutable result manifest.
-Reference result paging/federation, other Reference/project/Blizzard document
+The default query returns one bounded immutable result manifest. Explicit
+`--page-json` selects [Reference pages and continuation](SEARCH_REFERENCE_PAGINATION.md)
+with independent result, shard and original ReferenceView retention.
+Federation, other Reference/project/Blizzard document
 kinds, explicit aliases, similarity/graph lanes, full corpus/fault/platform
 qualification and current Tier X/runtime acceptance remain in Issue #169.

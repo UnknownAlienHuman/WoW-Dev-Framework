@@ -1,5 +1,9 @@
 # Exact retained Search pages
 
+This page describes ProjectFile pages. The separate
+[native Reference route](SEARCH_REFERENCE_PAGINATION.md) also retains its real
+ReferenceView source object and uses its own typed policy and cursor.
+
 `wow search retrieve` keeps its original unpaged behavior unless explicitly given
 `--page-json`. This option selects the closed
 `wow-search/project-file-result-page-policy/1` policy:

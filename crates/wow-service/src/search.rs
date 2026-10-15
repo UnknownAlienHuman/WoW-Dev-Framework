@@ -5,7 +5,10 @@
 
 mod documents;
 mod reference;
-pub use reference::{ReferenceIndexBuildRequest, ReferenceShardRequest};
+pub use reference::{
+    ReferenceContinueRequest, ReferenceIndexBuildRequest, ReferenceResultReleaseRequest,
+    ReferenceShardRequest,
+};
 mod retrieval;
 pub use retrieval::{SearchContinueRequest, SearchResultReleaseRequest, SearchRetrievalRequest};
 mod file_set;
@@ -451,6 +454,20 @@ pub struct SearchOperationService {
 }
 
 impl SearchOperationService {
+    pub fn continue_reference_results(
+        &self,
+        request: &ReferenceContinueRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        reference::pagination::continue_result(request, stop)
+    }
+    pub fn release_reference_results(
+        &self,
+        request: &ReferenceResultReleaseRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        reference::pagination::release_result(request, stop)
+    }
     pub fn build_reference_shard(
         &self,
         request: &ReferenceIndexBuildRequest,

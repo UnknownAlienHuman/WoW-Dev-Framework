@@ -10,7 +10,10 @@ use wow_reference::{
 use wow_store::StoreLimits;
 
 mod query;
-pub use query::{ReferenceQueryRequest, ReferenceQueryResult};
+pub use query::{
+    ReferencePage, ReferencePageCursor, ReferencePagePolicy, ReferenceQueryRequest,
+    ReferenceQueryResult,
+};
 const PROFILE_SCHEMA: &str = "wow-search/native-reference-callable-profile/1";
 const MANIFEST_SCHEMA: &str = "wow-search/native-reference-callable-shard/1";
 

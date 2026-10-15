@@ -1,6 +1,8 @@
 //! Closed name/member/signature lanes over genuine captured callable fields.
 use super::*;
 use crate::SearchRetrievalLane as Lane;
+mod pagination;
+pub use pagination::{ReferencePage, ReferencePageCursor, ReferencePagePolicy};
 const REQUEST_SCHEMA: &str = "wow-search/native-reference-query/1";
 const QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape/1";
 const RANK_PROFILE: &str = "wow-search/reference-authority-ordinal-fusion/1";

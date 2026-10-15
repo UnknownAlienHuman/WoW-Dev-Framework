@@ -9,6 +9,9 @@ use wow_search::reference::{
     open_reference_callable_shard, prepare_reference_callable_shard,
 };
 use wow_store::ObjectId;
+pub(super) mod pagination;
+pub use pagination::{ReferenceContinueRequest, ReferenceResultReleaseRequest};
+use wow_search::reference::ReferencePagePolicy;
 const SOURCE_ROOTS: &str = "wow-search.reference-sources";
 const HANDLE_SCHEMA: &str = "wow-service/native-reference-search-handle/1";
 
@@ -72,6 +75,7 @@ pub struct ReferenceShardRequest {
     max_output_bytes: NonZeroU64,
     lease_expires_after: u64,
     permission: LocalMetadataPermission,
+    page_policy: Option<ReferencePagePolicy>,
 }
 #[derive(Serialize)]
 struct ShardIdentity<'a> {
@@ -82,6 +86,8 @@ struct ShardIdentity<'a> {
     max_output_bytes: NonZeroU64,
     lease_expires_after: u64,
     privacy_scope: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    page_policy: Option<&'a ReferencePagePolicy>,
 }
 impl ReferenceShardRequest {
     #[allow(clippy::too_many_arguments)]
@@ -127,7 +133,16 @@ impl ReferenceShardRequest {
             max_output_bytes,
             lease_expires_after,
             permission,
+            page_policy: None,
         })
+    }
+    pub fn with_pagination_json(mut self, bytes: &[u8], stop: &AtomicBool) -> ServiceResult<Self> {
+        if self.query.is_none() {
+            return Err(invalid());
+        }
+        self.page_policy =
+            Some(ReferencePagePolicy::from_json_slice(bytes, stop).map_err(map_search_error)?);
+        Ok(self)
     }
 }
 
@@ -284,6 +299,7 @@ pub(super) fn execute(
             max_output_bytes: request.max_output_bytes,
             lease_expires_after: request.lease_expires_after,
             privacy_scope: "local_metadata_only",
+            page_policy: request.page_policy.as_ref(),
         },
     )?;
     let mut store = open_durable_search_store(&request.search_store, request.store_limits)?;
@@ -380,6 +396,17 @@ pub(super) fn execute(
                         target.clone(),
                     ))
                     .map_err(map_store_error)?;
+            }
+            if let Some(policy) = &request.page_policy {
+                return pagination::start(
+                    request,
+                    policy,
+                    &result,
+                    &public_digest,
+                    &mut store,
+                    &mut batch,
+                    stop,
+                );
             }
             let result_value: serde_json::Value =
                 serde_json::from_slice(result.canonical_bytes()).map_err(|_| invalid())?;

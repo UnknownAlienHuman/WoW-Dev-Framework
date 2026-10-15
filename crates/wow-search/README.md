@@ -45,6 +45,10 @@ The separate [native Reference callable component](../../apps/wow/SEARCH_REFEREN
 adds genuine canonical names, namespace/member and original signature fields,
 with durable exact owner/shard roots and source-absent queries. It shares the
 existing physical Store; it never reads names from opaque payloads or key text.
+Its [Reference pages](../../apps/wow/SEARCH_REFERENCE_PAGINATION.md) preserve the
+exact ordered result and owner state; Service independently retains all three
+required objects. Private budget accounting is shared with Project pages while
+their published wire identities remain distinct.
 The historical preimplementation freeze is not accepted.
 
 The explicit file-set component uses a separately named metadata profile and
