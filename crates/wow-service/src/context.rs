@@ -37,8 +37,10 @@ pub use combined::{
     execute_context_combined_status,
 };
 pub use continuation::{
-    CONTEXT_CONTINUE_REQUEST_SCHEMA, CONTEXT_CONTINUE_RESULT_SCHEMA, ContextContinueRequest,
-    execute_context_continue,
+    CONTEXT_CONTINUATION_HISTORY_PRUNE_REQUEST_SCHEMA,
+    CONTEXT_CONTINUATION_HISTORY_PRUNE_RESULT_SCHEMA, CONTEXT_CONTINUE_REQUEST_SCHEMA,
+    CONTEXT_CONTINUE_RESULT_SCHEMA, ContextContinuationHistoryPruneRequest, ContextContinueRequest,
+    execute_context_continuation_history_prune, execute_context_continue,
 };
 pub use host::{
     CONTEXT_MAP_CONTINUATION_HOST_SCHEMA, CONTEXT_MAP_HOST_INPUT_MAX_BYTES,

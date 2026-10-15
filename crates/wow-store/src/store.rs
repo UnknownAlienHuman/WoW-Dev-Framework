@@ -12,8 +12,8 @@ use crate::{
     CatalogChange, CatalogEntry, CatalogExpectation, CatalogMutation, CatalogName, CatalogPath,
     CommitReceipt, GarbageCollectionReceipt, IntegrityReport, LeaseId, LeaseRecord, LogicalEpoch,
     LogicalManifest, ObjectId, ObjectRecord, OperationBegin, OperationId, OperationRecord,
-    OperationState, RequestDigest, StoreConfiguration, StoreError, StoreErrorCode, StoreResult,
-    WriteBatch,
+    OperationResultMutation, OperationState, RequestDigest, StoreConfiguration, StoreError,
+    StoreErrorCode, StoreResult, WriteBatch,
 };
 
 const APPLICATION_ID: i64 = 0x5744_4631;
@@ -377,6 +377,12 @@ impl Store {
 
     pub fn commit(&mut self, batch: WriteBatch) -> StoreResult<CommitReceipt> {
         self.preflight_batch(&batch)?;
+        if !batch.operation_result_mutations().is_empty() {
+            return Err(StoreError::new(
+                StoreErrorCode::OperationStateInvalid,
+                "completed operation results require an operation completion transaction",
+            ));
+        }
         let max_object_bytes = self.configuration.limits().max_object_bytes;
         let transaction = self
             .connection
@@ -392,6 +398,9 @@ impl Store {
     ///
     /// The result object may already exist or be included in the batch; either way
     /// its presence is checked in the same transaction as object/catalog writes.
+    /// A batch may retarget exact Completed result pointers by operation ID,
+    /// request digest, and expected prior result, without changing their Completed
+    /// state. The caller owns the meaning of the replacement object.
     /// Exact completed retries return the durable operation record without replaying
     /// the batch or its compare-and-swap mutations.
     pub fn commit_operation(
@@ -467,6 +476,12 @@ impl Store {
         }
 
         let _ = apply_write_batch(&transaction, &batch, max_object_bytes)?;
+        apply_operation_result_mutations(
+            &transaction,
+            batch.operation_result_mutations(),
+            operation_id,
+            max_object_bytes,
+        )?;
         if read_object(&transaction, result_object_id, max_object_bytes)?.is_none() {
             return Err(StoreError::new(
                 StoreErrorCode::ObjectMissing,
@@ -515,6 +530,7 @@ impl Store {
         let limits = self.configuration.limits();
         if batch.objects().len() > limits.max_batch_objects as usize
             || batch.catalog_mutations().len() > limits.max_catalog_mutations as usize
+            || batch.operation_result_mutations().len() > limits.max_catalog_mutations as usize
         {
             return Err(StoreError::new(
                 StoreErrorCode::BatchTooLarge,
@@ -1342,6 +1358,97 @@ fn apply_write_batch(
     }
     Ok((inserted, deduplicated, changes))
 }
+
+fn apply_operation_result_mutations(
+    transaction: &Transaction<'_>,
+    mutations: &[OperationResultMutation],
+    committing_operation_id: &OperationId,
+    max_object_bytes: u64,
+) -> StoreResult<()> {
+    for mutation in mutations {
+        if mutation.operation_id() == committing_operation_id {
+            return Err(StoreError::new(
+                StoreErrorCode::OperationStateInvalid,
+                "operation completion cannot retarget its own result",
+            ));
+        }
+        let current = read_operation(transaction, mutation.operation_id())?.ok_or_else(|| {
+            StoreError::new(
+                StoreErrorCode::OperationStateInvalid,
+                "operation result target does not exist",
+            )
+        })?;
+        if current.request_digest() != mutation.request_digest() {
+            return Err(StoreError::new(
+                StoreErrorCode::OperationConflict,
+                "operation result target digest does not match",
+            ));
+        }
+        if current.state() != OperationState::Completed
+            || current.result_object_id() != Some(mutation.expected_result_object_id())
+        {
+            return Err(StoreError::new(
+                StoreErrorCode::OperationStateInvalid,
+                "completed operation result changed before retarget",
+            ));
+        }
+        if read_object(
+            transaction,
+            mutation.expected_result_object_id(),
+            max_object_bytes,
+        )?
+        .is_none()
+            || read_object(
+                transaction,
+                mutation.target_result_object_id(),
+                max_object_bytes,
+            )?
+            .is_none()
+        {
+            return Err(StoreError::new(
+                StoreErrorCode::ObjectMissing,
+                "operation result replacement object is missing",
+            ));
+        }
+
+        let changed = transaction
+            .execute(
+                "UPDATE store_operations
+                 SET result_object_id = ?1
+                 WHERE operation_id = ?2 AND request_digest = ?3
+                   AND state = 'completed' AND result_object_id = ?4",
+                params![
+                    mutation.target_result_object_id().as_str(),
+                    mutation.operation_id().as_str(),
+                    mutation.request_digest().as_str(),
+                    mutation.expected_result_object_id().as_str(),
+                ],
+            )
+            .map_err(StoreError::database)?;
+        if changed != 1 {
+            return Err(StoreError::new(
+                StoreErrorCode::OperationStateInvalid,
+                "completed operation result did not retarget",
+            ));
+        }
+        let updated = read_operation(transaction, mutation.operation_id())?.ok_or_else(|| {
+            StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                "operation disappeared during result retarget",
+            )
+        })?;
+        if updated.state() != OperationState::Completed
+            || updated.result_object_id() != Some(mutation.target_result_object_id())
+        {
+            return Err(StoreError::new(
+                StoreErrorCode::IntegrityViolation,
+                "operation result retarget did not read back",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn validate_batch(batch: &WriteBatch, max_object_bytes: u64) -> StoreResult<()> {
     for object in batch.objects() {
         if object.canonical_json().len() as u64 > max_object_bytes {

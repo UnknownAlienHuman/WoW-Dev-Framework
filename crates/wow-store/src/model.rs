@@ -353,11 +353,66 @@ impl CatalogMutation {
     }
 }
 
+/// Retargets one exact completed operation result without changing its durable
+/// request identity or completion state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OperationResultMutation {
+    operation_id: OperationId,
+    request_digest: RequestDigest,
+    expected_result_object_id: ObjectId,
+    target_result_object_id: ObjectId,
+}
+
+impl OperationResultMutation {
+    pub fn replace_completed(
+        operation_id: OperationId,
+        request_digest: RequestDigest,
+        expected_result_object_id: ObjectId,
+        target_result_object_id: ObjectId,
+    ) -> StoreResult<Self> {
+        if expected_result_object_id == target_result_object_id {
+            return Err(StoreError::new(
+                StoreErrorCode::OperationStateInvalid,
+                "operation result replacement must change the result identity",
+            ));
+        }
+        Ok(Self {
+            operation_id,
+            request_digest,
+            expected_result_object_id,
+            target_result_object_id,
+        })
+    }
+
+    #[must_use]
+    pub fn operation_id(&self) -> &OperationId {
+        &self.operation_id
+    }
+
+    #[must_use]
+    pub fn request_digest(&self) -> &RequestDigest {
+        &self.request_digest
+    }
+
+    #[must_use]
+    pub fn expected_result_object_id(&self) -> &ObjectId {
+        &self.expected_result_object_id
+    }
+
+    #[must_use]
+    pub fn target_result_object_id(&self) -> &ObjectId {
+        &self.target_result_object_id
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WriteBatch {
     objects: Vec<PendingObject>,
     catalog_mutations: Vec<CatalogMutation>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    operation_result_mutations: Vec<OperationResultMutation>,
 }
 
 impl WriteBatch {
@@ -394,6 +449,24 @@ impl WriteBatch {
         Ok(())
     }
 
+    pub fn add_operation_result_mutation(
+        &mut self,
+        mutation: OperationResultMutation,
+    ) -> StoreResult<()> {
+        if self
+            .operation_result_mutations
+            .iter()
+            .any(|current| current.operation_id() == mutation.operation_id())
+        {
+            return Err(StoreError::new(
+                StoreErrorCode::OperationConflict,
+                "batch contains duplicate operation result mutation",
+            ));
+        }
+        self.operation_result_mutations.push(mutation);
+        Ok(())
+    }
+
     #[must_use]
     pub fn objects(&self) -> &[PendingObject] {
         &self.objects
@@ -402,6 +475,11 @@ impl WriteBatch {
     #[must_use]
     pub fn catalog_mutations(&self) -> &[CatalogMutation] {
         &self.catalog_mutations
+    }
+
+    #[must_use]
+    pub fn operation_result_mutations(&self) -> &[OperationResultMutation] {
+        &self.operation_result_mutations
     }
 }
 

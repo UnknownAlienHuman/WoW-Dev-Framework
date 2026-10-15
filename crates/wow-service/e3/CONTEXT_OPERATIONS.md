@@ -315,27 +315,33 @@ Behavior:
 - compare original semantic-pack, renderer and pre-delivery budget-usage bytes; carry the latest verified historical cumulative ledger once, plus this request's actual native replay charge for each prior prefix and the exact prior Service-envelope bytes;
 - execute exactly the next caller-selected frontier batch under the original profiles and limits;
 - validate new page/pack and requested original renderers;
-- atomically commit response/receipt/catalog mutations (including consumed-token retirement), then transition the operation record to completed; release the exact root after the final round;
+- atomically commit response, receipt, direct history-root/catalog mutations (including new-token publication and the active-token index transition), and the Prepared-to-Completed journal transition through Store::commit_operation; consumed token catalog rows remain receipt roots until explicit terminal prune; release the exact ProjectStore root after the final round;
 - close resources and return exact continuation outcome.
 
 If a generation or receipt is unavailable, fail. No automatic restart against current or reconstruction from names.
 
-The response/receipt/catalog batch and the Store operation transition are separate
-transactions. A process interruption after `begin_operation` but before the batch
-leaves the journal in `prepared`; a retry returns `StoreOutcomeUnknown` and does
-not resume it. An interruption after the batch commit but before
-`complete_operation`
-can leave the response and token/catalog mutations committed while the issuer is
-still incomplete. The consumed token may already be retired, and a new receipt
-cannot pass issuer validation. This state is not repaired automatically; it
-requires operator reconciliation, and the retained generation hold remains.
-If the completed operation is durable but its response is lost, an exact retry
-returns the same stored bytes and rechecks or idempotently finishes retention
-cleanup. The initial ProjectStore hold is also written before issuance; a crash
-there can leave an unassociated hold, with no automatic expiry or sweep.
-The owner-binding fields use receipt/outcome schema `/2` and continuation Store
-profile `.2`; a prior `/1` continuation Store fails exact profile admission and
-has no in-place migration.
+Every completed continuation response and each receipt needed by its active ancestral chain has a direct Store catalog root. The history index only classifies the bounded lineage for the Service owner; generic GC never interprets its JSON. The selected continuation profile and original response/receipt/outcome schemas remain unchanged. The additive history record uses `wow-service/context-continuation-history/1` in the existing continuation Store profile `.2`.
+`Store::commit_operation` commits the response, receipt, history roots, token catalog mutations, and matching Prepared-to-Completed operation transition in one transaction. An interruption after `begin_operation` but before this batch leaves the journal Prepared; a retry returns `StoreOutcomeUnknown` and does not reconstruct native work. For an initial build the operation is Prepared before the ProjectStore retention hold is written. If interruption leaves that exact hold unresolved, it remains retained; there is no age-based or automatic orphan sweep. If the completed operation is durable but delivery is lost, exact retries return the same response bytes while the history remains retained.
+
+### `context_continuation_history_prune`
+
+Purpose: explicitly end the exact-response retry window for one fully terminal continuation history and release its response/receipt payload roots for generic Store GC.
+
+Request:
+
+```text
+exact original ContextBuild request ID
+explicit native continuation host
+cancellation
+```
+
+The Service verifies the history owner binding, every Completed issuer/outcome, the full native receipt ancestry, exact response and receipt root identities, and absence of every live token in the history. Active, Prepared, OutcomeUnknown, unreadable, or mismatched histories are refused without pruning. One request prunes one lineage, bounded by the existing maximum of four response operations, three issued receipts, and eight catalog mutations.
+
+The prune operation atomically removes each response and token/receipt catalog root, retargets every completed operation result to the shared durable prune result, and replaces the history index. Exact retries of the prune return its identical stored result. Exact retries of the original build/continue operations return `OperationReleased` after pruning; their Completed journal rows remain as no-replay tombstones and never rerun native work. The original outcome, response, receipt, and history-index objects become collectible by an explicit generic GC call; only the shared prune result remains rooted. No automatic time-based pruning is performed.
+
+A preexisting active chain without a history index is added to the root set in its next successful atomic issuance batch, after its exact token, issuer records, receipts, and responses validate. No standalone Store root-repair transaction is used. A chain whose required objects were already collected cannot be reconstructed or resumed.
+
+The receipt/outcome owner-binding fields remain schema `/2`; continuation Store profile `.2` remains exact. A prior `/1` continuation Store fails exact profile admission and has no in-place migration.
 
 ## `context_validate`
 

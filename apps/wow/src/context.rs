@@ -20,12 +20,13 @@ use wow_service::{
     ServiceErrorCode,
     context::{
         CONTEXT_MAP_HOST_INPUT_MAX_BYTES, CONTEXT_MAP_ID_MAX_BYTES, CONTEXT_MAP_RESULT_MAX_BYTES,
-        ContextBuildRequest, ContextContinueRequest, ContextInspectRequest, ContextMapCurrentGuard,
-        ContextMapHostInput, ContextMapPublication, ContextMapReferenceGuard, ContextMapRequest,
-        ContextMapResult, ContextMapRoot, ContextMapStatus, ContextStatusRequest,
-        PRIMARY_NAVIGATION_MAP_PROFILE_ID, PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID,
-        execute_context_build_with_source, execute_context_continue, execute_context_inspect,
-        execute_context_map, execute_context_status,
+        ContextBuildRequest, ContextContinuationHistoryPruneRequest, ContextContinueRequest,
+        ContextInspectRequest, ContextMapCurrentGuard, ContextMapHostInput, ContextMapPublication,
+        ContextMapReferenceGuard, ContextMapRequest, ContextMapResult, ContextMapRoot,
+        ContextMapStatus, ContextStatusRequest, PRIMARY_NAVIGATION_MAP_PROFILE_ID,
+        PRIMARY_PROJECT_NAVIGATION_MAP_PROFILE_ID, execute_context_build_with_source,
+        execute_context_continuation_history_prune, execute_context_continue,
+        execute_context_inspect, execute_context_map, execute_context_status,
     },
 };
 
@@ -106,6 +107,11 @@ const HELP: &str = concat!(
     "--continuation context-continuation:sha256:<digest> ",
     "[--expect-request <ContextRequestId>] [--expect-pack <ContextSemanticPackId>] ",
     "[--output envelope-json]\n",
+    "wow context prune-history --native-host-config <host.json> ",
+    "--original-request context-build-request:sha256:<digest> ",
+    "[--output envelope-json]\n",
+    "Pruning releases exact response/receipt retries for one fully terminal continuation history; ",
+    "active histories are refused. Pruning does not run generic Store GC.\n",
     "wow context map|inspect --platform native --native-host-config <host.json> ",
     "--platform-request-input <request.json> [--output envelope-json|text]\n",
     "  Native map/inspect use a bounded explicit service host and request document. ",
@@ -161,6 +167,7 @@ enum Request {
     Inspect(ContextInspectRequest),
     Build(ContextBuildRequest),
     Continue(ContextContinueRequest),
+    PruneHistory(ContextContinuationHistoryPruneRequest),
     Status(ContextStatusRequest),
     CombinedStatus(combined_status::Request),
     PlatformStatus(platform_status::Request),
@@ -184,6 +191,7 @@ pub fn run(values: Vec<OsString>) -> u8 {
                         || value == "inspect"
                         || value == "build"
                         || value == "continue"
+                        || value == "prune-history"
                         || value == "render"
                 })))
         && values
@@ -269,6 +277,9 @@ pub fn run(values: Vec<OsString>) -> u8 {
             &stop,
         ),
         Request::Continue(request) => execute_context_continue(&host, request, &stop),
+        Request::PruneHistory(request) => {
+            execute_context_continuation_history_prune(&host, request, &stop)
+        }
         Request::Status(request) => execute_context_status(&host, request, &stop),
         Request::CombinedStatus(_) => {
             crate::diagnostic("combined status dispatch invariant failed");
@@ -364,6 +375,9 @@ fn parse(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     }
     if values.get(1).is_some_and(|value| value == "continue") {
         return parse_continue(values);
+    }
+    if values.get(1).is_some_and(|value| value == "prune-history") {
+        return parse_prune_history(values);
     }
     let mut values = values.into_iter();
     if values.next().as_deref() != Some(OsStr::new("context")) {
@@ -680,6 +694,71 @@ fn parse_continue(values: Vec<OsString>) -> Result<Arguments, &'static str> {
     })
 }
 
+fn parse_prune_history(values: Vec<OsString>) -> Result<Arguments, &'static str> {
+    let mut values = values.into_iter();
+    if values.next().as_deref() != Some(OsStr::new("context"))
+        || values.next().as_deref() != Some(OsStr::new("prune-history"))
+    {
+        return Err("expected context prune-history");
+    }
+    let mut host_config = None;
+    let mut original_request_id = None;
+    let mut output_seen = false;
+    while let Some(option) = values.next() {
+        let option = option
+            .to_str()
+            .ok_or("invalid context prune-history option encoding")?;
+        let value = values
+            .next()
+            .ok_or("missing context prune-history option value")?;
+        if value.is_empty() || value.len() > MAX_VALUE_BYTES {
+            return Err("invalid context prune-history option length");
+        }
+        if option == "--native-host-config" {
+            if host_config.is_some() {
+                return Err("duplicate context prune-history option");
+            }
+            host_config = Some(PathBuf::from(value));
+            continue;
+        }
+        let value = value
+            .into_string()
+            .map_err(|_| "invalid context prune-history value encoding")?;
+        if value.chars().any(char::is_control) || value.trim() != value {
+            return Err("invalid context prune-history option value");
+        }
+        match option {
+            "--original-request" => {
+                id_syntax(&value)?;
+                if original_request_id.replace(value).is_some() {
+                    return Err("duplicate context prune-history option");
+                }
+            }
+            "--output" => {
+                if output_seen {
+                    return Err("duplicate context prune-history option");
+                }
+                if value != "envelope-json" {
+                    return Err("context prune-history supports envelope-json output only");
+                }
+                output_seen = true;
+            }
+            _ => return Err("unknown context prune-history option"),
+        }
+    }
+    let host_config =
+        host_config.ok_or("context prune-history requires explicit native host input")?;
+    let original_request_id =
+        original_request_id.ok_or("context prune-history requires --original-request")?;
+    let request = ContextContinuationHistoryPruneRequest::new(&original_request_id)
+        .map_err(|_| "invalid exact original context request ID")?;
+    Ok(Arguments {
+        host_config,
+        request: Request::PruneHistory(request),
+        source_root: None,
+    })
+}
+
 fn set<T>(slot: &mut Option<T>, value: T, command: Command) -> Result<(), &'static str> {
     if slot.is_some() {
         return Err(match command {
@@ -887,6 +966,7 @@ mod tests {
             Request::Inspect(request) => serde_json::to_value(request),
             Request::Build(request) => serde_json::to_value(request),
             Request::Continue(request) => serde_json::to_value(request),
+            Request::PruneHistory(request) => serde_json::to_value(request),
             Request::Status(request) => serde_json::to_value(request),
             Request::CombinedStatus(_)
             | Request::PlatformStatus(_)
@@ -956,6 +1036,65 @@ mod tests {
         assert!(matches!(
             parse(duplicate),
             Err("duplicate context continue option")
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn context_history_prune_grammar_is_exact_and_closed() -> Result<(), &'static str> {
+        let original_request = "context-build-request:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let values = [
+            "context",
+            "prune-history",
+            "--native-host-config",
+            "host.json",
+            "--original-request",
+            original_request,
+            "--output",
+            "envelope-json",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect();
+        let request = request_json(values)?;
+        assert_eq!(
+            request["schema"],
+            "wow-service/context-continuation-history-prune-request/1"
+        );
+        assert_eq!(request["original_request_id"], original_request);
+
+        let mut duplicate = vec![
+            "context",
+            "prune-history",
+            "--native-host-config",
+            "host.json",
+            "--original-request",
+            original_request,
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect::<Vec<_>>();
+        push(&mut duplicate, "--original-request", original_request);
+        assert!(matches!(
+            parse(duplicate),
+            Err("duplicate context prune-history option")
+        ));
+
+        let mut current_selector = vec![
+            "context",
+            "prune-history",
+            "--native-host-config",
+            "host.json",
+            "--original-request",
+            original_request,
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect::<Vec<_>>();
+        push(&mut current_selector, "--publication", "current");
+        assert!(matches!(
+            parse(current_selector),
+            Err("unknown context prune-history option")
         ));
         Ok(())
     }

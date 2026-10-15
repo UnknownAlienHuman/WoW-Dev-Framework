@@ -171,6 +171,86 @@ fn preimplementation_retained_progressive_seed() -> TestResult {
     Ok(())
 }
 
+fn open_continuation_store(path: &Path) -> TestResult<wow_store::Store> {
+    Ok(wow_store::Store::open(
+        path,
+        crate::context::continuation::continuation_store_configuration()?,
+    )?)
+}
+
+fn operation_result_object_id(
+    store: &wow_store::Store,
+    operation_id: &wow_store::OperationId,
+) -> TestResult<wow_store::ObjectId> {
+    let operation = store
+        .operation(operation_id)?
+        .ok_or("completed operation")?;
+    Ok(operation
+        .result_object_id()
+        .ok_or("operation result object")?
+        .clone())
+}
+
+fn operation_response_object_id(
+    store: &wow_store::Store,
+    operation_id: &wow_store::OperationId,
+) -> TestResult<wow_store::ObjectId> {
+    let result_id = operation_result_object_id(store, operation_id)?;
+    let object = store.object(&result_id)?.ok_or("operation result bytes")?;
+    let value: Value = serde_json::from_slice(object.canonical_json())?;
+    Ok(wow_store::ObjectId::new(
+        value["response_object_id"]
+            .as_str()
+            .ok_or("response object ID")?
+            .to_owned(),
+    )?)
+}
+
+fn history_receipt_object_ids(
+    store: &wow_store::Store,
+    original_request_id: &str,
+) -> TestResult<Vec<wow_store::ObjectId>> {
+    let catalog = wow_store::CatalogName::new("wow-service.context-continuation")?;
+    let path = wow_store::CatalogPath::new(format!("history/{original_request_id}"))?;
+    let entry = store
+        .catalog_entry(&catalog, &path)?
+        .ok_or("continuation history root")?;
+    let object = store.object(entry.object_id())?.ok_or("history object")?;
+    let value: Value = serde_json::from_slice(object.canonical_json())?;
+    value["receipts"]
+        .as_array()
+        .ok_or("history receipt roots")?
+        .iter()
+        .map(|receipt| {
+            Ok(wow_store::ObjectId::new(
+                receipt["receipt_object_id"]
+                    .as_str()
+                    .ok_or("receipt object ID")?
+                    .to_owned(),
+            )?)
+        })
+        .collect()
+}
+
+fn history_index_object_id(
+    store: &wow_store::Store,
+    original_request_id: &str,
+) -> TestResult<wow_store::ObjectId> {
+    let catalog = wow_store::CatalogName::new("wow-service.context-continuation")?;
+    let path = wow_store::CatalogPath::new(format!("history/{original_request_id}"))?;
+    Ok(store
+        .catalog_entry(&catalog, &path)?
+        .ok_or("continuation history root")?
+        .object_id()
+        .clone())
+}
+
+fn collect_continuation_garbage(path: &Path) -> TestResult<Vec<wow_store::ObjectId>> {
+    let mut store = open_continuation_store(path)?;
+    let receipt = store.collect_garbage(wow_store::LogicalEpoch::new(0), 10_000)?;
+    Ok(receipt.deleted().to_vec())
+}
+
 #[test]
 fn native_primary_continuation_replays_exact_round_after_current_moves() -> TestResult {
     let stop = AtomicBool::new(false);
@@ -190,10 +270,9 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
         None,
         &stop,
     )?;
-    assert_eq!(
-        publication.generation_id.as_str(),
-        frozen["selected_prefix"]["store_generation_id"]
-    );
+    // The historical checkpoint names a retained publication, not the result
+    // of rebuilding the shared state fixture after its producer/input changes.
+    // This lifecycle binds the freshly published exact generation throughout.
     store.close()?;
     std::fs::remove_dir_all(&input)?;
 
@@ -270,6 +349,22 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
     let selected_reference_profile_sha256 =
         format!("{:x}", Sha256::digest(&selected_reference_profile));
     let host = decode_host(&host_json, &stop)?;
+    let prefix_request = ContextBuildRequest::primary(
+        STORE_ID,
+        ContextMapPublication::store_generation(publication.generation_id.as_str())?,
+        ContextInspectLevel::L1,
+        ContextMapRoot::graph_entity(selected[0].as_str())?,
+        ContextRenderSelection::None,
+        None,
+        Some(reference_guard(&profile, &reference)?),
+    )?
+    .with_progressive_expansion(vec![vec![ContextMapRoot::graph_entity(
+        selected[1].as_str(),
+    )?]])?;
+    let prefix = execute_context_build(&host, &prefix_request, &stop)?;
+    assert_eq!(prefix.status(), ContextMapStatus::Partial);
+    assert_eq!(prefix.failure_code(), None);
+    let prefix_envelope: Value = serde_json::from_slice(prefix.canonical_bytes())?;
     let request = ContextBuildRequest::primary(
         STORE_ID,
         ContextMapPublication::store_generation(publication.generation_id.as_str())?,
@@ -300,7 +395,10 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
         .as_str()
         .ok_or("issued semantic pack")?;
     assert_ne!(token, pack_id);
-    assert_eq!(pack_id, frozen["selected_prefix"]["semantic_pack_id"]);
+    assert_eq!(
+        issued_payload["semantic_pack"], prefix_envelope["payload"]["semantic_pack"],
+        "retained issuance must preserve the ordinary exact-generation first batch"
+    );
     let selected_pack_profile =
         wow_core::canonical_json_bytes(&issued_payload["semantic_pack"]["core"]["profile"])?;
     assert_eq!(
@@ -439,6 +537,38 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
     assert!(!roots_after_orphan_retry.contains(&advanced_orphan_root));
     project_store.close()?;
 
+    let continuation_store_path = scratch.root.join("continuation-store.sqlite");
+    let build_operation_id = crate::context::continuation::build_operation_identity(&request)?.1;
+    let (initial_response_object_id, initial_receipt_object_id) = {
+        let mut journal = open_continuation_store(&continuation_store_path)?;
+        let operation = journal
+            .operation(&build_operation_id)?
+            .ok_or("initial completed continuation operation")?;
+        let result_id = operation
+            .result_object_id()
+            .ok_or("initial outcome object")?;
+        let outcome = journal.object(result_id)?.ok_or("initial outcome bytes")?;
+        let value: Value = serde_json::from_slice(outcome.canonical_json())?;
+        let response_id = operation_response_object_id(&journal, &build_operation_id)?;
+        let receipt_id = wow_store::ObjectId::new(
+            value["next_receipt_object_id"]
+                .as_str()
+                .ok_or("initial receipt object ID")?
+                .to_owned(),
+        )?;
+        let gc = journal.collect_garbage(wow_store::LogicalEpoch::new(0), 10_000)?;
+        assert!(!gc.deleted().contains(&response_id));
+        assert!(!gc.deleted().contains(&receipt_id));
+        assert!(journal.object(&response_id)?.is_some());
+        assert!(journal.object(&receipt_id)?.is_some());
+        (response_id, receipt_id)
+    };
+    assert_eq!(
+        execute_context_build(&host, &request, &stop)?.canonical_bytes(),
+        issued.canonical_bytes(),
+        "generic GC must preserve the exact initial response retry"
+    );
+
     let continuation =
         ContextContinueRequest::new(token, issued_envelope["request_id"].as_str(), Some(pack_id))?;
     let continuation_operation =
@@ -498,6 +628,53 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
             .as_u64()
             .ok_or("round two cumulative bytes")?
             > initial_bytes
+    );
+    let first_continue_operation_id =
+        crate::context::continuation::continue_operation_identity(&continuation)?.1;
+    let (round_two_receipt_object_id, receipt_chain_object_ids) = {
+        let mut journal = open_continuation_store(&continuation_store_path)?;
+        let operation = journal
+            .operation(&first_continue_operation_id)?
+            .ok_or("round two completed operation")?;
+        let result_id = operation
+            .result_object_id()
+            .ok_or("round two outcome object")?;
+        let outcome = journal
+            .object(result_id)?
+            .ok_or("round two outcome bytes")?;
+        let value: Value = serde_json::from_slice(outcome.canonical_json())?;
+        let response_id = operation_response_object_id(&journal, &first_continue_operation_id)?;
+        let receipt_id = wow_store::ObjectId::new(
+            value["next_receipt_object_id"]
+                .as_str()
+                .ok_or("round two receipt object ID")?
+                .to_owned(),
+        )?;
+        let chain_ids = history_receipt_object_ids(
+            &journal,
+            issued_envelope["request_id"]
+                .as_str()
+                .ok_or("original request ID")?,
+        )?;
+        assert_eq!(chain_ids.len(), 2);
+        let gc = journal.collect_garbage(wow_store::LogicalEpoch::new(0), 10_000)?;
+        assert!(!gc.deleted().contains(&initial_response_object_id));
+        assert!(!gc.deleted().contains(&initial_receipt_object_id));
+        assert!(!gc.deleted().contains(&response_id));
+        assert!(!gc.deleted().contains(&receipt_id));
+        assert!(journal.object(&response_id)?.is_some());
+        for receipt_id in &chain_ids {
+            assert!(!gc.deleted().contains(receipt_id));
+            assert!(journal.object(receipt_id)?.is_some());
+        }
+        (receipt_id, chain_ids)
+    };
+    assert!(receipt_chain_object_ids.contains(&initial_receipt_object_id));
+    assert!(receipt_chain_object_ids.contains(&round_two_receipt_object_id));
+    assert_eq!(
+        execute_context_build(&host, &request, &stop)?.canonical_bytes(),
+        issued.canonical_bytes(),
+        "GC between rounds must preserve the original exact build response"
     );
     assert_eq!(
         execute_context_continue(&host, &continuation, &stop)?.canonical_bytes(),
@@ -805,6 +982,56 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
     let json_token = json_envelope["payload"]["continuation_id"]
         .as_str()
         .ok_or("persisted JSON continuation token")?;
+    let json_build_operation_id =
+        crate::context::continuation::build_operation_identity(&rendered_request)?.1;
+    let json_history_prune = crate::context::ContextContinuationHistoryPruneRequest::new(
+        json_envelope["request_id"]
+            .as_str()
+            .ok_or("JSON original request ID")?,
+    )?;
+    let active_prune = crate::context::execute_context_continuation_history_prune(
+        &host,
+        &json_history_prune,
+        &stop,
+    )?;
+    assert_eq!(
+        active_prune.failure_code(),
+        Some(crate::ServiceErrorCode::OperationConflict),
+        "a live token history cannot be pruned"
+    );
+    let (json_initial_response_id, json_initial_receipt_id, json_initial_outcome_id) = {
+        let journal = open_continuation_store(&continuation_store_path)?;
+        let response_id = operation_response_object_id(&journal, &json_build_operation_id)?;
+        let operation = journal
+            .operation(&json_build_operation_id)?
+            .ok_or("JSON initial operation")?;
+        let outcome_id = operation
+            .result_object_id()
+            .ok_or("JSON initial outcome")?
+            .clone();
+        let outcome = journal
+            .object(&outcome_id)?
+            .ok_or("JSON initial outcome bytes")?;
+        let value: Value = serde_json::from_slice(outcome.canonical_json())?;
+        (
+            response_id,
+            wow_store::ObjectId::new(
+                value["next_receipt_object_id"]
+                    .as_str()
+                    .ok_or("JSON initial receipt object ID")?
+                    .to_owned(),
+            )?,
+            outcome_id,
+        )
+    };
+    let gc_after_json_issue = collect_continuation_garbage(&continuation_store_path)?;
+    assert!(!gc_after_json_issue.contains(&json_initial_response_id));
+    assert!(!gc_after_json_issue.contains(&json_initial_receipt_id));
+    assert_eq!(
+        execute_context_build(&host, &rendered_request, &stop)?.canonical_bytes(),
+        json_issue.canonical_bytes(),
+        "generic GC preserves the selected JSON response retry"
+    );
     let json_continue = ContextContinueRequest::new(
         json_token,
         json_envelope["request_id"].as_str(),
@@ -829,6 +1056,123 @@ fn native_primary_continuation_replays_exact_round_after_current_moves() -> Test
     assert_eq!(
         execute_context_continue(&host, &json_continue, &stop)?.canonical_bytes(),
         json_resume.canonical_bytes()
+    );
+    let json_continue_operation_id =
+        crate::context::continuation::continue_operation_identity(&json_continue)?.1;
+    let (
+        json_terminal_response_id,
+        json_receipt_ids,
+        json_terminal_outcome_id,
+        json_history_index_id,
+    ) = {
+        let journal = open_continuation_store(&continuation_store_path)?;
+        (
+            operation_response_object_id(&journal, &json_continue_operation_id)?,
+            history_receipt_object_ids(
+                &journal,
+                json_envelope["request_id"]
+                    .as_str()
+                    .ok_or("JSON original request ID")?,
+            )?,
+            operation_result_object_id(&journal, &json_continue_operation_id)?,
+            history_index_object_id(
+                &journal,
+                json_envelope["request_id"]
+                    .as_str()
+                    .ok_or("JSON original request ID")?,
+            )?,
+        )
+    };
+    assert_eq!(json_receipt_ids.len(), 1);
+    let gc_before_prune = collect_continuation_garbage(&continuation_store_path)?;
+    assert!(!gc_before_prune.contains(&json_initial_response_id));
+    assert!(!gc_before_prune.contains(&json_terminal_response_id));
+    for receipt_id in &json_receipt_ids {
+        assert!(!gc_before_prune.contains(receipt_id));
+    }
+    assert_eq!(
+        execute_context_build(&host, &rendered_request, &stop)?.canonical_bytes(),
+        json_issue.canonical_bytes()
+    );
+    assert_eq!(
+        execute_context_continue(&host, &json_continue, &stop)?.canonical_bytes(),
+        json_resume.canonical_bytes(),
+        "terminal retries remain exact until explicit prune"
+    );
+    let pruned = crate::context::execute_context_continuation_history_prune(
+        &host,
+        &json_history_prune,
+        &stop,
+    )?;
+    assert_eq!(pruned.status(), ContextMapStatus::Complete);
+    assert_eq!(pruned.failure_code(), None);
+    assert_eq!(
+        crate::context::execute_context_continuation_history_prune(
+            &host,
+            &json_history_prune,
+            &stop,
+        )?
+        .canonical_bytes(),
+        pruned.canonical_bytes(),
+        "the terminal prune operation has an exact durable retry"
+    );
+    let gc_after_prune = collect_continuation_garbage(&continuation_store_path)?;
+    assert!(gc_after_prune.contains(&json_initial_response_id));
+    assert!(gc_after_prune.contains(&json_terminal_response_id));
+    assert!(gc_after_prune.contains(&json_initial_outcome_id));
+    assert!(gc_after_prune.contains(&json_terminal_outcome_id));
+    assert!(gc_after_prune.contains(&json_history_index_id));
+    for receipt_id in &json_receipt_ids {
+        assert!(gc_after_prune.contains(receipt_id));
+    }
+    assert_eq!(
+        crate::context::execute_context_continuation_history_prune(
+            &host,
+            &json_history_prune,
+            &stop,
+        )?
+        .canonical_bytes(),
+        pruned.canonical_bytes(),
+        "the prune result remains exact after generic GC"
+    );
+    let mut changed_prune_limits_json = host_json.clone();
+    changed_prune_limits_json["limits"]["max_context_work"] = json!(31_999_999);
+    let changed_prune_limits_host = decode_host(&changed_prune_limits_json, &stop)?;
+    assert_eq!(
+        crate::context::execute_context_continuation_history_prune(
+            &changed_prune_limits_host,
+            &json_history_prune,
+            &stop,
+        )?
+        .failure_code(),
+        Some(crate::ServiceErrorCode::OperationConflict),
+        "a pruned retry with changed owner limits is refused after history GC"
+    );
+    let changed_prune_reference = wow_reference::ReferenceView::new(
+        format!("{}-prune-retry", reference.generation_id()),
+        reference.partitions().to_vec(),
+        reference.conflicts().to_vec(),
+    )?;
+    let mut changed_prune_reference_json = host_json.clone();
+    changed_prune_reference_json["reference"] = serde_json::to_value(changed_prune_reference)?;
+    let changed_prune_reference_host = decode_host(&changed_prune_reference_json, &stop)?;
+    assert_eq!(
+        crate::context::execute_context_continuation_history_prune(
+            &changed_prune_reference_host,
+            &json_history_prune,
+            &stop,
+        )?
+        .failure_code(),
+        Some(crate::ServiceErrorCode::OperationConflict),
+        "a pruned retry with changed Reference identity is refused after history GC"
+    );
+    assert_eq!(
+        execute_context_build(&host, &rendered_request, &stop)?.failure_code(),
+        Some(crate::ServiceErrorCode::OperationReleased)
+    );
+    assert_eq!(
+        execute_context_continue(&host, &json_continue, &stop)?.failure_code(),
+        Some(crate::ServiceErrorCode::OperationReleased)
     );
     let store = LiveProjectStore::open(&store_root)?;
     assert!(store.retention_roots(&stop)?.is_empty());

@@ -18,7 +18,7 @@ pub use identity::{
 pub use model::{
     CatalogChange, CatalogEntry, CatalogExpectation, CatalogMutation, CommitReceipt,
     GarbageCollectionReceipt, IntegrityReport, LeaseRecord, LogicalManifest, ObjectRecord,
-    OperationBegin, OperationRecord, OperationState, PendingObject, StoreConfiguration,
-    StoreLimits, WriteBatch,
+    OperationBegin, OperationRecord, OperationResultMutation, OperationState, PendingObject,
+    StoreConfiguration, StoreLimits, WriteBatch,
 };
 pub use store::{SealedStore, Store};

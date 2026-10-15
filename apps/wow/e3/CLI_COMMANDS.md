@@ -238,6 +238,21 @@ Service envelope followed by one LF.
 
 Artifact mode requires exactly one eligible returned artifact from the original renderer chain.
 
+## `wow context prune-history`
+
+```text
+wow context prune-history
+  --native-host-config <host.json>
+  --original-request <ContextBuildRequestId>
+  [--output envelope-json]
+```
+
+The request ID is copied from the original continuation build envelope. Service
+refuses histories with a live token or unresolved/mismatched operation or root.
+Pruning ends exact build/continue response retries for that terminal history and
+releases its receipt and response payload roots for a later explicit Store GC.
+The command does not run GC or resolve Current.
+
 ## `wow context validate`
 
 This route validates one explicit semantic-pack JSON input through the Primary StructuralOnly owner profile. All flags except `--output` are required; singleton duplicates and unknown flags are rejected. Numeric limits are unsigned decimal values greater than zero. `--output`, if present, accepts only `envelope-json`.

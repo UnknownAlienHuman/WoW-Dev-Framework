@@ -152,6 +152,13 @@ compare-and-swap mutations. Preparation remains a separate earlier boundary, so
 an interrupted operation can still be Prepared before its batch transaction
 starts.
 
+A WriteBatch may also retarget exact completed operation results as part of
+that same commit_operation transaction. Each retarget is guarded by the target
+OperationId, canonical request digest, and current result ObjectId; the
+replacement ObjectId must exist in the batch or store. The target row remains
+Completed, preserving no-replay behavior, while its former result object stops
+being a generic operation root. Store does not interpret either result body.
+
 ## Current implementation state
 
 Rust owners implement the generic immutable store and manifested ProjectStore

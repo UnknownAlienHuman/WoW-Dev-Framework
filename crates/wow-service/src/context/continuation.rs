@@ -8,8 +8,8 @@ use wow_store::project::{
 };
 use wow_store::{
     CatalogExpectation, CatalogMutation, CatalogName, CatalogPath, ObjectId, OperationBegin,
-    OperationId, OperationState, PendingObject, RequestDigest, Store, StoreConfiguration,
-    StoreErrorCode, StoreLimits, WriteBatch,
+    OperationId, OperationResultMutation, OperationState, PendingObject, RequestDigest, Store,
+    StoreConfiguration, StoreErrorCode, StoreLimits, WriteBatch,
 };
 
 use super::operation::{with_checked_context_read, with_native_progressive};
@@ -25,14 +25,23 @@ use wow_context::ContextBudgetReceipt;
 
 pub const CONTEXT_CONTINUE_REQUEST_SCHEMA: &str = "wow-service/context-continue-request/1";
 pub const CONTEXT_CONTINUE_RESULT_SCHEMA: &str = "wow-service/context-continue-result/1";
+pub const CONTEXT_CONTINUATION_HISTORY_PRUNE_REQUEST_SCHEMA: &str =
+    "wow-service/context-continuation-history-prune-request/1";
+pub const CONTEXT_CONTINUATION_HISTORY_PRUNE_RESULT_SCHEMA: &str =
+    "wow-service/context-continuation-history-prune-result/1";
 
+const HISTORY_PRUNE_OPERATION_BINDING_SCHEMA: &str =
+    "wow-service/context-continuation-history-prune-operation/1";
 const CONTINUATION_STORE_PROFILE: &str = "wow-service.context-continuation-store.2";
 const CONTINUATION_CATALOG: &str = "wow-service.context-continuation";
 const RECEIPT_KIND: &str = "wow-service.context-continuation-receipt";
 const OUTCOME_KIND: &str = "wow-service.context-continuation-outcome";
 const RESPONSE_KIND: &str = "wow-service.context-continuation-response";
+const HISTORY_KIND: &str = "wow-service.context-continuation-history";
+const HISTORY_PRUNE_RESULT_KIND: &str = "wow-service.context-continuation-history-prune-result";
 const RECEIPT_SCHEMA: &str = "wow-service/context-continuation-receipt/2";
 const OUTCOME_SCHEMA: &str = "wow-service/context-continuation-outcome/2";
+const HISTORY_SCHEMA: &str = "wow-service/context-continuation-history/1";
 const RESPONSE_SCHEMA_VERSION: u32 = 1;
 const RETENTION_HOLDER: &str = "wow-service.context-continuation";
 
@@ -68,6 +77,28 @@ impl ContextContinueRequest {
 
     pub fn continuation_id(&self) -> &str {
         &self.continuation_id
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ContextContinuationHistoryPruneRequest {
+    schema: &'static str,
+    original_request_id: Box<str>,
+}
+
+impl ContextContinuationHistoryPruneRequest {
+    pub fn new(original_request_id: &str) -> ServiceResult<Self> {
+        if !valid_original_request_id(original_request_id) {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        Ok(Self {
+            schema: CONTEXT_CONTINUATION_HISTORY_PRUNE_REQUEST_SCHEMA,
+            original_request_id: original_request_id.into(),
+        })
+    }
+
+    pub fn original_request_id(&self) -> &str {
+        &self.original_request_id
     }
 }
 
@@ -129,6 +160,49 @@ struct ContinuationOperationOutcome {
     release_retention_root: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct ContinuationHistoryResponse {
+    operation_id: OperationId,
+    response_object_id: ObjectId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct ContinuationHistoryReceipt {
+    continuation_id: Box<str>,
+    receipt_object_id: ObjectId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct ContinuationHistoryRecord {
+    schema: Box<str>,
+    original_request_id: Box<str>,
+    owner_binding_digest: Box<str>,
+    retention_root: RetentionRoot,
+    responses: Vec<ContinuationHistoryResponse>,
+    receipts: Vec<ContinuationHistoryReceipt>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    active_continuation_id: Option<Box<str>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    terminal_operation_id: Option<OperationId>,
+}
+
+struct LoadedContinuationHistory {
+    record: ContinuationHistoryRecord,
+    object_id: Option<ObjectId>,
+}
+
+enum HistoryTransition {
+    Initial {
+        original_request_id: Box<str>,
+    },
+    Continue {
+        prior: Box<LoadedContinuationHistory>,
+    },
+}
+
 struct LoadedReceipt {
     record: ContinuationRecord,
     receipt_object_id: ObjectId,
@@ -157,7 +231,8 @@ struct OperationWrite<'a> {
     request_digest: RequestDigest,
     response_bytes: &'a [u8],
     receipt: Option<ReceiptDraft>,
-    retire_continuation: Option<(Box<str>, ObjectId)>,
+    history: HistoryTransition,
+    consumed_continuation: Option<(Box<str>, ObjectId)>,
     retention_root: RetentionRoot,
     release_retention_root: bool,
     owner_binding_digest: Box<str>,
@@ -412,8 +487,28 @@ pub(super) fn continue_operation_identity(
     Ok((request_id, operation_id, digest))
 }
 
+fn history_prune_operation_identity(
+    host: &ContextMapHostInput,
+    request: &ContextContinuationHistoryPruneRequest,
+) -> ServiceResult<(Box<str>, OperationId, RequestDigest)> {
+    let (_, digest_text) =
+        request_digest(CONTEXT_CONTINUATION_HISTORY_PRUNE_REQUEST_SCHEMA, request)?;
+    let operation_id = continuation_operation_id(&format!("context-history-prune:{digest_text}"))?;
+    let request_id = format!("context-history-prune-request:{digest_text}").into_boxed_str();
+    // Preserve one journal slot per public prune request, while binding that
+    // slot's durable request digest to the exact service-selected host. The
+    // owner binding is recomputed from native host fields, never supplied by
+    // the caller, and remains checkable after terminal history is collected.
+    let owner_binding = owner_binding_digest(host)?;
+    let (bound_digest, _) = request_digest(
+        HISTORY_PRUNE_OPERATION_BINDING_SCHEMA,
+        &(request, owner_binding),
+    )?;
+    Ok((request_id, operation_id, bound_digest))
+}
+
 fn replay_completed_result(
-    store: &Store,
+    store: &mut Store,
     operation_id: &OperationId,
     request_digest: &RequestDigest,
     host: &ContextMapHostInput,
@@ -434,13 +529,28 @@ fn replay_completed_result(
         return Err(store_failure());
     }
     verify_owner_binding(host, &outcome.owner_binding_digest)?;
-    let bytes = response_object(store, &outcome.response_object_id)?;
+    let bytes = response_for_operation(store, operation_id, &outcome.response_object_id)?;
     if let Some(receipt_id) = &outcome.next_receipt_object_id {
         let receipt = receipt_from_object(store, receipt_id)?;
         if outcome.next_continuation_id.as_deref() != Some(receipt.record.continuation_id.as_ref())
             || receipt.record.response_object_id != outcome.response_object_id
         {
             return Err(store_failure());
+        }
+        if let Some(history) = load_history(store, &receipt.record.replay.original_request_id)? {
+            if history.record.owner_binding_digest != outcome.owner_binding_digest
+                || !history.record.responses.iter().any(|response| {
+                    &response.operation_id == operation_id
+                        && response.response_object_id == outcome.response_object_id
+                })
+                || !history.record.receipts.iter().any(|root| {
+                    root.continuation_id == receipt.record.continuation_id
+                        && &root.receipt_object_id == receipt_id
+                })
+            {
+                return Err(failure(ServiceErrorCode::IdentityMismatch));
+            }
+            verify_history_roots(store, &history.record)?;
         }
     }
     // Completed response replay either confirms an active exact hold or finishes
@@ -674,7 +784,10 @@ pub(super) fn execute_context_build_with_continuation(
             request_digest: request_digest.clone(),
             response_bytes: &response_bytes,
             receipt: Some(draft),
-            retire_continuation: None,
+            history: HistoryTransition::Initial {
+                original_request_id: request_id.clone(),
+            },
+            consumed_continuation: None,
             retention_root: retention.clone(),
             release_retention_root: false,
             owner_binding_digest,
@@ -718,11 +831,33 @@ fn continuation_catalog_path(value: &str) -> ServiceResult<CatalogPath> {
     CatalogPath::new(value.to_owned()).map_err(|_| failure(ServiceErrorCode::InvalidRequest))
 }
 
+pub(super) fn response_root_catalog_path(operation_id: &OperationId) -> ServiceResult<CatalogPath> {
+    continuation_catalog_path(&format!("response/{}", operation_id.as_str()))
+}
+
+pub(super) fn history_catalog_path(original_request_id: &str) -> ServiceResult<CatalogPath> {
+    if !valid_original_request_id(original_request_id) {
+        return Err(failure(ServiceErrorCode::InvalidRequest));
+    }
+    continuation_catalog_path(&format!("history/{original_request_id}"))
+}
+
 fn valid_continuation_id(value: &str) -> bool {
     let Some(digest) = value.strip_prefix("context-continuation:sha256:") else {
         return false;
     };
     digest.len() == 64
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn valid_original_request_id(value: &str) -> bool {
+    let Some(digest) = value.strip_prefix("context-build-request:sha256:") else {
+        return false;
+    };
+    bounded_id(value)
+        && digest.len() == 64
         && digest
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
@@ -737,6 +872,103 @@ fn bounded_id(value: &str) -> bool {
 
 fn store_failure() -> ServiceError {
     failure(ServiceErrorCode::InternalContractViolation)
+}
+
+fn validate_history_record(record: &ContinuationHistoryRecord) -> ServiceResult<()> {
+    if record.schema.as_ref() != HISTORY_SCHEMA
+        || !valid_original_request_id(&record.original_request_id)
+        || record.responses.is_empty()
+        || record.responses.len() > 4
+        || record.receipts.is_empty()
+        || record.receipts.len() > 3
+        || record.responses.len() < record.receipts.len()
+        || record.responses.len() > record.receipts.len() + 1
+        || record
+            .responses
+            .iter()
+            .enumerate()
+            .any(|(index, response)| {
+                record.responses[..index]
+                    .iter()
+                    .any(|prior| prior.operation_id == response.operation_id)
+            })
+        || record.receipts.iter().enumerate().any(|(index, receipt)| {
+            !valid_continuation_id(&receipt.continuation_id)
+                || record.receipts[..index]
+                    .iter()
+                    .any(|prior| prior.continuation_id == receipt.continuation_id)
+        })
+    {
+        return Err(failure(ServiceErrorCode::IdentityMismatch));
+    }
+
+    match (
+        record.active_continuation_id.as_deref(),
+        record.terminal_operation_id.as_ref(),
+    ) {
+        (Some(active), None)
+            if record.responses.len() == record.receipts.len()
+                && record
+                    .receipts
+                    .last()
+                    .is_some_and(|receipt| receipt.continuation_id.as_ref() == active) => {}
+        (None, Some(terminal))
+            if record.responses.len() == record.receipts.len() + 1
+                && record
+                    .responses
+                    .last()
+                    .is_some_and(|response| &response.operation_id == terminal) => {}
+        _ => return Err(failure(ServiceErrorCode::IdentityMismatch)),
+    }
+    Ok(())
+}
+
+fn history_object(store: &Store, object_id: &ObjectId) -> ServiceResult<ContinuationHistoryRecord> {
+    let object = store
+        .object(object_id)
+        .map_err(|_| store_failure())?
+        .ok_or_else(store_failure)?;
+    if object.kind() != HISTORY_KIND || object.schema_version() != RESPONSE_SCHEMA_VERSION {
+        return Err(store_failure());
+    }
+    let record: ContinuationHistoryRecord = object.decode().map_err(|_| store_failure())?;
+    validate_history_record(&record)?;
+    Ok(record)
+}
+
+fn pending_history_object(record: &ContinuationHistoryRecord) -> ServiceResult<PendingObject> {
+    validate_history_record(record)?;
+    PendingObject::from_json(
+        HISTORY_KIND,
+        RESPONSE_SCHEMA_VERSION,
+        record,
+        continuation_store_configuration()
+            .map_err(|_| store_failure())?
+            .limits(),
+    )
+    .map_err(|_| store_failure())
+}
+
+fn load_history(
+    store: &Store,
+    original_request_id: &str,
+) -> ServiceResult<Option<LoadedContinuationHistory>> {
+    let catalog = CatalogName::new(CONTINUATION_CATALOG).map_err(|_| store_failure())?;
+    let path = history_catalog_path(original_request_id)?;
+    let Some(entry) = store
+        .catalog_entry(&catalog, &path)
+        .map_err(|_| store_failure())?
+    else {
+        return Ok(None);
+    };
+    let record = history_object(store, entry.object_id())?;
+    if record.original_request_id.as_ref() != original_request_id {
+        return Err(failure(ServiceErrorCode::IdentityMismatch));
+    }
+    Ok(Some(LoadedContinuationHistory {
+        record,
+        object_id: Some(entry.object_id().clone()),
+    }))
 }
 
 fn pending_json(kind: &str, value: &Value) -> ServiceResult<PendingObject> {
@@ -798,6 +1030,35 @@ fn response_object(store: &Store, object_id: &ObjectId) -> ServiceResult<Box<[u8
     Ok(object.canonical_json().into())
 }
 
+fn response_for_operation(
+    store: &Store,
+    operation_id: &OperationId,
+    response_object_id: &ObjectId,
+) -> ServiceResult<Box<[u8]>> {
+    let catalog = CatalogName::new(CONTINUATION_CATALOG).map_err(|_| store_failure())?;
+    let path = response_root_catalog_path(operation_id)?;
+    if let Some(entry) = store
+        .catalog_entry(&catalog, &path)
+        .map_err(|_| store_failure())?
+    {
+        if entry.object_id() == response_object_id {
+            return response_object(store, response_object_id);
+        }
+        let object = store
+            .object(entry.object_id())
+            .map_err(|_| store_failure())?
+            .ok_or_else(store_failure)?;
+        if object.kind() == HISTORY_PRUNE_RESULT_KIND {
+            return Err(failure(ServiceErrorCode::OperationReleased));
+        }
+        return Err(failure(ServiceErrorCode::IdentityMismatch));
+    }
+
+    // Legacy rootless responses remain replayable while the exact object exists.
+    // New writes add this direct root in their atomic commit_operation batch.
+    response_object(store, response_object_id)
+}
+
 fn outcome_object(
     store: &Store,
     object_id: &ObjectId,
@@ -806,6 +1067,9 @@ fn outcome_object(
         .object(object_id)
         .map_err(|_| store_failure())?
         .ok_or_else(store_failure)?;
+    if object.kind() == HISTORY_PRUNE_RESULT_KIND {
+        return Err(failure(ServiceErrorCode::OperationReleased));
+    }
     if object.kind() != OUTCOME_KIND || object.schema_version() != RESPONSE_SCHEMA_VERSION {
         return Err(store_failure());
     }
@@ -813,7 +1077,7 @@ fn outcome_object(
 }
 
 fn read_completed_outcome(
-    store: &Store,
+    store: &mut Store,
     operation_id: &OperationId,
     expected_digest: &RequestDigest,
 ) -> ServiceResult<(ContinuationOperationOutcome, Box<[u8]>)> {
@@ -835,7 +1099,7 @@ fn read_completed_outcome(
     {
         return Err(store_failure());
     }
-    let response = response_object(store, &outcome.response_object_id)?;
+    let response = response_for_operation(store, operation_id, &outcome.response_object_id)?;
     Ok((outcome, response))
 }
 
@@ -914,6 +1178,17 @@ fn receipt_by_token(store: &Store, token: &str) -> ServiceResult<LoadedReceipt> 
     if receipt.record.continuation_id.as_ref() != token {
         return Err(failure(ServiceErrorCode::InvalidRequest));
     }
+    if let Some(history) = load_history(store, &receipt.record.replay.original_request_id)? {
+        if history.record.active_continuation_id.as_deref() != Some(token)
+            || !history.record.receipts.iter().any(|root| {
+                root.continuation_id.as_ref() == token
+                    && &root.receipt_object_id == entry.object_id()
+            })
+        {
+            return Err(failure(ServiceErrorCode::InvalidRequest));
+        }
+        verify_history_roots(store, &history.record)?;
+    }
     Ok(receipt)
 }
 
@@ -946,6 +1221,118 @@ fn receipt_chain(store: &Store, latest: LoadedReceipt) -> ServiceResult<Vec<Load
         return Err(failure(ServiceErrorCode::InvalidRequest));
     }
     Ok(chain)
+}
+
+fn history_from_active_chain(chain: &[LoadedReceipt]) -> ServiceResult<ContinuationHistoryRecord> {
+    let first = chain
+        .first()
+        .ok_or_else(|| failure(ServiceErrorCode::InvalidRequest))?;
+    let latest = chain
+        .last()
+        .ok_or_else(|| failure(ServiceErrorCode::InvalidRequest))?;
+    let record = ContinuationHistoryRecord {
+        schema: HISTORY_SCHEMA.into(),
+        original_request_id: first.record.replay.original_request_id.clone(),
+        owner_binding_digest: first.record.replay.owner_binding_digest.clone(),
+        retention_root: first.record.retention_root.clone(),
+        responses: chain
+            .iter()
+            .map(|receipt| ContinuationHistoryResponse {
+                operation_id: receipt.record.issuer_operation_id.clone(),
+                response_object_id: receipt.record.response_object_id.clone(),
+            })
+            .collect(),
+        receipts: chain
+            .iter()
+            .map(|receipt| ContinuationHistoryReceipt {
+                continuation_id: receipt.record.continuation_id.clone(),
+                receipt_object_id: receipt.receipt_object_id.clone(),
+            })
+            .collect(),
+        active_continuation_id: Some(latest.record.continuation_id.clone()),
+        terminal_operation_id: None,
+    };
+    validate_history_record(&record)?;
+    Ok(record)
+}
+
+fn catalog_target(
+    store: &Store,
+    catalog: &CatalogName,
+    path: &CatalogPath,
+) -> ServiceResult<Option<ObjectId>> {
+    store
+        .catalog_entry(catalog, path)
+        .map_err(|_| store_failure())
+        .map(|entry| entry.map(|value| value.object_id().clone()))
+}
+
+fn ensure_root_mutation(
+    store: &Store,
+    batch: &mut WriteBatch,
+    catalog: &CatalogName,
+    path: CatalogPath,
+    target: &ObjectId,
+) -> ServiceResult<()> {
+    match catalog_target(store, catalog, &path)? {
+        Some(existing) if &existing == target => Ok(()),
+        Some(existing) => {
+            let object = store
+                .object(&existing)
+                .map_err(|_| store_failure())?
+                .ok_or_else(store_failure)?;
+            if object.kind() == HISTORY_PRUNE_RESULT_KIND {
+                Err(failure(ServiceErrorCode::OperationReleased))
+            } else {
+                Err(failure(ServiceErrorCode::IdentityMismatch))
+            }
+        }
+        None => batch
+            .add_catalog_mutation(CatalogMutation::set(
+                catalog.clone(),
+                path,
+                CatalogExpectation::Absent,
+                target.clone(),
+            ))
+            .map_err(|_| store_failure()),
+    }
+}
+
+fn verify_history_roots(store: &Store, record: &ContinuationHistoryRecord) -> ServiceResult<()> {
+    let catalog = CatalogName::new(CONTINUATION_CATALOG).map_err(|_| store_failure())?;
+    for response in &record.responses {
+        let path = response_root_catalog_path(&response.operation_id)?;
+        if catalog_target(store, &catalog, &path)?.as_ref() != Some(&response.response_object_id) {
+            return Err(failure(ServiceErrorCode::IdentityMismatch));
+        }
+    }
+    for receipt in &record.receipts {
+        let path = continuation_catalog_path(&receipt.continuation_id)?;
+        if catalog_target(store, &catalog, &path)?.as_ref() != Some(&receipt.receipt_object_id) {
+            return Err(failure(ServiceErrorCode::IdentityMismatch));
+        }
+    }
+    Ok(())
+}
+
+fn history_for_active_chain(
+    store: &Store,
+    chain: &[LoadedReceipt],
+) -> ServiceResult<LoadedContinuationHistory> {
+    let expected = history_from_active_chain(chain)?;
+    if let Some(history) = load_history(store, &expected.original_request_id)? {
+        if history.record != expected {
+            return Err(failure(ServiceErrorCode::IdentityMismatch));
+        }
+        verify_history_roots(store, &history.record)?;
+        return Ok(history);
+    }
+    // A legacy active chain has no history index. Carry its verified roots into
+    // the next issuance batch; do not write them outside commit_operation.
+    Ok(LoadedContinuationHistory {
+        record: expected,
+        object_id: None,
+    })
 }
 
 impl ReplaySelection {
@@ -1268,6 +1655,9 @@ fn continue_inner(
     }
     verify_retention_root(host, &latest.record.retention_root)
         .map_err(|error| ("not_acquired", error))?;
+    checkpoint(stop).map_err(|error| ("not_acquired", error))?;
+    let history =
+        history_for_active_chain(store, &chain).map_err(|error| ("not_acquired", error))?;
     let build_request = replay
         .build_request()
         .map_err(|error| ("not_acquired", error))?;
@@ -1372,7 +1762,10 @@ fn continue_inner(
             request_digest: request_digest.clone(),
             response_bytes: &response_bytes,
             receipt,
-            retire_continuation: Some((
+            history: HistoryTransition::Continue {
+                prior: Box::new(history),
+            },
+            consumed_continuation: Some((
                 request.continuation_id.clone(),
                 latest.receipt_object_id.clone(),
             )),
@@ -1482,6 +1875,368 @@ fn failed_continue(
     })
 }
 
+#[derive(Serialize)]
+struct ContinuationHistoryPrunePayload<'a> {
+    original_request_id: &'a str,
+    terminal_operation_id: &'a str,
+    pruned_response_count: usize,
+    pruned_receipt_count: usize,
+}
+
+#[derive(Serialize)]
+struct ContinuationHistoryPruneEnvelope<'a> {
+    schema: &'static str,
+    operation: &'static str,
+    request_id: &'a str,
+    request: &'a ContextContinuationHistoryPruneRequest,
+    status: ContextMapStatus,
+    resource_closure: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    failure_code: Option<ServiceErrorCode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    payload: Option<ContinuationHistoryPrunePayload<'a>>,
+}
+
+fn failed_history_prune(
+    request: &ContextContinuationHistoryPruneRequest,
+    request_id: &str,
+    code: ServiceErrorCode,
+    stop: &AtomicBool,
+) -> ServiceResult<ContextMapResult> {
+    let envelope = ContinuationHistoryPruneEnvelope {
+        schema: CONTEXT_CONTINUATION_HISTORY_PRUNE_RESULT_SCHEMA,
+        operation: "context_continuation_history_prune",
+        request_id,
+        request,
+        status: if code == ServiceErrorCode::Cancelled {
+            ContextMapStatus::Cancelled
+        } else {
+            ContextMapStatus::Failed
+        },
+        resource_closure: "closed",
+        failure_code: Some(code),
+        payload: None,
+    };
+    let bytes = super::operation::encode(&envelope, CONTEXT_MAP_RESULT_MAX_BYTES, stop)?;
+    Ok(ContextMapResult {
+        bytes: bytes.into_boxed_slice(),
+        status: envelope.status,
+        code: Some(code),
+    })
+}
+
+fn completed_history_prune_result(
+    store: &Store,
+    operation_id: &OperationId,
+    request_digest: &RequestDigest,
+    request_id: &str,
+) -> ServiceResult<Option<ContextMapResult>> {
+    let Some(operation) = store.operation(operation_id).map_err(|_| store_failure())? else {
+        return Ok(None);
+    };
+    if operation.request_digest() != request_digest {
+        return Err(failure(ServiceErrorCode::OperationConflict));
+    }
+    if operation.state() != OperationState::Completed {
+        return Err(failure(ServiceErrorCode::StoreOutcomeUnknown));
+    }
+    let result_id = operation.result_object_id().ok_or_else(store_failure)?;
+    let object = store
+        .object(result_id)
+        .map_err(|_| store_failure())?
+        .ok_or_else(store_failure)?;
+    if object.kind() != HISTORY_PRUNE_RESULT_KIND
+        || object.schema_version() != RESPONSE_SCHEMA_VERSION
+    {
+        return Err(store_failure());
+    }
+    let value = response_value(object.canonical_json())?;
+    if value.get("schema").and_then(Value::as_str)
+        != Some(CONTEXT_CONTINUATION_HISTORY_PRUNE_RESULT_SCHEMA)
+        || value.get("operation").and_then(Value::as_str)
+            != Some("context_continuation_history_prune")
+        || value.get("request_id").and_then(Value::as_str) != Some(request_id)
+    {
+        return Err(store_failure());
+    }
+    response_result(object.canonical_json().into()).map(Some)
+}
+
+fn validate_terminal_history(
+    store: &Store,
+    host: &ContextMapHostInput,
+    history: &LoadedContinuationHistory,
+) -> ServiceResult<Vec<(OperationId, RequestDigest, ObjectId)>> {
+    validate_history_record(&history.record)?;
+    if history.record.active_continuation_id.is_some() {
+        return Err(failure(ServiceErrorCode::OperationConflict));
+    }
+    verify_owner_binding(host, &history.record.owner_binding_digest)?;
+
+    let catalog = CatalogName::new(CONTINUATION_CATALOG).map_err(|_| store_failure())?;
+    let history_path = history_catalog_path(&history.record.original_request_id)?;
+    let history_object_id = history
+        .object_id
+        .as_ref()
+        .ok_or_else(|| failure(ServiceErrorCode::IdentityMismatch))?;
+    if catalog_target(store, &catalog, &history_path)?.as_ref() != Some(history_object_id) {
+        return Err(failure(ServiceErrorCode::IdentityMismatch));
+    }
+
+    let latest_receipt_id = history
+        .record
+        .receipts
+        .last()
+        .ok_or_else(|| failure(ServiceErrorCode::IdentityMismatch))?
+        .receipt_object_id
+        .clone();
+    let latest_receipt = receipt_from_object(store, &latest_receipt_id)?;
+    let chain = receipt_chain(store, latest_receipt)?;
+    if chain.len() != history.record.receipts.len() {
+        return Err(failure(ServiceErrorCode::IdentityMismatch));
+    }
+    for (recorded, actual) in history.record.receipts.iter().zip(&chain) {
+        if recorded.continuation_id != actual.record.continuation_id
+            || recorded.receipt_object_id != actual.receipt_object_id
+        {
+            return Err(failure(ServiceErrorCode::IdentityMismatch));
+        }
+        let root_path = continuation_catalog_path(&recorded.continuation_id)?;
+        if catalog_target(store, &catalog, &root_path)?.as_ref()
+            != Some(&recorded.receipt_object_id)
+        {
+            return Err(failure(ServiceErrorCode::IdentityMismatch));
+        }
+    }
+
+    let terminal_operation_id = history
+        .record
+        .terminal_operation_id
+        .as_ref()
+        .ok_or_else(|| failure(ServiceErrorCode::IdentityMismatch))?;
+    let mut completed_results = Vec::with_capacity(history.record.responses.len());
+    for (index, response) in history.record.responses.iter().enumerate() {
+        let response_path = response_root_catalog_path(&response.operation_id)?;
+        if catalog_target(store, &catalog, &response_path)?.as_ref()
+            != Some(&response.response_object_id)
+        {
+            return Err(failure(ServiceErrorCode::IdentityMismatch));
+        }
+        let operation = store
+            .operation(&response.operation_id)
+            .map_err(|_| store_failure())?
+            .ok_or_else(|| failure(ServiceErrorCode::StoreOutcomeUnknown))?;
+        if operation.state() != OperationState::Completed {
+            return Err(failure(ServiceErrorCode::StoreOutcomeUnknown));
+        }
+        let result_id = operation
+            .result_object_id()
+            .ok_or_else(|| failure(ServiceErrorCode::StoreOutcomeUnknown))?;
+        let outcome = outcome_object(store, result_id)?;
+        if outcome.schema.as_ref() != OUTCOME_SCHEMA
+            || outcome.owner_binding_digest != history.record.owner_binding_digest
+            || outcome.retention_root != history.record.retention_root
+            || outcome.response_object_id != response.response_object_id
+        {
+            return Err(failure(ServiceErrorCode::IdentityMismatch));
+        }
+        if index < history.record.receipts.len() {
+            let receipt = &history.record.receipts[index];
+            if outcome.next_continuation_id.as_deref() != Some(receipt.continuation_id.as_ref())
+                || outcome.next_receipt_object_id.as_ref() != Some(&receipt.receipt_object_id)
+                || outcome.release_retention_root
+                || chain[index].record.issuer_operation_id != response.operation_id
+                || chain[index].record.response_object_id != response.response_object_id
+            {
+                return Err(failure(ServiceErrorCode::IdentityMismatch));
+            }
+        } else if &response.operation_id != terminal_operation_id
+            || outcome.next_continuation_id.is_some()
+            || outcome.next_receipt_object_id.is_some()
+            || !outcome.release_retention_root
+        {
+            return Err(failure(ServiceErrorCode::IdentityMismatch));
+        }
+        completed_results.push((
+            response.operation_id.clone(),
+            operation.request_digest().clone(),
+            result_id.clone(),
+        ));
+    }
+    Ok(completed_results)
+}
+
+fn prune_terminal_history(
+    host: &ContextMapHostInput,
+    request: &ContextContinuationHistoryPruneRequest,
+    request_id: &str,
+    operation_id: &OperationId,
+    request_digest: &RequestDigest,
+    store: &mut Store,
+    stop: &AtomicBool,
+) -> ServiceResult<ContextMapResult> {
+    if let Some(result) =
+        completed_history_prune_result(store, operation_id, request_digest, request_id)?
+    {
+        return Ok(result);
+    }
+    let history = load_history(store, request.original_request_id())?
+        .ok_or_else(|| failure(ServiceErrorCode::InvalidRequest))?;
+    let completed_results = validate_terminal_history(store, host, &history)?;
+    checkpoint(stop)?;
+
+    let terminal_operation_id = history
+        .record
+        .terminal_operation_id
+        .as_ref()
+        .ok_or_else(|| failure(ServiceErrorCode::IdentityMismatch))?;
+    let envelope = ContinuationHistoryPruneEnvelope {
+        schema: CONTEXT_CONTINUATION_HISTORY_PRUNE_RESULT_SCHEMA,
+        operation: "context_continuation_history_prune",
+        request_id,
+        request,
+        status: ContextMapStatus::Complete,
+        resource_closure: "closed",
+        failure_code: None,
+        payload: Some(ContinuationHistoryPrunePayload {
+            original_request_id: request.original_request_id(),
+            terminal_operation_id: terminal_operation_id.as_str(),
+            pruned_response_count: history.record.responses.len(),
+            pruned_receipt_count: history.record.receipts.len(),
+        }),
+    };
+    let response_bytes = super::operation::encode(&envelope, CONTEXT_MAP_RESULT_MAX_BYTES, stop)?;
+    let prune_result = PendingObject::from_json(
+        HISTORY_PRUNE_RESULT_KIND,
+        RESPONSE_SCHEMA_VERSION,
+        &envelope,
+        continuation_store_configuration()
+            .map_err(|_| store_failure())?
+            .limits(),
+    )
+    .map_err(|_| store_failure())?;
+    if prune_result.canonical_json() != response_bytes {
+        return Err(failure(ServiceErrorCode::CanonicalizationFailed));
+    }
+
+    match store
+        .begin_operation(operation_id.clone(), request_digest.clone())
+        .map_err(|_| store_failure())?
+    {
+        OperationBegin::Started(_) => {}
+        OperationBegin::Replay(record) if record.state() == OperationState::Completed => {
+            return completed_history_prune_result(
+                store,
+                operation_id,
+                request_digest,
+                request_id,
+            )?
+            .ok_or_else(store_failure);
+        }
+        OperationBegin::Replay(_) => return Err(failure(ServiceErrorCode::StoreOutcomeUnknown)),
+    }
+
+    let catalog = CatalogName::new(CONTINUATION_CATALOG).map_err(|_| store_failure())?;
+    let history_object_id = history
+        .object_id
+        .clone()
+        .ok_or_else(|| failure(ServiceErrorCode::IdentityMismatch))?;
+    let mut batch = WriteBatch::new();
+    batch
+        .add_object(prune_result.clone())
+        .map_err(|_| store_failure())?;
+    for response in &history.record.responses {
+        batch
+            .add_catalog_mutation(CatalogMutation::delete(
+                catalog.clone(),
+                response_root_catalog_path(&response.operation_id)?,
+                response.response_object_id.clone(),
+            ))
+            .map_err(|_| store_failure())?;
+    }
+    for receipt in &history.record.receipts {
+        batch
+            .add_catalog_mutation(CatalogMutation::delete(
+                catalog.clone(),
+                continuation_catalog_path(&receipt.continuation_id)?,
+                receipt.receipt_object_id.clone(),
+            ))
+            .map_err(|_| store_failure())?;
+    }
+    for (completed_operation_id, digest, previous_result_object_id) in completed_results {
+        batch
+            .add_operation_result_mutation(
+                OperationResultMutation::replace_completed(
+                    completed_operation_id,
+                    digest,
+                    previous_result_object_id,
+                    prune_result.object_id().clone(),
+                )
+                .map_err(|_| store_failure())?,
+            )
+            .map_err(|_| store_failure())?;
+    }
+    batch
+        .add_catalog_mutation(CatalogMutation::set(
+            catalog,
+            history_catalog_path(request.original_request_id())?,
+            CatalogExpectation::Exact(history_object_id),
+            prune_result.object_id().clone(),
+        ))
+        .map_err(|_| store_failure())?;
+    if batch.catalog_mutations().len() > 8 {
+        return Err(failure(ServiceErrorCode::BudgetExceeded));
+    }
+    let completed = match store.commit_operation(
+        batch,
+        operation_id,
+        request_digest,
+        prune_result.object_id(),
+    ) {
+        Ok(completed) => completed,
+        Err(_) => {
+            let _ = store.mark_outcome_unknown(operation_id, request_digest);
+            return Err(failure(ServiceErrorCode::StoreOutcomeUnknown));
+        }
+    };
+    if completed.state() != OperationState::Completed
+        || completed.request_digest() != request_digest
+        || completed.result_object_id() != Some(prune_result.object_id())
+    {
+        return Err(failure(ServiceErrorCode::StoreOutcomeUnknown));
+    }
+    response_result(response_bytes.into_boxed_slice())
+}
+
+pub fn execute_context_continuation_history_prune(
+    host: &ContextMapHostInput,
+    request: &ContextContinuationHistoryPruneRequest,
+    stop: &AtomicBool,
+) -> ServiceResult<ContextMapResult> {
+    checkpoint(stop)?;
+    let (request_id, operation_id, request_digest) =
+        history_prune_operation_identity(host, request)?;
+    if let Err(error) = host.validate(stop) {
+        return failed_history_prune(request, &request_id, error.code(), stop);
+    }
+    let mut store = match open_continuation_store(host) {
+        Ok(store) => store,
+        Err(error) => return failed_history_prune(request, &request_id, error.code(), stop),
+    };
+    match prune_terminal_history(
+        host,
+        request,
+        &request_id,
+        &operation_id,
+        &request_digest,
+        &mut store,
+        stop,
+    ) {
+        Ok(result) => Ok(result),
+        Err(error) => failed_history_prune(request, &request_id, error.code(), stop),
+    }
+}
+
 fn render_pack<'m, 'view>(
     universe: &wow_context::ContextUniverseSet<'view>,
     pack: &mut wow_context::ContextSemanticPack<'m, 'view>,
@@ -1522,6 +2277,106 @@ fn persist_prepared_operation(
     persist_operation_inner(store, operation, stop, true)
 }
 
+fn next_history_record(
+    transition: HistoryTransition,
+    operation_id: &OperationId,
+    response_object_id: &ObjectId,
+    receipt: Option<&(ContinuationRecord, PendingObject)>,
+    consumed_continuation: Option<&(Box<str>, ObjectId)>,
+    retention_root: &RetentionRoot,
+    owner_binding_digest: &str,
+) -> ServiceResult<(ContinuationHistoryRecord, CatalogExpectation)> {
+    match transition {
+        HistoryTransition::Initial {
+            original_request_id,
+        } => {
+            let Some((receipt, object)) = receipt else {
+                return Err(failure(ServiceErrorCode::InternalContractViolation));
+            };
+            if !valid_original_request_id(&original_request_id)
+                || receipt.replay.original_request_id != original_request_id
+                || receipt.completed_rounds != 1
+                || receipt.parent_receipt_object_id.is_some()
+                || receipt.retention_root != *retention_root
+                || receipt.replay.owner_binding_digest.as_ref() != owner_binding_digest
+            {
+                return Err(failure(ServiceErrorCode::IdentityMismatch));
+            }
+            let record = ContinuationHistoryRecord {
+                schema: HISTORY_SCHEMA.into(),
+                original_request_id,
+                owner_binding_digest: owner_binding_digest.into(),
+                retention_root: retention_root.clone(),
+                responses: vec![ContinuationHistoryResponse {
+                    operation_id: operation_id.clone(),
+                    response_object_id: response_object_id.clone(),
+                }],
+                receipts: vec![ContinuationHistoryReceipt {
+                    continuation_id: receipt.continuation_id.clone(),
+                    receipt_object_id: object.object_id().clone(),
+                }],
+                active_continuation_id: Some(receipt.continuation_id.clone()),
+                terminal_operation_id: None,
+            };
+            validate_history_record(&record)?;
+            Ok((record, CatalogExpectation::Absent))
+        }
+        HistoryTransition::Continue { prior } => {
+            let prior = *prior;
+            validate_history_record(&prior.record)?;
+            let Some((consumed_token, expected_receipt)) = consumed_continuation else {
+                return Err(failure(ServiceErrorCode::InternalContractViolation));
+            };
+            if prior.record.active_continuation_id.as_deref() != Some(consumed_token.as_ref())
+                || prior.record.owner_binding_digest.as_ref() != owner_binding_digest
+                || prior.record.retention_root != *retention_root
+                || prior
+                    .record
+                    .receipts
+                    .last()
+                    .is_none_or(|receipt| &receipt.receipt_object_id != expected_receipt)
+            {
+                return Err(failure(ServiceErrorCode::IdentityMismatch));
+            }
+
+            let history_expectation = prior
+                .object_id
+                .map(CatalogExpectation::Exact)
+                .unwrap_or(CatalogExpectation::Absent);
+            let mut record = prior.record;
+            record.responses.push(ContinuationHistoryResponse {
+                operation_id: operation_id.clone(),
+                response_object_id: response_object_id.clone(),
+            });
+            match receipt {
+                Some((next, object)) => {
+                    if next.replay.original_request_id != record.original_request_id
+                        || next.replay.owner_binding_digest.as_ref() != owner_binding_digest
+                        || next.retention_root != *retention_root
+                        || next.parent_receipt_object_id.as_ref() != Some(expected_receipt)
+                        || next.completed_rounds
+                            != u8::try_from(record.receipts.len() + 1).unwrap_or(u8::MAX)
+                    {
+                        return Err(failure(ServiceErrorCode::IdentityMismatch));
+                    }
+                    record.receipts.push(ContinuationHistoryReceipt {
+                        continuation_id: next.continuation_id.clone(),
+                        receipt_object_id: object.object_id().clone(),
+                    });
+                    record.active_continuation_id = Some(next.continuation_id.clone());
+                    record.terminal_operation_id = None;
+                }
+                None => {
+                    record.active_continuation_id = None;
+                    record.terminal_operation_id = Some(operation_id.clone());
+                }
+            }
+            validate_history_record(&record)?;
+            Ok((record, history_expectation))
+        }
+    }
+}
+
 fn persist_operation_inner(
     store: &mut Store,
     operation: OperationWrite<'_>,
@@ -1533,7 +2388,8 @@ fn persist_operation_inner(
         request_digest,
         response_bytes,
         receipt,
-        retire_continuation,
+        history,
+        consumed_continuation,
         retention_root,
         release_retention_root,
         owner_binding_digest,
@@ -1600,6 +2456,17 @@ fn persist_operation_inner(
     )
     .map_err(|_| store_failure())?;
 
+    let (history_record, history_expectation) = next_history_record(
+        history,
+        &operation_id,
+        response.object_id(),
+        receipt.as_ref(),
+        consumed_continuation.as_ref(),
+        &outcome.retention_root,
+        &outcome.owner_binding_digest,
+    )?;
+    let history_object = pending_history_object(&history_record)?;
+
     if already_prepared {
         let Some(record) = store
             .operation(&operation_id)
@@ -1633,29 +2500,42 @@ fn persist_operation_inner(
     }
 
     let mut batch = WriteBatch::new();
+    let catalog = CatalogName::new(CONTINUATION_CATALOG).map_err(|_| store_failure())?;
     batch.add_object(response).map_err(|_| store_failure())?;
-    if let Some((record, object)) = receipt {
-        let catalog = CatalogName::new(CONTINUATION_CATALOG).map_err(|_| store_failure())?;
-        let path = continuation_catalog_path(&record.continuation_id)?;
+    batch
+        .add_object(history_object.clone())
+        .map_err(|_| store_failure())?;
+    if let Some((_, object)) = receipt {
         batch
             .add_object(object.clone())
             .map_err(|_| store_failure())?;
-        batch
-            .add_catalog_mutation(CatalogMutation::set(
-                catalog,
-                path,
-                CatalogExpectation::Absent,
-                object.object_id().clone(),
-            ))
-            .map_err(|_| store_failure())?;
     }
-    if let Some((continuation_id, expected_receipt)) = retire_continuation {
-        let catalog = CatalogName::new(CONTINUATION_CATALOG).map_err(|_| store_failure())?;
-        let path = continuation_catalog_path(&continuation_id)?;
-        batch
-            .add_catalog_mutation(CatalogMutation::delete(catalog, path, expected_receipt))
-            .map_err(|_| store_failure())?;
+    for response in &history_record.responses {
+        ensure_root_mutation(
+            store,
+            &mut batch,
+            &catalog,
+            response_root_catalog_path(&response.operation_id)?,
+            &response.response_object_id,
+        )?;
     }
+    for receipt in &history_record.receipts {
+        ensure_root_mutation(
+            store,
+            &mut batch,
+            &catalog,
+            continuation_catalog_path(&receipt.continuation_id)?,
+            &receipt.receipt_object_id,
+        )?;
+    }
+    batch
+        .add_catalog_mutation(CatalogMutation::set(
+            catalog,
+            history_catalog_path(&history_record.original_request_id)?,
+            history_expectation,
+            history_object.object_id().clone(),
+        ))
+        .map_err(|_| store_failure())?;
     batch
         .add_object(outcome_object.clone())
         .map_err(|_| store_failure())?;
