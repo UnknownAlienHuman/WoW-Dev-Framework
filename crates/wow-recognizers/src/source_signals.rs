@@ -802,6 +802,8 @@ fn w1_validate_support(
 
 pub const W3_SIGNAL_PARTITION: &str = "wow-recognizers.lua-custom-signals";
 pub const W3_SIGNAL_PROFILE: &str = "wow-recognizers/lua-custom-signals/6";
+pub const W3_RECEIVER_SIGNAL_IDENTITY_PROFILE: &str =
+    "wow-recognizers/lua-custom-signals/receiver-signal-identity/1";
 const W3_FACT_PARTITION: &str = "wow-recognizers.lua-custom-signal-facts";
 const W3_FACT_PROFILE: &str = "wow-recognizers-lua-custom-signal-facts-4";
 const W3_PRODUCER_RULE: &str = "core.signal.custom_registry_producer";
@@ -821,6 +823,39 @@ const W3_POSITIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-001"];
 const W3_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-009"];
 const W3_PARTIAL_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-005"];
 const W3_MUTATION_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-006", "RECOG-EVENT-007"];
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum W3IdentityRecipe {
+    LegacyEventRegistry,
+    ReceiverSignalV1,
+}
+
+impl W3IdentityRecipe {
+    fn fact_profile(self) -> &'static str {
+        match self {
+            Self::LegacyEventRegistry => W3_FACT_PROFILE,
+            Self::ReceiverSignalV1 => "wow-recognizers-lua-custom-signal-receiver-identity-facts-1",
+        }
+    }
+    fn signal_profile(self) -> &'static str {
+        match self {
+            Self::LegacyEventRegistry => W3_SIGNAL_PROFILE,
+            Self::ReceiverSignalV1 => W3_RECEIVER_SIGNAL_IDENTITY_PROFILE,
+        }
+    }
+    fn target_field(self) -> &'static str {
+        match self {
+            Self::LegacyEventRegistry => "signal.event_key",
+            Self::ReceiverSignalV1 => "signal.signal_identity",
+        }
+    }
+    fn rule_version(self) -> u32 {
+        match self {
+            Self::LegacyEventRegistry => 1,
+            Self::ReceiverSignalV1 => 2,
+        }
+    }
+}
 
 /// One resolved custom-signal producer site: a resolved custom-registry receiver
 /// and one literal event key. A dynamic receiver or key never enters this block.
@@ -1216,6 +1251,27 @@ pub fn w3_recognize_signals(
         return Err(w3_failure(RecognizerErrorCode::AdapterBindingInvalid));
     }
 
+    // Exact receiver aliases of Library methods were rejected by the former callable/path
+    // reconciliation. Their new component binds the complete signal endpoint;
+    // the admitted EventRegistry-only class retains its original recipe bytes.
+    let mut identity_recipe = W3IdentityRecipe::LegacyEventRegistry;
+    for call in input.report.calls() {
+        w3_checkpoint(stop)?;
+        if w3_side(call).is_some()
+            && matches!(
+                call.target(),
+                wow_emmy::function_calls::SourceCallTarget::LibraryFunction { .. }
+            )
+            && input
+                .report
+                .exact_call_receiver(call)
+                .is_some_and(|receiver| receiver.key() != "EventRegistry")
+        {
+            identity_recipe = W3IdentityRecipe::ReceiverSignalV1;
+            break;
+        }
+    }
+
     let lookup = input.owner.producer_lookup(stop).map_err(w3_graph_error)?;
     let graph = lookup.input_view();
     let source_partition = input
@@ -1391,7 +1447,7 @@ pub fn w3_recognize_signals(
         if site_count > W3_MAX_SITES {
             return Err(w3_failure(RecognizerErrorCode::BudgetExceeded));
         }
-        let fact = w3_signal_fact(&input, &site, side, fact_limits)?;
+        let fact = w3_signal_fact(&input, &site, side, fact_limits, identity_recipe)?;
         facts.push(fact);
         if sites.insert(site.call_id.clone(), site).is_some() {
             return Err(w3_failure(RecognizerErrorCode::AdapterBindingDuplicate));
@@ -1409,7 +1465,7 @@ pub fn w3_recognize_signals(
             partition_id: W3_FACT_PARTITION.into(),
             capability_id: "emmy.fact.calls".into(),
             producer_id: "wow.emmy".into(),
-            producer_version: W3_FACT_PROFILE.into(),
+            producer_version: identity_recipe.fact_profile().into(),
             state: coverage_state,
             blocker_ids: if coverage_state == RecognizerFactCoverageState::Complete {
                 Vec::new()
@@ -1427,7 +1483,7 @@ pub fn w3_recognize_signals(
         coverage,
         fact_limits,
     )?;
-    let pack = w3_pack(input.owner.registry().bundle_id())?;
+    let pack = w3_pack(input.owner.registry().bundle_id(), identity_recipe)?;
     let plan = compile_recognizer_plan(&pack)?;
     let output = execute_recognizer_plan(input.context, &pack, &plan, &bundle, fact_limits, stop)?;
 
@@ -1435,7 +1491,9 @@ pub fn w3_recognize_signals(
     let empty_producers = BTreeMap::<(String, String), Vec<String>>::new();
     let mut producer_proof_refs = 0usize;
     for outcome in output.outcomes() {
-        if outcome.rule_id() == W3_PRODUCER_RULE && outcome.rule_version() == 1 {
+        if outcome.rule_id() == W3_PRODUCER_RULE
+            && outcome.rule_version() == identity_recipe.rule_version()
+        {
             for proposal in outcome.proposals() {
                 assertions.push(w3_read_assertion(
                     proposal,
@@ -1443,9 +1501,12 @@ pub fn w3_recognize_signals(
                     &bundle,
                     &empty_producers,
                     &mut producer_proof_refs,
+                    identity_recipe,
                 )?);
             }
-        } else if outcome.rule_id() != W3_SUBSCRIPTION_RULE || outcome.rule_version() != 1 {
+        } else if outcome.rule_id() != W3_SUBSCRIPTION_RULE
+            || outcome.rule_version() != identity_recipe.rule_version()
+        {
             return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
         }
     }
@@ -1470,7 +1531,9 @@ pub fn w3_recognize_signals(
         calls.dedup();
     }
     for outcome in output.outcomes() {
-        if outcome.rule_id() == W3_SUBSCRIPTION_RULE && outcome.rule_version() == 1 {
+        if outcome.rule_id() == W3_SUBSCRIPTION_RULE
+            && outcome.rule_version() == identity_recipe.rule_version()
+        {
             for proposal in outcome.proposals() {
                 assertions.push(w3_read_assertion(
                     proposal,
@@ -1478,6 +1541,7 @@ pub fn w3_recognize_signals(
                     &bundle,
                     &producer_calls,
                     &mut producer_proof_refs,
+                    identity_recipe,
                 )?);
             }
         }
@@ -1742,7 +1806,7 @@ pub fn w3_recognize_signals(
         batch,
         coverage: graph_coverage,
         recognition: W3Recognition {
-            profile: W3_SIGNAL_PROFILE,
+            profile: identity_recipe.signal_profile(),
             analyzer_report_id: input.report.analysis_id().into(),
             fact_bundle_id: bundle.bundle_id().to_string(),
             pack_digest: pack.pack_digest().into(),
@@ -1768,9 +1832,8 @@ fn w3_side(call: &wow_emmy::function_calls::SourceCallFact) -> Option<W3SignalSi
     }
 }
 
-/// A site exists only with a resolved Main custom-registry receiver and one
-/// literal event key. A dynamic receiver, a library target, or a non-literal key
-/// yields no fact rather than a degraded one.
+/// Build exact receiver/key source facts for an admitted canonical method.
+/// Dynamic receivers or keys yield no fact.
 fn w3_build_site(
     input: &W3Input<'_>,
     call: &wow_emmy::function_calls::SourceCallFact,
@@ -1809,7 +1872,7 @@ fn w3_build_site(
         return Ok(None);
     };
     let target = receiver.target();
-    if !w3_is_resolved_custom_registry(Some(receiver.key()), target, input.report) {
+    if !w3_is_resolved_custom_registry(target, input.report) {
         return Ok(None);
     }
     let receiver_identity = source_receiver_identity(target)?;
@@ -1879,18 +1942,16 @@ fn function_proposals_of<'a>(input: &W3Input<'a>) -> BTreeMap<&'a str, &'a str> 
     input.function_proposals.clone()
 }
 
-/// Receivers are exact Main project-local registries or exact targets in the
-/// selected Library semantic session. Their workspace identity remains distinct.
+/// Method admission occurs in w3_side. Validate the exact receiver declaration,
+/// including independently allocated registries in the selected Library.
 fn w3_is_resolved_custom_registry(
-    receiver_key: Option<&str>,
     target: &wow_emmy::bindings::SymbolTarget,
     report: &FunctionCallReport,
 ) -> bool {
     let workspace_matches = target.role == "main"
         && target.workspace_id == report.main_snapshot_id()
         || target.role == "library" && report.library_snapshot_ids().contains(&target.workspace_id);
-    receiver_key == Some("EventRegistry")
-        && workspace_matches
+    workspace_matches
         && !target.path.is_empty()
         && !target.content_digest.is_empty()
         && target
@@ -1983,6 +2044,7 @@ fn w3_signal_fact(
     site: &W3Site,
     side: W3SignalSide,
     limits: RecognizerFactLimits,
+    identity_recipe: W3IdentityRecipe,
 ) -> RecognizerResult<RecognizerFact> {
     let mut fields = BTreeMap::from([
         (
@@ -2025,6 +2087,18 @@ fn w3_signal_fact(
             ),
         ),
     ]);
+    if identity_recipe == W3IdentityRecipe::ReceiverSignalV1 {
+        fields.insert(
+            "signal_identity".into(),
+            RecognizerFactValue::Reference(
+                w3_entity_id(&w3_signal_entity_key(
+                    &site.receiver_identity,
+                    &site.event_key,
+                ))?
+                .into(),
+            ),
+        );
+    }
     if let Some(proposal_id) = &site.receiver_proposal_id {
         fields.insert(
             "receiver_declaration_proposal_id".into(),
@@ -2056,7 +2130,7 @@ fn w3_signal_fact(
                 caller_function_id.to_owned(),
             )?,
             producer_id: "wow.emmy".into(),
-            producer_version: W3_FACT_PROFILE.into(),
+            producer_version: identity_recipe.fact_profile().into(),
             confidence: GraphConfidence::Derived,
             fields,
             source_handle_ids: source_handle_ids.into_iter().collect(),
@@ -2075,6 +2149,7 @@ fn w3_read_assertion(
     bundle: &RecognizerFactBundle,
     producer_calls: &BTreeMap<(String, String), Vec<String>>,
     producer_proof_refs: &mut usize,
+    identity_recipe: W3IdentityRecipe,
 ) -> RecognizerResult<W3Assertion> {
     let crate::RecognizerProposedAssertion::Relation {
         relation_kind_id,
@@ -2130,9 +2205,21 @@ fn w3_read_assertion(
     let Some(RecognizerFactValue::String(callable_key)) = fact.field("callable_key") else {
         return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
     };
+    let expected_target = match identity_recipe {
+        W3IdentityRecipe::LegacyEventRegistry => RecognizerFactValue::String(event_key.clone()),
+        W3IdentityRecipe::ReceiverSignalV1 => {
+            let expected = RecognizerFactValue::Reference(
+                w3_entity_id(&w3_signal_entity_key(receiver, event_key))?.into(),
+            );
+            if fact.field("signal_identity") != Some(&expected) {
+                return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
+            }
+            expected
+        }
+    };
     if callable_key.as_ref() != side.callable()
         || source != &RecognizerFactValue::Reference(caller.clone())
-        || target != &RecognizerFactValue::String(event_key.clone())
+        || target != &expected_target
     {
         return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
     }
@@ -2352,16 +2439,29 @@ fn w3_graph_error(error: wow_graph::GraphError) -> RecognizerError {
     })
 }
 
-fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecognizerPack> {
+fn w3_pack(
+    registry_bundle_id: &str,
+    identity_recipe: W3IdentityRecipe,
+) -> RecognizerResult<crate::CompiledRecognizerPack> {
     let document = RecognizerPackDocument {
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-custom-signals".into(),
-            version: "3".into(),
+            version: match identity_recipe {
+                W3IdentityRecipe::LegacyEventRegistry => "3",
+                W3IdentityRecipe::ReceiverSignalV1 => "4",
+            }
+            .into(),
             trust_class: RecognizerPackTrustClass::Core,
-            fact_schema_profile_id: W3_FACT_PROFILE.into(),
+            fact_schema_profile_id: identity_recipe.fact_profile().into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-custom-signals-3".into(),
+            evaluation_profile_id: match identity_recipe {
+                W3IdentityRecipe::LegacyEventRegistry => "wow-recognizers-w11-custom-signals-3",
+                W3IdentityRecipe::ReceiverSignalV1 => {
+                    "wow-recognizers-w11-custom-signal-receiver-identity-1"
+                }
+            }
+            .into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 8,
@@ -2375,7 +2475,7 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
             rules: vec![
                 RecognizerRule {
                     rule_id: W3_PRODUCER_RULE.into(),
-                    version: 1,
+                    version: identity_recipe.rule_version(),
                     required_capabilities: vec!["emmy.fact.calls".into()],
                     scope: "function".into(),
                     clauses: vec![
@@ -2399,7 +2499,7 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
                         output_id: "custom_signal_producer_emits".into(),
                         relation_kind_id: W3_EMITTER_RELATION_ID.into(),
                         source: "signal.caller".into(),
-                        target: "signal.event_key".into(),
+                        target: identity_recipe.target_field().into(),
                         confidence: RecognizerOutputConfidence::Derived,
                     }],
                     positive_fixture_ids: (W3_POSITIVE_FIXTURE_IDS
@@ -2421,7 +2521,7 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
                 },
                 RecognizerRule {
                     rule_id: W3_SUBSCRIPTION_RULE.into(),
-                    version: 1,
+                    version: identity_recipe.rule_version(),
                     required_capabilities: vec!["emmy.fact.calls".into()],
                     scope: "function".into(),
                     clauses: vec![
@@ -2445,7 +2545,7 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
                         output_id: "custom_signal_subscription_handles".into(),
                         relation_kind_id: W3_SUBSCRIPTION_RELATION_ID.into(),
                         source: "signal.caller".into(),
-                        target: "signal.event_key".into(),
+                        target: identity_recipe.target_field().into(),
                         confidence: RecognizerOutputConfidence::Derived,
                     }],
                     positive_fixture_ids: (W3_POSITIVE_FIXTURE_IDS
@@ -3515,11 +3615,7 @@ mod source_receiver_tests {
                     assert_eq!(receiver.key(), "EventRegistry");
                     assert_eq!(target.role, "library");
                     assert_eq!(target.workspace_id, library_workspace_id);
-                    assert!(w3_is_resolved_custom_registry(
-                        Some(receiver.key()),
-                        target,
-                        &report,
-                    ));
+                    assert!(w3_is_resolved_custom_registry(target, &report));
                     saw_custom_producer |=
                         call.resolved_callable_key() == Some("EventRegistry.TriggerEvent");
                     saw_custom_subscription |=
@@ -3552,9 +3648,8 @@ mod source_receiver_tests {
             shadow_report.main_snapshot_id()
         );
         assert!(w3_is_resolved_custom_registry(
-            Some(shadow_receiver.key()),
             shadow_receiver.target(),
-            &shadow_report,
+            &shadow_report
         ));
         assert!(
             w4_registry_target(

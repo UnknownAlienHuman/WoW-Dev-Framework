@@ -110,6 +110,11 @@ CallFact
     resolved_callable_key: optional String
 ```
 
+When the session resolves a unique selected callable signature, its canonical
+key survives access through a different exact receiver table holding that
+captured Library closure. Lexical access paths and receiver declarations remain
+separate bound observations; spelling cannot substitute for signature custody.
+
 `call_kind`:
 
 ```text

@@ -1950,9 +1950,19 @@ pub(crate) fn collect_with_components(
         if observed.next().is_some() {
             return Err(invalid());
         }
-        match (&call.resolved_callable_key, access_key) {
-            (Some(existing), Some(access)) if existing != &access => return Err(invalid()),
-            (None, Some(access)) => call.resolved_callable_key = Some(access),
+        match (
+            call.resolved_callable_key.as_deref(),
+            access_key,
+            &call.target,
+        ) {
+            // Canonical Library closures retain their selected method key when
+            // accessed through independently declared receiver tables.
+            (Some(existing), Some(access), SourceCallTarget::LibraryFunction { .. })
+                if existing != access.as_str() && callable_signatures.contains_key(existing) => {}
+            (Some(existing), Some(access), _) if existing != access.as_str() => {
+                return Err(invalid());
+            }
+            (None, Some(access), _) => call.resolved_callable_key = Some(access),
             _ => {}
         }
         for argument in &mut call.arguments {

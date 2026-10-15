@@ -1,6 +1,8 @@
 # `wow-recognizers` E2-B core structural recognizer contract
 
-**Status:** implementation-ready documentation; no Rust code yet.
+**Status:** partial functional native owners; full E2/W11 acceptance remains open
+in #103/#120. See the crate [router](../README.md) and capability rows in
+[`CONTRACT.json`](CONTRACT.json) for the implemented application routes.
 
 **Contract ID:** `wow-recognizers/e2-b/core-structural-rules`
 

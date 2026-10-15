@@ -130,12 +130,15 @@ It is not a plain custom callback.
 
 ### `core.signal.custom_registry_producer@1`
 
-Match exact `EventRegistry:TriggerEvent` with exact event key. Emit a custom signal producer relation.
+Match the selected canonical `EventRegistry.TriggerEvent` method with an exact
+receiver declaration and event key. Distinct registered Library tables may share
+that same method closure; each retains its own receiver identity. Emit a custom
+signal producer relation.
 
 ### `core.signal.custom_registry_subscription@1`
 
-Match an exact `EventRegistry:RegisterCallback` call with the exact Main
-`EventRegistry` receiver and literal event key. The emitted relation describes
+Match the selected canonical `EventRegistry.RegisterCallback` method with an
+exact Main or registered Library receiver and literal event key. The relation describes
 the enclosing function's registration site for that key; it does not identify
 the callback or owner argument and emits no callback-handler endpoint.
 
@@ -143,6 +146,14 @@ the callback or owner argument and emits no callback-handler endpoint.
 - If producer lookup is incomplete, absent under partial coverage, dynamic, or ambiguous, emit only an unresolved/Possible registration-site proposal and explicit blocker.
 - An unresolved callback/owner value remains unbound; it does not fabricate a handler identity or callback-specific relation.
 - Never reinterpret `PLAYER_LOGIN`, `UNIT_AURA`, or another plausible native name as a custom producer without `TriggerEvent` evidence.
+
+Newly admitted exact receiver aliases of registered Library methods select
+`wow-recognizers/lua-custom-signals/receiver-signal-identity/1` (rule version2).
+Its matcher target is the real receiver+event signal proposal identity; the
+original literal stays in its own fact field. Distinct receivers in one caller
+therefore remain independent outputs. The historical EventRegistry-only class
+keeps its exact version1 fact/pack bytes for native graph replay. Selection uses
+the validated callable/exact receiver class; it never tries expected hashes.
 
 ### `core.signal.cvar_callback@1`
 

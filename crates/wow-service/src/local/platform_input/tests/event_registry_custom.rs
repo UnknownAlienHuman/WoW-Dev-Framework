@@ -11,7 +11,7 @@ function EventRegistry:TriggerEvent(event) end
 function EventRegistry:RegisterCallback(event, callback, owner) end
 "#;
 
-fn replace_source_file(
+pub(super) fn replace_source_file(
     root: &FixtureRoot,
     config: &mut Value,
     path: &str,

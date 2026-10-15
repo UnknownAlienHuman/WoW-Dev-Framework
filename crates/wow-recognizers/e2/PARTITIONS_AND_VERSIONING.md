@@ -102,6 +102,20 @@ On failure/partial/cancel, the target complete partition is not published. Prior
 
 ## Exact decoded EventRegistry keys
 
+W3 retains the admitted EventRegistry-only recipe as
+`wow-recognizers/lua-custom-signals/6`, fact profile4 and pack3. Newly admitted
+exact receiver aliases of selected Library methods use the named
+`wow-recognizers/lua-custom-signals/receiver-signal-identity/1` component,
+`wow-recognizers-lua-custom-signal-receiver-identity-facts-1`, pack4/rule2.
+The latter binds the matcher target to the real receiver+literal signal proposal
+reference; `event_key` remains the original decoded string. Distinct receivers
+in one caller retain independent confidence without changing generic competition.
+The old callable/path guard rejected this new input class, so admitted old
+fact/pack bytes remain exact. Selection uses the same validated native callable
+and exact receiver; it performs no expected-hash lookup or source-text inference.
+The real consumers are `publish_signals` and native Project/Graph capture and
+`AcquiredProjectPair` reconstruction. No aggregate Project/Store schema changes.
+
 The W2 native bridge and W3 custom-signal adapters preserve the decoded string literal as the event key. W3 producer/subscription matching and graph entity identity use that exact value, including leading or trailing whitespace. A W3 subscription relation describes the exact registration site from its enclosing source function to that event key; it does not identify the callback or owner argument. Unresolved callback/owner values remain unbound and produce no handler-specific edge. Empty and over-limit inputs retain each adapter's existing conservative handling: W3 omits the unsupported site, while W2 fails closed with its budget error.
 
 This interpretation change is identified by W2 profile wow-recognizers/lua-native-event-bridges/5 and fact profile wow-recognizers-lua-native-event-bridge-facts-5, plus W3 profile wow-recognizers/lua-custom-signals/5 and fact profile wow-recognizers-lua-custom-signal-facts-3. The typed rules and graph registry are unchanged, so their versions do not change. The real replacement consumer is wow-service::graph::build::signals::publish_signals: it replaces the stable W2 and W3 graph partitions from the new exact facts. Existing snapshots keep their recorded identities; this adds no legacy alias or reinterpretation path.
