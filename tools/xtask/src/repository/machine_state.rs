@@ -9,6 +9,19 @@ const GRAPH_CONTRACT: &str = "crates/wow-graph/e2/CONTRACT.json";
 const GRAPH_MANIFEST: &str = "crates/wow-graph/e2/examples/CHECKSUMS.json";
 const SERVICE_CONTRACT: &str = "crates/wow-service/e1/CONTRACT.json";
 const SERVICE_MANIFEST: &str = "crates/wow-service/e1/examples/CHECKSUMS.json";
+const APP_E0_CONTRACT: &str = "apps/wow/CONTRACT.json";
+const APP_E0_MANIFEST: &str = "apps/wow/examples/CHECKSUMS.json";
+const APP_E0_OWNER_ID: &str = "apps/wow/e0-f/1";
+const APP_E0_ACTIVE_COMMANDS: &[&str] = &["status", "check"];
+const APP_E0_STDOUT_VECTORS: &[&str] = &[
+    "service_status_cli_stdout_sha256",
+    "service_clean_cli_stdout_sha256",
+    "service_findings_cli_stdout_sha256",
+    "service_partial_cli_stdout_sha256",
+    "service_failure_cli_stdout_sha256",
+    "service_cancelled_cli_stdout_sha256",
+];
+const APP_E0_ROUTE_SCOPE: &str = "active_commands and E0-F forbidden_responsibilities apply to status/check; capability_routing also records separate selected source commands and library-only/refusal paths without widening E0-F ownership";
 const STORE_E2_CONTRACT: &str = "crates/wow-store/e2/CONTRACT.json";
 const STORE_E2_MANIFEST: &str = "crates/wow-store/e2/examples/CHECKSUMS.json";
 
@@ -168,6 +181,115 @@ const SERVICE_CAPABILITIES: &[CapabilitySpec] = &[
         application_routes: &[("apps/wow-reference-builder/src/lib.rs", "rebuild_compare")],
         service_routes: None,
         application_selection: None,
+    },
+];
+
+const APP_E0_CAPABILITIES: &[CapabilitySpec] = &[
+    CapabilitySpec {
+        name: "status",
+        owners: &[
+            ("apps/wow/src/args.rs", "parse"),
+            ("apps/wow/src/output.rs", "exit_code"),
+            ("apps/wow/src/output.rs", "render"),
+        ],
+        application_routes: &[("apps/wow/src/main.rs", "run")],
+        service_routes: Some(&[
+            (
+                "crates/wow-service/src/local/disk_input.rs",
+                "LocalProjectInput::from_config_path",
+            ),
+            (
+                "crates/wow-service/src/local/response.rs",
+                "LocalCommand::status",
+            ),
+            ("crates/wow-service/src/local/response.rs", "execute_local"),
+            ("crates/wow-service/src/service.rs", "Service::status"),
+        ]),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "check",
+        owners: &[
+            ("apps/wow/src/args.rs", "parse"),
+            ("apps/wow/src/output.rs", "exit_code"),
+            ("apps/wow/src/output.rs", "render"),
+        ],
+        application_routes: &[("apps/wow/src/main.rs", "run")],
+        service_routes: Some(&[
+            (
+                "crates/wow-service/src/local/disk_input.rs",
+                "LocalProjectInput::from_config_path",
+            ),
+            (
+                "crates/wow-service/src/local/response.rs",
+                "LocalCommand::check",
+            ),
+            ("crates/wow-service/src/local/response.rs", "execute_local"),
+            ("crates/wow-service/src/service.rs", "Service::check"),
+        ]),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "source-census",
+        owners: &[
+            ("apps/wow/src/source.rs", "parse"),
+            ("apps/wow/src/source.rs", "execute"),
+        ],
+        application_routes: &[
+            ("apps/wow/src/main.rs", "run"),
+            ("apps/wow/src/source.rs", "run"),
+        ],
+        service_routes: Some(&[(
+            "crates/wow-service/src/source_census.rs",
+            "census_local_source",
+        )]),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "source-reference",
+        owners: &[
+            ("apps/wow/src/source.rs", "parse"),
+            ("apps/wow/src/source.rs", "execute"),
+        ],
+        application_routes: &[
+            ("apps/wow/src/main.rs", "run"),
+            ("apps/wow/src/source.rs", "run"),
+        ],
+        service_routes: Some(&[(
+            "crates/wow-service/src/source_reference.rs",
+            "read_local_source_reference",
+        )]),
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "unsupported-command-refusal",
+        owners: &[("apps/wow/src/args.rs", "parse")],
+        application_routes: &[
+            ("apps/wow/src/main.rs", "run"),
+            ("apps/wow/src/main.rs", "usage"),
+        ],
+        service_routes: None,
+        application_selection: Some("application-selected"),
+    },
+    CapabilitySpec {
+        name: "service-deferred-refusal",
+        owners: &[("crates/wow-service/src/service.rs", "Service::deferred")],
+        application_routes: &[],
+        service_routes: Some(&[("crates/wow-service/src/service.rs", "Service::deferred")]),
+        application_selection: Some("library-only"),
+    },
+    CapabilitySpec {
+        name: "service-operation-registry-library-only",
+        owners: &[(
+            "crates/wow-service/src/service.rs",
+            "Service::operation_registry",
+        )],
+        application_routes: &[],
+        service_routes: Some(&[(
+            "crates/wow-service/src/service.rs",
+            "Service::operation_registry",
+        )]),
+        application_selection: Some("library-only"),
     },
 ];
 
@@ -916,6 +1038,19 @@ const OWNERS: &[OwnerSpec] = &[
         required_blocking_issues: &[],
     },
     OwnerSpec {
+        id: APP_E0_OWNER_ID,
+        contract_path: APP_E0_CONTRACT,
+        manifest_path: APP_E0_MANIFEST,
+        manifest_id: "apps-wow-e0-f-pending-acceptance-v1",
+        capabilities: APP_E0_CAPABILITIES,
+        manifest_history_is_object: false,
+        application_selection: None,
+        operation_matrix_matches_capabilities: true,
+        capability_matrix_field: None,
+        canonical_issue: Some(120),
+        required_blocking_issues: &[120],
+    },
+    OwnerSpec {
         id: "wow-store/e2-d/projectstore-coherent-publication",
         contract_path: STORE_E2_CONTRACT,
         manifest_path: STORE_E2_MANIFEST,
@@ -1112,6 +1247,9 @@ fn validate_contract(owner: &OwnerSpec, value: &Value, files: &BTreeSet<&str>) -
             .ok_or("functional checkpoint is absent")?,
     )?;
     validate_operation_matrix(owner, value)?;
+    if owner.id == APP_E0_OWNER_ID {
+        validate_app_e0_contract(value)?;
+    }
     validate_capabilities(owner, value, files)
 }
 
@@ -1164,6 +1302,66 @@ fn validate_manifest(owner: &OwnerSpec, value: &Value) -> Result<()> {
     };
     if !digest.is_some_and(Value::is_null) {
         return Err("pending manifest cannot claim a frozen bundle digest".into());
+    }
+    if owner.id == APP_E0_OWNER_ID {
+        validate_app_e0_manifest(value)?;
+    }
+    Ok(())
+}
+
+fn validate_app_e0_contract(value: &Value) -> Result<()> {
+    let commands = value
+        .get("active_commands")
+        .and_then(Value::as_array)
+        .ok_or("Apps E0 active_commands must be an array")?;
+    if commands.len() != APP_E0_ACTIVE_COMMANDS.len()
+        || commands
+            .iter()
+            .zip(APP_E0_ACTIVE_COMMANDS)
+            .any(|(command, expected)| command.as_str() != Some(expected))
+    {
+        return Err("Apps E0 active commands differ from the explicit CLI scope".into());
+    }
+    if text(value, "capability_routing_scope")? != APP_E0_ROUTE_SCOPE {
+        return Err("Apps E0 route matrix scope differs from the explicit owner map".into());
+    }
+    let vectors = value["checksum_contract"]
+        .get("required_stdout_vectors")
+        .and_then(Value::as_array)
+        .ok_or("Apps E0 required stdout vector list is absent")?;
+    if vectors.len() != APP_E0_STDOUT_VECTORS.len()
+        || vectors
+            .iter()
+            .zip(APP_E0_STDOUT_VECTORS)
+            .any(|(vector, expected)| vector.as_str() != Some(expected))
+    {
+        return Err("Apps E0 stdout vector list differs from the explicit manifest map".into());
+    }
+    Ok(())
+}
+
+fn validate_app_e0_manifest(value: &Value) -> Result<()> {
+    let vectors = value
+        .get("result_vectors")
+        .and_then(Value::as_object)
+        .ok_or("Apps E0 result_vectors must be an object")?;
+    if vectors.len() != APP_E0_STDOUT_VECTORS.len()
+        || APP_E0_STDOUT_VECTORS
+            .iter()
+            .any(|vector| vectors.get(*vector).is_none_or(|value| !value.is_null()))
+    {
+        return Err("pending Apps E0 CLI vectors must remain exact and null".into());
+    }
+    let members = value
+        .get("members")
+        .and_then(Value::as_array)
+        .ok_or("Apps E0 members must be an array")?;
+    if members.len() != 1 {
+        return Err("pending Apps E0 manifest must retain its one contract member".into());
+    }
+    exact(&members[0], &["path", "sha256"])?;
+    if text(&members[0], "path")? != APP_E0_CONTRACT || !members[0]["sha256"].is_null() {
+        return Err("pending Apps E0 contract member digest must remain null".into());
     }
     Ok(())
 }
@@ -1494,6 +1692,17 @@ mod tests {
         } else {
             manifest["bundle_sha256"] = Value::Null;
         }
+        if spec.id == APP_E0_OWNER_ID {
+            contract["active_commands"] = json!(APP_E0_ACTIVE_COMMANDS);
+            contract["capability_routing_scope"] = json!(APP_E0_ROUTE_SCOPE);
+            contract["checksum_contract"]["required_stdout_vectors"] = json!(APP_E0_STDOUT_VECTORS);
+            let result_vectors = APP_E0_STDOUT_VECTORS
+                .iter()
+                .map(|field| ((*field).to_owned(), Value::Null))
+                .collect::<serde_json::Map<_, _>>();
+            manifest["result_vectors"] = Value::Object(result_vectors);
+            manifest["members"] = json!([{"path":APP_E0_CONTRACT,"sha256":null}]);
+        }
         (contract, manifest, files)
     }
 
@@ -1647,6 +1856,135 @@ mod tests {
             }
         }
         Ok((spec, contract, manifest, files))
+    }
+
+    fn app_e0_records() -> Result<(&'static OwnerSpec, Value, Value, BTreeSet<&'static str>)> {
+        let spec = OWNERS
+            .iter()
+            .find(|owner| owner.id == APP_E0_OWNER_ID)
+            .ok_or("Apps E0 owner mapping is absent")?;
+        let contract = serde_json::from_str(include_str!("../../../../apps/wow/CONTRACT.json"))?;
+        let manifest =
+            serde_json::from_str(include_str!("../../../../apps/wow/examples/CHECKSUMS.json"))?;
+        let mut files = BTreeSet::from([spec.contract_path, spec.manifest_path]);
+        for capability in spec.capabilities {
+            for (path, _) in capability
+                .owners
+                .iter()
+                .chain(capability.application_routes)
+                .chain(capability.service_routes.into_iter().flatten())
+            {
+                files.insert(*path);
+            }
+        }
+        Ok((spec, contract, manifest, files))
+    }
+
+    #[test]
+    fn apps_e0_maps_selected_routes_library_refusals_and_pending_vectors() -> Result<()> {
+        let (spec, contract, manifest, files) = app_e0_records()?;
+        check(spec, contract.clone(), manifest.clone(), &files)?;
+
+        assert_eq!(contract["active_commands"], json!(["status", "check"]));
+        let routes = contract["capability_routing"]
+            .as_array()
+            .ok_or("Apps E0 capability routing must be an array")?;
+        assert_eq!(routes.len(), 7);
+        assert_eq!(
+            routes
+                .iter()
+                .filter(|row| row["application_selection"] == "application-selected")
+                .count(),
+            5
+        );
+        assert_eq!(
+            routes
+                .iter()
+                .filter(|row| row["application_selection"] == "library-only")
+                .count(),
+            2
+        );
+        assert!(
+            routes
+                .iter()
+                .filter(|row| row["application_selection"] == "library-only")
+                .all(|row| row["application_routes"]
+                    .as_array()
+                    .is_some_and(Vec::is_empty))
+        );
+        assert!(
+            routes
+                .iter()
+                .filter(|row| row["application_selection"] == "application-selected")
+                .all(|row| row["application_routes"]
+                    .as_array()
+                    .is_some_and(|routes| !routes.is_empty()))
+        );
+        assert!(routes.iter().any(|row| {
+            row["capability"] == "source-census"
+                && row["service_routes"].as_array().is_some_and(|routes| {
+                    routes.iter().any(|route| {
+                        route["path"] == "crates/wow-service/src/source_census.rs"
+                            && route["symbol"] == "census_local_source"
+                    })
+                })
+        }));
+        assert!(routes.iter().any(|row| {
+            row["capability"] == "source-reference"
+                && row["service_routes"].as_array().is_some_and(|routes| {
+                    routes.iter().any(|route| {
+                        route["path"] == "crates/wow-service/src/source_reference.rs"
+                            && route["symbol"] == "read_local_source_reference"
+                    })
+                })
+        }));
+        assert!(
+            manifest["result_vectors"]
+                .as_object()
+                .is_some_and(|vectors| vectors.values().all(Value::is_null))
+        );
+        assert!(manifest["members"][0]["sha256"].is_null());
+        assert!(manifest["bundle_sha256"].is_null());
+
+        let mut stale_contract = contract.clone();
+        stale_contract["state"] = json!("implementation-ready-documentation-no-rust-code");
+        stale_contract["implementation_status"] = json!("not-started");
+        assert!(validate_contract(spec, &stale_contract, &files).is_err());
+
+        let mut accepted_contract = contract.clone();
+        accepted_contract["state"] = json!("accepted");
+        accepted_contract["acceptance_status"] = json!("accepted");
+        assert!(validate_contract(spec, &accepted_contract, &files).is_err());
+
+        let mut widened_active_commands = contract.clone();
+        widened_active_commands["active_commands"] = json!(["status", "check", "source"]);
+        assert!(validate_contract(spec, &widened_active_commands, &files).is_err());
+
+        let mut missing_status_route = contract.clone();
+        missing_status_route["capability_routing"][0]["application_routes"] = json!([]);
+        assert!(validate_contract(spec, &missing_status_route, &files).is_err());
+
+        let mut library_source_route = contract.clone();
+        library_source_route["capability_routing"][2]["application_routes"] = json!([]);
+        library_source_route["capability_routing"][2]["application_selection"] =
+            json!("library-only");
+        assert!(validate_contract(spec, &library_source_route, &files).is_err());
+
+        let mut routed_deferred_refusal = contract.clone();
+        routed_deferred_refusal["capability_routing"][5]["application_routes"] =
+            json!([{"path":"apps/wow/src/main.rs","symbol":"run"}]);
+        assert!(validate_contract(spec, &routed_deferred_refusal, &files).is_err());
+
+        let mut accepted_manifest = manifest.clone();
+        accepted_manifest["state"] = json!("accepted");
+        accepted_manifest["acceptance_status"] = json!("accepted");
+        assert!(validate_manifest(spec, &accepted_manifest).is_err());
+
+        let mut filled_vector = manifest.clone();
+        filled_vector["result_vectors"][APP_E0_STDOUT_VECTORS[0]] = json!("sha256:review-required");
+        assert!(validate_manifest(spec, &filled_vector).is_err());
+
+        Ok(())
     }
 
     #[test]

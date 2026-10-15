@@ -1,7 +1,29 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract_id": "apps/wow/e0-f/1",
-  "state": "partial-executable-materialized-input-status-check",
+  "state": "partial-functional-freeze-open",
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "canonical_issue": 120,
+  "preimplementation_freeze": {
+    "status": "missed",
+    "evaluation": "NotEvaluated"
+  },
+  "functional_checkpoint": {
+    "commit": "8b3f158a13a502d4456aec157247abd99e2447cf",
+    "quick_run": 38615311861
+  },
+  "historical_preimplementation_requirements": [
+    "wow-service E0-F implementation and result vectors frozen",
+    "only status/check commands active",
+    "only wow-service framework dependency",
+    "canonical JSON stdout byte-equal to service result",
+    "text projection contains no extra semantic inference",
+    "all exit codes map exactly",
+    "no source/lower-crate/runtime/edit behavior",
+    "all required tests pass",
+    "The previous checksum pointer targeted the Service E0 manifest; the App-owned pending manifest now lives at apps/wow/examples/CHECKSUMS.json, and the Service manifest remains unchanged."
+  ],
   "application": "wow",
   "work_package": "E0-F",
   "framework_dependencies": [
@@ -24,6 +46,138 @@
   "active_commands": [
     "status",
     "check"
+  ],
+  "operations": [
+    "status",
+    "check",
+    "source-census",
+    "source-reference",
+    "unsupported-command-refusal",
+    "service-deferred-refusal",
+    "service-operation-registry-library-only"
+  ],
+  "capability_routing_scope": "active_commands and E0-F forbidden_responsibilities apply to status/check; capability_routing also records separate selected source commands and library-only/refusal paths without widening E0-F ownership",
+  "capability_routing": [
+    {
+      "capability": "status",
+      "status": "partial-functional",
+      "owners": [
+        { "path": "apps/wow/src/args.rs", "symbol": "parse" },
+        { "path": "apps/wow/src/output.rs", "symbol": "exit_code" },
+        { "path": "apps/wow/src/output.rs", "symbol": "render" }
+      ],
+      "application_routes": [
+        { "path": "apps/wow/src/main.rs", "symbol": "run" }
+      ],
+      "service_routes": [
+        { "path": "crates/wow-service/src/local/disk_input.rs", "symbol": "LocalProjectInput::from_config_path" },
+        { "path": "crates/wow-service/src/local/response.rs", "symbol": "LocalCommand::status" },
+        { "path": "crates/wow-service/src/local/response.rs", "symbol": "execute_local" },
+        { "path": "crates/wow-service/src/service.rs", "symbol": "Service::status" }
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120, 122]
+    },
+    {
+      "capability": "check",
+      "status": "partial-functional",
+      "owners": [
+        { "path": "apps/wow/src/args.rs", "symbol": "parse" },
+        { "path": "apps/wow/src/output.rs", "symbol": "exit_code" },
+        { "path": "apps/wow/src/output.rs", "symbol": "render" }
+      ],
+      "application_routes": [
+        { "path": "apps/wow/src/main.rs", "symbol": "run" }
+      ],
+      "service_routes": [
+        { "path": "crates/wow-service/src/local/disk_input.rs", "symbol": "LocalProjectInput::from_config_path" },
+        { "path": "crates/wow-service/src/local/response.rs", "symbol": "LocalCommand::check" },
+        { "path": "crates/wow-service/src/local/response.rs", "symbol": "execute_local" },
+        { "path": "crates/wow-service/src/service.rs", "symbol": "Service::check" }
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120, 122]
+    },
+    {
+      "capability": "source-census",
+      "status": "partial-functional",
+      "owners": [
+        { "path": "apps/wow/src/source.rs", "symbol": "parse" },
+        { "path": "apps/wow/src/source.rs", "symbol": "execute" }
+      ],
+      "application_routes": [
+        { "path": "apps/wow/src/main.rs", "symbol": "run" },
+        { "path": "apps/wow/src/source.rs", "symbol": "run" }
+      ],
+      "service_routes": [
+        { "path": "crates/wow-service/src/source_census.rs", "symbol": "census_local_source" }
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120, 122]
+    },
+    {
+      "capability": "source-reference",
+      "status": "partial-functional",
+      "owners": [
+        { "path": "apps/wow/src/source.rs", "symbol": "parse" },
+        { "path": "apps/wow/src/source.rs", "symbol": "execute" }
+      ],
+      "application_routes": [
+        { "path": "apps/wow/src/main.rs", "symbol": "run" },
+        { "path": "apps/wow/src/source.rs", "symbol": "run" }
+      ],
+      "service_routes": [
+        { "path": "crates/wow-service/src/source_reference.rs", "symbol": "read_local_source_reference" }
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120, 122]
+    },
+    {
+      "capability": "unsupported-command-refusal",
+      "status": "partial-functional",
+      "owners": [
+        { "path": "apps/wow/src/args.rs", "symbol": "parse" }
+      ],
+      "application_routes": [
+        { "path": "apps/wow/src/main.rs", "symbol": "run" },
+        { "path": "apps/wow/src/main.rs", "symbol": "usage" }
+      ],
+      "application_selection": "application-selected",
+      "acceptance_status": "pending",
+      "blocking_issues": [120, 122]
+    },
+    {
+      "capability": "service-deferred-refusal",
+      "status": "partial-functional",
+      "owners": [
+        { "path": "crates/wow-service/src/service.rs", "symbol": "Service::deferred" }
+      ],
+      "application_routes": [],
+      "service_routes": [
+        { "path": "crates/wow-service/src/service.rs", "symbol": "Service::deferred" }
+      ],
+      "application_selection": "library-only",
+      "acceptance_status": "pending",
+      "blocking_issues": [120, 122]
+    },
+    {
+      "capability": "service-operation-registry-library-only",
+      "status": "partial-functional",
+      "owners": [
+        { "path": "crates/wow-service/src/service.rs", "symbol": "Service::operation_registry" }
+      ],
+      "application_routes": [],
+      "service_routes": [
+        { "path": "crates/wow-service/src/service.rs", "symbol": "Service::operation_registry" }
+      ],
+      "application_selection": "library-only",
+      "acceptance_status": "pending",
+      "blocking_issues": [120, 122]
+    }
   ],
   "status_options": [
     "--project <ProjectId>",
@@ -164,7 +318,7 @@
   ],
   "checksum_contract": {
     "algorithm": "sha256",
-    "owner_manifest": "crates/wow-service/examples/CHECKSUMS.json",
+    "manifest": "apps/wow/examples/CHECKSUMS.json",
     "required_stdout_vectors": [
       "service_status_cli_stdout_sha256",
       "service_clean_cli_stdout_sha256",
@@ -173,18 +327,9 @@
       "service_failure_cli_stdout_sha256",
       "service_cancelled_cli_stdout_sha256"
     ],
-    "state": "pending-service-implementation-and-result-freeze"
+    "state": "pending-acceptance-freeze",
+    "rule": "all app stdout vectors and member digests remain null until their exact input/result fixtures are reviewed; implementation presence or a green build does not freeze or accept them"
   },
-  "implementation_gate": [
-    "wow-service E0-F implementation and result vectors frozen",
-    "only status/check commands active",
-    "only wow-service framework dependency",
-    "canonical JSON stdout byte-equal to service result",
-    "text projection contains no extra semantic inference",
-    "all exit codes map exactly",
-    "no source/lower-crate/runtime/edit behavior",
-    "all required tests pass"
-  ],
   "startup_options": [
     "--config <materialized-project.json>"
   ],

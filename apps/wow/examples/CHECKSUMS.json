@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "manifest_id": "apps-wow-e0-f-pending-acceptance-v1",
+  "contract_id": "apps/wow/e0-f/1",
+  "algorithm": "sha256",
+  "canonicalization_contract": "wow-core-json/e0-1",
+  "state": "pending-acceptance-freeze",
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "canonical_issue": 120,
+  "preimplementation_freeze": {
+    "status": "missed",
+    "evaluation": "NotEvaluated"
+  },
+  "historical_preimplementation_requirements": [
+    "wow-service E0-F implementation and result vectors frozen",
+    "only status/check commands active",
+    "only wow-service framework dependency",
+    "canonical JSON stdout byte-equal to service result",
+    "text projection contains no extra semantic inference",
+    "all exit codes map exactly",
+    "no source/lower-crate/runtime/edit behavior",
+    "all required tests pass"
+  ],
+  "result_vectors": {
+    "service_status_cli_stdout_sha256": null,
+    "service_clean_cli_stdout_sha256": null,
+    "service_findings_cli_stdout_sha256": null,
+    "service_partial_cli_stdout_sha256": null,
+    "service_failure_cli_stdout_sha256": null,
+    "service_cancelled_cli_stdout_sha256": null
+  },
+  "members": [
+    {
+      "path": "apps/wow/CONTRACT.json",
+      "sha256": null
+    }
+  ],
+  "bundle_sha256": null,
+  "acceptance_rules": [
+    "Application route selection is not semantic, platform, or runtime acceptance.",
+    "All CLI stdout vectors and member digests stay null until exact fixture bytes are reviewed and frozen.",
+    "The historical missed preimplementation freeze remains NotEvaluated; code presence and build checks do not backfill it."
+  ]
+}
