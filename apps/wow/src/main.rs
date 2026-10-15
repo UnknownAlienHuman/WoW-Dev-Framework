@@ -7,6 +7,7 @@ mod graph_store;
 mod native;
 mod output;
 mod project;
+mod search;
 mod source;
 
 use std::io::Write;
@@ -45,6 +46,9 @@ fn run() -> u8 {
     }
     if arguments.first().is_some_and(|value| value == "project") {
         return project::run(arguments);
+    }
+    if arguments.first().is_some_and(|value| value == "search") {
+        return search::run(arguments);
     }
     if arguments.first().is_some_and(|value| value == "source") {
         return source::run(arguments);

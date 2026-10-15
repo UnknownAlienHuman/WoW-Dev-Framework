@@ -2,6 +2,8 @@
 
 The active implementation slice is **primary maps, inspection and context packs**, tracked by
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
+The selected W20 exact-generation search owner and native build/query route are
+tracked by [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169).
 The W17 queue and qualification debt remain in
 [#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
 Use its current bounded sole-writer claim and
@@ -64,6 +66,9 @@ scoped #117/#118 obligations.
 
 ## Existing owner and application routes
 
+- [Exact-generation search](../apps/wow/SEARCH_BUILD_QUERY.md) builds one real
+  immutable ProjectFile metadata shard and queries exact owner ID/label plus
+  Candidate-only literal FTS. Broader E4 and durable search acceptance stay in #169.
 - [Source-only Reference](../apps/wow/SOURCE_REFERENCE.md) derives actual native
   profile/final Reference identities without dummy Main or fabricated IDs.
 - [Source census](../apps/wow/SOURCE_CENSUS.md) connects existing materialized

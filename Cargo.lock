@@ -2680,6 +2680,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "wow-search"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "wow-core",
+ "wow-graph",
+ "wow-project",
+ "wow-reference",
+ "wow-store",
+]
+
+[[package]]
 name = "wow-service"
 version = "0.1.0"
 dependencies = [
@@ -2695,6 +2709,7 @@ dependencies = [
  "wow-recognizers",
  "wow-reference",
  "wow-rules",
+ "wow-search",
  "wow-store",
 ]
 

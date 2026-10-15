@@ -183,6 +183,13 @@ impl<B: ServiceBackend> Service<B> {
                     request.operation_id().as_str(),
                 ));
             }
+            RegistryDecision::Replay(CompletedResult::Search(_)) => {
+                return Err(ServiceError::for_operation(
+                    ServiceErrorCode::InternalContractViolation,
+                    "status operation replay resolved to a search result",
+                    request.operation_id().as_str(),
+                ));
+            }
             RegistryDecision::Started => {}
         }
         let result = self.build_status(request, &request_digest, cancelled);
@@ -228,6 +235,13 @@ impl<B: ServiceBackend> Service<B> {
                 return Err(ServiceError::for_operation(
                     ServiceErrorCode::InternalContractViolation,
                     "check operation replay resolved to a status result",
+                    request.operation_id().as_str(),
+                ));
+            }
+            RegistryDecision::Replay(CompletedResult::Search(_)) => {
+                return Err(ServiceError::for_operation(
+                    ServiceErrorCode::InternalContractViolation,
+                    "check operation replay resolved to a search result",
                     request.operation_id().as_str(),
                 ));
             }

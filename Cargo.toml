@@ -10,6 +10,7 @@ members = [
     "crates/wow-emmy",
     "crates/wow-project",
     "crates/wow-rules",
+    "crates/wow-search",
     "crates/wow-service",
     "crates/wow-graph",
     "crates/wow-recognizers",

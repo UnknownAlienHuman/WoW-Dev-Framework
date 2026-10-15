@@ -15,6 +15,7 @@ pub use error::{StoreError, StoreErrorCode, StoreResult};
 pub use identity::{
     CatalogName, CatalogPath, LeaseId, LogicalEpoch, ObjectId, OperationId, RequestDigest,
 };
+pub mod search;
 pub use model::{
     CatalogChange, CatalogEntry, CatalogExpectation, CatalogMutation, CommitReceipt,
     GarbageCollectionReceipt, IntegrityReport, LeaseRecord, LogicalManifest, ObjectRecord,

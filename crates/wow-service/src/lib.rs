@@ -24,6 +24,7 @@ pub mod reference_pack;
 pub mod reference_pack_admin;
 mod reference_pack_license;
 pub mod reference_pack_materialization;
+pub mod search;
 mod service;
 pub mod source_census;
 pub mod source_reference;

@@ -20,6 +20,7 @@ wow-store = { path = "../wow-store" }
 wow-graph = { path = "../wow-graph" }
 wow-recognizers = { path = "../wow-recognizers" }
 wow-context = { path = "../wow-context" }
+wow-search = { path = "../wow-search" }
 
 [lints]
 workspace = true

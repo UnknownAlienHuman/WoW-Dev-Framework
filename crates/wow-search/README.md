@@ -1,6 +1,6 @@
 # `wow-search` contract router
 
-**Status:** E4-A exact-generation retrieval core and its E4-B Candidate-only lineage handoff are implementation-ready documentation; E4-C service orchestration is defined separately. Rust implementation has not started.
+**Status:** partial executable E4-A ProjectFile metadata shard and native E4-C build/query route. Full retrieval, lineage, persistence and package acceptance remain open in [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169).
 
 `wow-search` owns deterministic bounded retrieval over immutable exact-generation search shards. It does not own project/reference/graph truth, resolve current publications, accept lineage assertions, infer replacements, generate context, call models, or mutate source.
 
@@ -26,9 +26,16 @@ Read:
 ```text
 contract: wow-search/e4-a/exact-generation-retrieval-core
 manifest: e4/CONTRACT.json
-state: implementation-ready-documentation-no-rust-code
-implementation: not-started
+state: partial-functional-freeze-open
+implementation: selected ProjectFile metadata shard; full E4-A pending
 ```
+
+The selected [native search command](../../apps/wow/SEARCH_BUILD_QUERY.md) builds
+one immutable shard from an exact retained Project/Graph pair, preserves the
+owner's file ID and relative-path label, and exposes exact ID/label lookups plus
+Candidate-only literal FTS. The one-shot CLI uses an in-memory generic Store;
+durable reopening, other document/lane classes, ranking, misses and continuation
+remain separate work. The historical preimplementation freeze is not accepted.
 
 E4-A defines:
 

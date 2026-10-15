@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 
 use crate::identity::validate_identifier;
+use crate::search::SearchBuildQueryResult;
 use crate::{CheckResult, ServiceError, ServiceErrorCode, ServiceResult, StatusResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -28,12 +29,14 @@ impl OperationId {
 pub(crate) enum OperationKind {
     Status,
     Check,
+    Search,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum CompletedResult {
     Status(Arc<StatusResult>),
     Check(Arc<CheckResult>),
+    Search(Arc<SearchBuildQueryResult>),
 }
 
 #[derive(Debug, Clone)]
@@ -173,6 +176,9 @@ impl OperationRegistry {
                         ("completed", Some(result.result_id().into()))
                     }
                     RegistryState::Completed(CompletedResult::Check(result)) => {
+                        ("completed", Some(result.result_id().into()))
+                    }
+                    RegistryState::Completed(CompletedResult::Search(result)) => {
                         ("completed", Some(result.result_id().into()))
                     }
                 };

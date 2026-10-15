@@ -1,11 +1,18 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract_id": "wow-search/e4-a/exact-generation-retrieval-core",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
+  "implementation_status": "partial-functional",
+  "acceptance_status": "pending",
+  "canonical_issue": 169,
+  "preimplementation_freeze": {
+    "status": "missed",
+    "evaluation": "NotEvaluated"
+  },
   "work_package": "E4-A",
   "crate": "wow-search",
   "documentation_frontier": "E4-A",
-  "implementation_state": "not-started",
+  "implementation_state": "partial-functional",
   "direct_framework_dependencies": [
     "wow-core",
     "wow-store",
