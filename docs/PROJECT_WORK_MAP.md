@@ -1,132 +1,73 @@
 # Current project work map
 
-The active implementation slice is **primary maps, inspection and context packs**, tracked by
+The canonical implementation queue and current integration lease are in
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
-The selected W20 exact-generation search owner and native build/query route are
-tracked by [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169).
-The W17 queue and qualification debt remain in
-[#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
-Use its current bounded sole-writer claim and
-[the execution model](EXECUTION_MODEL.md); historical checkpoints are evidence.
-
-## Current bounded work and qualification
-
-[#116](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/116) integrates
-the genuine composed candidate, selected publication/reopen and first bounded
-Skeleton route. Its one-hop handles profile remains Partial/Truncated; broader
-projections are NotEvaluated. See [live project commands](../apps/wow/LIVE_PROJECT.md).
-Selected retained content/query update, NoChange, removal and source-absent reopen
-have a bounded native lifecycle. Actual CLI and publication evidence is retained
-in #116; this does not establish full E3 acceptance.
-
-[#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122) owns the
-W18 Project Map and its service/CLI route. The reviewed
-[primary direct and project-root profiles](../crates/wow-context/e3/NATIVE_PRIMARY_MAP.md) and
-[`wow context map`](../apps/wow/CONTEXT_MAP.md) now have executable owners.
-The direct profile uses an exact graph entity; the project profile enumerates
-every genuine retained source-file root and its bounded native neighborhood.
-Both explicitly omit the optional platform universe. Selected native
-[L0/L1 inspection](../apps/wow/CONTEXT_INSPECT.md) has a distinct owner/service/CLI
-route with exact containers/entities, original declaration metadata and one
-aggregate budget. The selected [semantic pack and renderers](../crates/wow-context/e3/NATIVE_PRIMARY_PACK.md)
-are reachable through [`wow context build`](../apps/wow/CONTEXT_BUILD.md): pack-only,
-lossless JSON, metadata-safe Markdown or both preserve the same pack identity and
-continue that budget. Ordinary physical Main+Library now explicitly selects
-[native declarations/signatures](../apps/wow/PRIMARY_CALLABLE_INPUT.md) through a
-strict files manifest and a separately registered replay/catalog. Source-absent
-reopen and update/removal retain those observations in the same context routes.
-Selected ordinary TOC state-root L0 reaches inspect/build; explicit
-[state-detail L1](../crates/wow-context/e3/NATIVE_PRIMARY_STATE_DETAIL.md) preserves
-native roots, typed literal paths and their mandatory TOC custody in inspect and
-structural build/JSON/Markdown, using the original L1 construction budget.
-The [explicit frontier](../crates/wow-context/e3/NATIVE_PRIMARY_EXPANSION.md)
-also reaches inspect and the
-[frontier pack/render route](../crates/wow-context/e3/NATIVE_PRIMARY_FRONTIER_PACK.md)
-under one continuing budget.
-Selected candidate-qualified platform Map/Inspect and consuming Primary-plus-
-platform Map/Inspect/Build now have service/CLI owners; selected platform-root
-facets and the bounded Primary excerpt/Reference handoffs are covered in the
-current #122 scope. Primary, exact-candidate platform and composed metadata
-status have Service/CLI routes. Broader combined recipes/cross-universe links, correction/type
-inventory, excerpt privacy/tokens/continuation, and full acceptance remain open
-in #122 and the census.
-
-The bounded performance repairs in [#121](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/121)
-and #123 are closed historical work. [#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113)
-owns complete-corpus qualification; unreached scopes remain NotEvaluated, and
-that qualification does not block independent bounded #122 implementation.
-
-Classification and fingerprint acceptance remain in
-[#117](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117) and
-[#118](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118).
-The bounded #119 contract/freeze reviews are historical routing evidence, not a
-current implementation queue. **W17 is not accepted**; #106 remains its
-acceptance tracker, and a published checkpoint or Quick pass does not close the
-scoped #117/#118 obligations.
-
-## Existing owner and application routes
-
-- [Exact-generation search](../apps/wow/SEARCH_BUILD_QUERY.md) builds one real
-  immutable ProjectFile metadata shard and queries exact owner ID/label plus
-  Candidate-only literal FTS. Broader E4 and durable search acceptance stay in #169.
-- [Source-only Reference](../apps/wow/SOURCE_REFERENCE.md) derives actual native
-  profile/final Reference identities without dummy Main or fabricated IDs.
-- [Source census](../apps/wow/SOURCE_CENSUS.md) connects existing materialized
-  manifest admission and native lexical/package measurement. Target-excluded and
-  unresolved selected TOCs retain per-document Partial refusals; ordinary native
-  package loading remains strict.
-- [Manifest-bound platform input](../apps/wow/PLATFORM_INPUT.md) connects exact
-  source/package/Main admission and same-session XML bindings to the CLI's
-  configuration-selected native graph. It selects either a bounded Reference
-  artifact or native callable composition from the same exact source manifest.
-  Release Library snapshots use the existing Library universe. Metadata-only and
-  inline-only package members retain their facts under a nonempty aggregate Main.
-  Ordinary package64 remains. An explicit native retention profile adds bounded
-  package/plan retention and identity-bound replay11; graph/map/analyzer/output/
-  storage bounds remain independent. This route is not full-corpus qualification.
-- [Source admission](PLATFORM_SOURCE_ADMISSION.md),
-  [package specialization](PLATFORM_SOURCE_PACKAGES.md),
-  [configuration](PLATFORM_SOURCE_CONFIGURATION.md),
-  [replay](PLATFORM_SOURCE_REPLAY.md) and
-  [namespace publication](PLATFORM_STORE_NAMESPACE.md) already have Rust owners.
-  Do not recreate them from obsolete `no-rust-code` declarations.
-- [Direct producers](PLATFORM_DIRECT_PRODUCERS.md),
-  [XML source maps](PLATFORM_XML_SOURCE_MAPS.md) and
-  [XSD components](PLATFORM_XML_SCHEMA_COMPONENTS.md) have scoped executable
-  checkpoints. Their existence does not establish full selected-corpus acceptance.
-
-## Acceptance and remaining project scope
-
-| Tracker | Open responsibility |
-|---|---|
-| [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | W11 structural mutation and rule-fixture acceptance |
-| [#107](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/107) | W12 graph derivation/conflict qualification |
-| [#108](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/108) | W13 coherent live ProjectView/GraphView qualification |
-| [#109](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/109) | W14 incremental equivalence/removal closure |
-| [#110](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/110) | W15 retained roots and safe GC |
-| [#111](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111) | W16 backup/restore/migration/recovery qualification |
-| [#112](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112) | Remaining status/matrix compaction and version/consumer inventory |
-| [#120](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/120) | Owner-scoped machine-contract census and contradiction validation |
-
+Read its current body and claim with [the execution model](EXECUTION_MODEL.md).
 The [completion matrix](PROJECT_COMPLETION_MATRIX.md) owns package/launch states;
-[implementation status](IMPLEMENTATION_STATUS.md) owns the capability census.
-Their remaining chronological-ledger cleanup is #112 debt. The normative
-[I0–I7 handoff](IMPLEMENTATION_HANDOFF.md) remains in force. E0/E1 identity,
-checksum and Reference Pack acceptance, later W18–W26 owners/apps and final
-qualification remain open; the whole-project Goal is not reduced to W17.
+[implementation status](IMPLEMENTATION_STATUS.md) describes executable scope.
 
-Run Tier S on each coherent functional slice and require the exact-head Quick
-gate before another product publication. [#104](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/104)
-is closed with that cadence retained in the execution model. Heavy Tier A and
-current-source/Ketho/MCP/runtime Tier X belong at a ready milestone, with missing
-evidence reported as NotEvaluated. Addon-development source preparation follows
-product implementation/build. Use [Ketho port guidance](KETHO_RUST_PORT.md) and
-[typed Wasm bridges](WASM_BRIDGES.md) when those owners are changed.
+Verified product checkpoint: `d76c822634b73bb34d0e40621e3c70a902e4812a`,
+[Quick 38695889112](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38695889112).
+This is exact-head build evidence, not full package or launch acceptance.
 
-## Historical evidence
+## Next bounded actions
 
-The previous detailed map, test ledgers, version history and W18–W26 specification
-references remain in the immutable
-[a78320f map](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/a78320f8f6ff7c007ea650f57344b7dfc658d7e0/docs/PROJECT_WORK_MAP.md).
-It is historical evidence, not current routing. Preserve its unique specifications
-when reconciling future work; do not merge or revive stale tracking PR branches.
+1. Reconcile the retained W5 repair with the current Service path and exact graph
+   readback in [#166](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/166).
+2. Qualify genuine EventRegistry bridge and CVar callback Service positives in
+   [#161](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/161);
+   custom-signal receiver/multiple-producer work remains
+   [#162](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/162).
+3. Implement typed local receiver/result-zero custody before activating the real
+   AceAddon embed convention in
+   [#159](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/159).
+   The former synthetic LibStub embed endpoint is not available.
+4. Finish durable exact-generation Search build/reopen/query/retention in
+   [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169).
+   Broader frontend conformance remains
+   [#170](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/170).
+5. Run the composed Tier A campaign at a coherent functional milestone. Fresh
+   source/Ketho/WoW API Ketho MCP and named-client Tier X remain separate gates.
+
+Root integrates one released worker patch at a time, publishes through exact
+expected-head/CAS without force, reads back the remote tree, and waits for the
+current-head Quick before another product publication. Preserve surviving dirty
+worktrees and exact artifacts during recovery; unpublished work is unverified.
+
+## Existing application routes
+
+- [Project publication and retained lifecycle](../apps/wow/LIVE_PROJECT.md).
+- [Map](../apps/wow/CONTEXT_MAP.md), [Inspect](../apps/wow/CONTEXT_INSPECT.md),
+  [Build/render/continuation](../apps/wow/CONTEXT_BUILD.md), and
+  [native declarations/signatures](../apps/wow/PRIMARY_CALLABLE_INPUT.md).
+- [Exact-generation Search build/query](../apps/wow/SEARCH_BUILD_QUERY.md).
+- [Manifest-bound platform input](../apps/wow/PLATFORM_INPUT.md),
+  [source-only Reference](../apps/wow/SOURCE_REFERENCE.md), and
+  [source census](../apps/wow/SOURCE_CENSUS.md).
+- `wow transport capabilities` and the selected MCP 2025-11-25 stdio profile:
+  fixed `wow.status` and exact profile resource; selected
+  [Service](../crates/wow-service/e7/CONTRACT.json) and
+  [application](../apps/wow/e7/CONTRACT.json) contracts.
+
+These routes retain their exact profiles, identities, coverage and omissions.
+Partial/Truncated output does not prove absence, complete roots, runtime behavior,
+or full corpus fit. Do not recreate existing owners from historical status text.
+
+## Acceptance and deferred work
+
+| Trackers | Responsibility |
+|---|---|
+| [#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106), #113, #116–#118 | W17 corpus, capacity, candidate/Skeleton, classification and fingerprint qualification |
+| [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103), #107–#111 | W11–W16 structural, graph, update, retention and recovery acceptance |
+| [#112](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112), #120 | Remaining docs/version-consumer inventory and machine-state census |
+| [#124](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/124), #125 | Legacy reconciliation and future W20–W25 implementation queue |
+| [#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131) | Deferred exact read-owner reconstruction cost |
+
+Closed #114/#115/#119/#121/#123 are historical evidence, not active blockers.
+Closed #105 tracks reconciled PR/remote-branch retirement. Use Issues for remaining
+work; do not revive obsolete tracking PRs. The whole-project Goal includes later
+owners/apps, full Tier A/X and launch; it is not reduced to W17.
+
+The prior detailed routing and historical evidence links remain in the immutable
+[d76c8226 work map](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/d76c822634b73bb34d0e40621e3c70a902e4812a/docs/PROJECT_WORK_MAP.md).
+It preserves older checkpoint/specification links without making them the queue.
