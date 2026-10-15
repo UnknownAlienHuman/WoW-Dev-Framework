@@ -121,6 +121,7 @@ pub const PACKAGE_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposal
 pub const PACKAGE_RAW_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/21";
 pub const DIRECT_PLATFORM_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-proposals/22";
 pub const CAPABILITIES_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-capabilities/1";
+pub const STATE_PREFIX_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-state-prefixes/1";
 pub const SOURCE_GRAPH_PARTITION: &str = "wow-project.source-load";
 pub const NATIVE_API_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-native-api-uses/1";
 
@@ -128,6 +129,9 @@ pub const NATIVE_API_SOURCE_GRAPH_PROFILE: &str = "wow-project/source-load-nativ
 /// class alone. Missing selection retains the published /19 recipe.
 #[must_use]
 pub fn source_graph_profile(configuration: &crate::ProjectConfiguration) -> &'static str {
+    if configuration.state_projection().is_some() {
+        return STATE_PREFIX_SOURCE_GRAPH_PROFILE;
+    }
     if configuration.native_api_uses().is_some() {
         return NATIVE_API_SOURCE_GRAPH_PROFILE;
     }
@@ -287,6 +291,11 @@ impl ProjectGraphProvenance {
     #[must_use]
     pub fn package_loads(&self) -> &[ProjectGraphPackageLoad] {
         &self.package_loads
+    }
+    /// Exact owner-selected source projection recipe, including retained readers.
+    #[must_use]
+    pub fn profile(&self) -> &str {
+        self.profile
     }
     pub fn state_declarations(&self) -> &[ProjectGraphStateDeclaration] {
         &self.state_declarations

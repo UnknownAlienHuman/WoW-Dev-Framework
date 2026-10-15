@@ -345,7 +345,7 @@ fn recognize_state(
         let access = accesses
             .get(fact.access_id)
             .ok_or_else(|| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let confidence = if access.is_alias() || !access.path_complete() {
+        let confidence = if access.is_alias() {
             GraphConfidence::Possible
         } else {
             GraphConfidence::Derived
@@ -353,6 +353,7 @@ fn recognize_state(
         if fact.kind != access.kind()
             || fact.confidence != confidence
             || access.alias_blocker().is_some()
+            || !access.path_complete()
             || access.resolution() != GlobalAccessResolution::MainGlobal
         {
             return Err(failure(RecognizerErrorCode::AdapterFactMismatch));

@@ -212,6 +212,18 @@ pub(super) struct ReplayConfiguration {
         deserialize_with = "non_null_native_api_uses"
     )]
     native_api_uses: Option<crate::NativeApiUseRecipe>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null_state_projection"
+    )]
+    state_projection: Option<crate::StateProjectionRecipe>,
+}
+
+fn non_null_state_projection<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<crate::StateProjectionRecipe>, D::Error> {
+    crate::StateProjectionRecipe::deserialize(deserializer).map(Some)
 }
 
 fn non_null_native_api_uses<'de, D: serde::Deserializer<'de>>(
@@ -245,6 +257,9 @@ fn non_null_physical_function_signatures<'de, D: serde::Deserializer<'de>>(
 }
 
 impl ReplayConfiguration {
+    pub(super) const fn state_projection(&self) -> Option<crate::StateProjectionRecipe> {
+        self.state_projection
+    }
     pub(super) const fn native_library_input(&self) -> Option<&crate::NativeLibraryInput> {
         self.native_library_input.as_ref()
     }
@@ -308,6 +323,7 @@ impl ReplayConfiguration {
             physical_function_signatures: config.physical_function_signatures(),
             native_library_input: config.native_library_input().cloned(),
             native_api_uses: config.native_api_uses(),
+            state_projection: config.state_projection(),
         })
     }
     pub(super) fn profile(&self) -> &ProfileIdentity {
@@ -408,6 +424,10 @@ impl ReplayConfiguration {
         };
         let builder = match classification {
             Some(profile) => builder.with_xml_classification(profile, stop)?,
+            None => builder,
+        };
+        let builder = match self.state_projection {
+            Some(recipe) => builder.with_state_projection(recipe),
             None => builder,
         };
         let config = builder.build()?;

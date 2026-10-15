@@ -287,6 +287,10 @@ pub(super) fn project(
                     ProjectGraphStateOutcome::LocalAliasRebinding
                 }
             })
+        } else if !access.path_complete() && project.configuration().state_projection().is_none() {
+            // Original /19 recipe did not mint support for an incomplete access.
+            // Retained Context catalogs bind even unreferenced owner support.
+            Some(ProjectGraphStateOutcome::DynamicOrUnsupportedKey)
         } else if access.kind() == GlobalAccessKind::UnsupportedAssignment {
             Some(ProjectGraphStateOutcome::UnsupportedAssignment)
         } else {
@@ -309,7 +313,8 @@ pub(super) fn project(
                 }
             }
         };
-        let incomplete_suffix = outcome == Some(ProjectGraphStateOutcome::DynamicOrUnsupportedKey);
+        let incomplete_suffix = outcome == Some(ProjectGraphStateOutcome::DynamicOrUnsupportedKey)
+            && project.configuration().state_projection().is_some();
         if let Some(outcome) = outcome
             && !incomplete_suffix
         {

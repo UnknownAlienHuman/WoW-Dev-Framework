@@ -288,7 +288,8 @@ impl ProjectReplay {
             _ => return Err(invalid()),
         };
         if (configuration.native_library_input().is_some()
-            || configuration.native_api_uses().is_some())
+            || configuration.native_api_uses().is_some()
+            || configuration.state_projection().is_some())
             && generation_schema_version != Some(2)
         {
             return Err(invalid());
@@ -418,7 +419,8 @@ impl ProjectReplay {
     }
     fn expected_schema(&self) -> ProjectResult<&'static str> {
         if (self.configuration.native_library_input().is_some()
-            || self.configuration.native_api_uses().is_some())
+            || self.configuration.native_api_uses().is_some()
+            || self.configuration.state_projection().is_some())
             && self.generation_schema_version != Some(2)
         {
             return Err(invalid());
@@ -819,6 +821,18 @@ fn selected_component_schema(
 ) -> ProjectResult<&'static str> {
     let selected =
         selected_component_base_schema(base, configuration, function_calls, physical_primary)?;
+    let selected = if configuration.state_projection().is_some() {
+        if !function_calls
+            || configuration.is_platform()
+            || configuration.platform_graph_profile().is_some()
+        {
+            return Err(invalid());
+        }
+        // Reuse the existing exact component envelope and registered reader.
+        SELECTED_COMPONENTS_REPLAY_SCHEMA
+    } else {
+        selected
+    };
     match configuration.native_api_uses() {
         Some(crate::NativeApiUseRecipe::ReferenceV1)
             if configuration.native_library_input().is_some() && !configuration.is_platform() =>

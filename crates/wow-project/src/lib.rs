@@ -39,7 +39,7 @@ pub use configuration::{
     PROJECT_CONTRACT_ID, PROJECT_GENERATION_SCHEMA_VERSION, PROJECT_SNAPSHOT_SCHEMA_VERSION,
     PackageXmlBindingProfile, PlatformGraphCapabilities, PlatformGraphCapability,
     PlatformGraphProfile, ProjectBudgetPolicy, ProjectCapabilityPolicy, ProjectConfiguration,
-    ProjectConfigurationBuilder, ProjectKind,
+    ProjectConfigurationBuilder, ProjectKind, StateProjectionRecipe,
 };
 pub use error::{ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult};
 pub use generation::ProjectGenerationCandidate;

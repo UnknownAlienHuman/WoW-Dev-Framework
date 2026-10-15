@@ -108,10 +108,48 @@ fn state_core_pipeline_publishes_roots_and_literal_paths() -> Result<(), Box<dyn
     .budget_policy(ProjectBudgetPolicy::fixture_e0()?)
     .load_plan(&plan)?
     .build()?;
+    let legacy_bundle = ProjectInputBundle::closed(config, files, vec![library])?;
+    let mut legacy_publisher = ProjectPublisher::with_function_call_facts();
+    legacy_publisher.publish_initial(legacy_bundle.clone())?;
+    let (_, _, _, legacy, _) =
+        build_source_graph_proposals(&legacy_publisher.open_current()?, &stop)?.into_parts();
+    assert!(legacy.state_sites().iter().any(|site| site.outcome
+        == wow_project::graph::ProjectGraphStateOutcome::DynamicOrUnsupportedKey));
+    let (complete, incomplete) = state::classify_state_bindings(
+        &legacy,
+        legacy
+            .function_call_report()
+            .ok_or("legacy function report")?,
+        &stop,
+    )?;
+    assert!(!complete.is_empty());
+    assert!(incomplete.is_empty());
     // The function/call fact sidecar must be enabled: legacy state publication
     // reads that report and would otherwise be skipped entirely.
     let mut publisher = ProjectPublisher::with_function_call_facts();
-    publisher.publish_initial(ProjectInputBundle::closed(config, files, vec![library])?)?;
+    publisher.publish_initial(
+        legacy_bundle
+            .with_state_projection(wow_project::StateProjectionRecipe::DynamicPrefixesV1)?,
+    )?;
+    let replay = wow_project::replay::ProjectReplay::capture(&publisher, &stop)?;
+    let archive = serde_json::to_value(&replay)?;
+    assert_eq!(
+        archive["schema"],
+        "wow-project/native-project-replay/selected-components/1"
+    );
+    assert_eq!(
+        archive["configuration"]["state_projection"],
+        "dynamic_prefixes_v1"
+    );
+    let restored = replay.hydrate(&stop)?;
+    assert_eq!(
+        restored.snapshot_id(),
+        publisher.open_current()?.snapshot_id()
+    );
+    assert_eq!(
+        restored.configuration().state_projection(),
+        Some(wow_project::StateProjectionRecipe::DynamicPrefixesV1)
+    );
     let view = publisher.open_current()?;
     let (registry, batch, coverage, provenance, limits) =
         build_source_graph_proposals(&view, &stop)?.into_parts();

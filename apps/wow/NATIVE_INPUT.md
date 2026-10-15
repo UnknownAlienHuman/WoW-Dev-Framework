@@ -18,9 +18,18 @@ internal `ProfileIdentity` JSON or a manually assembled annotation Library.
 The top-level fields are exactly `schema`, `project_id`, `workspace_id`,
 `source_origin_id`, `logical_root`, `profile`, `analyzer`, `main`, `native_source`,
 with optional `annotation_inputs`, `compatibility_evidence`, `distribution_evidence`
-and `native_api_uses` as described below. Unknown or duplicate known fields reject. Logical project/workspace/origin/root
+`native_api_uses` and `state_projection` as described below. Unknown or duplicate known fields reject. Logical project/workspace/origin/root
 identities retain their [existing meanings](LOCAL_INPUT.md#input-wow-servicelocal-project-input1).
 Physical paths remain relative to the explicitly selected config directory.
+
+Optional `state_projection: "dynamic_prefixes_v1"` selects the bounded ordinary
+Main source recipe for SavedVariables roots/literal prefixes before a dynamic
+suffix. Such accesses remain `Possible`; no exact dynamic field, runtime value
+or negative authority follows. The selection is bound into configuration and
+generation identity and retained by the existing component/native replay reader.
+Omission preserves the original source projection and evidence catalog, including
+historical Context identities. Explicit null and unknown recipes reject. Platform
+package/direct graph combinations are not admitted by this ordinary recipe.
 
 `profile` contains:
 

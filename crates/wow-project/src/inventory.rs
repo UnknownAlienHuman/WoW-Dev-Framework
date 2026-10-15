@@ -569,6 +569,15 @@ impl ProjectInputBundle {
         Ok(self)
     }
 
+    /// Select the source interpretation before generation/publication.
+    pub fn with_state_projection(
+        mut self,
+        recipe: crate::StateProjectionRecipe,
+    ) -> ProjectResult<Self> {
+        self.configuration = self.configuration.with_state_projection(recipe)?;
+        Ok(self)
+    }
+
     pub fn with_native_api_uses(
         mut self,
         recipe: crate::NativeApiUseRecipe,

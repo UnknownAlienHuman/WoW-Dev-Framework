@@ -278,11 +278,15 @@ pub(crate) fn build_analyzer_binding(
     generation.validate_function_call_facts(function_calls)?;
     let declaration_recipe = configuration.physical_function_declarations();
     let signature_recipe = configuration.physical_function_signatures();
-    if (declaration_recipe.is_some() || signature_recipe.is_some()) && !function_calls {
+    if (declaration_recipe.is_some()
+        || signature_recipe.is_some()
+        || configuration.state_projection().is_some())
+        && !function_calls
+    {
         return Err(ProjectError::new(
             ProjectErrorCode::InvalidConfiguration,
             ProjectPhase::Analyzer,
-            "selected physical function observations require the function-call sidecar",
+            "selected source observations require the function-call sidecar",
         )
         .with_candidate_generation(generation.project_generation()));
     }

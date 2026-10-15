@@ -696,6 +696,89 @@ fn native_library_inputs_requalify_after_published_source_absent_reopen() -> Tes
 }
 
 #[test]
+fn selected_state_projection_survives_native_service_source_absent_reopen() -> TestResult {
+    use crate::graph::GraphBuildRequest;
+    use crate::live_project::{LiveProjectPublishRequest, LiveProjectStore, publish_local_project};
+    use wow_project::{ProjectPublisher, StateProjectionRecipe, replay::ProjectReplay};
+    use wow_store::project::ReadSelector;
+
+    let (root, config) = native_fixture()?;
+    let document = json!({
+        "schema": crate::local::LOCAL_NATIVE_SCHEMA,
+        "project_id": config["project_id"], "workspace_id": config["workspace_id"],
+        "source_origin_id": config["source_origin_id"], "logical_root": config["logical_root"],
+        "profile": config["native_reference"]["profile"], "analyzer": config["analyzer"],
+        "main": {"root": "UI", "files": [ProjectDiskFile::new("main.lua")]},
+        "native_source": config["native_reference"]["native_source"],
+        "state_projection": "dynamic_prefixes_v1"
+    });
+    write_json(&root, "selected-state.json", &document)?;
+    let stop = AtomicBool::new(false);
+    let input = LocalProjectInput::from_config_path(&root.0.join("selected-state.json"), &stop)?;
+    let selected = Some(StateProjectionRecipe::DynamicPrefixesV1);
+    assert_eq!(input.bundle.configuration().state_projection(), selected);
+    let mut publisher = ProjectPublisher::with_function_call_facts();
+    publisher.publish_initial_cancellable(input.bundle.clone(), &stop)?;
+    let expected = publisher.open_current()?.snapshot_id().to_owned();
+    let replay = ProjectReplay::capture(&publisher, &stop)?;
+    let archive = serde_json::to_value(&replay)?;
+    assert_eq!(
+        archive["configuration"]["state_projection"],
+        "dynamic_prefixes_v1"
+    );
+    let mut null = archive.clone();
+    null["configuration"]["state_projection"] = Value::Null;
+    assert!(ProjectReplay::from_json(&serde_json::to_vec(&null)?, &stop).is_err());
+    let mut dropped = archive;
+    dropped["configuration"]
+        .as_object_mut()
+        .ok_or("replay configuration")?
+        .remove("state_projection");
+    assert!(
+        ProjectReplay::from_json(&serde_json::to_vec(&dropped)?, &stop)?
+            .hydrate(&stop)
+            .is_err()
+    );
+
+    let store_parent_path = root.0.with_extension("selected-state-store");
+    std::fs::create_dir(&store_parent_path)?;
+    let store_parent = FixtureRoot(store_parent_path);
+    let store_path = store_parent.0.join("store");
+    let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
+        .with_input_profile(&input);
+    publish_local_project(
+        &root.0.join("selected-state.json"),
+        &request,
+        &store_path,
+        &LiveProjectPublishRequest::new("fixture-selected-state", "absent", true, true)?,
+        &stop,
+    )?;
+    drop(input);
+    drop(publisher);
+    std::fs::remove_dir_all(&root.0)?;
+    assert!(!root.0.exists());
+
+    let restored = replay.hydrate(&stop)?;
+    assert_eq!(restored.snapshot_id(), expected);
+    assert_eq!(restored.configuration().state_projection(), selected);
+    let store = LiveProjectStore::open(&store_path)?;
+    let read = store.read(&ReadSelector::Current, &stop)?;
+    assert_eq!(read.project().snapshot_id(), expected);
+    assert_eq!(read.project().configuration().state_projection(), selected);
+    let source = read
+        .pair()
+        .source_provenance()
+        .ok_or("retained source provenance")?;
+    assert_eq!(
+        serde_json::to_value(source)?["profile"],
+        wow_project::graph::STATE_PREFIX_SOURCE_GRAPH_PROFILE
+    );
+    read.close()?;
+    store.close()?;
+    Ok(())
+}
+
+#[test]
 fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResult {
     use crate::{
         ServiceErrorCode,

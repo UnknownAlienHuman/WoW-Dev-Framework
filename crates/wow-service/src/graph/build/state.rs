@@ -58,7 +58,7 @@ impl StateRecognition {
     }
 }
 
-fn classify_state_bindings<'a>(
+pub(super) fn classify_state_bindings<'a>(
     provenance: &'a ProjectGraphProvenance,
     report: &wow_emmy::function_calls::FunctionCallReport,
     stop: &AtomicBool,
@@ -119,12 +119,14 @@ fn classify_state_bindings<'a>(
     }
     for (access_id, outcome) in &outcomes {
         checkpoint(stop)?;
-        if matches!(
-            *outcome,
-            wow_project::graph::ProjectGraphStateOutcome::Projected
-                | wow_project::graph::ProjectGraphStateOutcome::DynamicOrUnsupportedKey
-        ) && !binding_access_ids.contains(access_id)
-        {
+        let requires_binding = match *outcome {
+            wow_project::graph::ProjectGraphStateOutcome::Projected => true,
+            wow_project::graph::ProjectGraphStateOutcome::DynamicOrUnsupportedKey => {
+                provenance.profile() == wow_project::graph::STATE_PREFIX_SOURCE_GRAPH_PROFILE
+            }
+            _ => false,
+        };
+        if requires_binding && !binding_access_ids.contains(access_id) {
             return Err(error(ServiceErrorCode::InternalContractViolation));
         }
     }
