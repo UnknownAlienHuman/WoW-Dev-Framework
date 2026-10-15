@@ -36,24 +36,24 @@ use crate::{
 // ===== BEGIN WORKER 1: native frame event =====
 
 //  Exact Frame event-registration facts -> declarative core recognizer -> graph
-//  proposals. Source text is never reparsed here: the event name, the unit
-//  tokens, the handler target and every span come from the generation-bound Emmy
-//  function-call report. This module never claims combat safety, protected-action
+//  proposals. Source text is never reparsed here: the event name, unit tokens and
+//  every span come from the generation-bound Emmy function-call report. Handler
+//  associations remain owned by independent SetScript/XML producers. This module
+//  never claims combat safety, protected-action
 //  authority, taint state or secret-payload accessibility, and it never reads,
 //  caches or infers a client build, Interface value, source revision, provider
 //  revision or toolchain version. Only universal graph roles are used.
 
 pub const W1_SIGNAL_PARTITION: &str = "wow-recognizers.lua-native-frame-events";
-const W1_SIGNAL_PROFILE: &str = "wow-recognizers/lua-native-frame-events/3";
+const W1_SIGNAL_PROFILE: &str = "wow-recognizers/lua-native-frame-events/4";
 const W1_FACT_PARTITION: &str = "wow-recognizers.lua-native-frame-event-facts";
-const W1_FACT_PROFILE: &str = "wow-recognizers-lua-native-frame-event-facts-3";
+const W1_FACT_PROFILE: &str = "wow-recognizers-lua-native-frame-event-facts-4";
 const W1_RULE: &str = "core.signal.native_frame_event";
 const W1_RULE_VERSION: u32 = 1;
 const W1_REGISTER_EVENT_CALLABLE: &str = "Frame.RegisterEvent";
 const W1_REGISTER_UNIT_EVENT_CALLABLE: &str = "Frame.RegisterUnitEvent";
 const W1_MAX_CALLS: usize = 8192;
 const W1_MAX_FUNCTIONS: usize = 8192;
-const W1_MAX_DECLARATIONS: usize = 8192;
 const W1_MAX_ARGUMENTS: usize = 8;
 const W1_MAX_EVENT_NAMES: usize = 16;
 const W1_MAX_UNIT_TOKENS: usize = 16;
@@ -61,10 +61,10 @@ const W1_MAX_MATCHES: usize = 8192;
 const W1_MAX_EVENT_BYTES: usize = 1024;
 const W1_EVENT_ENTITY: &str = "native_event";
 const W1_REGISTERS_DEFINITION: &str = "lua_register_native_event";
-const W1_HANDLES_DEFINITION: &str = "lua_handles_native_event";
 const W1_REGISTERS_BLOCKER: &str =
     "lua_native_frame_events.exact_resolved_registerevent_calls_only";
-const W1_HANDLES_BLOCKER: &str = "lua_native_frame_events.exact_main_handler_declarations_only";
+const W1_HANDLES_BLOCKER: &str =
+    "lua_native_frame_events.handler_association_owned_by_other_producers";
 const W1_OTHER_RELATION_BLOCKER: &str = "lua_native_frame_events.relation_owned_by_other_producer";
 const W1_POSITIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-001"];
 const W1_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-005"];
@@ -114,14 +114,6 @@ impl W1RegistrationKind {
             Self::FrameUnitEvent => Some(1),
         }
     }
-
-    /// Argument slot that may hold an exact handler reference.
-    const fn handler_ordinal(self) -> usize {
-        match self {
-            Self::FrameEvent => 1,
-            Self::FrameUnitEvent => 2,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -169,15 +161,6 @@ struct W1FunctionBinding {
     evidence: EvidenceId,
 }
 
-struct W1DeclarationBinding {
-    node: GraphNodeId,
-    handle: StableHandleId,
-    evidence: EvidenceId,
-    path: String,
-    span: SourceSpan,
-    digest: ContentDigest<SourceContent>,
-}
-
 struct W1Site {
     call_id: String,
     kind: W1RegistrationKind,
@@ -187,13 +170,40 @@ struct W1Site {
     event_names: Vec<String>,
     exact_event_names: bool,
     unit_tokens: Vec<String>,
-    handlers: Vec<W1Handler>,
 }
 
-struct W1Handler {
-    declaration: W1DeclarationBinding,
-    reference_key: String,
-    argument_ordinal: u32,
+pub(crate) struct SignalEntityAccumulator {
+    pub(crate) proposal_id: String,
+    pub(crate) confidence: GraphConfidence,
+    pub(crate) source_handle_ids: BTreeSet<StableHandleId>,
+    pub(crate) evidence_ids: BTreeSet<EvidenceId>,
+    pub(crate) coverage_ids: BTreeSet<wow_core::CoverageId>,
+}
+
+impl SignalEntityAccumulator {
+    pub(crate) fn new(proposal_id: String, confidence: GraphConfidence) -> Self {
+        Self {
+            proposal_id,
+            confidence,
+            source_handle_ids: BTreeSet::new(),
+            evidence_ids: BTreeSet::new(),
+            coverage_ids: BTreeSet::new(),
+        }
+    }
+
+    pub(crate) fn merge(
+        &mut self,
+        confidence: GraphConfidence,
+        source_handle_ids: &[StableHandleId],
+        evidence_ids: &[EvidenceId],
+        coverage_ids: &[wow_core::CoverageId],
+    ) {
+        self.confidence = w1_merge_entity_confidence(self.confidence, confidence);
+        self.source_handle_ids
+            .extend(source_handle_ids.iter().copied());
+        self.evidence_ids.extend(evidence_ids.iter().copied());
+        self.coverage_ids.extend(coverage_ids.iter().copied());
+    }
 }
 
 /// Recognizes `core.signal.native_frame_event@1` from the exact Emmy
@@ -208,7 +218,6 @@ pub fn w1_recognize_native_frame_events(
         || input.report.functions().len() > W1_MAX_FUNCTIONS
         || input.function_proposals.len() != input.report.functions().len()
         || input.call_support.len() != input.report.calls().len()
-        || input.declaration_proposals.len() > W1_MAX_DECLARATIONS
     {
         return Err(w1_failure(RecognizerErrorCode::BudgetExceeded));
     }
@@ -302,85 +311,6 @@ pub fn w1_recognize_native_frame_events(
         }
     }
 
-    // Main-declaration crosswalk, used only for exact handler endpoints.
-    let mut declarations = BTreeMap::<(String, SourceSpan), W1DeclarationBinding>::new();
-    for ((path, span), proposal_id) in &input.declaration_proposals {
-        w1_checkpoint(stop)?;
-        let resolved = lookup
-            .entity(
-                lookup.scope(),
-                &GraphAssertionRef::Producer {
-                    partition_id: source_partition.partition_id().into(),
-                    batch_id: source_partition.batch().batch_id().into(),
-                    assertion: GraphLocalAssertion {
-                        kind: GraphAssertionKind::Entity,
-                        proposal_id: (*proposal_id).into(),
-                    },
-                },
-                stop,
-            )
-            .map_err(w1_entity_binding_error)?;
-        let proposal = resolved.proposal();
-        let (Some(start), Some(end)) = (span.byte_start(), span.byte_end()) else {
-            return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
-        };
-        let expected = BTreeMap::from([
-            (
-                "document".into(),
-                GraphProposalValue::String((*path).into()),
-            ),
-            (
-                "span_start".into(),
-                GraphProposalValue::Integer(
-                    i64::try_from(start)
-                        .map_err(|_| w1_failure(RecognizerErrorCode::AdapterFactMismatch))?,
-                ),
-            ),
-            (
-                "span_end".into(),
-                GraphProposalValue::Integer(
-                    i64::try_from(end)
-                        .map_err(|_| w1_failure(RecognizerErrorCode::AdapterFactMismatch))?,
-                ),
-            ),
-        ]);
-        if proposal.entity_kind_id() != "lua_source_declaration"
-            || proposal.semantic_key() != &expected
-            || proposal.confidence() != GraphConfidence::Derived
-        {
-            return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
-        }
-        let ([handle], [evidence]) = (proposal.source_handle_ids(), proposal.evidence_ids()) else {
-            return Err(w1_failure(RecognizerErrorCode::AdapterBindingInvalid));
-        };
-        let record = input
-            .source_handles
-            .get(handle)
-            .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let digest = record
-            .content_digest()
-            .to_string()
-            .parse::<ContentDigest<SourceContent>>()
-            .map_err(|_| w1_failure(RecognizerErrorCode::AdapterFactMismatch))?;
-        let node = resolved.accepted().node().node_id().clone();
-        if declarations
-            .insert(
-                ((*path).to_owned(), *span),
-                W1DeclarationBinding {
-                    node,
-                    handle: *handle,
-                    evidence: *evidence,
-                    path: (*path).to_owned(),
-                    span: *span,
-                    digest,
-                },
-            )
-            .is_some()
-        {
-            return Err(w1_failure(RecognizerErrorCode::AdapterBindingDuplicate));
-        }
-    }
-
     // Candidate registration sites, before any identity is derived. Only an exact
     // resolved callable key for the two reviewed shapes enters here.
     let mut sites = BTreeMap::<String, W1Site>::new();
@@ -420,10 +350,6 @@ pub fn w1_recognize_native_frame_events(
         let (event_names, event_exact) = w1_event_names(arguments, kind)?;
         let (unit_tokens, units_exact) = w1_unit_tokens(arguments, kind)?;
         let exact_event_names = event_exact && units_exact;
-        // RegisterEvent/RegisterUnitEvent do not carry a callback argument. Handler
-        // ownership is supplied by the independent SetScript/XML producers.
-        let handlers = Vec::new();
-
         let site = W1Site {
             call_id: call.fact_id().to_owned(),
             kind,
@@ -438,7 +364,6 @@ pub fn w1_recognize_native_frame_events(
             event_names,
             exact_event_names,
             unit_tokens,
-            handlers,
         };
         if sites.insert(site.call_id.clone(), site).is_some() {
             return Err(w1_failure(RecognizerErrorCode::AdapterBindingDuplicate));
@@ -486,14 +411,6 @@ pub fn w1_recognize_native_frame_events(
             fields.insert(
                 format!("unit_token_{index}").into_boxed_str(),
                 RecognizerFactValue::String(token.as_str().into()),
-            );
-        }
-        for handler in &site.handlers {
-            fields.insert(
-                format!("handler_{}", handler.argument_ordinal).into_boxed_str(),
-                RecognizerFactValue::Reference(
-                    handler.declaration.node.as_str().to_string().into(),
-                ),
             );
         }
         facts.push(RecognizerFact::new(
@@ -563,7 +480,7 @@ pub fn w1_recognize_native_frame_events(
     let mut entities = Vec::new();
     let mut relations = Vec::new();
     let mut event_by_call = BTreeMap::<String, String>::new();
-    let mut event_by_key = BTreeMap::<String, String>::new();
+    let mut event_entities = BTreeMap::<String, SignalEntityAccumulator>::new();
     let mut registers_by_call = BTreeMap::<String, String>::new();
 
     // Proposal order is canonical by proposal ID, not by output kind. Resolve all
@@ -571,7 +488,7 @@ pub fn w1_recognize_native_frame_events(
     for outcome in output.outcomes() {
         for proposal in outcome.proposals() {
             let crate::RecognizerProposedAssertion::Entity {
-                proposal_id,
+                proposal_id: _,
                 entity_kind_id,
                 semantic_key,
                 confidence,
@@ -595,28 +512,20 @@ pub fn w1_recognize_native_frame_events(
             let [event_key] = site.event_names.as_slice() else {
                 return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
             };
-            let entity_id = if let Some(existing) = event_by_key.get(event_key) {
-                existing.clone()
-            } else {
-                let entity_id = proposal_id.to_string();
-                event_by_key.insert(event_key.clone(), entity_id.clone());
-                entities.push(
-                    GraphEntityProposal::new(
-                        entity_id.clone(),
-                        W1_EVENT_ENTITY,
-                        BTreeMap::from([(
-                            "event".into(),
-                            GraphProposalValue::String(event_key.clone().into()),
-                        )]),
-                        w1_graph_confidence(*confidence),
-                        source_handle_ids.clone(),
-                        evidence_ids.clone(),
-                        coverage_ids.clone(),
-                    )
-                    .map_err(w1_graph_error)?,
-                );
-                entity_id
-            };
+            let entity_id = w1_event_entity_id(event_key)?;
+            let graph_confidence = w1_graph_confidence(*confidence);
+            let accumulator = event_entities.entry(event_key.clone()).or_insert_with(|| {
+                SignalEntityAccumulator::new(entity_id.clone(), graph_confidence)
+            });
+            if accumulator.proposal_id != entity_id {
+                return Err(w1_failure(RecognizerErrorCode::AdapterIdentityMismatch));
+            }
+            accumulator.merge(
+                graph_confidence,
+                source_handle_ids,
+                evidence_ids,
+                coverage_ids,
+            );
             if event_by_call
                 .insert(call_id.to_string(), entity_id)
                 .is_some()
@@ -624,6 +533,22 @@ pub fn w1_recognize_native_frame_events(
                 return Err(w1_failure(RecognizerErrorCode::AdapterBindingDuplicate));
             }
         }
+    }
+
+    for (event_key, accumulator) in event_entities {
+        w1_checkpoint(stop)?;
+        entities.push(
+            GraphEntityProposal::new(
+                accumulator.proposal_id,
+                W1_EVENT_ENTITY,
+                BTreeMap::from([("event".into(), GraphProposalValue::String(event_key.into()))]),
+                accumulator.confidence,
+                accumulator.source_handle_ids.into_iter().collect(),
+                accumulator.evidence_ids.into_iter().collect(),
+                accumulator.coverage_ids.into_iter().collect(),
+            )
+            .map_err(w1_graph_error)?,
+        );
     }
 
     for outcome in output.outcomes() {
@@ -696,10 +621,6 @@ pub fn w1_recognize_native_frame_events(
         return Err(w1_failure(RecognizerErrorCode::AdapterBindingMissing));
     }
 
-    // RegisterEvent/RegisterUnitEvent do not identify their eventual handler.
-    // The SetsScript/XML producers own that cross-family association.
-    let handle_relations = BTreeMap::<(String, String), String>::new();
-
     // Describe every stored relation family. This producer never certifies
     // source-owned relations and never grants absence authority.
     let relation_families = input
@@ -742,18 +663,6 @@ pub fn w1_recognize_native_frame_events(
         if matches.len() >= W1_MAX_MATCHES {
             return Err(w1_failure(RecognizerErrorCode::BudgetExceeded));
         }
-        let mut handler_proposal_ids = site
-            .handlers
-            .iter()
-            .map(|handler| handler.declaration.node.to_string())
-            .collect::<Vec<_>>();
-        handler_proposal_ids.sort();
-        let mut handles_relation_proposal_ids = handle_relations
-            .iter()
-            .filter(|((site_call_id, _), _)| site_call_id == call_id)
-            .map(|(_, relation_id)| relation_id.clone())
-            .collect::<Vec<_>>();
-        handles_relation_proposal_ids.sort();
         matches.push(W1FrameEventMatch {
             call_id: call_id.clone(),
             registration_kind: site.kind,
@@ -769,8 +678,8 @@ pub fn w1_recognize_native_frame_events(
                 .get(call_id)
                 .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?
                 .clone(),
-            handles_relation_proposal_ids,
-            handler_declaration_proposal_ids: handler_proposal_ids,
+            handles_relation_proposal_ids: Vec::new(),
+            handler_declaration_proposal_ids: Vec::new(),
         });
     }
 
@@ -826,6 +735,23 @@ fn w1_graph_confidence(confidence: RecognizerOutputConfidence) -> GraphConfidenc
     }
 }
 
+fn w1_merge_entity_confidence(left: GraphConfidence, right: GraphConfidence) -> GraphConfidence {
+    if left == GraphConfidence::Possible || right == GraphConfidence::Possible {
+        GraphConfidence::Possible
+    } else {
+        GraphConfidence::Derived
+    }
+}
+
+fn w1_event_entity_id(event_key: &str) -> RecognizerResult<String> {
+    let bytes = canonical_json_bytes(&(W1_SIGNAL_PROFILE, W1_EVENT_ENTITY, event_key))
+        .map_err(|_| w1_failure(RecognizerErrorCode::AdapterIdentityMismatch))?;
+    Ok(format!(
+        "lua-native-event:sha256:{}",
+        w1_encode_hex(&Sha256::digest(bytes))
+    ))
+}
+
 /// Validate one support record against the exact source handle and evidence.
 fn w1_validate_support(
     input: &W1Input<'_>,
@@ -876,9 +802,9 @@ fn w1_validate_support(
 // ===== BEGIN WORKER 3: custom registry producer and subscription =====
 
 pub const W3_SIGNAL_PARTITION: &str = "wow-recognizers.lua-custom-signals";
-pub const W3_SIGNAL_PROFILE: &str = "wow-recognizers/lua-custom-signals/5";
+pub const W3_SIGNAL_PROFILE: &str = "wow-recognizers/lua-custom-signals/6";
 const W3_FACT_PARTITION: &str = "wow-recognizers.lua-custom-signal-facts";
-const W3_FACT_PROFILE: &str = "wow-recognizers-lua-custom-signal-facts-3";
+const W3_FACT_PROFILE: &str = "wow-recognizers-lua-custom-signal-facts-4";
 const W3_PRODUCER_RULE: &str = "core.signal.custom_registry_producer";
 const W3_SUBSCRIPTION_RULE: &str = "core.signal.custom_registry_subscription";
 const W3_TRIGGER_EVENT_CALLABLE: &str = "EventRegistry.TriggerEvent";
@@ -903,7 +829,10 @@ const W3_MUTATION_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-006", "RECOG-EVENT-007"
 pub struct W3ProducerMatch {
     pub call_id: String,
     pub event_key: String,
-    pub receiver_declaration_proposal_id: String,
+    pub receiver_workspace_id: String,
+    pub receiver_identity: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receiver_declaration_proposal_id: Option<String>,
     pub relation_proposal_id: String,
 }
 
@@ -915,9 +844,13 @@ pub struct W3ProducerMatch {
 pub struct W3SubscriptionMatch {
     pub call_id: String,
     pub event_key: String,
-    pub receiver_declaration_proposal_id: String,
+    pub receiver_workspace_id: String,
+    pub receiver_identity: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receiver_declaration_proposal_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub producer_call_id: Option<String>,
+    pub producer_call_ids: Vec<String>,
     pub relation_proposal_id: String,
     pub confirmed: bool,
 }
@@ -926,7 +859,9 @@ pub struct W3SubscriptionMatch {
 #[serde(rename_all = "snake_case")]
 pub enum W3UnconfirmedReason {
     ProducerAbsentInReport,
+    ProducerReceiverMismatch,
     ProducerEventKeyMismatch,
+    ProducerLookupIncomplete,
 }
 
 /// A subscription that could not be confirmed against an exact producer. Retained
@@ -935,7 +870,10 @@ pub enum W3UnconfirmedReason {
 pub struct W3UnconfirmedSubscription {
     pub call_id: String,
     pub event_key: String,
-    pub receiver_declaration_proposal_id: String,
+    pub receiver_workspace_id: String,
+    pub receiver_identity: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receiver_declaration_proposal_id: Option<String>,
     pub reason: W3UnconfirmedReason,
 }
 
@@ -999,85 +937,16 @@ fn w1_event_names(
     }
 }
 
-/// Exact Main-declaration handler endpoints. A library, unresolved or dynamic
-/// argument never becomes a handler here and never fabricates a target.
-fn w1_handlers(
-    _input: &W1Input<'_>,
-    arguments: &[wow_emmy::function_calls::SourceCallArgument],
-    kind: W1RegistrationKind,
-    declarations: &BTreeMap<(String, SourceSpan), W1DeclarationBinding>,
-    main_snapshot_id: &str,
-) -> RecognizerResult<Vec<W1Handler>> {
-    let Some(argument) = arguments.get(kind.handler_ordinal()) else {
-        return Ok(Vec::new());
-    };
-    let (Some(reference_key), Some(target)) =
-        (argument.reference_key(), argument.reference_target())
-    else {
-        return Ok(Vec::new());
-    };
-    if target.role != "main" || target.workspace_id != main_snapshot_id {
-        return Ok(Vec::new());
-    }
-    let declaration = declarations
-        .get(&(target.path.clone(), target.span))
-        .ok_or_else(|| w1_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    if declaration.path != target.path || declaration.span != target.span {
-        return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
-    }
-    let digest = target
-        .content_digest
-        .parse::<ContentDigest<SourceContent>>()
-        .map_err(|_| w1_failure(RecognizerErrorCode::AdapterFactMismatch))?;
-    if digest != declaration.digest {
-        return Err(w1_failure(RecognizerErrorCode::AdapterFactMismatch));
-    }
-    let argument_ordinal = u32::try_from(kind.handler_ordinal())
-        .map_err(|_| w1_failure(RecognizerErrorCode::BudgetExceeded))?;
-    Ok(vec![W1Handler {
-        declaration: W1DeclarationBinding {
-            node: declaration.node.clone(),
-            handle: declaration.handle,
-            evidence: declaration.evidence,
-            path: declaration.path.clone(),
-            span: declaration.span,
-            digest: declaration.digest,
-        },
-        reference_key: reference_key.to_owned(),
-        argument_ordinal,
-    }])
-}
-
-fn w1_handler_relation_id(
-    call_id: &str,
-    declaration: &W1DeclarationBinding,
-    argument_ordinal: u32,
-) -> RecognizerResult<String> {
-    let bytes = canonical_json_bytes(&(
-        W1_SIGNAL_PROFILE,
-        call_id,
-        &declaration.path,
-        declaration.span,
-        argument_ordinal,
-        W1_HANDLES_DEFINITION,
-    ))
-    .map_err(|_| w1_failure(RecognizerErrorCode::AdapterIdentityMismatch))?;
-    Ok(format!(
-        "lua-native-frame-event-edge:sha256:{}",
-        w1_encode_hex(&Sha256::digest(bytes))
-    ))
-}
-
 fn w1_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecognizerPack> {
     let document = RecognizerPackDocument {
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-native-frame-events".into(),
-            version: "3".into(),
+            version: "4".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W1_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-native-frame-event-3".into(),
+            evaluation_profile_id: "wow-recognizers-w11-native-frame-event-4".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 4,
@@ -1237,6 +1106,7 @@ struct W3Binding {
 
 /// One exact Main declaration identity, used to recheck a resolved receiver.
 struct W3ReceiverTarget {
+    workspace_id: String,
     path: String,
     span: SourceSpan,
 }
@@ -1277,10 +1147,11 @@ struct W3Site {
     call_id: String,
     caller_proposal_id: String,
     caller_node: GraphNodeId,
-    receiver_proposal_id: String,
-    receiver_node: GraphNodeId,
-    receiver_handle: StableHandleId,
-    receiver_evidence: EvidenceId,
+    receiver_proposal_id: Option<String>,
+    receiver_workspace_id: String,
+    receiver_identity: String,
+    receiver_handle: Option<StableHandleId>,
+    receiver_evidence: Option<EvidenceId>,
     event_key: String,
     event_ordinal: usize,
     argument_count: usize,
@@ -1293,7 +1164,9 @@ enum W3Assertion {
     Emitter {
         call_id: String,
         caller_proposal_id: String,
-        receiver_proposal_id: String,
+        receiver_proposal_id: Option<String>,
+        receiver_workspace_id: String,
+        receiver_identity: String,
         event_key: String,
         relation_proposal_id: String,
         confidence: RecognizerOutputConfidence,
@@ -1304,10 +1177,12 @@ enum W3Assertion {
     Subscription {
         call_id: String,
         caller_proposal_id: String,
-        receiver_proposal_id: String,
+        receiver_proposal_id: Option<String>,
+        receiver_workspace_id: String,
+        receiver_identity: String,
         event_key: String,
         relation_proposal_id: String,
-        producer_call_id: Option<String>,
+        producer_call_ids: Vec<String>,
         confidence: RecognizerOutputConfidence,
         source_handle_ids: Vec<StableHandleId>,
         evidence_ids: Vec<EvidenceId>,
@@ -1472,6 +1347,7 @@ pub fn w3_recognize_signals(
         declaration_keys.insert(
             (*proposal_id).to_owned(),
             W3ReceiverTarget {
+                workspace_id: input.report.main_snapshot_id().to_owned(),
                 path: (*path).clone(),
                 span: *span,
             },
@@ -1558,6 +1434,7 @@ pub fn w3_recognize_signals(
 
     let mut assertions = Vec::new();
     let empty_producers = BTreeMap::<(String, String), Vec<String>>::new();
+    let mut producer_proof_refs = 0usize;
     for outcome in output.outcomes() {
         if outcome.rule_id() == W3_PRODUCER_RULE && outcome.rule_version() == 1 {
             for proposal in outcome.proposals() {
@@ -1566,6 +1443,7 @@ pub fn w3_recognize_signals(
                     W3SignalSide::Producer,
                     &bundle,
                     &empty_producers,
+                    &mut producer_proof_refs,
                 )?);
             }
         } else if outcome.rule_id() != W3_SUBSCRIPTION_RULE || outcome.rule_version() != 1 {
@@ -1577,13 +1455,13 @@ pub fn w3_recognize_signals(
     for assertion in &assertions {
         if let W3Assertion::Emitter {
             call_id,
-            receiver_proposal_id,
+            receiver_identity,
             event_key,
             ..
         } = assertion
         {
             producer_calls
-                .entry((receiver_proposal_id.clone(), event_key.clone()))
+                .entry((receiver_identity.clone(), event_key.clone()))
                 .or_default()
                 .push(call_id.clone());
         }
@@ -1600,6 +1478,7 @@ pub fn w3_recognize_signals(
                     W3SignalSide::Subscription,
                     &bundle,
                     &producer_calls,
+                    &mut producer_proof_refs,
                 )?);
             }
         }
@@ -1609,16 +1488,18 @@ pub fn w3_recognize_signals(
     let mut relations = Vec::new();
     let mut producer_matches = Vec::new();
     let mut subscription_matches = Vec::new();
-    let mut signal_entities = BTreeMap::<String, String>::new();
+    let mut signal_entities = BTreeMap::<String, SignalEntityAccumulator>::new();
     for assertion in &assertions {
         let (
             call_id,
             caller_proposal_id,
             receiver_proposal_id,
+            receiver_workspace_id,
+            receiver_identity,
             event_key,
             relation_proposal_id,
             confidence,
-            producer_call_id,
+            producer_call_ids,
             source_handle_ids,
             evidence_ids,
             coverage_ids,
@@ -1627,6 +1508,8 @@ pub fn w3_recognize_signals(
                 call_id,
                 caller_proposal_id,
                 receiver_proposal_id,
+                receiver_workspace_id,
+                receiver_identity,
                 event_key,
                 relation_proposal_id,
                 confidence,
@@ -1637,10 +1520,12 @@ pub fn w3_recognize_signals(
                 call_id,
                 caller_proposal_id,
                 receiver_proposal_id,
+                receiver_workspace_id,
+                receiver_identity,
                 event_key,
                 relation_proposal_id,
                 *confidence,
-                None,
+                &[][..],
                 source_handle_ids,
                 evidence_ids,
                 coverage_ids,
@@ -1649,9 +1534,11 @@ pub fn w3_recognize_signals(
                 call_id,
                 caller_proposal_id,
                 receiver_proposal_id,
+                receiver_workspace_id,
+                receiver_identity,
                 event_key,
                 relation_proposal_id,
-                producer_call_id,
+                producer_call_ids,
                 confidence,
                 source_handle_ids,
                 evidence_ids,
@@ -1660,10 +1547,12 @@ pub fn w3_recognize_signals(
                 call_id,
                 caller_proposal_id,
                 receiver_proposal_id,
+                receiver_workspace_id,
+                receiver_identity,
                 event_key,
                 relation_proposal_id,
                 *confidence,
-                producer_call_id.as_ref(),
+                producer_call_ids.as_slice(),
                 source_handle_ids,
                 evidence_ids,
                 coverage_ids,
@@ -1674,6 +1563,8 @@ pub fn w3_recognize_signals(
             .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
         if site.caller_proposal_id != *caller_proposal_id
             || site.receiver_proposal_id != *receiver_proposal_id
+            || site.receiver_workspace_id != *receiver_workspace_id
+            || site.receiver_identity != *receiver_identity
             || site.event_key != *event_key
         {
             return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
@@ -1681,49 +1572,50 @@ pub fn w3_recognize_signals(
         let mut handles = source_handle_ids.iter().copied().collect::<BTreeSet<_>>();
         let mut evidence = evidence_ids.iter().copied().collect::<BTreeSet<_>>();
         handles.insert(site.handle);
-        handles.insert(site.receiver_handle);
         evidence.insert(site.evidence);
-        evidence.insert(site.receiver_evidence);
-        if let Some(producer_call_id) = producer_call_id {
+        if let Some(handle) = site.receiver_handle {
+            handles.insert(handle);
+        }
+        if let Some(receiver_evidence) = site.receiver_evidence {
+            evidence.insert(receiver_evidence);
+        }
+        for producer_call_id in producer_call_ids {
             let producer = sites
                 .get(producer_call_id.as_str())
                 .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+            if producer.receiver_identity != *receiver_identity
+                || producer.receiver_workspace_id != *receiver_workspace_id
+                || producer.event_key != *event_key
+            {
+                return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
+            }
             handles.insert(producer.handle);
-            handles.insert(producer.receiver_handle);
             evidence.insert(producer.evidence);
-            evidence.insert(producer.receiver_evidence);
+            if let Some(handle) = producer.receiver_handle {
+                handles.insert(handle);
+            }
+            if let Some(receiver_evidence) = producer.receiver_evidence {
+                evidence.insert(receiver_evidence);
+            }
         }
         let handles = handles.into_iter().collect::<Vec<_>>();
         let evidence = evidence.into_iter().collect::<Vec<_>>();
         let graph_confidence = if matches!(assertion, W3Assertion::Subscription { .. })
-            && producer_call_id.is_none()
+            && producer_call_ids.is_empty()
         {
             GraphConfidence::Possible
         } else {
             w3_graph_confidence(confidence)
         };
-        let signal_id = if let Some(existing) = signal_entities.get(event_key) {
-            existing.clone()
-        } else {
-            let signal_id = w3_entity_id("signal", event_key);
-            signal_entities.insert(event_key.clone(), signal_id.clone());
-            entities.push(
-                GraphEntityProposal::new(
-                    signal_id.clone(),
-                    W3_CUSTOM_SIGNAL_ENTITY,
-                    BTreeMap::from([(
-                        "signal".into(),
-                        GraphProposalValue::String(event_key.clone().into()),
-                    )]),
-                    graph_confidence,
-                    handles.clone(),
-                    evidence.clone(),
-                    coverage_ids.clone(),
-                )
-                .map_err(w3_graph_error)?,
-            );
-            signal_id
-        };
+        let signal_key = w3_signal_entity_key(receiver_identity, event_key);
+        let signal_id = w3_entity_id(&signal_key)?;
+        let accumulator = signal_entities
+            .entry(signal_key)
+            .or_insert_with(|| SignalEntityAccumulator::new(signal_id.clone(), graph_confidence));
+        if accumulator.proposal_id != signal_id {
+            return Err(w3_failure(RecognizerErrorCode::AdapterIdentityMismatch));
+        }
+        accumulator.merge(graph_confidence, &handles, &evidence, coverage_ids);
         relations.push(
             GraphRelationProposal::new(
                 relation_proposal_id.as_str(),
@@ -1746,6 +1638,8 @@ pub fn w3_recognize_signals(
             W3Assertion::Emitter { .. } => producer_matches.push(W3ProducerMatch {
                 call_id: call_id.clone(),
                 event_key: event_key.clone(),
+                receiver_workspace_id: receiver_workspace_id.clone(),
+                receiver_identity: receiver_identity.clone(),
                 receiver_declaration_proposal_id: receiver_proposal_id.clone(),
                 relation_proposal_id: relation_proposal_id.clone(),
             }),
@@ -1753,19 +1647,38 @@ pub fn w3_recognize_signals(
                 subscription_matches.push(W3SubscriptionMatch {
                     call_id: call_id.clone(),
                     event_key: event_key.clone(),
+                    receiver_workspace_id: receiver_workspace_id.clone(),
+                    receiver_identity: receiver_identity.clone(),
                     receiver_declaration_proposal_id: receiver_proposal_id.clone(),
-                    producer_call_id: producer_call_id.cloned(),
+                    producer_call_id: producer_call_ids.first().cloned(),
+                    producer_call_ids: producer_call_ids.to_vec(),
                     relation_proposal_id: relation_proposal_id.clone(),
-                    confirmed: producer_call_id.is_some(),
+                    confirmed: !producer_call_ids.is_empty(),
                 });
             }
         }
     }
 
-    let producer_events = producer_matches
-        .iter()
-        .map(|producer| producer.event_key.as_str())
-        .collect::<BTreeSet<_>>();
+    for (signal_key, accumulator) in signal_entities {
+        w3_checkpoint(stop)?;
+        entities.push(
+            GraphEntityProposal::new(
+                accumulator.proposal_id,
+                W3_CUSTOM_SIGNAL_ENTITY,
+                BTreeMap::from([(
+                    "signal".into(),
+                    GraphProposalValue::String(signal_key.into()),
+                )]),
+                accumulator.confidence,
+                accumulator.source_handle_ids.into_iter().collect(),
+                accumulator.evidence_ids.into_iter().collect(),
+                accumulator.coverage_ids.into_iter().collect(),
+            )
+            .map_err(w3_graph_error)?,
+        );
+    }
+
+    let source_health_complete = input.report.source_health_complete();
     let mut unconfirmed = Vec::new();
     for subscription in &subscription_matches {
         if subscription.confirmed {
@@ -1774,12 +1687,15 @@ pub fn w3_recognize_signals(
         unconfirmed.push(W3UnconfirmedSubscription {
             call_id: subscription.call_id.clone(),
             event_key: subscription.event_key.clone(),
+            receiver_workspace_id: subscription.receiver_workspace_id.clone(),
+            receiver_identity: subscription.receiver_identity.clone(),
             receiver_declaration_proposal_id: subscription.receiver_declaration_proposal_id.clone(),
-            reason: if producer_events.contains(subscription.event_key.as_str()) {
-                W3UnconfirmedReason::ProducerEventKeyMismatch
-            } else {
-                W3UnconfirmedReason::ProducerAbsentInReport
-            },
+            reason: w3_unconfirmed_reason(
+                &subscription.receiver_identity,
+                &subscription.event_key,
+                &producer_matches,
+                source_health_complete,
+            ),
         });
     }
 
@@ -1894,25 +1810,36 @@ fn w3_build_site(
         return Ok(None);
     };
     let target = receiver.target();
-    if !w3_is_resolved_custom_registry(Some(receiver.key()), target, input) {
+    if !w3_is_resolved_custom_registry(Some(receiver.key()), target, input.report) {
         return Ok(None);
     }
-    let declaration_proposal = input
-        .declaration_proposals
-        .iter()
-        .find(|((path, span), _)| *path == target.path && *span == target.span)
-        .map(|(_, proposal)| *proposal)
-        .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    let binding = declarations
-        .get(&(target.path.clone(), target.span))
-        .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    w3_validate_receiver(
-        input,
-        target,
-        binding,
-        declaration_proposal,
-        declaration_keys,
-    )?;
+    let receiver_identity = source_receiver_identity(target)?;
+    let (receiver_proposal_id, receiver_handle, receiver_evidence) = if target.role == "main" {
+        let declaration_proposal = input
+            .declaration_proposals
+            .iter()
+            .find(|((path, span), _)| *path == target.path && *span == target.span)
+            .map(|(_, proposal)| *proposal)
+            .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        let binding = declarations
+            .get(&(target.path.clone(), target.span))
+            .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+        w3_validate_receiver(
+            input,
+            target,
+            binding,
+            declaration_proposal,
+            declaration_keys,
+        )?;
+        (
+            Some(declaration_proposal.to_owned()),
+            Some(binding.handle),
+            Some(binding.evidence),
+        )
+    } else {
+        w3_validate_library_receiver(input.report, target)?;
+        (None, None, None)
+    };
 
     for argument in arguments {
         if argument.span().byte_start().is_none() || argument.span().byte_end().is_none() {
@@ -1936,10 +1863,11 @@ fn w3_build_site(
         call_id: call.fact_id().to_owned(),
         caller_proposal_id: (*caller_proposal).to_owned(),
         caller_node,
-        receiver_proposal_id: declaration_proposal.to_owned(),
-        receiver_node: binding.node.clone(),
-        receiver_handle: binding.handle,
-        receiver_evidence: binding.evidence,
+        receiver_proposal_id,
+        receiver_workspace_id: target.workspace_id.clone(),
+        receiver_identity,
+        receiver_handle,
+        receiver_evidence,
         event_key,
         event_ordinal: ordinal,
         argument_count: arguments.len(),
@@ -1952,19 +1880,25 @@ fn function_proposals_of<'a>(input: &W3Input<'a>) -> BTreeMap<&'a str, &'a str> 
     input.function_proposals.clone()
 }
 
-/// A resolved receiver must be an exact Main global declaration, never a library
-/// target, an unresolved global or an alias with a reassignment blocker.
+/// Receivers are exact Main project-local registries or exact targets in the
+/// selected Library semantic session. Their workspace identity remains distinct.
 fn w3_is_resolved_custom_registry(
     receiver_key: Option<&str>,
     target: &wow_emmy::bindings::SymbolTarget,
-    input: &W3Input<'_>,
+    report: &FunctionCallReport,
 ) -> bool {
+    let workspace_matches = target.role == "main"
+        && target.workspace_id == report.main_snapshot_id()
+        || target.role == "library" && report.library_snapshot_ids().contains(&target.workspace_id);
     receiver_key == Some("EventRegistry")
-        && target.role == "main"
-        && target.workspace_id == input.report.main_snapshot_id()
+        && workspace_matches
         && !target.path.is_empty()
         && !target.content_digest.is_empty()
-        && target.span.byte_start() != target.span.byte_end()
+        && target
+            .span
+            .byte_start()
+            .zip(target.span.byte_end())
+            .is_some_and(|(start, end)| start < end)
 }
 
 fn w3_validate_receiver(
@@ -1994,10 +1928,55 @@ fn w3_validate_receiver(
     let record = declaration_keys
         .get(proposal_id)
         .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    if record.path != target.path || record.span != target.span {
+    if record.workspace_id != target.workspace_id
+        || record.path != target.path
+        || record.span != target.span
+    {
         return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
     }
     Ok(())
+}
+
+fn w3_validate_library_receiver(
+    report: &FunctionCallReport,
+    target: &wow_emmy::bindings::SymbolTarget,
+) -> RecognizerResult<()> {
+    if target.role != "library"
+        || !report.library_snapshot_ids().contains(&target.workspace_id)
+        || target.path.is_empty()
+        || target
+            .span
+            .byte_start()
+            .zip(target.span.byte_end())
+            .is_none_or(|(start, end)| start >= end)
+    {
+        return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
+    }
+    target
+        .content_digest
+        .parse::<ContentDigest<SourceContent>>()
+        .map_err(|_| w3_failure(RecognizerErrorCode::AdapterFactMismatch))?;
+    Ok(())
+}
+
+fn source_receiver_identity(target: &wow_emmy::bindings::SymbolTarget) -> RecognizerResult<String> {
+    let digest = target
+        .content_digest
+        .parse::<ContentDigest<SourceContent>>()
+        .map_err(|_| w3_failure(RecognizerErrorCode::AdapterFactMismatch))?;
+    let bytes = canonical_json_bytes(&(
+        "wow-recognizers/resolved-source-receiver/1",
+        target.role,
+        target.workspace_id.as_str(),
+        target.path.as_str(),
+        target.span,
+        digest,
+    ))
+    .map_err(|_| w3_failure(RecognizerErrorCode::AdapterIdentityMismatch))?;
+    Ok(format!(
+        "receiver:sha256:{}",
+        w3_hex(&Sha256::digest(bytes))
+    ))
 }
 
 fn w3_signal_fact(
@@ -2006,7 +1985,7 @@ fn w3_signal_fact(
     side: W3SignalSide,
     limits: RecognizerFactLimits,
 ) -> RecognizerResult<RecognizerFact> {
-    let fields = BTreeMap::from([
+    let mut fields = BTreeMap::from([
         (
             "call_id".into(),
             RecognizerFactValue::Reference(site.call_id.clone().into()),
@@ -2022,7 +2001,11 @@ fn w3_signal_fact(
         ("colon_call".into(), RecognizerFactValue::Boolean(true)),
         (
             "receiver".into(),
-            RecognizerFactValue::Reference(site.receiver_proposal_id.clone().into()),
+            RecognizerFactValue::Reference(site.receiver_identity.clone().into()),
+        ),
+        (
+            "receiver_workspace_id".into(),
+            RecognizerFactValue::String(site.receiver_workspace_id.clone().into()),
         ),
         (
             "event_key".into(),
@@ -2043,6 +2026,12 @@ fn w3_signal_fact(
             ),
         ),
     ]);
+    if let Some(proposal_id) = &site.receiver_proposal_id {
+        fields.insert(
+            "receiver_declaration_proposal_id".into(),
+            RecognizerFactValue::Reference(proposal_id.clone().into()),
+        );
+    }
     let caller_function_id = input
         .report
         .calls()
@@ -2050,6 +2039,14 @@ fn w3_signal_fact(
         .find(|call| call.fact_id() == site.call_id.as_str())
         .map(|call| call.caller_function_id())
         .ok_or_else(|| w3_failure(RecognizerErrorCode::AdapterBindingMissing))?;
+    let mut source_handle_ids = BTreeSet::from([site.handle]);
+    let mut evidence_ids = BTreeSet::from([site.evidence]);
+    if let Some(handle) = site.receiver_handle {
+        source_handle_ids.insert(handle);
+    }
+    if let Some(evidence) = site.receiver_evidence {
+        evidence_ids.insert(evidence);
+    }
     RecognizerFact::new(
         input.context.context_id(),
         RecognizerFactInput {
@@ -2063,12 +2060,8 @@ fn w3_signal_fact(
             producer_version: W3_FACT_PROFILE.into(),
             confidence: GraphConfidence::Derived,
             fields,
-            source_handle_ids: BTreeSet::from([site.handle, site.receiver_handle])
-                .into_iter()
-                .collect(),
-            evidence_ids: BTreeSet::from([site.evidence, site.receiver_evidence])
-                .into_iter()
-                .collect(),
+            source_handle_ids: source_handle_ids.into_iter().collect(),
+            evidence_ids: evidence_ids.into_iter().collect(),
         },
         limits,
     )
@@ -2082,6 +2075,7 @@ fn w3_read_assertion(
     side: W3SignalSide,
     bundle: &RecognizerFactBundle,
     producer_calls: &BTreeMap<(String, String), Vec<String>>,
+    producer_proof_refs: &mut usize,
 ) -> RecognizerResult<W3Assertion> {
     let crate::RecognizerProposedAssertion::Relation {
         relation_kind_id,
@@ -2121,6 +2115,16 @@ fn w3_read_assertion(
     let Some(RecognizerFactValue::Reference(receiver)) = fact.field("receiver") else {
         return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
     };
+    let Some(RecognizerFactValue::String(receiver_workspace_id)) =
+        fact.field("receiver_workspace_id")
+    else {
+        return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
+    };
+    let receiver_proposal_id = match fact.field("receiver_declaration_proposal_id") {
+        Some(RecognizerFactValue::Reference(proposal_id)) => Some(proposal_id.to_string()),
+        None => None,
+        _ => return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch)),
+    };
     let Some(RecognizerFactValue::String(event_key)) = fact.field("event_key") else {
         return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
     };
@@ -2133,19 +2137,30 @@ fn w3_read_assertion(
     {
         return Err(w3_failure(RecognizerErrorCode::AdapterFactMismatch));
     }
-    let producer_call_id = match side {
-        W3SignalSide::Producer => None,
-        W3SignalSide::Subscription => producer_calls
-            .get(&(receiver.to_string(), event_key.to_string()))
-            .filter(|calls| calls.len() == 1)
-            .and_then(|calls| calls.first())
-            .cloned(),
+    let producer_call_ids = match side {
+        W3SignalSide::Producer => Vec::new(),
+        W3SignalSide::Subscription => {
+            let calls = producer_calls
+                .get(&(receiver.to_string(), event_key.to_string()))
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            let next = producer_proof_refs
+                .checked_add(calls.len())
+                .ok_or_else(|| w3_failure(RecognizerErrorCode::BudgetExceeded))?;
+            if next > W3_MAX_SITES {
+                return Err(w3_failure(RecognizerErrorCode::BudgetExceeded));
+            }
+            *producer_proof_refs = next;
+            calls.to_vec()
+        }
     };
     Ok(match side {
         W3SignalSide::Producer => W3Assertion::Emitter {
             call_id: call_id.to_string(),
             caller_proposal_id: caller.to_string(),
-            receiver_proposal_id: receiver.to_string(),
+            receiver_proposal_id,
+            receiver_workspace_id: receiver_workspace_id.to_string(),
+            receiver_identity: receiver.to_string(),
             event_key: event_key.to_string(),
             relation_proposal_id: w3_relation_id("emitter", call_id.as_ref()),
             confidence: *confidence,
@@ -2156,10 +2171,12 @@ fn w3_read_assertion(
         W3SignalSide::Subscription => W3Assertion::Subscription {
             call_id: call_id.to_string(),
             caller_proposal_id: caller.to_string(),
-            receiver_proposal_id: receiver.to_string(),
+            receiver_proposal_id,
+            receiver_workspace_id: receiver_workspace_id.to_string(),
+            receiver_identity: receiver.to_string(),
             event_key: event_key.to_string(),
             relation_proposal_id: w3_relation_id("subscription", call_id.as_ref()),
-            producer_call_id,
+            producer_call_ids,
             confidence: *confidence,
             source_handle_ids: source_handle_ids.clone(),
             evidence_ids: evidence_ids.clone(),
@@ -2168,8 +2185,39 @@ fn w3_read_assertion(
     })
 }
 
-fn w3_entity_id(prefix: &str, call_id: &str) -> String {
-    w3_digest_id("signal", &(prefix, call_id))
+fn w3_signal_entity_key(receiver_identity: &str, event_key: &str) -> String {
+    format!("{receiver_identity}|{}|{event_key}", event_key.len())
+}
+
+fn w3_entity_id(signal_key: &str) -> RecognizerResult<String> {
+    let bytes = canonical_json_bytes(&(W3_SIGNAL_PROFILE, signal_key))
+        .map_err(|_| w3_failure(RecognizerErrorCode::AdapterIdentityMismatch))?;
+    Ok(format!(
+        "custom-signal:sha256:{}",
+        w3_hex(&Sha256::digest(bytes))
+    ))
+}
+
+fn w3_unconfirmed_reason(
+    receiver_identity: &str,
+    event_key: &str,
+    producers: &[W3ProducerMatch],
+    source_health_complete: bool,
+) -> W3UnconfirmedReason {
+    if !source_health_complete {
+        return W3UnconfirmedReason::ProducerLookupIncomplete;
+    }
+    if producers.iter().any(|producer| {
+        producer.event_key == event_key && producer.receiver_identity != receiver_identity
+    }) {
+        return W3UnconfirmedReason::ProducerReceiverMismatch;
+    }
+    if producers.iter().any(|producer| {
+        producer.receiver_identity == receiver_identity && producer.event_key != event_key
+    }) {
+        return W3UnconfirmedReason::ProducerEventKeyMismatch;
+    }
+    W3UnconfirmedReason::ProducerAbsentInReport
 }
 
 fn w3_relation_id(prefix: &str, call_id: &str) -> String {
@@ -2310,11 +2358,11 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-custom-signals".into(),
-            version: "2".into(),
+            version: "3".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W3_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-custom-signals-2".into(),
+            evaluation_profile_id: "wow-recognizers-w11-custom-signals-3".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 8,
@@ -2439,9 +2487,9 @@ fn w3_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
 //  version. Only universal graph roles are used.
 
 pub const W4_PARTITION: &str = "wow-recognizers.lua-cvar-callbacks";
-const W4_PROFILE: &str = "wow-recognizers/lua-cvar-callbacks/3";
+const W4_PROFILE: &str = "wow-recognizers/lua-cvar-callbacks/4";
 const W4_FACT_PARTITION: &str = "wow-recognizers.lua-cvar-callback-facts";
-const W4_FACT_PROFILE: &str = "wow-recognizers-lua-cvar-callback-facts-3";
+const W4_FACT_PROFILE: &str = "wow-recognizers-lua-cvar-callback-facts-4";
 const W4_RULE: &str = "core.signal.cvar_callback";
 const W4_RULE_VERSION: u32 = 1;
 const W4_REGISTERS_CVAR: &str = "CVarCallbackRegistry.RegisterCallback";
@@ -2465,6 +2513,8 @@ const W4_MUTATION_FIXTURE_IDS: [&str; 1] = ["RECOG-EVENT-009"];
 pub struct W4CvarMatch {
     pub call_id: String,
     pub cvar_key: String,
+    pub receiver_workspace_id: String,
+    pub receiver_identity: String,
     pub entity_proposal_id: String,
     pub registers_proposal_id: String,
     pub callback_proposal_id: Option<String>,
@@ -2505,7 +2555,8 @@ struct W4Site {
     exact_cvar_key: bool,
     colon_call: bool,
     caller: W4FunctionBinding,
-    receiver: W3Binding,
+    receiver_workspace_id: String,
+    receiver_identity: String,
     callback: Option<W4CallbackBinding>,
     handle: StableHandleId,
     evidence: EvidenceId,
@@ -2550,6 +2601,19 @@ fn w4_graph_confidence(confidence: RecognizerOutputConfidence) -> GraphConfidenc
         RecognizerOutputConfidence::Derived => GraphConfidence::Derived,
         RecognizerOutputConfidence::Possible => GraphConfidence::Possible,
     }
+}
+
+fn w4_cvar_entity_key(receiver_identity: &str, cvar_key: &str) -> String {
+    format!("{receiver_identity}|{}|{cvar_key}", cvar_key.len())
+}
+
+fn w4_cvar_entity_id(entity_key: &str) -> RecognizerResult<String> {
+    let bytes = canonical_json_bytes(&(W4_PROFILE, entity_key))
+        .map_err(|_| w4_failure(RecognizerErrorCode::AdapterIdentityMismatch))?;
+    Ok(format!(
+        "cvar-key:sha256:{}",
+        w3_hex(&Sha256::digest(bytes))
+    ))
 }
 
 /// Resolves the exact CVar key literal from the registration argument slot. A
@@ -2599,16 +2663,41 @@ fn w4_callback(
     })
 }
 
+fn w4_registry_target(
+    report: &FunctionCallReport,
+    call: &wow_emmy::function_calls::SourceCallFact,
+) -> Option<(String, String)> {
+    let receiver = report.exact_call_receiver(call)?;
+    let target = receiver.target();
+    if receiver.key() != "CVarCallbackRegistry"
+        || target.role != "library"
+        || !report.library_snapshot_ids().contains(&target.workspace_id)
+        || target.path.is_empty()
+        || target.content_digest.is_empty()
+        || target
+            .span
+            .byte_start()
+            .zip(target.span.byte_end())
+            .is_none_or(|(start, end)| start >= end)
+    {
+        return None;
+    }
+    Some((
+        target.workspace_id.clone(),
+        source_receiver_identity(target).ok()?,
+    ))
+}
+
 fn w4_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecognizerPack> {
     let document = RecognizerPackDocument {
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-cvar-callbacks".into(),
-            version: "3".into(),
+            version: "4".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W4_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-cvar-callback-3".into(),
+            evaluation_profile_id: "wow-recognizers-w11-cvar-callback-4".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 4,
@@ -2720,9 +2809,17 @@ fn w4_signal_fact(
             "cvar_key".into(),
             RecognizerFactValue::String(site.cvar_key.clone().into()),
         ),
+        (
+            "receiver_workspace_id".into(),
+            RecognizerFactValue::String(site.receiver_workspace_id.clone().into()),
+        ),
+        (
+            "receiver_identity".into(),
+            RecognizerFactValue::Reference(site.receiver_identity.clone().into()),
+        ),
     ]);
-    let mut source_handle_ids = BTreeSet::from([site.handle, site.receiver.handle]);
-    let mut evidence_ids = BTreeSet::from([site.evidence, site.receiver.evidence]);
+    let mut source_handle_ids = BTreeSet::from([site.handle]);
+    let mut evidence_ids = BTreeSet::from([site.evidence]);
     if let Some(callback) = site.callback.as_ref() {
         fields.insert(
             "callback".into(),
@@ -2952,20 +3049,11 @@ pub fn recognize_source_cvar_callbacks(
         if !exact_cvar_key {
             continue;
         }
-        let Some(receiver) = input.report.exact_call_receiver(call) else {
+        let Some((receiver_workspace_id, receiver_identity)) =
+            w4_registry_target(input.report, call)
+        else {
             continue;
         };
-        let target = receiver.target();
-        if receiver.key() != "CVarCallbackRegistry"
-            || target.role != "main"
-            || target.workspace_id != input.report.main_snapshot_id()
-        {
-            continue;
-        }
-        let receiver = declarations
-            .get(&(target.path.clone(), target.span))
-            .cloned()
-            .ok_or_else(|| w4_failure(RecognizerErrorCode::AdapterBindingMissing))?;
         let callback = w4_callback(
             call,
             &declarations,
@@ -2985,7 +3073,8 @@ pub fn recognize_source_cvar_callbacks(
                 handle: caller.handle,
                 evidence: caller.evidence,
             },
-            receiver,
+            receiver_workspace_id,
+            receiver_identity,
             callback,
             handle,
             evidence,
@@ -3035,7 +3124,7 @@ pub fn recognize_source_cvar_callbacks(
     let mut relations = Vec::new();
     let mut matches = Vec::new();
     let mut entity_by_call = BTreeMap::<String, String>::new();
-    let mut entity_by_key = BTreeMap::<String, String>::new();
+    let mut entity_accumulators = BTreeMap::<String, SignalEntityAccumulator>::new();
     let mut registers_by_call = BTreeMap::<String, String>::new();
 
     // Matcher proposals are sorted by proposal ID, so materialize entities before
@@ -3046,7 +3135,7 @@ pub fn recognize_source_cvar_callbacks(
         }
         for proposal in outcome.proposals() {
             let crate::RecognizerProposedAssertion::Entity {
-                proposal_id,
+                proposal_id: _,
                 entity_kind_id,
                 semantic_key,
                 confidence,
@@ -3074,28 +3163,20 @@ pub fn recognize_source_cvar_callbacks(
                 return Err(w4_failure(RecognizerErrorCode::AdapterBindingMissing));
             }
             let graph_confidence = w4_graph_confidence(*confidence);
-            let entity_id = if let Some(existing) = entity_by_key.get(&site.cvar_key) {
-                existing.clone()
-            } else {
-                let entity_id = proposal_id.to_string();
-                entity_by_key.insert(site.cvar_key.clone(), entity_id.clone());
-                entities.push(
-                    GraphEntityProposal::new(
-                        entity_id.clone(),
-                        W4_CVAR_ENTITY,
-                        BTreeMap::from([(
-                            "cvar".into(),
-                            GraphProposalValue::String(site.cvar_key.clone().into()),
-                        )]),
-                        graph_confidence,
-                        source_handle_ids.clone(),
-                        evidence_ids.clone(),
-                        coverage_ids.clone(),
-                    )
-                    .map_err(w4_graph_error)?,
-                );
-                entity_id
-            };
+            let entity_key = w4_cvar_entity_key(&site.receiver_identity, &site.cvar_key);
+            let entity_id = w4_cvar_entity_id(&entity_key)?;
+            let accumulator = entity_accumulators.entry(entity_key).or_insert_with(|| {
+                SignalEntityAccumulator::new(entity_id.clone(), graph_confidence)
+            });
+            if accumulator.proposal_id != entity_id {
+                return Err(w4_failure(RecognizerErrorCode::AdapterIdentityMismatch));
+            }
+            accumulator.merge(
+                graph_confidence,
+                source_handle_ids,
+                evidence_ids,
+                coverage_ids,
+            );
             if entity_by_call
                 .insert(call_id.to_string(), entity_id)
                 .is_some()
@@ -3103,6 +3184,22 @@ pub fn recognize_source_cvar_callbacks(
                 return Err(w4_failure(RecognizerErrorCode::AdapterBindingDuplicate));
             }
         }
+    }
+
+    for (entity_key, accumulator) in entity_accumulators {
+        w4_checkpoint(stop)?;
+        entities.push(
+            GraphEntityProposal::new(
+                accumulator.proposal_id,
+                W4_CVAR_ENTITY,
+                BTreeMap::from([("cvar".into(), GraphProposalValue::String(entity_key.into()))]),
+                accumulator.confidence,
+                accumulator.source_handle_ids.into_iter().collect(),
+                accumulator.evidence_ids.into_iter().collect(),
+                accumulator.coverage_ids.into_iter().collect(),
+            )
+            .map_err(w4_graph_error)?,
+        );
     }
 
     for outcome in output.outcomes() {
@@ -3180,6 +3277,8 @@ pub fn recognize_source_cvar_callbacks(
         matches.push(W4CvarMatch {
             call_id: call_id.clone(),
             cvar_key: site.cvar_key.clone(),
+            receiver_workspace_id: site.receiver_workspace_id.clone(),
+            receiver_identity: site.receiver_identity.clone(),
             entity_proposal_id: entity_proposal_id.to_string(),
             registers_proposal_id: registers_proposal_id.clone(),
             callback_proposal_id: site
@@ -3312,6 +3411,200 @@ mod w4_tests {
         assert_eq!(
             w4_graph_error(invalid).code(),
             RecognizerErrorCode::AdapterFactMismatch
+        );
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod source_receiver_test_support {
+    use super::FunctionCallReport;
+    use std::error::Error;
+    use wow_emmy::{
+        EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE, EmmyBackendIdentity,
+        LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
+    };
+
+    pub(crate) fn function_call_report(
+        main_shadows_registry: bool,
+    ) -> Result<(FunctionCallReport, String), Box<dyn Error>> {
+        let backend = EmmyBackendIdentity::new(
+            "emmylua_code_analysis",
+            Some(EMMYLUA_CODE_ANALYSIS_VERSION),
+            EMMYLUA_REVISION,
+            EMMYLUA_TREE,
+            format!("sha256:{}", "1".repeat(64)),
+            format!("sha256:{}", "2".repeat(64)),
+        )?;
+        let main_shadow = if main_shadows_registry {
+            "EventRegistry = {}\n\
+             function EventRegistry:TriggerEvent(event) end\n\
+             function EventRegistry:RegisterCallback(event, callback, owner) end\n\
+             function EventRegistry:RegisterFrameEvent(event) end\n\
+             function EventRegistry:RegisterFrameEventAndCallback(event, callback, owner) end\n\
+             function EventRegistry:RegisterFrameEventAndCallbackWithHandle(event, callback, owner) end\n\
+             CVarCallbackRegistry = {}\n\
+             function CVarCallbackRegistry:RegisterCallback(cvar, callback, owner) end\n"
+        } else {
+            ""
+        };
+        let main_source = format!(
+            "{main_shadow}local function onEvent() end\n\
+             function Main()\n\
+             EventRegistry:TriggerEvent(\"Signal.Ready\")\n\
+             EventRegistry:RegisterCallback(\"Signal.Ready\", onEvent)\n\
+             EventRegistry:RegisterFrameEvent(\"PLAYER_LOGOUT\")\n\
+             EventRegistry:RegisterFrameEventAndCallback(\"PLAYER_LOGIN\", onEvent)\n\
+             EventRegistry:RegisterFrameEventAndCallbackWithHandle(\"PLAYER_LOGOUT\", onEvent)\n\
+             CVarCallbackRegistry:RegisterCallback(\"test_cvar\", onEvent)\n\
+             end\n"
+        );
+        let library_source = "EventRegistry = {}\n\
+            function EventRegistry:TriggerEvent(event) end\n\
+            function EventRegistry:RegisterCallback(event, callback, owner) end\n\
+            function EventRegistry:RegisterFrameEvent(event) end\n\
+            function EventRegistry:RegisterFrameEventAndCallback(event, callback, owner) end\n\
+            function EventRegistry:RegisterFrameEventAndCallbackWithHandle(event, callback, owner) end\n\
+            CVarCallbackRegistry = {}\n\
+            function CVarCallbackRegistry:RegisterCallback(cvar, callback, owner) end\n";
+        let limits = LuaWorkspaceLimits::new(16, 16_384, 1024 * 1024, 8 * 1024 * 1024)?;
+        let main = LuaWorkspaceSnapshot::build(
+            backend.clone(),
+            LuaWorkspaceUniverse::Project,
+            vec![LuaWorkspaceFileInput::new("main/main.lua", main_source)],
+            limits,
+        )?;
+        let library = LuaWorkspaceSnapshot::build(
+            backend,
+            LuaWorkspaceUniverse::Fixture,
+            vec![LuaWorkspaceFileInput::new(
+                "Blizzard_SharedXMLBase/GlobalCallbackRegistry.lua",
+                library_source,
+            )],
+            limits,
+        )?;
+        let session = wow_emmy::references::analyze_member_call_session(
+            &main,
+            &[&library],
+            &[],
+            true,
+            &std::sync::atomic::AtomicBool::new(false),
+        )?;
+        let report = session.function_calls.ok_or("function-call report")?;
+        report.validate()?;
+        Ok((report, library.snapshot_id().to_owned()))
+    }
+}
+
+#[cfg(test)]
+mod source_receiver_tests {
+    use super::source_receiver_test_support::function_call_report;
+    use super::*;
+
+    #[test]
+    fn library_receiver_gates_preserve_exact_workspace_and_classify_unconfirmed_proofs()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (report, library_workspace_id) = function_call_report(false)?;
+        let mut saw_custom_producer = false;
+        let mut saw_custom_subscription = false;
+        let mut saw_cvar = false;
+        for call in report.calls() {
+            match call.resolved_callable_key() {
+                Some("EventRegistry.TriggerEvent" | "EventRegistry.RegisterCallback") => {
+                    let receiver = report.exact_call_receiver(call).ok_or("exact receiver")?;
+                    let target = receiver.target();
+                    assert_eq!(receiver.key(), "EventRegistry");
+                    assert_eq!(target.role, "library");
+                    assert_eq!(target.workspace_id, library_workspace_id);
+                    assert!(w3_is_resolved_custom_registry(
+                        Some(receiver.key()),
+                        target,
+                        &report,
+                    ));
+                    saw_custom_producer |=
+                        call.resolved_callable_key() == Some("EventRegistry.TriggerEvent");
+                    saw_custom_subscription |=
+                        call.resolved_callable_key() == Some("EventRegistry.RegisterCallback");
+                }
+                Some("CVarCallbackRegistry.RegisterCallback") => {
+                    let (workspace_id, identity) =
+                        w4_registry_target(&report, call).ok_or("exact Library CVar receiver")?;
+                    assert_eq!(workspace_id, library_workspace_id);
+                    assert!(identity.starts_with("receiver:sha256:"));
+                    saw_cvar = true;
+                }
+                _ => {}
+            }
+        }
+        assert!(saw_custom_producer && saw_custom_subscription && saw_cvar);
+
+        let (shadow_report, _) = function_call_report(true)?;
+        let shadow = shadow_report
+            .calls()
+            .iter()
+            .find(|call| call.resolved_callable_key() == Some("EventRegistry.TriggerEvent"))
+            .ok_or("Main-shadow call")?;
+        let shadow_receiver = shadow_report
+            .exact_call_receiver(shadow)
+            .ok_or("exact Main-shadow receiver")?;
+        assert_eq!(shadow_receiver.target().role, "main");
+        assert_eq!(
+            shadow_receiver.target().workspace_id,
+            shadow_report.main_snapshot_id()
+        );
+        assert!(w3_is_resolved_custom_registry(
+            Some(shadow_receiver.key()),
+            shadow_receiver.target(),
+            &shadow_report,
+        ));
+        assert!(
+            w4_registry_target(
+                &shadow_report,
+                shadow_report
+                    .calls()
+                    .iter()
+                    .find(|call| {
+                        call.resolved_callable_key()
+                            == Some("CVarCallbackRegistry.RegisterCallback")
+                    })
+                    .ok_or("Main-shadow CVar call")?,
+            )
+            .is_none()
+        );
+
+        let producer = |call_id: &str, receiver_identity: &str, event_key: &str| W3ProducerMatch {
+            call_id: call_id.into(),
+            event_key: event_key.into(),
+            receiver_workspace_id: "library-snapshot".into(),
+            receiver_identity: receiver_identity.into(),
+            receiver_declaration_proposal_id: None,
+            relation_proposal_id: format!("relation:{call_id}"),
+        };
+        assert_eq!(
+            w3_unconfirmed_reason("receiver-a", "Signal.Ready", &[], true),
+            W3UnconfirmedReason::ProducerAbsentInReport
+        );
+        assert_eq!(
+            w3_unconfirmed_reason(
+                "receiver-a",
+                "Signal.Ready",
+                &[producer("p1", "receiver-a", "Signal.Other")],
+                true,
+            ),
+            W3UnconfirmedReason::ProducerEventKeyMismatch
+        );
+        assert_eq!(
+            w3_unconfirmed_reason(
+                "receiver-a",
+                "Signal.Ready",
+                &[producer("p2", "receiver-b", "Signal.Ready")],
+                true,
+            ),
+            W3UnconfirmedReason::ProducerReceiverMismatch
+        );
+        assert_eq!(
+            w3_unconfirmed_reason("receiver-a", "Signal.Ready", &[], false),
+            W3UnconfirmedReason::ProducerLookupIncomplete
         );
         Ok(())
     }

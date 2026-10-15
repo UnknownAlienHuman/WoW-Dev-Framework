@@ -1,6 +1,11 @@
 use super::*;
 
-fn replace_main_source(root: &FixtureRoot, config: &mut Value, main: &str) -> TestResult {
+fn replace_source_file(
+    root: &FixtureRoot,
+    config: &mut Value,
+    path: &str,
+    source: &str,
+) -> TestResult {
     let mut manifest: Value =
         serde_json::from_slice(&std::fs::read(root.0.join("manifest.json"))?)?;
     let files = manifest["files"]
@@ -8,10 +13,10 @@ fn replace_main_source(root: &FixtureRoot, config: &mut Value, main: &str) -> Te
         .ok_or("fixture manifest files")?;
     let member = files
         .iter_mut()
-        .find(|file| file["path"] == "UI/main.lua")
-        .ok_or("fixture Main manifest member")?;
-    member["bytes"] = json!(main.len());
-    member["content_sha256"] = json!(format!("{:x}", Sha256::digest(main.as_bytes())));
+        .find(|file| file["path"].as_str() == Some(path))
+        .ok_or("fixture source manifest member")?;
+    member["bytes"] = json!(source.len());
+    member["content_sha256"] = json!(format!("{:x}", Sha256::digest(source.as_bytes())));
     let total = files
         .iter()
         .try_fold(0_u64, |sum, file| -> TestResult<u64> {
@@ -28,7 +33,7 @@ fn replace_main_source(root: &FixtureRoot, config: &mut Value, main: &str) -> Te
         "{:x}",
         Sha256::digest(wow_core::canonical_json_bytes(&manifest)?)
     ));
-    std::fs::write(root.0.join("UI/main.lua"), main)?;
+    std::fs::write(root.0.join(path), source)?;
     let manifest_file = serde_json::to_value(super::write_json(root, "manifest.json", &manifest)?)?;
     config["source"]["manifest"] = manifest_file.clone();
     config["native_reference"]["native_source"]["manifest"] = manifest_file;
@@ -64,11 +69,14 @@ fn custom_relation<'a>(
 }
 
 #[test]
-fn native_service_graph_preserves_exact_eventregistry_literal_keys() -> TestResult {
+fn native_service_graph_keeps_main_registry_shadows_out_of_donor_adapters() -> TestResult {
     use crate::graph::{GraphBuildRequest, GraphReadStatus, execute_graph_build};
     use std::sync::atomic::AtomicBool;
     use wow_graph::{GraphConfidence, GraphPartitionSnapshot, GraphProposalValue};
-    use wow_recognizers::{source_bridge::W2_PARTITION, source_signals::W3_SIGNAL_PARTITION};
+    use wow_recognizers::{
+        source_bridge::W2_PARTITION,
+        source_signals::{W3_SIGNAL_PARTITION, W4_PARTITION},
+    };
 
     let (root, mut config) = super::native_fixture()?;
     let capabilities = wow_project::PlatformGraphCapabilities::new(&[
@@ -80,15 +88,17 @@ fn native_service_graph_preserves_exact_eventregistry_literal_keys() -> TestResu
     config["graph_profile"] = serde_json::to_value(
         wow_project::PlatformGraphProfile::DirectCapabilitiesV1(capabilities),
     )?;
-    // RegisterCallback's real owner argument carries this same Main receiver into Project's declaration crosswalk.
-    let oversized_key = "E".repeat(1_025);
-    let oversized_call = format!("    EventRegistry:TriggerEvent(\"{oversized_key}\")\n");
     let main = r#"EventRegistry = {}
-function EventRegistry:TriggerEvent(key) end
-function EventRegistry:RegisterCallback(key, callback) end
-function EventRegistry:RegisterFrameEventAndCallback(key, callback) end
+function EventRegistry:TriggerEvent(event) end
+function EventRegistry:RegisterCallback(event, callback, owner) end
+function EventRegistry:RegisterFrameEvent(event) end
+function EventRegistry:RegisterFrameEventAndCallback(event, callback, owner) end
+function EventRegistry:RegisterFrameEventAndCallbackWithHandle(event, callback, owner) end
+CVarCallbackRegistry = {}
+function CVarCallbackRegistry:RegisterCallback(cvar, callback, owner) end
 local function onEvent() end
 function Main()
+    EventRegistry:TriggerEvent("Audit.Equal")
     EventRegistry:TriggerEvent("Audit.Equal")
     EventRegistry:RegisterCallback("Audit.Equal", onEvent, EventRegistry)
     EventRegistry:TriggerEvent(" Audit.Leading")
@@ -97,16 +107,25 @@ function Main()
     EventRegistry:RegisterCallback("Audit.Trailing", onEvent, EventRegistry)
     EventRegistry:TriggerEvent("")
     EventRegistry:RegisterCallback("", onEvent, EventRegistry)
+    EventRegistry:RegisterFrameEvent("PLAYER_LOGOUT")
+    EventRegistry:RegisterFrameEventAndCallback(" Native.Trim", onEvent)
     EventRegistry:RegisterFrameEventAndCallback(" Native.Trim", onEvent)
     EventRegistry:RegisterFrameEventAndCallback("Native.Trim ", onEvent)
-    -- W6 oversized unrelated event argument
+    EventRegistry:RegisterFrameEventAndCallback("Callback.Missing")
+    EventRegistry:RegisterFrameEventAndCallbackWithHandle("Native.Handle", onEvent)
+    CVarCallbackRegistry:RegisterCallback("cvar.name", onEvent, CVarCallbackRegistry)
+    CVarCallbackRegistry:RegisterCallback("cvar.name", onEvent, CVarCallbackRegistry)
 end
 "#
-    .replace(
-        "    -- W6 oversized unrelated event argument\n",
-        &oversized_call,
-    );
-    replace_main_source(&root, &mut config, &main)?;
+    .to_owned();
+    replace_source_file(&root, &mut config, "UI/main.lua", &main)?;
+    let api = r#"APIDocumentation:AddDocumentationTable({Name="Transport",Type="System",Namespace="C_Transport",Environment="All",Functions={{Name="Read",Type="Function",Arguments={{Name="flag",Type="bool",Nilable=false,Default=false}},Returns={{Name="value",Type="number",Nilable=true}}}}})"#;
+    replace_source_file(
+        &root,
+        &mut config,
+        "Blizzard_APIDocumentationGenerated/API.lua",
+        api,
+    )?;
 
     let stop = AtomicBool::new(false);
     let input = LocalProjectInput::from_config_path(&root.0.join("project.json"), &stop)?;
@@ -123,14 +142,6 @@ end
         serde_json::to_string(&result)?
     );
     let result_json = serde_json::to_value(&result)?;
-    let library_matches = result_json
-        .get("library_recognition")
-        .and_then(|recognition| recognition.get("matches"))
-        .and_then(Value::as_array)
-        .ok_or("native library recognition matches")?;
-    assert!(library_matches.iter().all(|row| {
-        row.get("library_name").and_then(Value::as_str) != Some(oversized_key.as_str())
-    }));
     let custom = result_json
         .get("custom_recognition")
         .ok_or("Service custom-signal recognition")?;
@@ -144,17 +155,19 @@ end
     let subscriptions = custom["subscriptions"]
         .as_array()
         .ok_or("custom-signal subscriptions")?;
-    assert_eq!(producers.len(), 3);
+    assert_eq!(producers.len(), 4);
     assert_eq!(subscriptions.len(), 3);
     assert!(subscriptions.iter().all(|row| {
         row.get("callback_proposal_id").is_none() && row.get("owner_proposal_id").is_none()
     }));
-    assert_eq!(
-        custom["unconfirmed_subscriptions"]
-            .as_array()
-            .ok_or("unconfirmed custom-signal subscriptions")?
-            .len(),
-        2
+    let unconfirmed = custom["unconfirmed_subscriptions"]
+        .as_array()
+        .ok_or("unconfirmed custom-signal subscriptions")?;
+    assert_eq!(unconfirmed.len(), 2);
+    assert!(
+        unconfirmed
+            .iter()
+            .all(|row| row["reason"] == "producer_event_key_mismatch")
     );
 
     let equal = subscriptions
@@ -171,6 +184,35 @@ end
         .ok_or("trailing-space subscription")?;
     assert_eq!(equal["confirmed"], true);
     assert!(equal["producer_call_id"].as_str().is_some());
+    assert!(
+        equal["receiver_workspace_id"]
+            .as_str()
+            .is_some_and(|workspace| !workspace.is_empty())
+    );
+    assert!(
+        equal["receiver_identity"]
+            .as_str()
+            .is_some_and(|identity| identity.starts_with("receiver:sha256:"))
+    );
+    let mut expected_producer_call_ids = producers
+        .iter()
+        .filter(|row| row["event_key"] == "Audit.Equal")
+        .filter_map(|row| row["call_id"].as_str().map(str::to_owned))
+        .collect::<Vec<_>>();
+    expected_producer_call_ids.sort();
+    assert_eq!(expected_producer_call_ids.len(), 2);
+    let producer_call_ids = equal["producer_call_ids"]
+        .as_array()
+        .ok_or("all compatible producer call IDs")?
+        .iter()
+        .filter_map(|value| value.as_str().map(str::to_owned))
+        .collect::<Vec<_>>();
+    assert_eq!(producer_call_ids.len(), 2);
+    assert_eq!(producer_call_ids, expected_producer_call_ids);
+    assert_eq!(
+        equal["producer_call_id"].as_str(),
+        expected_producer_call_ids.first().map(String::as_str)
+    );
     assert_eq!(leading["confirmed"], false);
     assert!(leading.get("producer_call_id").is_none());
     assert_eq!(trailing["confirmed"], false);
@@ -192,7 +234,26 @@ end
         .partition(W3_SIGNAL_PARTITION)
         .ok_or("custom-signal graph partition")?;
     assert_eq!(custom_partition.report().accepted_entities().len(), 5);
-    assert_eq!(custom_partition.report().accepted_relations().len(), 6);
+    assert_eq!(custom_partition.report().accepted_relations().len(), 7);
+    let equal_entity = custom_partition
+        .report()
+        .accepted_entities()
+        .iter()
+        .find_map(|accepted| {
+            let proposal = custom_partition
+                .batch()
+                .entity_proposal(accepted.proposal_id())?;
+            match proposal.semantic_key().get("signal") {
+                Some(GraphProposalValue::String(key))
+                    if key.splitn(3, '|').nth(2) == Some("Audit.Equal") =>
+                {
+                    Some(accepted)
+                }
+                _ => None,
+            }
+        })
+        .ok_or("receiver-scoped exact signal entity")?;
+    assert!(equal_entity.node().evidence_ids().len() >= 3);
     let custom_keys = custom_partition
         .report()
         .accepted_entities()
@@ -202,7 +263,9 @@ end
                 .batch()
                 .entity_proposal(accepted.proposal_id())?;
             match proposal.semantic_key().get("signal") {
-                Some(GraphProposalValue::String(value)) => Some(value.to_string()),
+                Some(GraphProposalValue::String(value)) => {
+                    value.splitn(3, '|').nth(2).map(str::to_owned)
+                }
                 _ => None,
             }
         })
@@ -223,6 +286,13 @@ end
             .confidence(),
         GraphConfidence::Derived
     );
+    assert!(
+        custom_relation(custom_partition, equal)?
+            .edge()
+            .evidence_ids()
+            .len()
+            >= 3
+    );
     assert_eq!(
         custom_relation(custom_partition, leading)?
             .edge()
@@ -239,38 +309,28 @@ end
     let bridges = result_json["bridge_recognition"]["bridges"]
         .as_array()
         .ok_or("native EventRegistry bridges")?;
-    assert_eq!(bridges.len(), 2);
-    assert!(bridges.iter().all(|row| {
-        [
-            "frame_declaration_proposal_id",
-            "callback_declaration_proposal_id",
-        ]
-        .iter()
-        .all(|key| row.get(*key).is_none_or(|value| value.as_str().is_some()))
-    }));
-    assert!(bridges.iter().any(|row| row["event_key"] == " Native.Trim"));
-    assert!(bridges.iter().any(|row| row["event_key"] == "Native.Trim "));
+    assert!(
+        bridges.is_empty(),
+        "Main shadows are not Blizzard registries"
+    );
     let bridge_partition = snapshot
         .partition(W2_PARTITION)
         .ok_or("native-event bridge graph partition")?;
-    assert_eq!(bridge_partition.report().accepted_entities().len(), 2);
-    let bridge_keys = bridge_partition
-        .report()
-        .accepted_entities()
-        .iter()
-        .filter_map(|accepted| {
-            let proposal = bridge_partition
-                .batch()
-                .entity_proposal(accepted.proposal_id())?;
-            match proposal.semantic_key().get("event") {
-                Some(GraphProposalValue::String(value)) => Some(value.to_string()),
-                _ => None,
-            }
-        })
-        .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(
-        bridge_keys,
-        std::collections::BTreeSet::from([" Native.Trim".to_owned(), "Native.Trim ".to_owned(),])
+    assert!(bridge_partition.report().accepted_entities().is_empty());
+    assert!(bridge_partition.report().accepted_relations().is_empty());
+
+    let cvar = result_json
+        .get("cvar_recognition")
+        .ok_or("CVar callback recognition")?;
+    let cvar_matches = cvar["matches"].as_array().ok_or("CVar callback matches")?;
+    assert!(
+        cvar_matches.is_empty(),
+        "Main CVar shadows are not donor registries"
     );
+    let cvar_partition = snapshot
+        .partition(W4_PARTITION)
+        .ok_or("CVar callback partition")?;
+    assert!(cvar_partition.report().accepted_entities().is_empty());
+    assert!(cvar_partition.report().accepted_relations().is_empty());
     Ok(())
 }

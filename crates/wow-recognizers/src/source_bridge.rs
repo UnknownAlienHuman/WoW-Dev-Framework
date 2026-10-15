@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 use wow_core::{
     ClaimScope, ContentDigest, EvidenceConfidence, EvidenceId, EvidenceRecord, GenerationContext,
@@ -26,6 +27,7 @@ use wow_graph::{
     GraphRelationKind, GraphRelationProposal, GraphRelationProposalInput,
 };
 
+use crate::source_signals::SignalEntityAccumulator;
 use crate::{
     RecognizerClause, RecognizerError, RecognizerErrorCode, RecognizerFact, RecognizerFactBundle,
     RecognizerFactCoverage, RecognizerFactCoverageInput, RecognizerFactCoverageState,
@@ -46,24 +48,21 @@ const W2_NATIVE_EVENT_ENTITY: &str = "native_event";
 const W2_REGISTERS_RELATION: &str = "lua_registers_native_event";
 const W2_BRIDGES_RELATION: &str = "lua_bridges_native_event";
 const W2_CAPABILITY: &str = "emmy.fact.calls";
+const W2_UNMODELED_FORM_BLOCKER: &str =
+    "wow_recognizers.native_event_bridge.unmodeled_registration_or_handle_form";
 
 const MAX_CALLS: usize = 4096;
 const MAX_SITES: usize = 65_536;
 const MAX_EVENT_KEY_BYTES: usize = 1024;
 const MAX_ARGUMENTS: usize = 8;
 
-/// Exact resolved callables that bind a native event through the registry and a
-/// custom callback. The first argument is the event key, the second is the frame
-/// or target receiver; the callback argument is retained only when it resolves.
-const W2_REGISTER_CALLABLES: [&str; 3] = [
-    "EventRegistry.RegisterFrameEvent",
-    "EventRegistry.RegisterFrameEventAndCallback",
-    "EventRegistry.RegisterFrameEventAndCallbackWithHandle",
-];
+/// Exact resolved Library registry callables that bind a native event and an
+/// exact Main callback. The EventRegistry is the colon receiver; positional
+/// arguments are the event key and callback, in that order.
+const W2_REGISTER_CALLABLES: [&str; 1] = ["EventRegistry.RegisterFrameEventAndCallback"];
 const W2_UNREGISTER_CALLABLES: [&str; 0] = [];
-/// Exact resolved EventRegistry-receiver constructions. A bridge originates from
-/// a resolved registry owner, never from a bare `EventRegistry` name expression,
-/// a library target, or an unresolved global.
+/// Exact resolved Library-owned EventRegistry receivers. Main shadows and bare
+/// spellings do not establish Blizzard native-event bridge semantics.
 const W2_POSITIVE_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-001", "RECOG-EVENT-004"];
 const W2_NEAR_NEGATIVE_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-007", "RECOG-EVENT-009"];
 const W2_PARTIAL_FIXTURE_IDS: [&str; 2] = ["RECOG-EVENT-004", "RECOG-EVENT-005"];
@@ -93,11 +92,11 @@ pub struct W2BridgeMatch {
     pub event_key: String,
     pub event_ordinal: usize,
     pub registers_native_event: bool,
-    pub registry_declaration_proposal_id: String,
+    pub registry_workspace_id: String,
+    pub registry_target_identity: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub frame_declaration_proposal_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub callback_declaration_proposal_id: Option<String>,
+    pub callback_declaration_proposal_id: String,
     pub event_entity_proposal_id: String,
     pub registers_relation_proposal_id: String,
     pub bridges_relation_proposal_id: String,
@@ -162,19 +161,22 @@ struct W2Site {
     caller_proposal_id: String,
     caller_function_id: String,
     caller_node: GraphNodeId,
-    registry_proposal_id: String,
-    registry_node: GraphNodeId,
-    registry_handle: StableHandleId,
-    registry_evidence: EvidenceId,
+    registry_workspace_id: String,
+    registry_target_identity: String,
     event_key: String,
     event_ordinal: usize,
     frame_binding: Option<W2Binding>,
     frame_node: Option<GraphNodeId>,
     frame_proposal_id: Option<String>,
-    callback_binding: Option<W2Binding>,
+    callback_binding: W2Binding,
     registration: bool,
     handle: StableHandleId,
     evidence: EvidenceId,
+}
+
+struct W2RegistryTarget {
+    workspace_id: String,
+    identity: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -352,9 +354,12 @@ pub fn w2_recognize_native_event_bridges(
     let mut facts = Vec::new();
     let mut sites = BTreeMap::<String, W2Site>::new();
     let mut site_count = 0usize;
+    let mut unresolved_candidates = false;
+    let mut unmodeled_candidates = false;
     for call in input.report.calls() {
         w2_checkpoint(stop)?;
         let Some(side) = w2_side(call) else {
+            unmodeled_candidates |= w2_unmodeled_registration(call);
             continue;
         };
         let (handle, evidence) = *input
@@ -363,13 +368,10 @@ pub fn w2_recognize_native_event_bridges(
             .ok_or_else(|| w2_failure(RecognizerErrorCode::AdapterBindingMissing))?;
         w2_validate_support_for_call(&input, handle, evidence, call)?;
 
-        // The receiver must be an exact resolved registry owner, never a bare
-        // `EventRegistry` name expression, a library target or an unresolved global.
-        let registry_binding = w2_registry_binding(input.report, call, &declarations);
-        let Some(registry_binding) = registry_binding else {
+        let Some(registry_target) = w2_registry_binding(input.report, call) else {
+            unresolved_candidates = true;
             continue;
         };
-        let registry_proposal_id = registry_binding.proposal_id.clone();
 
         let arguments = call.arguments();
         if arguments.len() > MAX_ARGUMENTS {
@@ -382,21 +384,38 @@ pub fn w2_recognize_native_event_bridges(
         let Some(wow_emmy::function_calls::SourceCallLiteral::String(literal_key)) =
             event_argument.literal()
         else {
+            unresolved_candidates = true;
             continue;
         };
         // String literals are already decoded here; their exact value is the key.
         let event_key = literal_key.to_owned();
         if event_key.is_empty() || event_key.len() > MAX_EVENT_KEY_BYTES {
-            return Err(w2_failure(RecognizerErrorCode::BudgetExceeded));
+            if event_key.len() > MAX_EVENT_KEY_BYTES {
+                return Err(w2_failure(RecognizerErrorCode::BudgetExceeded));
+            }
+            unresolved_candidates = true;
+            continue;
         }
 
         // Current Blizzard `RegisterFrameEventAndCallback*` forms take the event
         // key first and the callback second. The EventRegistry object is the Lua
         // colon receiver, not an ordinary positional argument.
         let frame_binding = None;
-        let callback_binding = match shape.callback_ordinal.map(|ordinal| arguments.get(ordinal)) {
-            Some(Some(argument)) => w2_frame_binding(Some(argument), &declarations).resolved(),
-            _ => None,
+        let Some(callback_ordinal) = shape.callback_ordinal else {
+            unresolved_candidates = true;
+            continue;
+        };
+        let callback_binding = arguments.get(callback_ordinal).and_then(|argument| {
+            w2_frame_binding(
+                Some(argument),
+                &declarations,
+                input.report.main_snapshot_id(),
+            )
+            .resolved()
+        });
+        let Some(callback_binding) = callback_binding else {
+            unresolved_candidates = true;
+            continue;
         };
 
         site_count = site_count
@@ -416,10 +435,8 @@ pub fn w2_recognize_native_event_bridges(
             caller_proposal_id,
             caller_function_id,
             caller_node,
-            registry_proposal_id,
-            registry_node: registry_binding.node.clone(),
-            registry_handle: registry_binding.handle,
-            registry_evidence: registry_binding.evidence,
+            registry_workspace_id: registry_target.workspace_id,
+            registry_target_identity: registry_target.identity,
             event_key,
             event_ordinal: shape.event_ordinal,
             frame_binding: frame_binding.clone(),
@@ -438,11 +455,25 @@ pub fn w2_recognize_native_event_bridges(
         }
     }
 
-    let coverage_state = if input.report.source_health_complete() {
-        RecognizerFactCoverageState::Complete
-    } else {
+    let source_complete = input.report.source_health_complete();
+    let coverage_state = if !source_complete {
         RecognizerFactCoverageState::NotEvaluated
+    } else if unresolved_candidates || unmodeled_candidates {
+        RecognizerFactCoverageState::Partial
+    } else {
+        RecognizerFactCoverageState::Complete
     };
+    let mut blocker_ids = Vec::new();
+    if !source_complete {
+        blocker_ids.push("emmy.call_source_parse_failed".into());
+    }
+    if unresolved_candidates {
+        blocker_ids
+            .push("wow_recognizers.native_event_bridge.receiver_or_callback_unresolved".into());
+    }
+    if unmodeled_candidates {
+        blocker_ids.push(W2_UNMODELED_FORM_BLOCKER.into());
+    }
     let coverage = vec![RecognizerFactCoverage::new(
         RecognizerFactCoverageInput {
             context_id: input.context.context_id(),
@@ -451,11 +482,7 @@ pub fn w2_recognize_native_event_bridges(
             producer_id: "wow.emmy".into(),
             producer_version: W2_FACT_PROFILE.into(),
             state: coverage_state,
-            blocker_ids: if coverage_state == RecognizerFactCoverageState::Complete {
-                Vec::new()
-            } else {
-                vec!["emmy.call_source_parse_failed".into()]
-            },
+            blocker_ids,
         },
         fact_limits,
     )?];
@@ -483,7 +510,7 @@ pub fn w2_recognize_native_event_bridges(
         for proposal in outcome.proposals() {
             match proposal {
                 crate::RecognizerProposedAssertion::Entity {
-                    proposal_id,
+                    proposal_id: _,
                     entity_kind_id,
                     semantic_key,
                     confidence,
@@ -500,7 +527,6 @@ pub fn w2_recognize_native_event_bridges(
                         return Err(w2_failure(RecognizerErrorCode::AdapterFactMismatch));
                     };
                     events.push(w2_event_proposal(
-                        proposal_id.to_string(),
                         event_key,
                         *confidence,
                         source_handle_ids,
@@ -540,25 +566,35 @@ pub fn w2_recognize_native_event_bridges(
         return Err(w2_failure(RecognizerErrorCode::AdapterBindingMissing));
     }
 
-    let mut entity_proposals = Vec::new();
-    let mut event_entities = BTreeMap::<String, String>::new();
+    let mut event_entities = BTreeMap::<String, SignalEntityAccumulator>::new();
     for event in events {
-        if event_entities.contains_key(&event.event_key) {
-            continue;
+        let entity_id = w2_event_entity_id(&event.event_key)?;
+        let accumulator = event_entities
+            .entry(event.event_key.clone())
+            .or_insert_with(|| SignalEntityAccumulator::new(entity_id.clone(), event.confidence));
+        if accumulator.proposal_id != entity_id {
+            return Err(w2_failure(RecognizerErrorCode::AdapterIdentityMismatch));
         }
-        event_entities.insert(event.event_key.clone(), event.proposal_id.clone());
+        accumulator.merge(
+            event.confidence,
+            &event.source_handle_ids,
+            &event.evidence_ids,
+            &event.coverage_ids,
+        );
+    }
+    let mut event_entities_by_key = BTreeMap::<String, String>::new();
+    let mut entity_proposals = Vec::with_capacity(event_entities.len());
+    for (event_key, accumulator) in event_entities {
+        event_entities_by_key.insert(event_key.clone(), accumulator.proposal_id.clone());
         entity_proposals.push(
             GraphEntityProposal::new(
-                event.proposal_id.clone(),
+                accumulator.proposal_id,
                 W2_NATIVE_EVENT_ENTITY,
-                BTreeMap::from([(
-                    "event".into(),
-                    GraphProposalValue::String(event.event_key.clone().into()),
-                )]),
-                event.confidence,
-                event.source_handle_ids.clone(),
-                event.evidence_ids.clone(),
-                event.coverage_ids.clone(),
+                BTreeMap::from([("event".into(), GraphProposalValue::String(event_key.into()))]),
+                accumulator.confidence,
+                accumulator.source_handle_ids.into_iter().collect(),
+                accumulator.evidence_ids.into_iter().collect(),
+                accumulator.coverage_ids.into_iter().collect(),
             )
             .map_err(w2_graph_error)?,
         );
@@ -572,7 +608,7 @@ pub fn w2_recognize_native_event_bridges(
         let site = sites
             .get(&call_id)
             .ok_or_else(|| w2_failure(RecognizerErrorCode::AdapterBindingMissing))?;
-        let event_entity_proposal_id = event_entities
+        let event_entity_proposal_id = event_entities_by_key
             .get(&site.event_key)
             .ok_or_else(|| w2_failure(RecognizerErrorCode::AdapterBindingMissing))?;
         w2_push_relation(
@@ -593,7 +629,7 @@ pub fn w2_recognize_native_event_bridges(
 
     let mut bridges = Vec::new();
     for (call_id, site) in sites {
-        let event_entity_proposal_id = event_entities
+        let event_entity_proposal_id = event_entities_by_key
             .get(&site.event_key)
             .ok_or_else(|| w2_failure(RecognizerErrorCode::AdapterBindingMissing))?
             .clone();
@@ -602,9 +638,10 @@ pub fn w2_recognize_native_event_bridges(
             event_key: site.event_key.clone(),
             event_ordinal: site.event_ordinal,
             registers_native_event: site.registration,
-            registry_declaration_proposal_id: site.registry_proposal_id.clone(),
+            registry_workspace_id: site.registry_workspace_id.clone(),
+            registry_target_identity: site.registry_target_identity.clone(),
             frame_declaration_proposal_id: site.frame_binding.map(|id| id.proposal_id),
-            callback_declaration_proposal_id: site.callback_binding.map(|id| id.proposal_id),
+            callback_declaration_proposal_id: site.callback_binding.proposal_id,
             event_entity_proposal_id,
             registers_relation_proposal_id: registrations
                 .get(&call_id)
@@ -676,7 +713,6 @@ pub fn w2_recognize_native_event_bridges(
 }
 
 struct W2EventProposal {
-    proposal_id: String,
     event_key: String,
     confidence: GraphConfidence,
     source_handle_ids: Vec<StableHandleId>,
@@ -697,7 +733,6 @@ struct W2RelationRequest {
 }
 
 fn w2_event_proposal(
-    proposal_id: String,
     event_key: &str,
     confidence: RecognizerOutputConfidence,
     source_handle_ids: &[StableHandleId],
@@ -705,13 +740,31 @@ fn w2_event_proposal(
     coverage_ids: &[wow_core::CoverageId],
 ) -> RecognizerResult<W2EventProposal> {
     Ok(W2EventProposal {
-        proposal_id,
         event_key: event_key.to_string(),
         confidence: w2_graph_confidence(confidence),
         source_handle_ids: source_handle_ids.to_vec(),
         evidence_ids: evidence_ids.to_vec(),
         coverage_ids: coverage_ids.to_vec(),
     })
+}
+
+fn w2_event_entity_id(event_key: &str) -> RecognizerResult<String> {
+    let bytes = canonical_json_bytes(&(W2_PROFILE, W2_NATIVE_EVENT_ENTITY, event_key))
+        .map_err(|_| w2_failure(RecognizerErrorCode::AdapterIdentityMismatch))?;
+    Ok(format!(
+        "native-event:sha256:{}",
+        w2_hex(&Sha256::digest(bytes))
+    ))
+}
+
+fn w2_hex(bytes: &[u8]) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(char::from(DIGITS[usize::from(byte >> 4)]));
+        output.push(char::from(DIGITS[usize::from(byte & 0x0f)]));
+    }
+    output
 }
 
 fn w2_relation_kind(relation_kind_id: &str) -> RecognizerResult<W2Relation> {
@@ -811,6 +864,17 @@ fn w2_side(call: &SourceCallFact) -> Option<W2Side> {
         .then_some(W2Side::Registers)
 }
 
+fn w2_unmodeled_registration(call: &SourceCallFact) -> bool {
+    call.is_colon_call()
+        && matches!(
+            call.resolved_callable_key(),
+            Some(
+                "EventRegistry.RegisterFrameEvent"
+                    | "EventRegistry.RegisterFrameEventAndCallbackWithHandle"
+            )
+        )
+}
+
 /// Current EventRegistry bridge forms take the native event key first. The
 /// `*AndCallback*` forms take the callback second; `RegisterFrameEvent` has no
 /// callback argument. The registry itself is the colon receiver.
@@ -853,6 +917,7 @@ impl W2FrameResolution {
 fn w2_frame_binding(
     argument: Option<&SourceCallArgument>,
     declarations: &BTreeMap<(String, SourceSpan), W2Binding>,
+    main_snapshot_id: &str,
 ) -> W2FrameResolution {
     let Some(argument) = argument else {
         return W2FrameResolution::Absent;
@@ -860,7 +925,7 @@ fn w2_frame_binding(
     let Some(target) = argument.reference_target() else {
         return W2FrameResolution::Unresolved;
     };
-    if target.role != "main" {
+    if target.role != "main" || target.workspace_id != main_snapshot_id {
         return W2FrameResolution::Unresolved;
     }
     declarations
@@ -875,19 +940,38 @@ fn w2_frame_binding(
 fn w2_registry_binding(
     report: &FunctionCallReport,
     call: &SourceCallFact,
-    declarations: &BTreeMap<(String, SourceSpan), W2Binding>,
-) -> Option<W2Binding> {
+) -> Option<W2RegistryTarget> {
     let receiver = report.exact_call_receiver(call)?;
     let target = receiver.target();
     if receiver.key() != "EventRegistry"
-        || target.role != "main"
-        || target.workspace_id != report.main_snapshot_id()
+        || target.role != "library"
+        || !report.library_snapshot_ids().contains(&target.workspace_id)
+        || target.path.is_empty()
     {
         return None;
     }
-    declarations
-        .get(&(target.path.clone(), target.span))
-        .cloned()
+    let content_digest = target
+        .content_digest
+        .parse::<ContentDigest<SourceContent>>()
+        .ok()?;
+    let (Some(start), Some(end)) = (target.span.byte_start(), target.span.byte_end()) else {
+        return None;
+    };
+    if start >= end {
+        return None;
+    }
+    let bytes = canonical_json_bytes(&(
+        target.role,
+        target.workspace_id.as_str(),
+        target.path.as_str(),
+        target.span,
+        content_digest,
+    ))
+    .ok()?;
+    Some(W2RegistryTarget {
+        workspace_id: target.workspace_id.clone(),
+        identity: format!("event-registry:sha256:{}", w2_hex(&Sha256::digest(bytes))),
+    })
 }
 
 fn w2_caller_proposal<'a>(
@@ -920,7 +1004,11 @@ fn w2_signal_fact(
         ),
         (
             "registry_receiver".into(),
-            RecognizerFactValue::Reference(site.registry_proposal_id.clone().into()),
+            RecognizerFactValue::Reference(site.registry_target_identity.clone().into()),
+        ),
+        (
+            "registry_workspace_id".into(),
+            RecognizerFactValue::String(site.registry_workspace_id.clone().into()),
         ),
         (
             "event_key".into(),
@@ -944,18 +1032,14 @@ fn w2_signal_fact(
             RecognizerFactValue::Reference(frame.proposal_id.clone().into()),
         );
     }
-    if let Some(callback) = site.callback_binding.as_ref() {
-        fields.insert(
-            "callback".into(),
-            RecognizerFactValue::Reference(callback.proposal_id.clone().into()),
-        );
-    }
-    let mut source_handle_ids = BTreeSet::from([site.handle, site.registry_handle]);
-    let mut evidence_ids = BTreeSet::from([site.evidence, site.registry_evidence]);
-    if let Some(callback) = site.callback_binding.as_ref() {
-        source_handle_ids.insert(callback.handle);
-        evidence_ids.insert(callback.evidence);
-    }
+    fields.insert(
+        "callback".into(),
+        RecognizerFactValue::Reference(site.callback_binding.proposal_id.clone().into()),
+    );
+    let mut source_handle_ids = BTreeSet::from([site.handle]);
+    let mut evidence_ids = BTreeSet::from([site.evidence]);
+    source_handle_ids.insert(site.callback_binding.handle);
+    evidence_ids.insert(site.callback_binding.evidence);
     RecognizerFact::new(
         input.context.context_id(),
         RecognizerFactInput {
@@ -1117,11 +1201,11 @@ fn w2_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
         schema_version: crate::RECOGNIZER_PACK_SCHEMA_VERSION,
         pack: RecognizerPack {
             pack_id: "wow-core-lua-native-event-bridges".into(),
-            version: "4".into(),
+            version: "5".into(),
             trust_class: RecognizerPackTrustClass::Core,
             fact_schema_profile_id: W2_FACT_PROFILE.into(),
             graph_registry_bundle_id: registry_bundle_id.into(),
-            evaluation_profile_id: "wow-recognizers-w11-native-event-bridge-4".into(),
+            evaluation_profile_id: "wow-recognizers-w11-native-event-bridge-5".into(),
             rollout: RecognizerPackRollout::Shadow,
             budgets: RecognizerPackBudgets {
                 max_rules: 8,
@@ -1192,5 +1276,62 @@ fn w2_pack(registry_bundle_id: &str) -> RecognizerResult<crate::CompiledRecogniz
     let bytes = canonical_json_bytes(&document)
         .map_err(|_| w2_failure(RecognizerErrorCode::PackIdentityMismatch))?;
     parse_recognizer_pack(&bytes)
+}
+
+#[cfg(test)]
+mod w2_receiver_tests {
+    use super::*;
+
+    #[test]
+    fn callback_bridge_receiver_must_be_the_exact_library_registry()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (report, library_workspace_id) =
+            crate::source_signals::source_receiver_test_support::function_call_report(false)?;
+        let callback_call = report
+            .calls()
+            .iter()
+            .find(|call| {
+                call.resolved_callable_key() == Some("EventRegistry.RegisterFrameEventAndCallback")
+            })
+            .ok_or("Library callback bridge call")?;
+        let target = w2_registry_binding(&report, callback_call).ok_or("Library registry")?;
+        assert_eq!(target.workspace_id, library_workspace_id);
+        assert!(target.identity.starts_with("event-registry:sha256:"));
+
+        let plain_registration = report
+            .calls()
+            .iter()
+            .find(|call| call.resolved_callable_key() == Some("EventRegistry.RegisterFrameEvent"))
+            .ok_or("plain native registration call")?;
+        assert!(w2_side(plain_registration).is_none());
+        assert!(w2_unmodeled_registration(plain_registration));
+
+        let handle_registration = report
+            .calls()
+            .iter()
+            .find(|call| {
+                call.resolved_callable_key()
+                    == Some("EventRegistry.RegisterFrameEventAndCallbackWithHandle")
+            })
+            .ok_or("handle-returning registration call")?;
+        assert!(w2_side(handle_registration).is_none());
+        assert!(w2_unmodeled_registration(handle_registration));
+
+        let (shadow_report, _) =
+            crate::source_signals::source_receiver_test_support::function_call_report(true)?;
+        let shadow_call = shadow_report
+            .calls()
+            .iter()
+            .find(|call| {
+                call.resolved_callable_key() == Some("EventRegistry.RegisterFrameEventAndCallback")
+            })
+            .ok_or("Main-shadow callback bridge call")?;
+        let shadow_receiver = shadow_report
+            .exact_call_receiver(shadow_call)
+            .ok_or("exact Main-shadow target")?;
+        assert_eq!(shadow_receiver.target().role, "main");
+        assert!(w2_registry_binding(&shadow_report, shadow_call).is_none());
+        Ok(())
+    }
 }
 // ===== END WORKER 2: native event registry bridge =====
