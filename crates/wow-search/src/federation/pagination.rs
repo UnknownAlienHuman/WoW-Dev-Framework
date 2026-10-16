@@ -363,7 +363,7 @@ fn page_retained_impl(
     if let (Some(shard), Some(summary)) = (blizzard, b) {
         shard.validate_federation_summary(summary, stop)?;
     }
-    reference.validate_federation_summary(r, stop)?;
+    let reference_request = reference.validate_federation_summary(r, stop)?;
     if p.get("candidates").is_some()
         || r.get("candidates").is_some()
         || text_field(primary_capture, "candidate_delivery")?
@@ -554,6 +554,7 @@ fn page_retained_impl(
                 component_query,
                 component_universe,
                 original,
+                &reference_request,
                 stop,
             )?;
         }

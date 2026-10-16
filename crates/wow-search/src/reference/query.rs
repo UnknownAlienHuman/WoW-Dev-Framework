@@ -4,6 +4,7 @@ use crate::SearchRetrievalLane as Lane;
 mod alias_lane;
 mod declaration_shape;
 mod field_shape;
+mod filters;
 mod pagination;
 mod similar_lane;
 mod similarity;
@@ -20,6 +21,8 @@ const INVENTORY_RANK_PROFILE: &str = "wow-search/reference-inventory-authority-o
 const ALIAS_REQUEST_SCHEMA: &str = "wow-search/native-reference-alias-query/1";
 const ALIAS_QUERY_PROFILE: &str = "wow-search/native-reference-compatibility-alias-retrieval/1";
 const ALIAS_RANK_PROFILE: &str = "wow-search/reference-compatibility-alias-ordinal-fusion/1";
+const FILTERED_REQUEST_SCHEMA: &str = "wow-search/native-reference-filtered-query/1";
+const FILTERED_QUERY_PROFILE: &str = "wow-search/native-reference-owner-hard-filters/1";
 const QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape/1";
 const RANK_PROFILE: &str = "wow-search/reference-authority-ordinal-fusion/1";
 const SIM_QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape-similarity/1";
@@ -106,6 +109,10 @@ struct Selectors {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReferenceQueryRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    base_component: Option<filters::Component>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    filters: Option<filters::Filters>,
     schema: String,
     selectors: Selectors,
     enabled_lanes: Vec<Lane>,
@@ -116,6 +123,13 @@ pub struct ReferenceQueryRequest {
     max_result_bytes: NonZeroU64,
 }
 impl ReferenceQueryRequest {
+    fn effective_schema(&self) -> &str {
+        if self.schema == FILTERED_REQUEST_SCHEMA {
+            self.base_component.map_or("", filters::Component::schema)
+        } else {
+            &self.schema
+        }
+    }
     pub fn from_json_slice(bytes: &[u8], stop: &AtomicBool) -> SearchResult<Self> {
         check(stop)?;
         if bytes.len() > 65536 {
@@ -132,6 +146,7 @@ impl ReferenceQueryRequest {
                 | DOCUMENTATION_REQUEST_SCHEMA
                 | INVENTORY_REQUEST_SCHEMA
                 | ALIAS_REQUEST_SCHEMA
+                | FILTERED_REQUEST_SCHEMA
         ) || request.enabled_lanes.is_empty()
             || request.enabled_lanes.len() > 9
             || request.required_lanes.len() > 9
@@ -144,10 +159,30 @@ impl ReferenceQueryRequest {
         {
             return Err(SearchError::InvalidProfile);
         }
-        if request.schema == REQUEST_SCHEMA {
+        if request.schema == FILTERED_REQUEST_SCHEMA {
+            if request.base_component.is_none() {
+                return Err(SearchError::InvalidProfile);
+            }
+            request
+                .filters
+                .as_mut()
+                .ok_or(SearchError::InvalidProfile)?
+                .validate()?;
+        } else {
+            let raw: serde_json::Value =
+                serde_json::from_slice(bytes).map_err(|_| SearchError::InvalidProfile)?;
+            if raw.as_object().is_some_and(|root| {
+                root.contains_key("filters") || root.contains_key("base_component")
+            }) {
+                return Err(SearchError::InvalidProfile);
+            }
+        }
+        if request.effective_schema() == REQUEST_SCHEMA {
             validate_legacy_shape(bytes)?;
         }
-        if request.schema != INVENTORY_REQUEST_SCHEMA && request.schema != ALIAS_REQUEST_SCHEMA {
+        if request.effective_schema() != INVENTORY_REQUEST_SCHEMA
+            && request.effective_schema() != ALIAS_REQUEST_SCHEMA
+        {
             let value: serde_json::Value =
                 serde_json::from_slice(bytes).map_err(|_| SearchError::InvalidProfile)?;
             if value
@@ -159,7 +194,7 @@ impl ReferenceQueryRequest {
             }
         }
         let s = &request.selectors;
-        if request.schema != ALIAS_REQUEST_SCHEMA {
+        if request.effective_schema() != ALIAS_REQUEST_SCHEMA {
             let value: serde_json::Value =
                 serde_json::from_slice(bytes).map_err(|_| SearchError::InvalidProfile)?;
             if value
@@ -333,6 +368,35 @@ pub(super) fn valid_text(value: &str) -> SearchResult<()> {
 }
 
 #[derive(Serialize)]
+struct FilterScope {
+    unavailable_kinds: Vec<ReferenceRecordKind>,
+    predicate_evaluations: u64,
+    excluded_evaluations: u64,
+}
+fn filter_accepts(
+    request: &ReferenceQueryRequest,
+    document: &Document,
+    scope: &mut Option<FilterScope>,
+) -> SearchResult<bool> {
+    let Some(filters) = &request.filters else {
+        return Ok(true);
+    };
+    let scope = scope.as_mut().ok_or(SearchError::OwnerEvidenceInvalid)?;
+    scope.predicate_evaluations = scope
+        .predicate_evaluations
+        .checked_add(1)
+        .ok_or(SearchError::FileSetBudgetExceeded)?;
+    let accepted = filters.accepts(document);
+    if !accepted {
+        scope.excluded_evaluations = scope
+            .excluded_evaluations
+            .checked_add(1)
+            .ok_or(SearchError::FileSetBudgetExceeded)?;
+    }
+    Ok(accepted)
+}
+
+#[derive(Serialize)]
 struct Origin {
     owner_field: &'static str,
     owner_record_digest: String,
@@ -427,7 +491,15 @@ impl ReferenceSearchShard {
         let mut signals = 0u32;
         let mut omitted = 0u32;
         let mut truncated = false;
-        let mut missing = false;
+        let mut filter_scope = request.filters.as_ref().map(|filters| FilterScope {
+            unavailable_kinds: filters.unsupported_kinds(&self.manifest),
+            predicate_evaluations: 0,
+            excluded_evaluations: 0,
+        });
+        let filter_unavailable = filter_scope
+            .as_ref()
+            .is_some_and(|scope| !scope.unavailable_kinds.is_empty());
+        let mut missing = filter_unavailable;
         let mut similarity_work = None;
         let mut alias_match = None;
         for lane in [
@@ -459,7 +531,9 @@ impl ReferenceSearchShard {
                     Lane::ExactExplicitAlias => s.explicit_alias.is_some(),
                     _ => false,
                 };
-                state = if lane == Lane::SeededGraph
+                state = if filter_unavailable {
+                    "missing_filter_capability"
+                } else if lane == Lane::SeededGraph
                     || (lane == Lane::ExactExplicitAlias
                         && self.manifest.compatibility_aliases.is_none())
                     || (lane == Lane::StructuredShape
@@ -496,6 +570,7 @@ impl ReferenceSearchShard {
                         &mut scanned,
                         &mut signals,
                         &mut omitted,
+                        &mut filter_scope,
                         stop,
                     )?;
                     state = lane_state;
@@ -510,6 +585,7 @@ impl ReferenceSearchShard {
                         &mut scanned,
                         &mut signals,
                         &mut omitted,
+                        &mut filter_scope,
                         stop,
                     )?;
                     state = lane_state;
@@ -542,6 +618,9 @@ impl ReferenceSearchShard {
                                 break;
                             }
                             scanned += 1;
+                            if !filter_accepts(request, document, &mut filter_scope)? {
+                                continue;
+                            }
                             let matched: Option<MatchMaterial> = match lane {
                                 Lane::ExactIdentity
                                     if s.entity_key.as_deref() == Some(&document.entity_key) =>
@@ -761,9 +840,36 @@ impl ReferenceSearchShard {
                         == Some(NativeReferenceDocuments::SourceDeclarationsV1)
                         && c.partition_id() == NATIVE_DECLARATION_PARTITION))
                     && c.key() == key
+                    && request
+                        .filters
+                        .as_ref()
+                        .is_none_or(|filters| match c.partition_id() {
+                            NATIVE_API_PARTITION => {
+                                filters.entity_kinds.contains(&ReferenceRecordKind::Api)
+                            }
+                            NATIVE_EVENT_PARTITION => {
+                                filters.entity_kinds.contains(&ReferenceRecordKind::Event)
+                            }
+                            NATIVE_DECLARATION_PARTITION => {
+                                filters.entity_kinds.iter().any(|kind| {
+                                    matches!(
+                                        kind,
+                                        ReferenceRecordKind::Event
+                                            | ReferenceRecordKind::Other
+                                            | ReferenceRecordKind::Enumeration
+                                            | ReferenceRecordKind::Widget
+                                    )
+                                })
+                            }
+                            _ => false,
+                        })
             })
         });
         let authoritative = !missing
+            && request
+                .filters
+                .as_ref()
+                .is_none_or(|filters| filters.entity_kinds.contains(&ReferenceRecordKind::Api))
             && !truncated
             && enumeration_complete
             && !self.manifest.binding.acquisition_partial
@@ -862,6 +968,8 @@ impl ReferenceSearchShard {
         #[derive(Serialize)]
         struct Payload<'a> {
             #[serde(skip_serializing_if = "Option::is_none")]
+            filter_scope: Option<FilterScope>,
+            #[serde(skip_serializing_if = "Option::is_none")]
             alias_match: Option<alias_lane::AliasMatch>,
             schema: &'static str,
             query_profile: &'static str,
@@ -885,6 +993,7 @@ impl ReferenceSearchShard {
         // Owner summary excludes the full document list; each selected candidate
         // carries its whole document. Nonmatching source fields are not delivered.
         let payload = Payload {
+            filter_scope,
             alias_match,
             schema: "wow-search/native-reference-result-set/1",
             query_profile,
@@ -1137,6 +1246,9 @@ fn capture_query_profile(
     selection: Option<NativeReferenceDocuments>,
     request: &ReferenceQueryRequest,
 ) -> &'static str {
+    if request.schema == FILTERED_REQUEST_SCHEMA {
+        return FILTERED_QUERY_PROFILE;
+    }
     if request.schema == ALIAS_REQUEST_SCHEMA {
         return ALIAS_QUERY_PROFILE;
     }
@@ -1164,18 +1276,18 @@ fn capture_query_profile(
 impl ReferenceSearchShard {
     fn validate_query_component(&self, request: &ReferenceQueryRequest) -> SearchResult<()> {
         if self.manifest.compatibility_aliases.is_some() {
-            if request.schema != ALIAS_REQUEST_SCHEMA {
+            if request.effective_schema() != ALIAS_REQUEST_SCHEMA {
                 return Err(SearchError::InvalidProfile);
             }
-        } else if request.schema == ALIAS_REQUEST_SCHEMA {
+        } else if request.effective_schema() == ALIAS_REQUEST_SCHEMA {
             return Err(SearchError::InvalidProfile);
         } else if self.manifest.include_restrictions.is_some() {
-            if request.schema != INVENTORY_REQUEST_SCHEMA {
+            if request.effective_schema() != INVENTORY_REQUEST_SCHEMA {
                 return Err(SearchError::InvalidProfile);
             }
         } else if self.manifest.include_documentation.is_some()
-            != (request.schema == DOCUMENTATION_REQUEST_SCHEMA)
-            || request.schema == INVENTORY_REQUEST_SCHEMA
+            != (request.effective_schema() == DOCUMENTATION_REQUEST_SCHEMA)
+            || request.effective_schema() == INVENTORY_REQUEST_SCHEMA
         {
             return Err(SearchError::InvalidProfile);
         }
@@ -1185,7 +1297,7 @@ impl ReferenceSearchShard {
         &self,
         summary: &serde_json::Value,
         stop: &AtomicBool,
-    ) -> SearchResult<()> {
+    ) -> SearchResult<ReferenceQueryRequest> {
         check(stop)?;
         let request_value = summary
             .get("request")
@@ -1254,12 +1366,12 @@ impl ReferenceSearchShard {
                 != Some(self.physical.search_shard_id())
             || summary.get("owner") != Some(&owner)
             || request_value
-                != &serde_json::to_value(request).map_err(|_| SearchError::OwnerEvidenceInvalid)?
+                != &serde_json::to_value(&request).map_err(|_| SearchError::OwnerEvidenceInvalid)?
         {
             return Err(SearchError::OwnerEvidenceInvalid);
         }
 
-        Ok(())
+        Ok(request)
     }
     /// Validate recorded Search fields, never reconstruct native signatures.
     pub(crate) fn validate_federation_candidate(
@@ -1267,6 +1379,7 @@ impl ReferenceSearchShard {
         query_id: &str,
         universe_id: &str,
         candidate: &serde_json::Value,
+        request: &ReferenceQueryRequest,
         stop: &AtomicBool,
     ) -> SearchResult<()> {
         check(stop)?;
@@ -1280,6 +1393,13 @@ impl ReferenceSearchShard {
             .binary_search_by(|document| document.entity_key.as_str().cmp(key))
             .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
         let document = &self.manifest.documents[index];
+        if request
+            .filters
+            .as_ref()
+            .is_some_and(|filters| !filters.accepts(document))
+        {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
         if candidate.get("document")
             != Some(&serde_json::to_value(document).map_err(|_| SearchError::OwnerEvidenceInvalid)?)
             || candidate
@@ -1358,6 +1478,51 @@ impl ReferenceSearchShard {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn filtered_query_is_closed_explicit_and_retains_original_component_rules() -> SearchResult<()>
+    {
+        let stop = AtomicBool::new(false);
+        let input = json!({"schema":FILTERED_REQUEST_SCHEMA,"base_component":"compatibility",
+            "filters":{"entity_kinds":["event","api"]},"selectors":{"explicit_alias":"Legacy"},
+            "enabled_lanes":["exact_explicit_alias"],"required_lanes":["exact_explicit_alias"],
+            "max_scanned_documents":32,"max_candidates":8,"max_signals":16,"max_result_bytes":65536});
+        let encode = |value: &serde_json::Value| {
+            serde_json::to_vec(value).map_err(|_| SearchError::InvalidProfile)
+        };
+        let request = ReferenceQueryRequest::from_json_slice(&encode(&input)?, &stop)?;
+        assert_eq!(request.effective_schema(), ALIAS_REQUEST_SCHEMA);
+        assert_eq!(
+            capture_query_profile(None, &request),
+            FILTERED_QUERY_PROFILE
+        );
+        let normalized = serde_json::to_value(&request).map_err(|_| SearchError::InvalidProfile)?;
+        assert_eq!(
+            normalized["filters"]["entity_kinds"],
+            json!(["api", "event"])
+        );
+        for field in ["base_component", "filters"] {
+            let mut bad = input.clone();
+            bad[field] = serde_json::Value::Null;
+            assert!(ReferenceQueryRequest::from_json_slice(&encode(&bad)?, &stop).is_err());
+        }
+        let mut bad = input.clone();
+        bad["schema"] = json!(ALIAS_REQUEST_SCHEMA);
+        assert!(ReferenceQueryRequest::from_json_slice(&encode(&bad)?, &stop).is_err());
+        let mut bad = input.clone();
+        bad["filters"]["entity_kinds"] = json!(["api", "api"]);
+        assert!(ReferenceQueryRequest::from_json_slice(&encode(&bad)?, &stop).is_err());
+        let mut bad = input.clone();
+        bad["filters"]["entity_kinds"] = json!(["event"]);
+        bad["filters"]["callable_namespace"] = json!({"kind":"exact","value":"C_Example"});
+        assert!(ReferenceQueryRequest::from_json_slice(&encode(&bad)?, &stop).is_err());
+        let mut bad = input;
+        bad["base_component"] = json!("native");
+        bad["selectors"] = json!({"shape":{"returns":[{"position":0,"original_type":"table"}]}});
+        bad["enabled_lanes"] = json!(["structured_shape"]);
+        bad["required_lanes"] = json!(["structured_shape"]);
+        assert!(ReferenceQueryRequest::from_json_slice(&encode(&bad)?, &stop).is_err());
+        Ok(())
+    }
     #[test]
     fn field_shape_schema_is_explicit_and_preserves_kind_boundaries() -> SearchResult<()> {
         let stop = AtomicBool::new(false);

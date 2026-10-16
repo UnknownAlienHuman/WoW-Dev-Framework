@@ -3,6 +3,8 @@ use super::*;
 use wow_reference::compatibility_aliases::AliasState;
 #[derive(Serialize, Default)]
 pub(super) struct AliasMatch {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    excluded_by_filters: Option<usize>,
     matched_records: Vec<String>,
     pub resolved: usize,
     pub unresolved: usize,
@@ -18,6 +20,7 @@ pub(super) fn run<'a>(
     scanned: &mut u32,
     signals: &mut u32,
     omitted: &mut u32,
+    filter_scope: &mut Option<FilterScope>,
     stop: &AtomicBool,
 ) -> SearchResult<(&'static str, AliasMatch)> {
     let data = manifest
@@ -29,7 +32,10 @@ pub(super) fn run<'a>(
         .explicit_alias
         .as_ref()
         .ok_or(SearchError::InvalidProfile)?;
-    let mut report = AliasMatch::default();
+    let mut report = AliasMatch {
+        excluded_by_filters: request.filters.as_ref().map(|_| 0),
+        ..AliasMatch::default()
+    };
     let mut rank = 0u32;
     let mut state = "complete";
     for record in &data.records {
@@ -65,6 +71,16 @@ pub(super) fn run<'a>(
         let document = &manifest.documents[index];
         if !record.target_matches(document) {
             return Err(SearchError::OwnerEvidenceInvalid);
+        }
+        if !filter_accepts(request, document, filter_scope)? {
+            let excluded = report
+                .excluded_by_filters
+                .as_mut()
+                .ok_or(SearchError::OwnerEvidenceInvalid)?;
+            *excluded = excluded
+                .checked_add(1)
+                .ok_or(SearchError::FileSetBudgetExceeded)?;
+            continue;
         }
         rank = rank
             .checked_add(1)

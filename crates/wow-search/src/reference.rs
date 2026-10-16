@@ -244,6 +244,19 @@ struct EventDocument {
     definition_namespace: Option<String>,
     payload: Vec<Field>,
 }
+impl Document {
+    fn record_kind(&self) -> ReferenceRecordKind {
+        if self.restriction.is_some() {
+            ReferenceRecordKind::Restriction
+        } else if let Some(declaration) = &self.declaration {
+            declaration.kind.record_kind()
+        } else if self.event.is_some() {
+            ReferenceRecordKind::Event
+        } else {
+            ReferenceRecordKind::Api
+        }
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Partition {

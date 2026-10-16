@@ -353,6 +353,63 @@ caches from its projection. Existing native Reference/federated pages, offline
 reopen, roots, retire/GC and historical response replay remain the route. See
 [the owner seam](../../docs/EXPLICIT_COMPATIBILITY_ALIAS_SEAM.md).
 
+## Query-wide native owner filters
+
+Existing exact handles can be queried with
+`wow-search/native-reference-filtered-query/1`. Select the original component
+explicitly and supply a closed hard-filter scope:
+
+```json
+{
+  "schema": "wow-search/native-reference-filtered-query/1",
+  "base_component": "compatibility",
+  "filters": {
+    "entity_kinds": ["api"],
+    "callable_namespace": {"kind": "exact", "value": "C_Example"}
+  },
+  "selectors": {"explicit_alias": "C_Example.LegacyRead"},
+  "enabled_lanes": ["exact_explicit_alias"],
+  "required_lanes": ["exact_explicit_alias"],
+  "max_scanned_documents": 1024,
+  "max_candidates": 32,
+  "max_signals": 128,
+  "max_result_bytes": 1048576
+}
+```
+
+Components are `native`, `field_shape`, `documentation`, `inventory` and
+`compatibility`. They retain the corresponding original query/shard capability
+rules; the envelope does not build, refresh or change a handle. Its interpretation
+profile is `wow-search/native-reference-owner-hard-filters/1`.
+
+`entity_kinds` is a nonempty, unique set of actual `ReferenceRecordKind` values:
+`api`, `event`, `global`, `widget`, `enumeration`, `restriction`, `other`.
+These are owner record kinds: callback declarations also have kind `event`,
+structures have kind `other`, and alias metadata is not a target document kind.
+A requested kind unsupported by the selected projection yields `lane_unavailable`
+with `filter_scope.unavailable_kinds`; zero observed records in an admitted kind
+does not mean the capability is missing.
+
+Optional `callable_namespace` is either `{"kind":"global"}` or
+`{"kind":"exact","value":"C_Example"}` and requires `api` in the kind scope.
+It admits only actual native callable documents, preserving case and the explicit
+global owner case. Event/type definition grouping is not callable namespace.
+
+All lanes apply this scope before candidate contribution, including identity,
+name, shape, prefix, literal FTS, similarity and resolved alias targets. Filtering
+never resolves an owner alias conflict. Existing scan limits still charge visited
+records; similarity work is performed only for eligible documents. Optional
+`filter_scope` reports predicate/excluded **evaluations**, which can repeat a
+document across lanes; they are not unique corpus counts. Alias match diagnostics
+preserve owner resolution and separately count filtered-out targets. A hidden or
+excluded existing entity never becomes an authoritative absence.
+
+The original filter/request/profile is frozen through federation and pages.
+Captured continuation rechecks primitive kind/namespace predicates against the
+original retained Search documents; it does not rerun the query or resolve Current.
+Cursor transport cannot replace the filters. Old schemas reject the new envelope
+keys, including null, and unfiltered requests retain their original bytes.
+
 ## Retire
 
 ```text

@@ -57,6 +57,7 @@ pub(super) fn run<'a>(
     scanned: &mut u32,
     signals: &mut u32,
     omitted: &mut u32,
+    filter_scope: &mut Option<FilterScope>,
     stop: &AtomicBool,
 ) -> SearchResult<(&'static str, SimilarityWork)> {
     let selector = request
@@ -98,6 +99,9 @@ pub(super) fn run<'a>(
             break;
         }
         *scanned += 1;
+        if !filter_accepts(request, document, filter_scope)? {
+            continue;
+        }
         let fields = [
             (
                 0u8,
