@@ -41,6 +41,9 @@ case-sensitive metadata-prefix and literal lanes, ranked explanations and honest
 misses. Opt-in [whole-candidate pages](../../apps/wow/SEARCH_PAGINATION.md) preserve
 an exact result/shard and cumulative budgets through continuation and release.
 Other document/lane classes and full durability/fault qualification remain open.
+The [recorded source observation component](../../apps/wow/SEARCH_SOURCE_OBSERVATIONS.md)
+adds native local bindings and direct member use sites with exact recorded names,
+prefix/literal/similarity candidates and the existing durable retention lifecycle.
 The separate [native Reference callable component](../../apps/wow/SEARCH_REFERENCE.md)
 adds genuine canonical names, namespace/member and original signature fields,
 with durable exact owner/shard roots and source-absent queries. It shares the

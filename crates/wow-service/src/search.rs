@@ -18,7 +18,9 @@ pub use reference::{
 mod retrieval;
 pub use retrieval::{SearchContinueRequest, SearchResultReleaseRequest, SearchRetrievalRequest};
 mod file_set;
+mod source_observations;
 use documents::{Documents, Profile as DurableProfile, Selection as DurableSelection};
+pub use source_observations::SourceObservationRetrievalRequest;
 
 use std::{
     num::NonZeroU64,
@@ -494,6 +496,13 @@ impl SearchOperationService {
         stop: &AtomicBool,
     ) -> ServiceResult<Box<[u8]>> {
         entity::pagination::release_result(request, stop)
+    }
+    pub fn retrieve_source_observations(
+        &self,
+        request: &SourceObservationRetrievalRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        source_observations::execute(request, stop)
     }
     pub fn retrieve_entities(
         &self,
@@ -1681,7 +1690,9 @@ fn durable_build_shard(
     let object_id = prepared.object_id().clone();
     let single_document = match &prepared {
         documents::Prepared::Single(value) => Some(value.document()),
-        documents::Prepared::FileSet(_) | documents::Prepared::GraphEntities(_) => None,
+        documents::Prepared::FileSet(_)
+        | documents::Prepared::GraphEntities(_)
+        | documents::Prepared::SourceObservations(_) => None,
     };
     let payload = DurableBuildPayload {
         status: "retained",

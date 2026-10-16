@@ -32,8 +32,10 @@ pub use wow_store::search::SearchStoreLeaseRequest;
 pub mod entities;
 pub mod federation;
 mod file_set;
+mod identifier_distance;
 mod page_budget;
 pub mod reference;
+pub mod source_observations;
 pub use file_set::{
     PreparedProjectFileSetShard, ProjectFileSetSelection, RetrievalCursor, RetrievalPage,
     RetrievalPagePolicy, RetrievalRequest, RetrievalResult, RetrievalState,

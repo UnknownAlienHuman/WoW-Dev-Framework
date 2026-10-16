@@ -4,11 +4,16 @@ use wow_search::entities::{
     EntitySearchProfile, EntitySearchShard, PreparedEntityShard, open_project_entity_shard,
     prepare_project_entity_shard,
 };
+use wow_search::source_observations::{
+    ObservationSearchProfile, ObservationSearchShard, PreparedObservationShard,
+    open_source_observation_shard, prepare_source_observation_shard,
+};
 use wow_search::{
     PreparedProjectFileSetShard, ProjectFileSetSelection, SearchFileSetBuildProfile,
     SearchFileSetOpenRequest, SearchFileSetPrepareRequest, SearchFileSetShard,
     open_project_file_set_shard, prepare_project_file_set_shard,
 };
+pub(super) const OBSERVATION_COMPONENT: &str = "project_source_observations_v1";
 pub(super) const ENTITY_COMPONENT: &str = "project_graph_entities_v1";
 
 pub(super) const FILE_SET_COMPONENT: &str = "project_file_set_v1";
@@ -95,6 +100,7 @@ pub(super) enum Selection {
     Single(Box<str>),
     FileSet(ProjectFileSetSelection),
     GraphEntities,
+    SourceObservations,
 }
 
 #[derive(Serialize)]
@@ -149,6 +155,11 @@ impl Selection {
                 file_ids: Some(selection.ids()),
                 document_component: Some(FILE_SET_COMPONENT),
             },
+            Self::SourceObservations => Identity {
+                file_id: None,
+                file_ids: None,
+                document_component: Some(OBSERVATION_COMPONENT),
+            },
             Self::GraphEntities => Identity {
                 file_id: None,
                 file_ids: None,
@@ -164,6 +175,7 @@ impl Selection {
             )),
             Self::FileSet(selection) => Ok(Documents::FileSet(selection)),
             Self::GraphEntities => Ok(Documents::GraphEntities),
+            Self::SourceObservations => Ok(Documents::SourceObservations),
         }
     }
 }
@@ -172,6 +184,7 @@ pub(super) enum Documents<'a> {
     Single(ProjectFileId),
     FileSet(&'a ProjectFileSetSelection),
     GraphEntities,
+    SourceObservations,
 }
 
 impl Documents<'_> {
@@ -187,6 +200,11 @@ impl Documents<'_> {
                 file_ids: Some(selection.ids()),
                 document_component: Some(FILE_SET_COMPONENT),
             },
+            Self::SourceObservations => Identity {
+                file_id: None,
+                file_ids: None,
+                document_component: Some(OBSERVATION_COMPONENT),
+            },
             Self::GraphEntities => Identity {
                 file_id: None,
                 file_ids: None,
@@ -199,6 +217,7 @@ impl Documents<'_> {
             Self::Single(id) => Some(id),
             Self::FileSet(_) => None,
             Self::GraphEntities => None,
+            Self::SourceObservations => None,
         }
     }
 }
@@ -207,6 +226,7 @@ pub(super) enum Profile {
     Single(SearchBuildProfile),
     FileSet(SearchFileSetBuildProfile),
     GraphEntities(EntitySearchProfile),
+    SourceObservations(ObservationSearchProfile),
 }
 
 impl Profile {
@@ -214,7 +234,11 @@ impl Profile {
         bounds: SearchBounds,
         selection: &Selection,
     ) -> ServiceResult<Self> {
-        if matches!(selection, Selection::GraphEntities) {
+        if matches!(selection, Selection::SourceObservations) {
+            Ok(Self::SourceObservations(
+                ObservationSearchProfile::new(bounds).map_err(map_search_error)?,
+            ))
+        } else if matches!(selection, Selection::GraphEntities) {
             Ok(Self::GraphEntities(
                 EntitySearchProfile::new(bounds).map_err(map_search_error)?,
             ))
@@ -238,6 +262,7 @@ impl Profile {
             Self::Single(profile) => profile.digest(),
             Self::FileSet(profile) => profile.digest(),
             Self::GraphEntities(profile) => profile.digest(),
+            Self::SourceObservations(profile) => profile.digest(),
         }
     }
     pub(super) fn component(&self) -> Option<&'static str> {
@@ -245,6 +270,7 @@ impl Profile {
             Self::Single(_) => None,
             Self::FileSet(_) => Some(FILE_SET_COMPONENT),
             Self::GraphEntities(_) => Some(ENTITY_COMPONENT),
+            Self::SourceObservations(_) => Some(OBSERVATION_COMPONENT),
         }
     }
     pub(super) fn prepare(
@@ -257,6 +283,19 @@ impl Profile {
         stop: &AtomicBool,
     ) -> ServiceResult<Prepared> {
         match (self, documents) {
+            (Self::SourceObservations(profile), Documents::SourceObservations) => {
+                Ok(Prepared::SourceObservations(
+                    prepare_source_observation_shard(
+                        read,
+                        generation,
+                        profile,
+                        permission,
+                        object_limits,
+                        stop,
+                    )
+                    .map_err(map_search_error)?,
+                ))
+            }
             (Self::GraphEntities(profile), Documents::GraphEntities) => {
                 Ok(Prepared::GraphEntities(
                     prepare_project_entity_shard(
@@ -318,6 +357,19 @@ impl Profile {
         stop: &AtomicBool,
     ) -> ServiceResult<Opened> {
         let opened = match self {
+            Self::SourceObservations(profile) => Ok(Opened::SourceObservations(
+                open_source_observation_shard(
+                    store,
+                    logical_id,
+                    &object_id,
+                    &generation,
+                    profile,
+                    permission,
+                    lease,
+                    stop,
+                )
+                .map_err(map_search_error)?,
+            )),
             Self::GraphEntities(profile) => Ok(Opened::GraphEntities(
                 open_project_entity_shard(
                     store,
@@ -379,6 +431,7 @@ impl Profile {
                     .map(|document| document.entity_id())
                     .eq(selection.ids().iter()),
                 (Opened::GraphEntities(_), Documents::GraphEntities) => true,
+                (Opened::SourceObservations(_), Documents::SourceObservations) => true,
                 _ => false,
             };
             if !matches {
@@ -397,6 +450,7 @@ pub(super) enum Prepared {
     Single(PreparedProjectFileShard),
     FileSet(PreparedProjectFileSetShard),
     GraphEntities(PreparedEntityShard),
+    SourceObservations(PreparedObservationShard),
 }
 impl Prepared {
     pub(super) fn logical_id(&self) -> &str {
@@ -404,6 +458,7 @@ impl Prepared {
             Self::Single(value) => value.logical_id(),
             Self::FileSet(value) => value.logical_id(),
             Self::GraphEntities(value) => value.logical_id(),
+            Self::SourceObservations(value) => value.logical_id(),
         }
     }
     pub(super) fn object_id(&self) -> &wow_store::ObjectId {
@@ -411,6 +466,7 @@ impl Prepared {
             Self::Single(value) => value.object_id(),
             Self::FileSet(value) => value.object_id(),
             Self::GraphEntities(value) => value.object_id(),
+            Self::SourceObservations(value) => value.object_id(),
         }
     }
     pub(super) fn source_generation(&self) -> &str {
@@ -418,6 +474,7 @@ impl Prepared {
             Self::Single(value) => value.source_generation(),
             Self::FileSet(value) => value.source_generation(),
             Self::GraphEntities(value) => value.source_generation(),
+            Self::SourceObservations(value) => value.source_generation(),
         }
     }
     pub(super) fn profile_digest(&self) -> &str {
@@ -425,6 +482,7 @@ impl Prepared {
             Self::Single(value) => value.profile_digest(),
             Self::FileSet(value) => value.profile_digest(),
             Self::GraphEntities(value) => value.profile_digest(),
+            Self::SourceObservations(value) => value.profile_digest(),
         }
     }
     pub(super) fn transport_documents(&self) -> Vec<DurableDocument<'_>> {
@@ -443,6 +501,15 @@ impl Prepared {
                     entity_kind: None,
                 })
                 .collect(),
+            Self::SourceObservations(value) => value
+                .documents()
+                .iter()
+                .map(|d| DurableDocument {
+                    entity_id: d.fact_id(),
+                    owner_metadata_label: d.recorded_name(),
+                    entity_kind: Some(d.kind()),
+                })
+                .collect(),
             Self::GraphEntities(value) => value
                 .documents()
                 .iter()
@@ -459,6 +526,7 @@ impl Prepared {
             Self::Single(value) => value.into_object(),
             Self::FileSet(value) => value.into_object(),
             Self::GraphEntities(value) => value.into_object(),
+            Self::SourceObservations(value) => value.into_object(),
         }
     }
 }
@@ -467,6 +535,7 @@ pub(super) enum Opened {
     Single(wow_search::SearchShard),
     FileSet(SearchFileSetShard),
     GraphEntities(EntitySearchShard),
+    SourceObservations(ObservationSearchShard),
 }
 impl Opened {
     pub(super) fn logical_id(&self) -> &str {
@@ -474,6 +543,7 @@ impl Opened {
             Self::Single(value) => value.logical_id(),
             Self::FileSet(value) => value.logical_id(),
             Self::GraphEntities(value) => value.logical_id(),
+            Self::SourceObservations(value) => value.logical_id(),
         }
     }
     pub(super) fn object_id(&self) -> &wow_store::ObjectId {
@@ -481,6 +551,7 @@ impl Opened {
             Self::Single(value) => value.object_id(),
             Self::FileSet(value) => value.object_id(),
             Self::GraphEntities(value) => value.object_id(),
+            Self::SourceObservations(value) => value.object_id(),
         }
     }
     pub(super) fn source_generation(&self) -> &str {
@@ -488,6 +559,7 @@ impl Opened {
             Self::Single(value) => value.source_generation(),
             Self::FileSet(value) => value.source_generation(),
             Self::GraphEntities(value) => value.source_generation(),
+            Self::SourceObservations(value) => value.source_generation(),
         }
     }
     pub(super) fn profile_digest(&self) -> &str {
@@ -495,6 +567,7 @@ impl Opened {
             Self::Single(value) => value.profile_digest(),
             Self::FileSet(value) => value.profile_digest(),
             Self::GraphEntities(value) => value.profile_digest(),
+            Self::SourceObservations(value) => value.profile_digest(),
         }
     }
     pub(super) fn is_file_set(&self) -> bool {
@@ -507,7 +580,9 @@ impl Opened {
         match self {
             Self::Single(value) => value.exact_id_lookup(id),
             Self::FileSet(value) => value.exact_id_lookup(id),
-            Self::GraphEntities(_) => Err(wow_search::SearchError::InvalidProfile),
+            Self::GraphEntities(_) | Self::SourceObservations(_) => {
+                Err(wow_search::SearchError::InvalidProfile)
+            }
         }
     }
     pub(super) fn exact_label_lookup(
@@ -517,7 +592,9 @@ impl Opened {
         match self {
             Self::Single(value) => value.exact_label_lookup(label),
             Self::FileSet(value) => value.exact_label_lookup(label),
-            Self::GraphEntities(_) => Err(wow_search::SearchError::InvalidProfile),
+            Self::GraphEntities(_) | Self::SourceObservations(_) => {
+                Err(wow_search::SearchError::InvalidProfile)
+            }
         }
     }
     pub(super) fn literal_candidates(
@@ -527,7 +604,9 @@ impl Opened {
         match self {
             Self::Single(value) => value.literal_candidates(query),
             Self::FileSet(value) => value.literal_candidates(query),
-            Self::GraphEntities(_) => Err(wow_search::SearchError::InvalidProfile),
+            Self::GraphEntities(_) | Self::SourceObservations(_) => {
+                Err(wow_search::SearchError::InvalidProfile)
+            }
         }
     }
     pub(super) fn release(self, store: &mut Store) -> wow_search::SearchResult<()> {
@@ -535,6 +614,7 @@ impl Opened {
             Self::Single(value) => value.release(store),
             Self::FileSet(value) => value.release(store),
             Self::GraphEntities(value) => value.release(store),
+            Self::SourceObservations(value) => value.release(store),
         }
     }
 }

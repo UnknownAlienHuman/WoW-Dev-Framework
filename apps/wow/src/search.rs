@@ -22,7 +22,7 @@ use wow_service::{
         SearchBuildQueryRequest, SearchContinueRequest, SearchIndexBuildRequest,
         SearchOperationService, SearchResultReleaseRequest, SearchRetrievalRequest,
         SearchShardQueryRequest, SearchShardRetireRequest, SearchSourceHoldBinding,
-        SearchStoreGcRequest, SearchStoreLimits,
+        SearchStoreGcRequest, SearchStoreLimits, SourceObservationRetrievalRequest,
     },
 };
 
@@ -38,6 +38,7 @@ const RETRIEVAL_HELP: &str = "wow search retrieve --search-store <STORE> --gener
 const PAGINATION_HELP: &str = "Optional retrieve --page-json <CLOSED-PAGE-POLICY> retains an immutable result and exact shard before returning page one. wow search continue --continuation-json <EXACT-TOKEN> --search-store <STORE> --operation-id <ID> --allow-local-metadata-only <original Store/output limits>. wow search results release --session-object-id <EXACT> --search-store <STORE> --operation-id <ID> --allow-local-metadata-only <Store/output limits> releases both roots; completed response replay remains retained.\n";
 const DURABLE_FILE_SET_HELP: &str = "Durable index build/retire accept either --file-id <ID> or --file-ids <JSON-array-of-exact-IDs>. Durable query uses its real --file-id plus --file-set for that component. Preserve the full original selection and source-hold receipt for retirement.\n";
 const FILE_SET_HELP: &str = "For one-shot build-query, optional --file-ids <JSON-array-of-exact-ProjectFileIds> selects a finite set. --file-id must belong to it. Empty/duplicate/absent/over-cap selections refuse; --max-documents caps the raw set. No durable file-set handle is returned.\n";
+const OBSERVATIONS_HELP: &str = "Source observation index build/retire use --source-observations instead of file/Graph selection. wow search observations --generation <EXACT> --search-shard-id <EXACT> --object-id <EXACT> --profile-digest <EXACT> --query-json <CLOSED-JSON> uses original Search/Store/output bounds, --search-store, --operation-id, --lease-expires-after and --allow-local-metadata-only. Recorded local names/direct member use sites retain source evidence; they confer no canonical name, alias, runtime target or absence authority.\n";
 const MAX_ARGUMENT_BYTES: usize = 128 * 1024;
 const MAX_VALUE_BYTES: usize = 32 * 1024;
 
@@ -77,6 +78,7 @@ struct ParsedDurableSearch {
 }
 
 enum DurableCommand {
+    Observations(SourceObservationRetrievalRequest),
     FederatedContinue(FederationContinueRequest),
     FederatedRelease(FederationResultReleaseRequest),
     Federated(Box<FederationRequest>),
@@ -133,6 +135,7 @@ fn run_with_io<W: Write, E: Write>(
             .and_then(|()| stdout.write_all(REFERENCE_PAGES_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(ENTITIES_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(ENTITY_PAGES_HELP.as_bytes()))
+            .and_then(|()| stdout.write_all(OBSERVATIONS_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(FEDERATION_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(BLIZZARD_FEDERATION_HELP.as_bytes()))
             .and_then(|()| stdout.flush())
@@ -224,6 +227,9 @@ fn run_durable<W: Write, E: Write>(
         DurableCommand::EntityContinue(request) => service.continue_entity_results(&request, stop),
         DurableCommand::EntityRelease(request) => service.release_entity_results(&request, stop),
         DurableCommand::Entities(request) => service.retrieve_entities(&request, stop),
+        DurableCommand::Observations(request) => {
+            service.retrieve_source_observations(&request, stop)
+        }
         DurableCommand::ReferenceContinue(request) => {
             service.continue_reference_results(&request, stop)
         }
@@ -326,6 +332,7 @@ fn is_help(arguments: &[OsString]) -> bool {
                 .any(|value| value == "--help" || value == "-h")
             && (arguments[1] == "query"
                 || arguments[1] == "retrieve"
+                || arguments[1] == "observations"
                 || arguments[1] == "index"
                 || arguments[1] == "continue"
                 || arguments[1] == "results"))
@@ -375,6 +382,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             }
             _ => return Ok(None),
         },
+        "observations" => ("observations", 2),
         "query" => ("query", 2),
         "retrieve" => ("retrieve", 2),
         "continue" => ("continue", 2),
@@ -440,6 +448,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             "--file-id",
             "--file-ids",
             "--graph-entities",
+            "--source-observations",
         ]),
         "query" => allowed.extend_from_slice(&[
             "--generation",
@@ -474,6 +483,14 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             "--page-json",
             "--lease-expires-after",
         ]),
+        "observations" => allowed.extend_from_slice(&[
+            "--generation",
+            "--search-shard-id",
+            "--object-id",
+            "--profile-digest",
+            "--query-json",
+            "--lease-expires-after",
+        ]),
         "continue" => allowed.push("--continuation-json"),
         "release" => allowed.push("--session-object-id"),
         "retire" => allowed.extend_from_slice(&[
@@ -482,6 +499,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             "--file-id",
             "--file-ids",
             "--graph-entities",
+            "--source-observations",
             "--search-shard-id",
             "--object-id",
             "--profile-digest",
@@ -595,6 +613,25 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
                 LocalMetadataPermission::authorize_local_metadata_only(),
             )
             .map_err(|_| "invalid exact ProjectEntity session release")?,
+        ),
+        "observations" => DurableCommand::Observations(
+            SourceObservationRetrievalRequest::new(
+                OperationId::new(required_text(&options, "--operation-id")?)
+                    .map_err(|_| "invalid --operation-id")?,
+                store_path,
+                required_text(&options, "--generation")?,
+                required_text(&options, "--search-shard-id")?,
+                required_text(&options, "--object-id")?,
+                required_text(&options, "--profile-digest")?,
+                required_text(&options, "--query-json")?.as_bytes(),
+                parse_search_bounds(&options)?,
+                store_limits,
+                max_output_bytes,
+                positive_u64(&options, "--lease-expires-after")?.get(),
+                LocalMetadataPermission::authorize_local_metadata_only(),
+                &AtomicBool::new(false),
+            )
+            .map_err(|_| "invalid exact source observation Search request")?,
         ),
         "entities" => {
             let hold = SearchSourceHoldBinding::new(
@@ -776,7 +813,18 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             let bounds = parse_search_bounds(&options)?;
             let operation_id = OperationId::new(required_text(&options, "--operation-id")?)
                 .map_err(|_| "invalid --operation-id")?;
-            let request = if graph_entity_selection(&options)? {
+            let request = if source_observation_selection(&options)? {
+                SearchIndexBuildRequest::new_source_observations(
+                    operation_id,
+                    PathBuf::from(required(&options, "--store-root")?),
+                    store_path,
+                    required_text(&options, "--generation")?,
+                    bounds,
+                    store_limits,
+                    max_output_bytes,
+                    LocalMetadataPermission::authorize_local_metadata_only(),
+                )
+            } else if graph_entity_selection(&options)? {
                 SearchIndexBuildRequest::new_graph_entities(
                     operation_id,
                     project_store_root,
@@ -864,7 +912,22 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             } else {
                 return Err("search retirement requires --allow-local-metadata-only");
             };
-            let request = if graph_entity_selection(&options)? {
+            let request = if source_observation_selection(&options)? {
+                SearchShardRetireRequest::new_source_observations(
+                    operation_id,
+                    store_path,
+                    source_hold,
+                    required_text(&options, "--generation")?,
+                    required_text(&options, "--search-shard-id")?,
+                    required_text(&options, "--object-id")?,
+                    required_text(&options, "--profile-digest")?,
+                    bounds,
+                    store_limits,
+                    max_output_bytes,
+                    positive_u64(&options, "--lease-expires-after")?.get(),
+                    permission,
+                )
+            } else if graph_entity_selection(&options)? {
                 SearchShardRetireRequest::new_graph_entities(
                     operation_id,
                     store_path,
@@ -948,8 +1011,13 @@ fn parse_durable_options(
     let mut values = values.iter();
     while let Some(option) = values.next() {
         let option = option.to_str().ok_or("invalid option encoding")?;
-        if option == "--file-set" || option == "--graph-entities" {
-            let key = if option == "--file-set" {
+        if option == "--file-set"
+            || option == "--graph-entities"
+            || option == "--source-observations"
+        {
+            let key = if option == "--source-observations" {
+                "--source-observations"
+            } else if option == "--file-set" {
                 "--file-set"
             } else {
                 "--graph-entities"
@@ -1008,6 +1076,20 @@ fn durable_file_ids(
                 .map_err(|_| "--file-ids must be an explicit JSON array of exact ProjectFile IDs")
         })
         .transpose()
+}
+
+fn source_observation_selection(
+    options: &BTreeMap<&'static str, OsString>,
+) -> Result<bool, &'static str> {
+    let selected = options.contains_key("--source-observations");
+    if selected
+        && (options.contains_key("--file-id")
+            || options.contains_key("--file-ids")
+            || options.contains_key("--graph-entities"))
+    {
+        return Err("--source-observations conflicts with other document selections");
+    }
+    Ok(selected)
 }
 
 fn graph_entity_selection(
