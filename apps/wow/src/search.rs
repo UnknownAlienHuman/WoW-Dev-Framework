@@ -3,7 +3,7 @@
 use std::{
     collections::BTreeMap,
     ffi::OsString,
-    io::Write,
+    io::{Read, Write},
     num::{NonZeroU32, NonZeroU64},
     path::PathBuf,
     sync::{
@@ -14,6 +14,7 @@ use std::{
 
 use wow_service::{
     OperationId, ServiceErrorCode,
+    context::CONTEXT_MAP_HOST_INPUT_MAX_BYTES,
     search::{
         EntityContinueRequest, EntityExplainRequest, EntityResultReleaseRequest,
         EntityRetrievalRequest, FederationContinueRequest, FederationExplainRequest,
@@ -22,7 +23,7 @@ use wow_service::{
         ReferenceIndexBuildRequest, ReferenceResultReleaseRequest, ReferenceShardRequest,
         SearchBounds, SearchBuildQueryRequest, SearchContinueRequest, SearchIndexBuildRequest,
         SearchOperationService, SearchResultReleaseRequest, SearchRetrievalRequest,
-        SearchSelectionRequest, SearchShardQueryRequest, SearchShardRetireRequest,
+        SearchContextRequest, SearchSelectionRequest, SearchShardQueryRequest, SearchShardRetireRequest,
         SearchSourceHoldBinding, SearchStoreGcRequest, SearchStoreLimits,
         SourceObservationExplainRequest, SourceObservationRetrievalRequest,
     },
@@ -37,6 +38,7 @@ const ENTITY_EXPLAIN_HELP: &str = "wow search entities explain --explain-json <w
 const REFERENCE_INSPECTION_HELP: &str = "wow search reference status|validate --handle-json <EXACT-HANDLE> --search-store <EXISTING-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output limits>. Checks the exact native retained shard without a search, source access or repair. Valid covers native owner/physical open only; full E4 validation stays not_evaluated. Invalid exits1, unavailable/not_evaluated exits2. Replay returns the original observation; use a new operation ID for a fresh observation.\n";
 const BLIZZARD_FEDERATION_HELP: &str = "Required Blizzard UI uses request schema wow-service/exact-platform-search-federation-input/1 with an exact blizzard source-hold/shard/query record, and query schema wow-search/exact-primary-platform-reference-query/1 with blizzard_ui=required and all3universe priorities. Native ProjectKind/source/package binding required; source grade stays explicit. Captured pages retain5roots; choose original Store catalog-mutation capacity>=9. Excluded2universe schemas/bytes remain exact.\n";
 const SELECT_HELP: &str = "wow search select --selection-json <wow-service/search-selection-input/1 JSON> --search-store <EXISTING-STORE> --operation-id <ID> --allow-local-metadata-only <Store/output limits>. Consumes exact completed owner-validated journal output; emits inert explicit selection receipt. No query/source rerun, no context execution, no native owner lease.\n";
+const CONTEXT_HELP: &str = "wow search context --context-json <wow-service/search-context-input/1 JSON> --context-host <ABSOLUTE-PATH|-> --search-store <EXISTING-STORE> --operation-id <ID> --allow-local-metadata-only <Store/output limits>. Strict raw semantic selection fields plus one bounded explicit native Context host registration; no root, generation, query, profile or lease overrides. L0/L1/Both native inspection only. Unsupported Source/Reference root mapping stays not_evaluated.\n";
 const FEDERATION_HELP: &str = "wow search federated --request-json <wow-service/exact-search-federation-input/1 JSON> --search-store <SAME-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output limits>. Optional --page-json <wow-search/federated-page-policy/1 JSON> retains captured result, primary shard, Reference shard and ReferenceView. wow search federated continue --continuation-json <EXACT> and wow search federated results release --session-object-id <EXACT> use the same Store/output limits. Requires compatible exact native owners; no Current, implicit build or cross-profile fallback.\n";
 const ENTITY_PAGES_HELP: &str = "ProjectEntity query accepts optional --page-json <wow-search/project-entity-page-policy/1 JSON>. wow search entities continue --continuation-json <EXACT-TOKEN> and wow search entities results release --session-object-id <EXACT> use the same --search-store and original Store/output limits, --operation-id and --allow-local-metadata-only. Pages retain the original Search capture and shard; continuation does not recompute native Graph owners.\n";
 const ENTITIES_HELP: &str = "ProjectEntity index build/retire use --graph-entities instead of --file-id/--file-ids. wow search entities --store-root <ORIGINAL-PROJECT-STORE> --generation <EXACT> --search-store <SEARCH-STORE> --search-shard-id <ID> --object-id <ID> --profile-digest <DIGEST> --build-operation-id <ORIGINAL> --source-store-epoch-id <EXACT> --source-generation-hold-id <EXACT> --source-generation-hold-digest <EXACT> --query-json <CLOSED-ENTITY-QUERY> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Search/Store/output bounds>. Actual graph seed expansion uses native Graph owners; opaque owner keys are metadata, not canonical names.\n";
@@ -52,6 +54,7 @@ const OBSERVED_FEDERATION_HELP: &str = "Observed source slots use wow-service/ex
 const INVENTORY_HELP: &str = "--source-inventory selects native local/member/function/global-access observations with wow-search/source-inventory-query/1. recorded_slot accepts typed string/integer/boolean keys, explicit access_kind and direct_only|include_possible alias policy; blocked/incomplete paths cannot be exact slots. Federation source_component=source_inventory reuses captured pages. See SEARCH_SOURCE_OBSERVATIONS.md.\n";
 const MAX_ARGUMENT_BYTES: usize = 128 * 1024;
 const MAX_VALUE_BYTES: usize = 32 * 1024;
+const MAX_CONTEXT_JSON_BYTES: usize = 64 * 1024;
 
 const VALUE_OPTIONS: &[&str] = &[
     "--store-root",
@@ -92,6 +95,7 @@ enum DurableCommand {
     Observations(SourceObservationRetrievalRequest),
     ObservationExplain(SourceObservationExplainRequest),
     Select(SearchSelectionRequest),
+    Context(Box<SearchContextRequest>),
     FederatedContinue(FederationContinueRequest),
     FederatedExplain(FederationExplainRequest),
     FederatedRelease(FederationResultReleaseRequest),
@@ -165,6 +169,7 @@ fn run_with_io<W: Write, E: Write>(
             .and_then(|()| stdout.write_all(OBSERVED_FEDERATION_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(BLIZZARD_FEDERATION_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(SELECT_HELP.as_bytes()))
+            .and_then(|()| stdout.write_all(CONTEXT_HELP.as_bytes()))
             .and_then(|()| stdout.flush())
         {
             Ok(()) => 0,
@@ -265,6 +270,7 @@ fn run_durable<W: Write, E: Write>(
             service.explain_source_observation_candidate(&request, stop)
         }
         DurableCommand::Select(request) => service.select_candidate(&request, stop),
+        DurableCommand::Context(request) => service.context_for_selection(&request, stop),
         DurableCommand::ReferenceContinue(request) => {
             service.continue_reference_results(&request, stop)
         }
@@ -336,6 +342,7 @@ fn durable_status_exit(bytes: &[u8]) -> Option<u8> {
     let envelope: serde_json::Value = serde_json::from_slice(bytes).ok()?;
     match envelope.get("payload")?.get("status")?.as_str()? {
         "candidate_only"
+        | "partial"
         | "exact_not_found_partial"
         | "no_candidates_under_executed_lanes"
         | "lane_unavailable"
@@ -397,6 +404,10 @@ fn is_help(arguments: &[OsString]) -> bool {
             && arguments[0] == "search"
             && arguments[1] == "select"
             && arguments.iter().any(|v| v == "--help" || v == "-h"))
+        || (arguments.len() >= 3
+            && arguments[0] == "search"
+            && arguments[1] == "context"
+            && arguments.iter().any(|v| v == "--help" || v == "-h"))
 }
 
 fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, &'static str> {
@@ -443,6 +454,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
         "query" => ("query", 2),
         "retrieve" => ("retrieve", 2),
         "select" => ("select", 2),
+        "context" => ("context", 2),
         "continue" => ("continue", 2),
         "results" if arguments.get(2).is_some_and(|value| value == "release") => ("release", 3),
         "index" => match arguments.get(2).and_then(|value| value.to_str()) {
@@ -489,6 +501,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             allowed.extend_from_slice(&["--explain-json", "--lease-expires-after"])
         }
         "select" => allowed.push("--selection-json"),
+        "context" => allowed.extend_from_slice(&["--context-json", "--context-host"]),
         "federated-release" => allowed.push("--session-object-id"),
         "reference-build" => allowed.extend_from_slice(&[
             "--config",
@@ -596,6 +609,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
         command,
         "gc" | "continue"
             | "select"
+            | "context"
             | "federated"
             | "federated-continue"
             | "federated-explain"
@@ -652,6 +666,20 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             )
             .map_err(|_| "invalid exact selection request")?,
         ),
+        "context" => DurableCommand::Context(Box::new(
+            SearchContextRequest::new(
+                OperationId::new(required_text(&options, "--operation-id")?)
+                    .map_err(|_| "invalid --operation-id")?,
+                PathBuf::from(required(&options, "--context-host")?),
+                required_text(&options, "--context-json")?.as_bytes(),
+                read_context_host(required(&options, "--context-host")?, stop)?,
+                store_limits,
+                max_output_bytes,
+                LocalMetadataPermission::authorize_local_metadata_only(),
+                stop,
+            )
+            .map_err(|_| "invalid exact search context request")?,
+        )),
         "federated-explain" => DurableCommand::FederatedExplain(
             FederationExplainRequest::new(
                 OperationId::new(required_text(&options, "--operation-id")?)
@@ -1362,6 +1390,49 @@ fn parse_store_limits(
         positive_u32(options, "--store-max-gc-deletes")?.get(),
     )
     .map_err(|_| "invalid Store limits")
+}
+
+/// Reads one explicit absolute regular file or stdin as inert bounded bytes. The
+/// path is transport only and never a semantic selector or a store.
+fn read_context_host(
+    path: &std::path::Path,
+    stop: &AtomicBool,
+) -> Result<wow_service::context::ContextMapHostInput, &'static str> {
+    let bytes = read_context_host_bytes(path, stop)?;
+    wow_service::context::ContextMapHostInput::from_json_slice(&bytes, stop)
+        .map_err(|_| "invalid or refused native context host registration")
+}
+
+fn read_context_host_bytes(
+    path: &std::path::Path,
+    stop: &AtomicBool,
+) -> Result<Vec<u8>, &'static str> {
+    let mut bytes = Vec::new();
+    if path.as_os_str() == "-" {
+        let stdin = std::io::stdin();
+        stdin
+            .lock()
+            .take(CONTEXT_MAP_HOST_INPUT_MAX_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| "cannot read native context host input")?;
+    } else {
+        if !path.is_absolute() {
+            return Err("--context-host must be an absolute file path or -");
+        }
+        std::fs::File::open(path)
+            .and_then(|file| {
+                file.take(CONTEXT_MAP_HOST_INPUT_MAX_BYTES as u64 + 1)
+                    .read_to_end(&mut bytes)
+            })
+            .map_err(|_| "cannot read native context host file")?;
+    }
+    if bytes.len() > CONTEXT_MAP_HOST_INPUT_MAX_BYTES {
+        return Err("native context host input byte limit");
+    }
+    if stop.load(Ordering::Acquire) {
+        return Err("native context host input cancelled");
+    }
+    Ok(bytes)
 }
 
 fn unsigned_u64(
