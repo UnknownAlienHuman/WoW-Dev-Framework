@@ -5,6 +5,45 @@ existing [source-only Reference reader](SOURCE_REFERENCE.md). It consumes the
 sealed `NativeCallableSignature` name, namespace and ordered field read ports.
 Search never decodes an opaque Reference payload or extracts a name from a key.
 
+## Exact explanation from a retained result
+
+```text
+wow search reference explain --explain-json <CLOSED-JSON>
+  --search-store <EXISTING-STORE> --operation-id <ID>
+  --lease-expires-after <EPOCH> --allow-local-metadata-only
+  <ORIGINAL-STORE-BOUNDS> --max-output-bytes <LIMIT>
+```
+
+```json
+{
+  "schema": "wow-service/native-reference-explain-input/1",
+  "session_object_id": "<EXACT-REFERENCE-SESSION-OBJECT-ID>",
+  "result_set_id": "<EXACT-RESULT-SET-ID>",
+  "candidate_id": "<EXACT-CANDIDATE-ID>"
+}
+```
+
+Supply the retained Reference page session, its `page.result_set_id` and the
+explicit candidate ID to inspect. Rank, name, Current, query/page overrides and
+source paths are not selectors. Search validates the full canonical retained
+result, original request/profile/owner/universe binding, candidate IDs,
+documents, kind predicates, ordering and signal/count bounds through its existing
+primitive capture checks. The original candidate, all its signals/origins/rank
+and whole-query context/status are returned unchanged; partial, unavailable,
+conflicted and truncated context remains visible. No alias/absence/intent or
+selection fact is inferred from the address lookup.
+
+One Service call opens the genuine exact retained ReferenceView and immutable
+shard, without source/config access, query rerun or reconstructing signatures/AST
+from Search report data.
+It checks and fences the three result/shard/view roots, closes the shard lease
+before success, and journals the exact response. Missing, released, mismatched
+or absent candidates fail. A missing Store is not created. Completed replay
+returns historical bytes before reopening data, including after release/GC;
+a new operation requires active retention. This separately bounded read does
+not advance or reset page cursors. Existing standalone Reference continuation
+keeps its original bounded-query replay semantics and bytes.
+
 ## Build and exact handle
 
 ### Exact status and nonrepairing validation

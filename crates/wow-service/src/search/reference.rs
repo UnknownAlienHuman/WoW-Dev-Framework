@@ -11,7 +11,9 @@ use wow_search::reference::{
 use wow_store::ObjectId;
 mod inspection;
 pub(super) mod pagination;
-pub use pagination::{ReferenceContinueRequest, ReferenceResultReleaseRequest};
+pub use pagination::{
+    ReferenceContinueRequest, ReferenceExplainRequest, ReferenceResultReleaseRequest,
+};
 use wow_search::reference::ReferencePagePolicy;
 const SOURCE_ROOTS: &str = "wow-search.reference-sources";
 const HANDLE_SCHEMA: &str = "wow-service/native-reference-search-handle/1";

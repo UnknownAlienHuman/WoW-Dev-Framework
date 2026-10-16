@@ -1,6 +1,9 @@
 //! Native Reference continuation retains result, Search shard AND source view.
 use super::*;
 use wow_search::reference::{ReferencePage, ReferencePageCursor, ReferenceQueryResult};
+mod explanation;
+pub use explanation::ReferenceExplainRequest;
+pub(in crate::search) use explanation::explain_result;
 const SESSION_SCHEMA: &str = "wow-service/native-reference-search-session/1";
 const SESSION_KIND: &str = "wow.search.reference-result-session";
 const ROOT_CATALOG: &str = "wow-search.reference-result-sessions";

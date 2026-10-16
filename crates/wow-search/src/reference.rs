@@ -16,8 +16,8 @@ mod query;
 mod restrictions;
 mod validation;
 pub use query::{
-    ReferencePage, ReferencePageCursor, ReferencePagePolicy, ReferenceQueryRequest,
-    ReferenceQueryResult,
+    ReferenceCandidateExplanation, ReferencePage, ReferencePageCursor, ReferencePagePolicy,
+    ReferenceQueryRequest, ReferenceQueryResult,
 };
 pub use validation::{ReferenceShardValidation, validate_reference_callable_shard};
 const PROFILE_SCHEMA: &str = "wow-search/native-reference-callable-profile/1";
@@ -723,7 +723,7 @@ pub struct ReferenceSearchShard {
 impl ReferenceSearchShard {
     pub fn release(self, store: &mut Store) -> SearchResult<()> {
         let Self { physical, .. } = self;
-        physical.release(store).map_err(SearchError::from)
+        release_physical(physical, store)
     }
 }
 
