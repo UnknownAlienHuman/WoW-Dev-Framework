@@ -48,6 +48,23 @@ fn configuration() -> Result<StoreConfiguration, StoreError> {
     StoreConfiguration::new("fixture.admission", StoreLimits::new(32, 8, 8, 32, 8)?)
 }
 
+#[test]
+fn existing_only_open_never_initializes_missing_or_foreign_files() -> TestResult {
+    let fixture = Fixture::new("existing-only")?;
+    refused(
+        Store::open_existing(&fixture.database, configuration()?),
+        StoreErrorCode::DatabaseUnavailable,
+    )?;
+    assert!(!fixture.database.exists());
+    drop(Store::open(&fixture.database, configuration()?)?);
+    drop(Store::open_existing(&fixture.database, configuration()?)?);
+    fs::write(&fixture.database, b"foreign existing bytes")?;
+    let before = fixture.bytes_digest()?;
+    assert!(Store::open_existing(&fixture.database, configuration()?).is_err());
+    assert_eq!(fixture.bytes_digest()?, before);
+    fixture.close()
+}
+
 fn refused<T>(result: Result<T, StoreError>, expected: StoreErrorCode) -> TestResult {
     let error = result.err().ok_or("unexpected successful admission")?;
     assert_eq!(error.code(), expected);

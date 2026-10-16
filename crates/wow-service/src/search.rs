@@ -539,6 +539,20 @@ impl SearchOperationService {
     ) -> ServiceResult<Box<[u8]>> {
         reference::execute(request, false, stop)
     }
+    pub fn reference_shard_status(
+        &self,
+        request: &ReferenceShardRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        reference::inspect(request, false, stop)
+    }
+    pub fn validate_reference_shard(
+        &self,
+        request: &ReferenceShardRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        reference::inspect(request, true, stop)
+    }
     pub fn retire_reference_shard(
         &self,
         request: &ReferenceShardRequest,

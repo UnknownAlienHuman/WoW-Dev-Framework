@@ -28,6 +28,7 @@ use wow_service::{
 
 const HELP: &str = "wow search index build --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --operation-id <ID> --allow-local-metadata-only <finite bounds>\nwow search query --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --literal-query <UTF-8-LITERAL> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index retire --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --build-operation-id <BuildOperationId> --source-store-epoch-id <ExactEpochId> --source-generation-hold-id <ExactRetentionRootId> --source-generation-hold-digest <sha256:...> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index gc --search-store <SEARCH-STORE-FILE> --target-object-id <ExactObjectId> --operation-id <ID> --gc-now <epoch> --gc-max-deletes <positive-u32> <Store limits>\nwow search build-query --store-root <PROJECT-STORE> <existing one-shot route; it does not claim durable SearchStore persistence>\nAll durable commands require --max-output-bytes <positive-u64> and Store limits: --store-max-object-bytes <positive-u64> --store-max-batch-objects <positive-u32> --store-max-catalog-mutations <positive-u32> --store-max-manifest-records <positive-u32> --store-max-gc-deletes <positive-u32>.\nBuild/query/retire also require Search bounds: --max-documents <positive-u32> --max-document-id-bytes <positive-u32> --max-owner-metadata-label-bytes <positive-u32> --max-literal-query-bytes <positive-u32> --max-candidate-results <positive-u32> --max-owner-evidence-records <positive-u32> --max-owner-manifest-bytes <positive-u64> --max-database-bytes <positive-u64> --max-search-object-bytes <positive-u64>.\n";
 const MAX_ARGUMENTS: usize = 64;
+const REFERENCE_INSPECTION_HELP: &str = "wow search reference status|validate --handle-json <EXACT-HANDLE> --search-store <EXISTING-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output limits>. Checks the exact native retained shard without a search, source access or repair. Valid covers native owner/physical open only; full E4 validation stays not_evaluated. Invalid exits1, unavailable/not_evaluated exits2. Replay returns the original observation; use a new operation ID for a fresh observation.\n";
 const BLIZZARD_FEDERATION_HELP: &str = "Required Blizzard UI uses request schema wow-service/exact-platform-search-federation-input/1 with an exact blizzard source-hold/shard/query record, and query schema wow-search/exact-primary-platform-reference-query/1 with blizzard_ui=required and all3universe priorities. Native ProjectKind/source/package binding required; source grade stays explicit. Captured pages retain5roots; choose original Store catalog-mutation capacity>=9. Excluded2universe schemas/bytes remain exact.\n";
 const FEDERATION_HELP: &str = "wow search federated --request-json <wow-service/exact-search-federation-input/1 JSON> --search-store <SAME-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output limits>. Optional --page-json <wow-search/federated-page-policy/1 JSON> retains captured result, primary shard, Reference shard and ReferenceView. wow search federated continue --continuation-json <EXACT> and wow search federated results release --session-object-id <EXACT> use the same Store/output limits. Requires compatible exact native owners; no Current, implicit build or cross-profile fallback.\n";
 const ENTITY_PAGES_HELP: &str = "ProjectEntity query accepts optional --page-json <wow-search/project-entity-page-policy/1 JSON>. wow search entities continue --continuation-json <EXACT-TOKEN> and wow search entities results release --session-object-id <EXACT> use the same --search-store and original Store/output limits, --operation-id and --allow-local-metadata-only. Pages retain the original Search capture and shard; continuation does not recompute native Graph owners.\n";
@@ -92,6 +93,8 @@ enum DurableCommand {
     ReferenceRelease(ReferenceResultReleaseRequest),
     ReferenceBuild(ReferenceIndexBuildRequest),
     ReferenceQuery(ReferenceShardRequest),
+    ReferenceStatus(ReferenceShardRequest),
+    ReferenceValidate(ReferenceShardRequest),
     ReferenceRetire(ReferenceShardRequest),
     Build(SearchIndexBuildRequest),
     Query(SearchShardQueryRequest),
@@ -135,6 +138,7 @@ fn run_with_io<W: Write, E: Write>(
             .and_then(|()| stdout.write_all(RETRIEVAL_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(PAGINATION_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(REFERENCE_HELP.as_bytes()))
+            .and_then(|()| stdout.write_all(REFERENCE_INSPECTION_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(REFERENCE_PAGES_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(ENTITIES_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(ENTITY_PAGES_HELP.as_bytes()))
@@ -244,6 +248,10 @@ fn run_durable<W: Write, E: Write>(
         }
         DurableCommand::ReferenceBuild(request) => service.build_reference_shard(&request, stop),
         DurableCommand::ReferenceQuery(request) => service.query_reference_shard(&request, stop),
+        DurableCommand::ReferenceStatus(request) => service.reference_shard_status(&request, stop),
+        DurableCommand::ReferenceValidate(request) => {
+            service.validate_reference_shard(&request, stop)
+        }
         DurableCommand::ReferenceRetire(request) => service.retire_reference_shard(&request, stop),
         DurableCommand::Build(request) => service.build_shard(&request, stop),
         DurableCommand::Query(request) => service.query_shard(&request, stop),
@@ -305,6 +313,9 @@ fn durable_status_exit(bytes: &[u8]) -> Option<u8> {
         | "lane_unavailable"
         | "truncated"
         | "conflict_blocked" => Some(2),
+        "not_evaluated" => Some(2),
+        "invalid" => Some(1),
+        "valid" => Some(0),
         "exact_found" | "exact_not_found_with_authority" => Some(0),
         "retained" | "retired" | "collected" | "released" => Some(0),
         _ => None,
@@ -381,6 +392,8 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
         "reference" => match arguments.get(2).and_then(|v| v.to_str()) {
             Some("build") => ("reference-build", 3),
             Some("query") => ("reference-query", 3),
+            Some("status") => ("reference-status", 3),
+            Some("validate") => ("reference-validate", 3),
             Some("retire") => ("reference-retire", 3),
             Some("continue") => ("reference-continue", 3),
             Some("results") if arguments.get(3).is_some_and(|value| value == "release") => {
@@ -446,7 +459,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             "--lease-expires-after",
             "--page-json",
         ]),
-        "reference-retire" => {
+        "reference-retire" | "reference-status" | "reference-validate" => {
             allowed.extend_from_slice(&["--handle-json", "--lease-expires-after"])
         }
         "reference-continue" => allowed.push("--continuation-json"),
@@ -540,6 +553,8 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             | "release"
             | "reference-query"
             | "reference-retire"
+            | "reference-status"
+            | "reference-validate"
             | "reference-continue"
             | "reference-release"
     ) {
@@ -743,7 +758,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
                 request
             })
         }
-        "reference-query" | "reference-retire" => {
+        "reference-query" | "reference-retire" | "reference-status" | "reference-validate" => {
             let request = ReferenceShardRequest::new(
                 OperationId::new(required_text(&options, "--operation-id")?)
                     .map_err(|_| "invalid --operation-id")?,
@@ -776,6 +791,10 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
                     request
                 };
                 DurableCommand::ReferenceQuery(request)
+            } else if command == "reference-status" {
+                DurableCommand::ReferenceStatus(request)
+            } else if command == "reference-validate" {
+                DurableCommand::ReferenceValidate(request)
             } else {
                 DurableCommand::ReferenceRetire(request)
             }

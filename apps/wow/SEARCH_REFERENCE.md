@@ -7,6 +7,45 @@ Search never decodes an opaque Reference payload or extracts a name from a key.
 
 ## Build and exact handle
 
+### Exact status and nonrepairing validation
+
+```text
+wow search reference status|validate --handle-json <EXACT-HANDLE>
+  --search-store <EXISTING-STORE-FILE> --operation-id <NEW-ID>
+  --lease-expires-after <EPOCH> --allow-local-metadata-only
+  <STORE-BOUNDS> --max-output-bytes <LIMIT>
+```
+
+Each command invokes one Service operation over the retained exact handle.
+It does not read the original source/configuration, resolve Current, run a search,
+build, repair or replace a shard. The Store must already exist. Journal and
+temporary lease operations remain Store-owned; immutable objects are unchanged.
+
+The response preserves independent shard/reference catalog observations and
+object presence. Absent roots alone cannot distinguish retirement from a handle
+that was never admitted. An unadmitted/missing root or object returns
+`not_evaluated` (exit 2). A different catalog target stays visible as
+`different_object`; it is never substituted. Exact admitted roots are fenced at
+completion. Unadmitted observations are explicitly independent reads.
+
+Both operations reuse the same native Search owner validator as query admission:
+physical immutable/read-only integrity, exact original profile/generation/object
+bindings, canonical manifest and projected record/source checks. A definite
+owner-manifest contradiction yields completed `invalid` (exit 1), only after
+checked resource closure. Acquisition/infrastructure/corruption errors, ambiguous
+bounded evidence, cancellation and cleanup failures remain errors; they are not
+converted to Invalid. Successful structural validation is `valid` (exit 0), with
+native validation scope, original profile/acquisition state, document/source
+counts, partition coverage, conflict/issue counts and projection capabilities.
+The advertised manifest negative-authority flag is not a new absence decision.
+Full E4/golden-query acceptance remains `not_evaluated`, with its missing gate.
+
+Operation replay returns the exact historical observation before reopening owners.
+Use a new operation ID for a fresh observation. Retiring or collecting the shard
+afterward does not rewrite an already completed validation response.
+
+### Build
+
 ```text
 wow search reference build --config <ABSOLUTE-SOURCE-REFERENCE-JSON>
   --expect-config-sha256 <SHA256-OF-EXACT-CONFIG-BYTES>

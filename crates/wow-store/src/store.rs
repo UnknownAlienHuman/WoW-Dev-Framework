@@ -297,6 +297,17 @@ impl Store {
         Self::initialize_connection(connection, configuration)
     }
 
+    /// Admits an existing owned store for journal/lease operations without ever
+    /// creating a missing file. Uses the same read-only proof and no-CREATE
+    /// writable admission as `open` for an existing path.
+    pub fn open_existing(
+        path: impl AsRef<Path>,
+        configuration: StoreConfiguration,
+    ) -> StoreResult<Self> {
+        configuration.limits().validate()?;
+        admit_file(path.as_ref(), configuration)
+    }
+
     /// Initializes a brand-new, store-created database.
     ///
     /// Only reached from the private staging and in-memory creator routes, which
@@ -833,9 +844,13 @@ impl Store {
 /// opens a writable connection.
 fn admit_file(path: &Path, configuration: StoreConfiguration) -> StoreResult<Store> {
     // Also check a winner created while our private bootstrap was running.
-    let existing = fs::symlink_metadata(path).map_err(|_| {
+    let existing = fs::symlink_metadata(path).map_err(|error| {
         StoreError::new(
-            StoreErrorCode::IntegrityViolation,
+            if error.kind() == std::io::ErrorKind::NotFound {
+                StoreErrorCode::DatabaseUnavailable
+            } else {
+                StoreErrorCode::IntegrityViolation
+            },
             "store path could not be inspected",
         )
     })?;

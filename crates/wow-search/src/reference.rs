@@ -14,10 +14,12 @@ mod declarations;
 mod documentation;
 mod query;
 mod restrictions;
+mod validation;
 pub use query::{
     ReferencePage, ReferencePageCursor, ReferencePagePolicy, ReferenceQueryRequest,
     ReferenceQueryResult,
 };
+pub use validation::{ReferenceShardValidation, validate_reference_callable_shard};
 const PROFILE_SCHEMA: &str = "wow-search/native-reference-callable-profile/1";
 const MANIFEST_SCHEMA: &str = "wow-search/native-reference-callable-shard/1";
 const DOCUMENT_PROFILE_SCHEMA: &str = "wow-search/native-reference-callable-event-profile/1";
@@ -737,261 +739,18 @@ pub fn open_reference_callable_shard(
     lease: SearchStoreLeaseRequest,
     stop: &AtomicBool,
 ) -> SearchResult<ReferenceSearchShard> {
-    check(stop)?;
-    if !permission.authorized {
-        return Err(SearchError::LocalMetadataPermissionRequired);
-    }
-    let physical = SearchStore::open_exact(
+    validation::open(
         store,
-        SearchStoreProfile::new(profile.digest.to_string(), profile.bounds.physical()?)?,
-        logical_id.to_owned(),
+        logical_id,
         object_id,
+        profile,
+        reference_object_id,
+        reference,
+        permission,
         lease,
         stop,
-    )?;
-    let result = (|| {
-        reference
-            .validate()
-            .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
-        let bytes = physical.reader().owner_manifest_bytes();
-        let manifest: Manifest =
-            serde_json::from_slice(bytes).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
-        if manifest.schema != profile.manifest_schema()
-            || manifest.compatibility_aliases.is_some() != profile.include_compatibility_aliases
-            || manifest.native_documents != profile.native_documents
-            || manifest.include_documentation != profile.include_documentation.then_some(true)
-            || manifest.include_restrictions != profile.include_restrictions.then_some(true)
-            || manifest.profile_digest != profile.digest
-            || manifest.reference_generation != reference.generation_id()
-            || manifest.reference_view_digest != reference.self_digest()
-            || &manifest.binding.reference_view_object_id != reference_object_id
-            || manifest.binding.reference_store_instance_id.as_ref()
-                != store.store_instance_id()?.as_str()
-            || manifest.binding.reference_store_configuration_id.as_ref()
-                != store.configuration().configuration_id()
-            || wow_core::canonical_json_bytes(&manifest)
-                .map_err(|_| SearchError::OwnerEvidenceInvalid)?
-                != bytes
-            || format!("search-shard:sha256:{}", hex(&Sha256::digest(bytes))) != logical_id
-            || manifest.documents.len() != physical.reader().document_count() as usize
-            || !manifest
-                .documents
-                .windows(2)
-                .all(|p| p[0].entity_key < p[1].entity_key)
-            || !manifest
-                .source_origins
-                .windows(2)
-                .all(|p| p[0].source_id < p[1].source_id)
-        {
-            return Err(SearchError::OwnerEvidenceInvalid);
-        }
-        if profile.include_compatibility_aliases {
-            let catalog = wow_reference::compatibility_aliases::read(
-                reference,
-                &manifest.binding.profile,
-                stop,
-            )
-            .map_err(native_error)?
-            .ok_or(SearchError::OwnerEvidenceInvalid)?;
-            if manifest.compatibility_aliases.as_ref()
-                != Some(&compatibility_aliases::AliasInventory::capture(
-                    &catalog,
-                    profile.bounds,
-                    stop,
-                )?)
-            {
-                return Err(SearchError::OwnerEvidenceInvalid);
-            }
-        }
-        let partition = reference
-            .partitions()
-            .iter()
-            .find(|p| p.id() == NATIVE_API_PARTITION)
-            .ok_or(SearchError::OwnerEvidenceInvalid)?;
-        let mut records = partition
-            .records()
-            .iter()
-            .map(|record| (record.key().to_owned(), record))
-            .collect::<Vec<_>>();
-        if profile.native_documents.is_some() {
-            let events = reference
-                .partitions()
-                .iter()
-                .find(|part| part.id() == NATIVE_EVENT_PARTITION)
-                .ok_or(SearchError::OwnerEvidenceInvalid)?;
-            if events.coverage() != CoverageStatus::Partial {
-                return Err(SearchError::OwnerEvidenceInvalid);
-            }
-            records.extend(
-                events
-                    .records()
-                    .iter()
-                    .map(|record| (record.key().to_owned(), record)),
-            );
-        }
-        if profile.native_documents == Some(NativeReferenceDocuments::SourceDeclarationsV1) {
-            let declarations = reference
-                .partitions()
-                .iter()
-                .find(|part| part.id() == NATIVE_DECLARATION_PARTITION)
-                .ok_or(SearchError::OwnerEvidenceInvalid)?;
-            if declarations.coverage() != CoverageStatus::Partial {
-                return Err(SearchError::OwnerEvidenceInvalid);
-            }
-            records.extend(
-                declarations
-                    .records()
-                    .iter()
-                    .map(|record| (record.key().to_owned(), record)),
-            );
-        }
-        if profile.include_restrictions {
-            let partition = reference
-                .partitions()
-                .iter()
-                .find(|part| part.id() == wow_reference::native_view::NATIVE_RESTRICTION_PARTITION)
-                .filter(|part| part.coverage() == CoverageStatus::Partial)
-                .ok_or(SearchError::OwnerEvidenceInvalid)?;
-            for record in partition.records() {
-                check(stop)?;
-                records.push((
-                    wow_reference::native_view::restriction_entity_id(
-                        reference.generation_id(),
-                        record.key(),
-                    )
-                    .map_err(native_error)?,
-                    record,
-                ));
-            }
-        }
-        records.sort_by(|a, b| a.0.cmp(&b.0));
-        if records.len() != manifest.documents.len() {
-            return Err(SearchError::OwnerEvidenceInvalid);
-        }
-        manifest
-            .binding
-            .profile
-            .validate()
-            .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
-        if manifest.privacy_scope != "local_metadata_only"
-            || manifest.license_state != "not_evaluated"
-            || manifest.conflicts != reference.conflicts()
-            || manifest.partitions.len() != reference.partitions().len()
-            || manifest
-                .partitions
-                .iter()
-                .zip(reference.partitions())
-                .any(|(a, b)| {
-                    a.id != b.id()
-                        || a.coverage != b.coverage()
-                        || a.record_count != b.records().len() as u64
-                })
-        {
-            return Err(SearchError::OwnerEvidenceInvalid);
-        }
-        let subject_index = if profile.include_restrictions {
-            Some(restrictions::SubjectIndex::new(reference, stop)?)
-        } else {
-            None
-        };
-        for (doc, (entity_id, record)) in manifest.documents.iter().zip(records) {
-            check(stop)?;
-            let origin_id = if doc.declaration.is_some() {
-                wow_reference::native_view::declaration_origin_id
-            } else if doc.event.is_some() {
-                wow_reference::native_view::event_origin_id
-            } else {
-                wow_reference::native_view::callable_origin_id
-            };
-            let row = physical
-                .reader()
-                .exact_id(&doc.entity_key)?
-                .ok_or(SearchError::OwnerEvidenceInvalid)?;
-            if doc.entity_key != entity_id
-                || record.kind()
-                    != if doc.restriction.is_some() {
-                        ReferenceRecordKind::Restriction
-                    } else if let Some(declaration) = &doc.declaration {
-                        declaration.kind.record_kind()
-                    } else if doc.event.is_some() {
-                        ReferenceRecordKind::Event
-                    } else {
-                        ReferenceRecordKind::Api
-                    }
-                || (doc.event.is_some() && profile.native_documents.is_none())
-                || !declarations::valid_document(doc, profile.native_documents)
-                || (doc.restriction.is_some() && !profile.include_restrictions)
-                || !restrictions::valid(doc, record, reference, subject_index.as_ref())?
-                || doc.event.as_ref().is_some_and(|event| {
-                    event.literal_name != doc.canonical_short_name
-                        || !doc.arguments.is_empty()
-                        || !doc.returns.is_empty()
-                        || doc.namespace.is_some()
-                })
-                || doc.owner_record_digest
-                    != record
-                        .digest()
-                        .map_err(|_| SearchError::OwnerEvidenceInvalid)?
-                || record.source_ids().len() != 1
-                || record.source_ids()[0].as_ref() != doc.source.source_id
-                || row.owner_metadata_label() != documentation::row_text(doc, profile.bounds)?
-                || doc.documentation.is_some() != profile.include_documentation
-                || doc.type_authority
-                    != if doc.restriction.is_some() {
-                        "original_source_restriction_facets_only"
-                    } else {
-                        "original_source_type_identities_unresolved"
-                    }
-                || doc.canonical_qualified_name
-                    != doc.namespace.as_ref().map_or_else(
-                        || doc.canonical_short_name.clone(),
-                        |n| format!("{n}.{}", doc.canonical_short_name),
-                    )
-                || manifest
-                    .source_origins
-                    .binary_search_by(|source| source.source_id.cmp(&doc.source.source_id))
-                    .ok()
-                    .is_none_or(|index| manifest.source_origins[index] != doc.source)
-                || (if let Some(restriction) = &doc.restriction {
-                    wow_reference::native_view::restriction_origin_id(
-                        &manifest.native_projection_profile,
-                        restriction.kind,
-                        &manifest.binding.source_revision,
-                        &doc.source.path,
-                        &doc.source.sha256,
-                        wow_reference::native::Span {
-                            start: doc.source.byte_range[0],
-                            end: doc.source.byte_range[1],
-                        },
-                    )
-                } else {
-                    origin_id(
-                        &manifest.native_projection_profile,
-                        &manifest.binding.source_revision,
-                        &doc.source.path,
-                        &doc.source.sha256,
-                        wow_reference::native::Span {
-                            start: doc.source.byte_range[0],
-                            end: doc.source.byte_range[1],
-                        },
-                    )
-                })
-                .map_err(native_error)?
-                    != doc.source.source_id
-            {
-                return Err(SearchError::OwnerEvidenceInvalid);
-            }
-        }
-        Ok(manifest)
-    })();
-    match result {
-        Ok(manifest) => Ok(ReferenceSearchShard {
-            manifest,
-            physical,
-            bounds: profile.bounds,
-        }),
-        Err(error) => Err(release_after_owner_error(physical, store, error)),
-    }
+    )
+    .map_err(validation::ValidationFailure::into_search_error)
 }
 
 fn native_error(error: wow_reference::native::NativeError) -> SearchError {

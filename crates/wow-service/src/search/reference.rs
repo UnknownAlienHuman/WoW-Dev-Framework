@@ -9,6 +9,7 @@ use wow_search::reference::{
     open_reference_callable_shard, prepare_reference_callable_shard,
 };
 use wow_store::ObjectId;
+mod inspection;
 pub(super) mod pagination;
 pub use pagination::{ReferenceContinueRequest, ReferenceResultReleaseRequest};
 use wow_search::reference::ReferencePagePolicy;
@@ -201,6 +202,15 @@ impl ReferenceShardRequest {
         }
         let handle: Handle = serde_json::from_slice(handle_json).map_err(|_| invalid())?;
         handle_profile(&handle)?;
+        RequestDigest::new(handle.reference_view_digest.clone()).map_err(|_| invalid())?;
+        RequestDigest::new(
+            handle
+                .logical_shard_id
+                .strip_prefix("search-shard:")
+                .ok_or_else(invalid)?
+                .to_owned(),
+        )
+        .map_err(|_| invalid())?;
         handle
             .reference_generation
             .parse::<wow_core::ReferenceGenerationId>()
@@ -620,6 +630,14 @@ fn unavailable() -> ServiceError {
         ServiceErrorCode::ExactGenerationUnavailable,
         "exact native Reference Search roots or owner object are unavailable",
     )
+}
+
+pub(super) fn inspect(
+    request: &ReferenceShardRequest,
+    validate: bool,
+    stop: &AtomicBool,
+) -> ServiceResult<Box<[u8]>> {
+    inspection::execute(request, validate, stop)
 }
 
 pub(super) fn acquire_result(
