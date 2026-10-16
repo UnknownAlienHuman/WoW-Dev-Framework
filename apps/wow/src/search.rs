@@ -40,6 +40,7 @@ const DURABLE_FILE_SET_HELP: &str = "Durable index build/retire accept either --
 const FILE_SET_HELP: &str = "For one-shot build-query, optional --file-ids <JSON-array-of-exact-ProjectFileIds> selects a finite set. --file-id must belong to it. Empty/duplicate/absent/over-cap selections refuse; --max-documents caps the raw set. No durable file-set handle is returned.\n";
 const OBSERVATIONS_HELP: &str = "Source observation index build/retire use --source-observations instead of file/Graph selection. wow search observations --generation <EXACT> --search-shard-id <EXACT> --object-id <EXACT> --profile-digest <EXACT> --query-json <CLOSED-JSON> uses original Search/Store/output bounds, --search-store, --operation-id, --lease-expires-after and --allow-local-metadata-only. Recorded local names/direct member use sites retain source evidence; they confer no canonical name, alias, runtime target or absence authority.\n";
 const DECLARATIONS_HELP: &str = "Optional --source-declarations selects the named-function mode on source index build/retire and search observations, with its exact component/profile and wow-search/source-observation-declaration-query/1 schema. Qualified/short names and recorded dot/colon receiver paths come from native declaration tokens; assignments/aliases/anonymous closures are not inferred. See SEARCH_SOURCE_OBSERVATIONS.md.\n";
+const OBSERVED_FEDERATION_HELP: &str = "Observed source slots use wow-service/exact-observed-source-reference-input/1 or exact-observed-source-platform-reference-input/1, matching observed-source query schemas and explicit source_component=source_observations|source_declarations in each source slot. Same federated/page/continue/release commands and four/five retained roots; initial native source binding required. See SEARCH_FEDERATION.md.\n";
 const MAX_ARGUMENT_BYTES: usize = 128 * 1024;
 const MAX_VALUE_BYTES: usize = 32 * 1024;
 
@@ -139,6 +140,7 @@ fn run_with_io<W: Write, E: Write>(
             .and_then(|()| stdout.write_all(OBSERVATIONS_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(DECLARATIONS_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(FEDERATION_HELP.as_bytes()))
+            .and_then(|()| stdout.write_all(OBSERVED_FEDERATION_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(BLIZZARD_FEDERATION_HELP.as_bytes()))
             .and_then(|()| stdout.flush())
         {

@@ -254,7 +254,14 @@ pub fn page_retained_federation(
     stop: &AtomicBool,
 ) -> SearchResult<FederationPage> {
     page_retained_impl(
-        primary, None, reference, bytes, request, policy, cursor, stop,
+        RetainedSourceShard::Entities(primary),
+        None,
+        reference,
+        bytes,
+        request,
+        policy,
+        cursor,
+        stop,
     )
 }
 #[allow(clippy::too_many_arguments)]
@@ -269,8 +276,8 @@ pub fn page_retained_federation_with_blizzard(
     stop: &AtomicBool,
 ) -> SearchResult<FederationPage> {
     page_retained_impl(
-        primary,
-        Some(blizzard),
+        RetainedSourceShard::Entities(primary),
+        Some(RetainedSourceShard::Entities(blizzard)),
         reference,
         bytes,
         request,
@@ -279,10 +286,26 @@ pub fn page_retained_federation_with_blizzard(
         stop,
     )
 }
+/// Validate a captured result against finite exact source shard kinds.
+#[allow(clippy::too_many_arguments)]
+pub fn page_retained_source_federation(
+    primary: RetainedSourceShard<'_>,
+    blizzard: Option<RetainedSourceShard<'_>>,
+    reference: &crate::reference::ReferenceSearchShard,
+    bytes: &[u8],
+    request: &FederationQueryRequest,
+    policy: &FederationPagePolicy,
+    cursor: Option<&FederationPageCursor>,
+    stop: &AtomicBool,
+) -> SearchResult<FederationPage> {
+    page_retained_impl(
+        primary, blizzard, reference, bytes, request, policy, cursor, stop,
+    )
+}
 #[allow(clippy::too_many_arguments)]
 fn page_retained_impl(
-    primary: &crate::entities::EntitySearchShard,
-    blizzard: Option<&crate::entities::EntitySearchShard>,
+    primary: RetainedSourceShard<'_>,
+    blizzard: Option<RetainedSourceShard<'_>>,
     reference: &crate::reference::ReferenceSearchShard,
     bytes: &[u8],
     request: &FederationQueryRequest,
@@ -292,7 +315,10 @@ fn page_retained_impl(
 ) -> SearchResult<FederationPage> {
     check(stop)?;
     request.validate()?;
-    if request.requires_blizzard() != blizzard.is_some() {
+    if request.requires_blizzard() != blizzard.is_some()
+        || primary.uses_observations() != request.uses_observations()
+        || blizzard.is_some_and(|b| b.uses_observations() != request.uses_observations())
+    {
         return Err(SearchError::OwnerEvidenceInvalid);
     }
     if bytes.len() as u64 > request.max_result_bytes.get() {
@@ -309,7 +335,7 @@ fn page_retained_impl(
             != digest("federated-search-result-set:", payload)?.as_ref()
         || text_field(payload, "schema")? != "wow-search/federated-result-set/1"
         || text_field(payload, "federation_profile")? != request.profile()
-        || text_field(payload, "ranking_profile")? != RANK_PROFILE
+        || text_field(payload, "ranking_profile")? != request.ranking_profile()
         || field(payload, "request")?
             != &serde_json::to_value(request).map_err(|_| SearchError::OwnerEvidenceInvalid)?
         || text_field(payload, "privacy_scope")? != "local_metadata_only"
@@ -388,7 +414,9 @@ fn page_retained_impl(
         .filter(|rows| rows.len() == if request.requires_blizzard() { 3 } else { 2 })
         .ok_or(SearchError::OwnerEvidenceInvalid)?;
     let kind = text_field(&bindings[0], "project_kind")?;
-    if !matches!(kind, "repository" | "fixture") {
+    if !matches!(kind, "repository" | "fixture")
+        || request.uses_observations() && text_field(p, "project_kind")? != kind
+    {
         return Err(SearchError::OwnerEvidenceInvalid);
     }
     let mut expected = vec![
@@ -398,6 +426,13 @@ fn page_retained_impl(
         let binding = &bindings[1];
         let profile = field(binding, "platform_profile")?;
         let package = field(binding, "platform_binding")?;
+        if request.uses_observations()
+            && (text_field(b, "project_kind")? != "blizzard_ui_platform_source"
+                || field(b, "platform_source_profile")? != profile
+                || field(b, "platform_package_binding")? != package)
+        {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
         let target = field(field(profile, "request")?, "target")?;
         if text_field(profile, "schema")? != "wow-project/platform-source-profile/1"
             || text_field(package, "schema")? != "wow-project/platform-package-binding/1"
@@ -454,7 +489,11 @@ fn page_retained_impl(
         digest(
             "federated-search-query:",
             &(
-                PROFILE,
+                if request.uses_observations() {
+                    request.profile()
+                } else {
+                    PROFILE
+                },
                 &universe,
                 text_field(p, "result_query_id")?,
                 text_field(r, "normalized_query_id")?,
@@ -525,9 +564,7 @@ fn page_retained_impl(
             .and_then(|value| u32::try_from(value).ok())
             .filter(|band| *band <= 10)
             .ok_or(SearchError::OwnerEvidenceInvalid)?;
-        let capped = class != FederationUniverse::ReferencePlatformContract
-            && text_field(original, "match_class")? == "exact_recorded_owner_key";
-        let effective = if capped { band.max(4) } else { band };
+        let (effective, cap) = effective_band(request, class, original, band)?;
         let ordinal = number(candidate, "component_candidate_ordinal")?;
         if ordinal == 0 || ordinal > count {
             return Err(SearchError::OwnerEvidenceInvalid);
@@ -560,12 +597,7 @@ fn page_retained_impl(
                 != text_field(capture, "source_result_set_id")?
             || number(candidate, "source_authority_band")? != u64::from(band)
             || number(candidate, "effective_authority_band")? != u64::from(effective)
-            || text_field(candidate, "authority_cap")?
-                != if capped {
-                    "recorded_owner_key_is_not_canonical_name"
-                } else {
-                    "original_component_band"
-                }
+            || text_field(candidate, "authority_cap")? != cap
             || number(candidate, "reciprocal_rank_contribution")? != u64::from(rr)
             || field(candidate, "rank_tuple")? != &serde_json::json!(rank)
             || text_field(candidate, "stable_tie_key")? != stable

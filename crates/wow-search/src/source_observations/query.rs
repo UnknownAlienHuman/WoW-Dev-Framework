@@ -5,6 +5,13 @@ use std::collections::BTreeSet;
 const QUERY_PROFILE: &str = "wow-search/recorded-source-fact-name-member-prefix-text-similarity/1";
 const DECLARATION_QUERY_PROFILE: &str =
     "wow-search/recorded-source-declaration-name-member-prefix-text-similarity/1";
+pub(super) const fn profile(declarations: bool) -> &'static str {
+    if declarations {
+        DECLARATION_QUERY_PROFILE
+    } else {
+        QUERY_PROFILE
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "class", rename_all = "snake_case", deny_unknown_fields)]
@@ -44,6 +51,55 @@ pub struct ObservationQueryRequest {
     max_result_bytes: NonZeroU64,
 }
 impl ObservationQueryRequest {
+    pub(super) fn validate_capture_summary(
+        &self,
+        summary: &serde_json::Value,
+        document_count: usize,
+        declarations: bool,
+    ) -> SearchResult<()> {
+        let number = |key| {
+            summary
+                .get(key)
+                .and_then(serde_json::Value::as_u64)
+                .ok_or(SearchError::OwnerEvidenceInvalid)
+        };
+        let scanned = number("scanned_documents")?;
+        let matched = number("matched_documents")?;
+        if (self.schema == "wow-search/source-observation-declaration-query/1") != declarations
+            || scanned > u64::from(self.max_scanned_documents.get())
+            || scanned > document_count as u64
+            || matched > scanned
+            || number("unscanned_documents")? != document_count as u64 - scanned
+            || number("candidate_omissions")?
+                != matched.saturating_sub(u64::from(self.max_candidates.get()))
+            || number("excluded_long_identifiers")? > scanned.saturating_mul(2)
+            || !matches!(
+                summary.get("status").and_then(serde_json::Value::as_str),
+                Some("candidate_only" | "truncated" | "no_candidates_under_executed_lanes")
+            )
+        {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
+        match self.query {
+            Query::IdentifierSimilarity {
+                max_prefiltered_documents,
+                max_distance_cells,
+                ..
+            } => {
+                if number("prefiltered_documents")? > u64::from(max_prefiltered_documents.get())
+                    || number("charged_distance_cells")? > max_distance_cells.get()
+                {
+                    return Err(SearchError::OwnerEvidenceInvalid);
+                }
+            }
+            _ => {
+                if number("prefiltered_documents")? != 0 || number("charged_distance_cells")? != 0 {
+                    return Err(SearchError::OwnerEvidenceInvalid);
+                }
+            }
+        }
+        Ok(())
+    }
     pub fn from_json_slice(bytes: &[u8], stop: &AtomicBool) -> SearchResult<Self> {
         check(stop)?;
         if bytes.len() > 65536 {

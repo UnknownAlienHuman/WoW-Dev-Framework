@@ -72,3 +72,25 @@ New page/session/cursor consumers have separately named wire identities; physica
 Store and admitted standalone/no-page profiles remain unchanged. These selected
 continuations do not qualify a real vendor corpus, additional document kinds,
 aliases, native context selection or full E4/TierX/runtime/launch.
+## Observed-source captures
+
+Observed-name/declaration federation uses the same page policy, cumulative ledger,
+continuation and release commands. Its session has the explicit
+`wow-service/observed-source-federated-search-session/1` interpretation and a closed
+source component in each retained binding. The original untagged Graph binding
+representation stays byte-identical; strict fields and required component tags
+make the two retained shapes disjoint, and session/query family checks reject
+mixed forms before opening any owner.
+
+Continuation opens the exact retained Search source shard(s) and Reference roots.
+It validates their captured summaries, immutable original documents/candidate IDs,
+query/universe/profile/rank data and cumulative budgets. It neither reruns native
+source/Graph/current acquisition nor executes the original FTS/similarity query.
+Captured data cannot be deserialized into a native Project owner. Both original
+SourceStores and raw inputs may be offline after initial capture.
+
+Every reopened resource closes in reverse order, including late Reference
+open/validation/release failures. Root CAS, independent sessions, exact response
+replay and retire/GC behavior are shared with the existing implementation. No
+public success precedes mandatory closure. Original five-root Graph sessions
+remain readable and produce their exact historical pages.

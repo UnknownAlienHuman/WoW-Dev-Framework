@@ -90,3 +90,43 @@ shards, result and ReferenceView for exact continuation/release without Graph
 recomputation. Additional source universes, full E4 corpus/fault/platform
 qualification and launch acceptance remain open in #169. Existing standalone
 queries/pages/profiles and physical Store schemas are unchanged.
+## Observed source names and declarations
+
+The same `search federated` command also accepts
+`wow-service/exact-observed-source-reference-input/1` or, with required Blizzard
+input, `wow-service/exact-observed-source-platform-reference-input/1`.
+Their query schemas are respectively `wow-search/exact-observed-source-reference-query/1`
+and `wow-search/exact-observed-source-platform-reference-query/1`. The existing
+explicit universe order, whole component/candidate/result budgets and
+excluded/required Blizzard choice apply.
+
+Each source slot retains the original exact source epoch/generation/build/hold,
+shard/object/profile/bounds and query fields. Add the required closed
+`source_component`: `source_observations` or `source_declarations`, matching its
+original build selection and query schema. The legacy Graph input schemas accept
+neither field. Missing/null/unknown/mismatched components fail; no hidden reader
+fallback or implicit build is performed. Reference input is unchanged.
+
+Initial observed-source federation acquires the genuine exact Project owner and
+source hold for every source slot. Search reproduces and byte-compares the whole
+native document manifest before running the selected query, then carries the
+actual Project kind and original platform source/profile/package proof privately.
+Ordinary source cannot fill the Blizzard slot. Serialized labels/metadata cannot
+construct this native binding. Both/all three full Reference profiles and
+generations must match. Initial binding requires the original SourceStores;
+captured continuation below does not.
+
+Observed fact IDs, names, receiver syntax, source handles, coverage, omissions and
+inner match/rank data remain separate per universe. The new fusion profile maps
+source identity to band 0, recorded source name/member relation to band 4, prefix
+to 5, literal text to 7 and similarity to 8. Class/band mismatches fail. Recorded
+syntax does not outrank Reference canonical names or become a canonical API,
+alias, runtime target or availability claim. Distance zero remains approximate.
+Equal names and duplicate scopes never collapse; reciprocal rank uses integer
+component ordinals, with no cross-shard raw FTS score comparison.
+
+Use the existing `--page-json`, `search federated continue` and
+`search federated results release` routes for captured pages. They retain the
+result, original source shard(s), Reference shard and ReferenceView: four roots
+without Blizzard, five with it. Original Graph request/result/session bytes remain
+unchanged. These operations add no frontend registration or context selection.

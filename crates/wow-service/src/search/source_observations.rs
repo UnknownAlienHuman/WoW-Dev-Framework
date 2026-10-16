@@ -1,9 +1,36 @@
 //! Exact source-observation Search orchestration; no source acquisition on query.
 use super::*;
+use serde::Deserialize;
 use wow_search::source_observations::{
     ObservationQueryRequest, ObservationSearchProfile, open_source_observation_shard,
 };
 use wow_store::ObjectId;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(in crate::search) enum ObservationComponent {
+    SourceObservations,
+    SourceDeclarations,
+}
+impl ObservationComponent {
+    pub(in crate::search) const fn declarations(self) -> bool {
+        matches!(self, Self::SourceDeclarations)
+    }
+}
+pub(in crate::search) struct BoundSourceRequest {
+    pub(in crate::search) query: SourceObservationRetrievalRequest,
+    pub(in crate::search) hold: SearchSourceHoldBinding,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::search) struct ObservationRetainedBinding {
+    component: ObservationComponent,
+    generation: StoreGenerationId,
+    logical_id: Box<str>,
+    pub(in crate::search) object_id: ObjectId,
+    bounds: SearchBounds,
+    profile_digest: Box<str>,
+}
 
 impl SearchIndexBuildRequest {
     pub fn with_function_declarations(mut self) -> ServiceResult<Self> {
@@ -295,6 +322,169 @@ pub(super) fn execute(
         request.max_output_bytes.get(),
     )
     .map_err(|error| operation_failure(error, &request.operation_id))
+}
+pub(in crate::search) fn retained_binding(
+    request: &BoundSourceRequest,
+) -> ObservationRetainedBinding {
+    let q = &request.query;
+    ObservationRetainedBinding {
+        component: if q.profile.includes_function_declarations() {
+            ObservationComponent::SourceDeclarations
+        } else {
+            ObservationComponent::SourceObservations
+        },
+        generation: q.generation.clone(),
+        logical_id: q.logical_id.clone(),
+        object_id: q.object_id.clone(),
+        bounds: q.profile.bounds(),
+        profile_digest: q.profile.digest().into(),
+    }
+}
+pub(in crate::search) fn federation_input(request: &BoundSourceRequest) -> serde_json::Value {
+    let q = &request.query;
+    let h = &request.hold;
+    serde_json::json!({"component":if q.profile.includes_function_declarations(){"source_declarations"}else{"source_observations"},
+        "generation":q.generation,"logical_id":q.logical_id,"object_id":q.object_id,"profile_digest":q.profile.digest(),"query":q.query,
+        "build_operation_id":h.build_operation_id.as_str(),"source_epoch":h.source_store_epoch_id,"hold_id":h.retention_root_id,"hold_digest":h.retention_root_digest})
+}
+pub(in crate::search) fn fence_result(
+    request: &BoundSourceRequest,
+    batch: &mut WriteBatch,
+) -> ServiceResult<()> {
+    let q = &request.query;
+    let (catalog, path) = search_catalog_key(&q.logical_id)?;
+    batch
+        .add_catalog_mutation(CatalogMutation::set(
+            catalog,
+            path,
+            CatalogExpectation::Exact(q.object_id.clone()),
+            q.object_id.clone(),
+        ))
+        .map_err(map_store_error)
+}
+pub(in crate::search) fn acquire_bound(
+    request: &BoundSourceRequest,
+    store: &mut Store,
+    digest: &str,
+    purpose: &str,
+    stop: &AtomicBool,
+) -> ServiceResult<wow_search::source_observations::BoundObservationQueryResult> {
+    let q = &request.query;
+    let binding = &request.hold;
+    let (catalog, path) = search_catalog_key(&q.logical_id)?;
+    if store
+        .catalog_entry(&catalog, &path)
+        .map_err(map_store_error)?
+        .is_none_or(|e| e.object_id() != &q.object_id)
+    {
+        return Err(unavailable());
+    }
+    let source = crate::live_project::LiveProjectStore::open_retained_owner_store(
+        &binding.project_store_root,
+    )?;
+    let result = (|| {
+        let selected = q.profile.includes_function_declarations();
+        let docs = Documents::SourceObservations(selected);
+        let profile = DurableProfile::SourceObservations(q.profile.clone());
+        let hold = validate_source_hold_binding(
+            &source,
+            store.store_instance_id().map_err(map_store_error)?,
+            binding,
+            &q.generation,
+            &docs,
+            &profile,
+            q.store_limits,
+        )?;
+        if !source_hold_present(&source, &hold, stop)? {
+            return Err(unavailable());
+        }
+        let read = source
+            .read(&ReadSelector::Exact(q.generation.clone()), stop)
+            .map_err(map_store_error)?;
+        let result = (|| {
+            let pair = wow_project::replay::publication::AcquiredProjectPair::read(&read, stop)
+                .map_err(map_project_error)?;
+            let lease = SearchStoreLeaseRequest::new(
+                lease_id_for(purpose, digest)?,
+                "wow-service-search",
+                LogicalEpoch::new(q.lease_expires_after),
+            )
+            .map_err(map_store_error)?;
+            let shard = open_source_observation_shard(
+                store,
+                &q.logical_id,
+                &q.object_id,
+                &q.generation,
+                &q.profile,
+                q.permission,
+                lease,
+                stop,
+            )
+            .map_err(map_search_error)?;
+            let query = shard
+                .retrieve_bound(&read, &pair, &q.query, stop)
+                .map_err(map_search_error);
+            shard.release(store).map_err(map_search_error)?;
+            query
+        })();
+        if read.close().is_err() {
+            return Err(source_hold_outcome_unknown(&hold));
+        }
+        if !source_hold_present(&source, &hold, stop)? {
+            return Err(unavailable());
+        }
+        result
+    })();
+    if source.close().is_err() {
+        return Err(source_hold_binding_outcome_unknown(binding));
+    }
+    result
+}
+#[allow(clippy::too_many_arguments)]
+pub(in crate::search) fn open_retained(
+    binding: &ObservationRetainedBinding,
+    store: &mut Store,
+    digest: &str,
+    purpose: &str,
+    expires: u64,
+    permission: LocalMetadataPermission,
+    stop: &AtomicBool,
+) -> ServiceResult<wow_search::source_observations::ObservationSearchShard> {
+    let profile = if binding.component.declarations() {
+        ObservationSearchProfile::with_function_declarations(binding.bounds)
+    } else {
+        ObservationSearchProfile::new(binding.bounds)
+    }
+    .map_err(map_search_error)?;
+    if profile.digest() != binding.profile_digest.as_ref() {
+        return Err(failure(
+            ServiceErrorCode::IdentityMismatch,
+            "retained source-observation profile differs",
+        ));
+    }
+    let lease = SearchStoreLeaseRequest::new(
+        lease_id_for(purpose, digest)?,
+        "wow-service-search",
+        LogicalEpoch::new(expires),
+    )
+    .map_err(map_store_error)?;
+    open_source_observation_shard(
+        store,
+        &binding.logical_id,
+        &binding.object_id,
+        &binding.generation,
+        &profile,
+        permission,
+        lease,
+        stop,
+    )
+    .map_err(map_search_error)
+}
+fn unavailable() -> ServiceError {
+    failure(
+        ServiceErrorCode::ExactGenerationUnavailable,
+        "exact observed source shard/owner hold unavailable",
+    )
 }
 fn invalid() -> ServiceError {
     failure(

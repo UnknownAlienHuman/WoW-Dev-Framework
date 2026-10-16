@@ -2,8 +2,11 @@
 use super::*;
 use serde::Deserialize;
 use wow_search::federation::{
-    FederationPagePolicy, FederationQueryRequest, federate, federate_with_blizzard,
+    FederationPagePolicy, FederationQueryRequest, federate, federate_observations,
+    federate_with_blizzard,
 };
+mod source_slot;
+use source_slot::SourceRequest;
 pub(in crate::search) mod pagination;
 pub use pagination::{FederationContinueRequest, FederationResultReleaseRequest};
 #[derive(Deserialize)]
@@ -19,6 +22,8 @@ struct Input {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Primary {
+    #[serde(default, deserialize_with = "source_slot::present_component")]
+    source_component: Option<super::source_observations::ObservationComponent>,
     project_store_root: PathBuf,
     generation: String,
     logical_shard_id: String,
@@ -40,8 +45,8 @@ struct Reference {
 pub struct FederationRequest {
     operation_id: OperationId,
     search_store: PathBuf,
-    primary: EntityRetrievalRequest,
-    blizzard: Option<EntityRetrievalRequest>,
+    primary: SourceRequest,
+    blizzard: Option<SourceRequest>,
     reference: ReferenceShardRequest,
     query: FederationQueryRequest,
     store_limits: SearchStoreLimits,
@@ -71,17 +76,26 @@ impl FederationRequest {
         let platform = query.requires_blizzard();
         if input.schema
             != if platform {
-                "wow-service/exact-platform-search-federation-input/1"
+                if query.uses_observations() {
+                    "wow-service/exact-observed-source-platform-reference-input/1"
+                } else {
+                    "wow-service/exact-platform-search-federation-input/1"
+                }
             } else {
-                "wow-service/exact-search-federation-input/1"
+                if query.uses_observations() {
+                    "wow-service/exact-observed-source-reference-input/1"
+                } else {
+                    "wow-service/exact-search-federation-input/1"
+                }
             }
             || platform != input.blizzard.is_some()
         {
             return Err(invalid());
         }
         let p = input.primary;
-        let primary = source_request(
+        let primary = source_slot::from_input(
             p,
+            query.uses_observations(),
             &operation_id,
             &search_store,
             store_limits,
@@ -93,8 +107,9 @@ impl FederationRequest {
         let blizzard = input
             .blizzard
             .map(|source| {
-                source_request(
+                source_slot::from_input(
                     source,
+                    query.uses_observations(),
                     &operation_id,
                     &search_store,
                     store_limits,
@@ -181,7 +196,7 @@ fn encode(value: &serde_json::Value) -> ServiceResult<Vec<u8>> {
 pub(super) fn execute(request: &FederationRequest, stop: &AtomicBool) -> ServiceResult<Box<[u8]>> {
     check_cancelled(stop)?;
     let identity = (
-        entity::federation_input(&request.primary),
+        request.primary.input(),
         reference::federation_input(&request.reference),
         &request.query,
         request.store_limits,
@@ -190,29 +205,45 @@ pub(super) fn execute(request: &FederationRequest, stop: &AtomicBool) -> Service
         "local_metadata_only",
     );
     let (operation_id, digest, public_digest) = if let Some(blizzard) = &request.blizzard {
-        let extended = (&identity, entity::federation_input(blizzard));
+        let extended = (&identity, blizzard.input());
         if let Some(policy) = &request.page_policy {
             durable_identity(
-                "wow-service/exact-platform-search-federation-page-request/1",
+                if request.query.uses_observations() {
+                    "wow-service/exact-observed-source-platform-search-federation-page-request/1"
+                } else {
+                    "wow-service/exact-platform-search-federation-page-request/1"
+                },
                 &request.operation_id,
                 &(&extended, policy),
             )?
         } else {
             durable_identity(
-                "wow-service/exact-platform-search-federation-request/1",
+                if request.query.uses_observations() {
+                    "wow-service/exact-observed-source-platform-search-federation-request/1"
+                } else {
+                    "wow-service/exact-platform-search-federation-request/1"
+                },
                 &request.operation_id,
                 &extended,
             )?
         }
     } else if let Some(policy) = &request.page_policy {
         durable_identity(
-            "wow-service/exact-search-federation-page-request/1",
+            if request.query.uses_observations() {
+                "wow-service/exact-observed-source-search-federation-page-request/1"
+            } else {
+                "wow-service/exact-search-federation-page-request/1"
+            },
             &request.operation_id,
             &(&identity, policy),
         )?
     } else {
         durable_identity(
-            "wow-service/exact-search-federation-request/1",
+            if request.query.uses_observations() {
+                "wow-service/exact-observed-source-search-federation-request/1"
+            } else {
+                "wow-service/exact-search-federation-request/1"
+            },
             &request.operation_id,
             &identity,
         )?
@@ -229,16 +260,28 @@ pub(super) fn execute(request: &FederationRequest, stop: &AtomicBool) -> Service
     }
     let mut batch = WriteBatch::new();
     let outcome = (|| {
-        let primary = entity::acquire_result(&request.primary, &mut store, &public_digest, stop)?;
+        let primary = request.primary.acquire(
+            &mut store,
+            &public_digest,
+            if request.query.uses_observations() {
+                "observed-federation-primary"
+            } else {
+                "entity-search"
+            },
+            stop,
+        )?;
         let blizzard = request
             .blizzard
             .as_ref()
             .map(|source| {
-                entity::acquire_result_as(
-                    source,
+                source.acquire(
                     &mut store,
                     &public_digest,
-                    "blizzard-search",
+                    if request.query.uses_observations() {
+                        "observed-federation-blizzard"
+                    } else {
+                        "blizzard-search"
+                    },
                     stop,
                 )
             })
@@ -246,16 +289,30 @@ pub(super) fn execute(request: &FederationRequest, stop: &AtomicBool) -> Service
         let reference =
             reference::acquire_result(&request.reference, &mut store, &public_digest, stop)?
                 .ok_or_else(invalid)??;
-        let result = match &blizzard {
-            Some(blizzard) => {
-                federate_with_blizzard(&primary, blizzard, &reference, &request.query, stop)
+        let result = if request.query.uses_observations() {
+            federate_observations(
+                primary.observation()?,
+                blizzard.as_ref().map(|b| b.observation()).transpose()?,
+                &reference,
+                &request.query,
+                stop,
+            )
+        } else {
+            match &blizzard {
+                Some(blizzard) => federate_with_blizzard(
+                    primary.entity()?,
+                    blizzard.entity()?,
+                    &reference,
+                    &request.query,
+                    stop,
+                ),
+                None => federate(primary.entity()?, &reference, &request.query, stop),
             }
-            None => federate(&primary, &reference, &request.query, stop),
         }
         .map_err(map_search_error)?;
-        entity::fence_result(&request.primary, &mut batch)?;
+        request.primary.fence(&mut batch)?;
         if let Some(blizzard) = &request.blizzard {
-            entity::fence_result(blizzard, &mut batch)?;
+            blizzard.fence(&mut batch)?;
         }
         reference::fence_result(&request.reference, &mut batch)?;
         if let Some(policy) = &request.page_policy {

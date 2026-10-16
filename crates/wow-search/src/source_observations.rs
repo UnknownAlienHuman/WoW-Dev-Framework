@@ -3,7 +3,9 @@
 use super::*;
 use wow_core::{SourceHandle, SourceSpan};
 
+mod federation;
 mod query;
+pub use federation::BoundObservationQueryResult;
 pub use query::{ObservationQueryRequest, ObservationQueryResult};
 const PROFILE: &str = "wow-search/project-source-observation-profile/1";
 const MANIFEST: &str = "wow-search/project-source-observation-shard/1";
@@ -53,6 +55,9 @@ impl ObservationSearchProfile {
     }
     pub fn includes_function_declarations(&self) -> bool {
         self.declarations
+    }
+    pub fn bounds(&self) -> SearchBounds {
+        self.bounds
     }
 }
 
@@ -165,6 +170,31 @@ pub fn prepare_source_observation_shard(
         return Err(SearchError::OwnerEvidenceInvalid);
     }
     let pair = AcquiredProjectPair::read(read, stop)?;
+    let (manifest, bytes) = capture_manifest(read, &pair, profile, stop)?;
+    let logical_id = format!("search-shard:sha256:{}", hex(&Sha256::digest(&bytes)));
+    let rows = manifest
+        .documents
+        .iter()
+        .map(|d| SearchStoreDocument::new(d.fact_id(), d.recorded_name()))
+        .collect::<Vec<_>>();
+    let physical = SearchStore::prepare(
+        SearchStoreProfile::new(profile.digest.to_string(), profile.bounds.physical()?)?,
+        logical_id,
+        &rows,
+        &bytes,
+        object_limits,
+        stop,
+    )?;
+    Ok(PreparedObservationShard { manifest, physical })
+}
+
+fn capture_manifest(
+    read: &ReadSnapshot,
+    pair: &AcquiredProjectPair,
+    profile: &ObservationSearchProfile,
+    stop: &AtomicBool,
+) -> SearchResult<(ObservationManifest, Vec<u8>)> {
+    check(stop)?;
     let project = pair.project();
     let local = project.local_flow_report();
     let member = project.member_call_report();
@@ -235,7 +265,7 @@ pub fn prepare_source_observation_shard(
     let mut manifest = ObservationManifest {
         schema: MANIFEST.into(),
         profile_digest: profile.digest.clone(),
-        owner: owner_manifest_evidence(read, &pair, profile.bounds, stop)?,
+        owner: owner_manifest_evidence(read, pair, profile.bounds, stop)?,
         project_kind: value(&project.configuration().project_kind())?,
         platform_source_profile: project
             .configuration()
@@ -426,21 +456,7 @@ pub fn prepare_source_observation_shard(
     if bytes.len() as u64 != charged {
         return Err(SearchError::OwnerEvidenceInvalid);
     }
-    let logical_id = format!("search-shard:sha256:{}", hex(&Sha256::digest(&bytes)));
-    let rows = manifest
-        .documents
-        .iter()
-        .map(|d| SearchStoreDocument::new(d.fact_id(), d.recorded_name()))
-        .collect::<Vec<_>>();
-    let physical = SearchStore::prepare(
-        SearchStoreProfile::new(profile.digest.to_string(), profile.bounds.physical()?)?,
-        logical_id,
-        &rows,
-        &bytes,
-        object_limits,
-        stop,
-    )?;
-    Ok(PreparedObservationShard { manifest, physical })
+    Ok((manifest, bytes))
 }
 
 pub struct ObservationSearchShard {

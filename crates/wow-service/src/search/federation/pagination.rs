@@ -1,11 +1,12 @@
 //! Four-root captured federation sessions, authenticated by prior completion.
+use super::source_slot::SourceRetainedBinding;
 use super::*;
 use wow_search::federation::{
-    FederationPage, FederationPageCursor, FederationQueryResult, page_retained_federation,
-    page_retained_federation_with_blizzard,
+    FederationPage, FederationPageCursor, FederationQueryResult, page_retained_source_federation,
 };
 const SESSION_SCHEMA: &str = "wow-service/federated-search-session/1";
 const PLATFORM_SESSION_SCHEMA: &str = "wow-service/platform-federated-search-session/1";
+const OBSERVATION_SESSION_SCHEMA: &str = "wow-service/observed-source-federated-search-session/1";
 const SESSION_KIND: &str = "wow.search.federated-result-session";
 const ROOT_CATALOG: &str = "wow-search.federated-result-sessions";
 const TOKEN_SCHEMA: &str = "wow-service/federated-search-continuation/1";
@@ -24,13 +25,13 @@ struct Session {
     schema: String,
     original_request_digest: String,
     start_operation_id: String,
-    primary: entity::EntityRetainedBinding,
+    primary: SourceRetainedBinding,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "present_binding"
     )]
-    blizzard: Option<entity::EntityRetainedBinding>,
+    blizzard: Option<SourceRetainedBinding>,
     reference: reference::Handle,
     query: FederationQueryRequest,
     policy: FederationPagePolicy,
@@ -121,16 +122,11 @@ pub(super) fn start(
 ) -> ServiceResult<Box<[u8]>> {
     let page = result.page(policy, None, stop).map_err(map_search_error)?;
     let session = Session {
-        schema: if request.blizzard.is_some() {
-            PLATFORM_SESSION_SCHEMA
-        } else {
-            SESSION_SCHEMA
-        }
-        .into(),
+        schema: session_schema(&request.query, request.blizzard.is_some()).into(),
         original_request_digest: digest.into(),
         start_operation_id: request.operation_id.as_str().into(),
-        primary: entity::retained_binding(&request.primary),
-        blizzard: request.blizzard.as_ref().map(entity::retained_binding),
+        primary: request.primary.retained(),
+        blizzard: request.blizzard.as_ref().map(|source| source.retained()),
         reference: reference::retained_handle(&request.reference),
         query: request.query.clone(),
         policy: policy.clone(),
@@ -237,10 +233,10 @@ pub(in crate::search) fn continue_result(
                 ))
                 .map_err(map_store_error)?;
         }
-        let primary = entity::open_retained_shard(
-            &session.primary,
+        let primary = session.primary.open(
             &mut store,
             &public_digest,
+            "federated-page-primary",
             session.lease_expires_after,
             request.permission,
             stop,
@@ -252,8 +248,7 @@ pub(in crate::search) fn continue_result(
                 .blizzard
                 .as_ref()
                 .map(|binding| {
-                    entity::open_retained_shard_as(
-                        binding,
+                    binding.open(
                         &mut store,
                         &public_digest,
                         "federated-page-blizzard",
@@ -272,28 +267,16 @@ pub(in crate::search) fn continue_result(
                     request.permission,
                     stop,
                 )?;
-                let page = if let Some(blizzard) = &blizzard {
-                    page_retained_federation_with_blizzard(
-                        &primary,
-                        blizzard,
-                        &reference,
-                        &retained,
-                        &session.query,
-                        &session.policy,
-                        Some(&request.continuation.cursor),
-                        stop,
-                    )
-                } else {
-                    page_retained_federation(
-                        &primary,
-                        &reference,
-                        &retained,
-                        &session.query,
-                        &session.policy,
-                        Some(&request.continuation.cursor),
-                        stop,
-                    )
-                }
+                let page = page_retained_source_federation(
+                    primary.view(),
+                    blizzard.as_ref().map(|b| b.view()),
+                    &reference,
+                    &retained,
+                    &session.query,
+                    &session.policy,
+                    Some(&request.continuation.cursor),
+                    stop,
+                )
                 .map_err(map_search_error);
                 reference.release(&mut store).map_err(map_search_error)?;
                 page
@@ -393,12 +376,12 @@ fn roots(id: &wow_store::ObjectId, session: &Session) -> Vec<(&'static str, wow_
     let (reference, view) = reference::retained_objects(&session.reference);
     let mut roots = vec![
         ("result", id.clone()),
-        ("primary", session.primary.object_id.clone()),
+        ("primary", session.primary.object_id().clone()),
         ("reference", reference),
         ("reference_view", view),
     ];
     if let Some(blizzard) = &session.blizzard {
-        roots.push(("blizzard", blizzard.object_id.clone()));
+        roots.push(("blizzard", blizzard.object_id().clone()));
     }
     roots
 }
@@ -428,13 +411,13 @@ fn load_session(store: &Store, id: &wow_store::ObjectId) -> ServiceResult<Sessio
     }
     let session: Session =
         serde_json::from_slice(object.canonical_json()).map_err(|_| invalid())?;
-    if session.schema
-        != if session.blizzard.is_some() {
-            PLATFORM_SESSION_SCHEMA
-        } else {
-            SESSION_SCHEMA
-        }
+    if session.schema != session_schema(&session.query, session.blizzard.is_some())
         || session.query.requires_blizzard() != session.blizzard.is_some()
+        || session.primary.uses_observations() != session.query.uses_observations()
+        || session
+            .blizzard
+            .as_ref()
+            .is_some_and(|b| b.uses_observations() != session.query.uses_observations())
         || session.privacy_scope != "local_metadata_only"
     {
         return Err(mismatch());
@@ -538,8 +521,17 @@ fn preserve_named_closure_errors(
 }
 fn present_binding<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
-) -> Result<Option<entity::EntityRetainedBinding>, D::Error> {
-    entity::EntityRetainedBinding::deserialize(deserializer).map(Some)
+) -> Result<Option<SourceRetainedBinding>, D::Error> {
+    SourceRetainedBinding::deserialize(deserializer).map(Some)
+}
+fn session_schema(query: &FederationQueryRequest, blizzard: bool) -> &'static str {
+    if query.uses_observations() {
+        OBSERVATION_SESSION_SCHEMA
+    } else if blizzard {
+        PLATFORM_SESSION_SCHEMA
+    } else {
+        SESSION_SCHEMA
+    }
 }
 #[cfg(test)]
 mod tests {

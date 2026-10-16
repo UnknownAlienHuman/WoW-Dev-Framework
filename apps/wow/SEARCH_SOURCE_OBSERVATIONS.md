@@ -61,8 +61,10 @@ never deserializable native owner authority. A recorded receiver is source synta
 it does not prove an API namespace, alias, callable target or runtime binding.
 No hit or miss proves availability, absence or complete source coverage.
 
-This component currently has no pagination, federation, context selection or
-frontend registration. Those remain separate #169/W22 scopes. Synthetic native
+The standalone query currently has no pagination. Its exact source slots can
+participate in [observed-source federation](SEARCH_FEDERATION.md#observed-source-names-and-declarations)
+with [captured pages](SEARCH_FEDERATED_PAGINATION.md#observed-source-captures).
+Context selection and frontend registration remain separate #169/W22 scopes. Synthetic native
 functional proof does not qualify vendor/current source, Ketho parity, a client
 runtime, the full corpus or launch acceptance.
 
