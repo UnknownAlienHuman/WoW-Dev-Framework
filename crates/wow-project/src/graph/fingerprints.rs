@@ -1141,7 +1141,7 @@ fn build_selected_function_fingerprints(
     Ok(manifest)
 }
 
-fn span_component(
+pub(super) fn span_component(
     bytes: &[u8],
     used: &mut usize,
     limits: FunctionFingerprintLimits,

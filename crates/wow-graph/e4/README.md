@@ -1,6 +1,9 @@
 # `wow-graph` E4-B lineage, migration, and static-impact contract
 
-**Status:** implementation-ready documentation; no Rust code yet.
+**Status:** partial functional implementation: ordinary Project exact-source-span
+Candidate buckets/components and separately retained immutable snapshots (#178).
+See [selected application path](../../../apps/wow/LINEAGE_CANDIDATES.md).
+Other E4-B operations and complete package acceptance remain pending.
 
 **Contract ID:** `wow-graph/e4-b/lineage-migration-static-impact`
 

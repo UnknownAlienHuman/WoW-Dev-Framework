@@ -4,6 +4,7 @@ mod context;
 mod graph;
 mod graph_build;
 mod graph_store;
+mod lineage;
 mod mcp;
 mod native;
 mod output;
@@ -50,6 +51,9 @@ fn run() -> u8 {
     }
     if arguments.first().is_some_and(|value| value == "search") {
         return search::run(arguments);
+    }
+    if arguments.first().is_some_and(|value| value == "lineage") {
+        return lineage::run(arguments);
     }
     if arguments.first().is_some_and(|value| value == "mcp") {
         return mcp::run(arguments);

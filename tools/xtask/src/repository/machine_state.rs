@@ -59,6 +59,22 @@ struct OwnerSpec {
 
 const PROJECT_CAPABILITIES: &[CapabilitySpec] = &[
     CapabilitySpec {
+        name: "native-project-lineage-source-span-candidates",
+        owners: &[(
+            "crates/wow-project/src/graph/lineage_input.rs",
+            "build_project_source_fingerprint_partition",
+        )],
+        application_routes: &[
+            (
+                "crates/wow-service/src/lineage.rs",
+                "build_lineage_snapshot",
+            ),
+            ("apps/wow/src/lineage.rs", "run"),
+        ],
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
         name: "retained-native-generation-pair",
         owners: &[(
             "crates/wow-project/src/replay/publication/generation_pair.rs",

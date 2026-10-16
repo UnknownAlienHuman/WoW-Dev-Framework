@@ -105,7 +105,7 @@ struct PairEnvelope<'a> {
     pair: wow_project::replay::publication::RetainedGenerationPairDescriptor<'a>,
 }
 
-pub(super) fn with_pair<T>(
+pub(crate) fn with_pair<T>(
     root: &Path,
     request: &ProjectGenerationPairRequest,
     stop: &AtomicBool,
@@ -114,7 +114,19 @@ pub(super) fn with_pair<T>(
     publication_checkpoint(stop)?;
     let store = LiveProjectStore::open(root)?;
     let closure = Cell::new("pending");
-    let draft = if store.store.epoch().namespace().is_some() {
+    let draft = with_pair_in_owner(&store, request, stop, &closure, build);
+    selected_read_scope::finish_store(store, draft, &closure, stop)
+}
+
+pub(crate) fn with_pair_in_owner<T>(
+    store: &LiveProjectStore,
+    request: &ProjectGenerationPairRequest,
+    stop: &AtomicBool,
+    closure: &Cell<&'static str>,
+    build: impl FnOnce(&LiveProjectRead, &LiveProjectRead) -> ServiceResult<T>,
+) -> ServiceResult<T> {
+    publication_checkpoint(stop)?;
+    if store.store.epoch().namespace().is_some() {
         Err(fail(ServiceErrorCode::InvalidRequest))
     } else {
         match store.read_checked(
@@ -153,8 +165,7 @@ pub(super) fn with_pair<T>(
                 }
             }
         }
-    };
-    selected_read_scope::finish_store(store, draft, &closure, stop)
+    }
 }
 fn closure_name(closure: ReadFailureClosure) -> &'static str {
     match closure {

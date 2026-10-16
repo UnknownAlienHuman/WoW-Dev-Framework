@@ -107,6 +107,9 @@ impl<'a> RetainedGenerationPair<'a> {
     pub fn pair_id(&self) -> &str {
         &self.id
     }
+    pub const fn exact_configuration_and_registry(&self) -> bool {
+        self.configuration_equal && self.graph_registry_equal
+    }
     pub const fn status(&self) -> &'static str {
         if self.configuration_equal && self.graph_registry_equal {
             "valid_partial"

@@ -30,6 +30,14 @@
     "legacy_inputs_and_results": "unchanged",
     "full_e4_c_acceptance": "not-accepted"
   },
+  "lineage_candidate_subset": {
+    "issue": 178,
+    "operations": ["build_lineage_snapshot", "compare_lineage_snapshot", "retire_lineage_snapshot", "abandon_lineage_snapshot"],
+    "owner": "crates/wow-service/src/lineage.rs",
+    "contract": "apps/wow/LINEAGE_CANDIDATES.md",
+    "proof_ceiling": "Candidate",
+    "full_e4_c_acceptance": "not-accepted"
+  },
   "direct_framework_dependencies": [
     "wow-core",
     "wow-store",

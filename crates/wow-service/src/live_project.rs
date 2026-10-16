@@ -9,6 +9,7 @@ pub use current_recovery::{
     CurrentDomainFailure, CurrentDomainIds, CurrentDomainObservation, CurrentDomainPhase,
     LiveProjectRecoveryObservation, recover_current_live_project,
 };
+pub(crate) use generation_pair::with_pair_in_owner as with_native_generation_pair;
 pub use generation_pair::{
     PROJECT_GENERATION_PAIR_MAX_OUTPUT_BYTES, ProjectGenerationPairRequest,
     ProjectGenerationPairResult, read_live_project_generation_pair,
@@ -87,6 +88,9 @@ pub(crate) struct LiveProjectReadFailure {
     pub closure: ReadFailureClosure,
 }
 impl LiveProjectRead {
+    pub(crate) fn custody(&self) -> wow_store::project::ReadSnapshotCustody<'_> {
+        self.read.custody()
+    }
     /// Release retained domain owners before checking transaction/lease closure.
     pub fn close(self) -> ServiceResult<()> {
         let Self {
@@ -178,6 +182,12 @@ impl LiveProjectRead {
     }
 }
 impl LiveProjectStore {
+    pub(crate) fn retained_owner(&self) -> &ProjectStore {
+        &self.store
+    }
+    pub(crate) fn retained_owner_mut(&mut self) -> &mut ProjectStore {
+        &mut self.store
+    }
     /// Check native store closure without revoking another live reader.
     pub fn close(self) -> ServiceResult<()> {
         self.store.close().map_err(store_error)

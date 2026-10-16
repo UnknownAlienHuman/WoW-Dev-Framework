@@ -265,6 +265,14 @@ pub struct Store {
 }
 
 impl Store {
+    /// Explicit native connection closure for foreground publication/readback
+    /// plans. A failed close is not a successful durable operation delivery.
+    pub fn close(self) -> StoreResult<()> {
+        self.connection.close().map_err(|(connection, error)| {
+            drop(connection);
+            StoreError::database(error)
+        })
+    }
     /// Opens one owned store file, publishing a completely initialized file when
     /// it does not exist. Interrupted staging never occupies the final pathname.
     ///

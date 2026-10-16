@@ -1,11 +1,22 @@
 {
   "schema_version": 1,
   "contract_id": "wow-graph/e4-b/lineage-migration-static-impact",
-  "state": "implementation-ready-documentation-no-rust-code",
+  "state": "partial-functional-freeze-open",
   "work_package": "E4-B",
   "crate": "wow-graph",
   "documentation_frontier": "E4-B",
-  "implementation_state": "not-started",
+  "implementation_state": "partial-functional",
+  "acceptance_status": "pending",
+  "implemented_subset": {
+    "issue": 178,
+    "profile": "wow-graph/lineage/ordinary-project-source-span-candidates/1",
+    "store_profile": "wow-graph.lineage-project-span-store.v1",
+    "owner": "crates/wow-graph/src/lineage.rs",
+    "scope": "bounded native ordinary Project source-span Candidate proposals/components and immutable inactive/readback/sealed snapshots",
+    "accepted_assertion_count": 0,
+    "promotion": "not_evaluated",
+    "full_e4_b_acceptance": "not-accepted"
+  },
   "direct_framework_dependencies": [
     "wow-core",
     "wow-store"

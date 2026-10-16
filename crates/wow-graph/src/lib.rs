@@ -10,6 +10,7 @@ mod error;
 mod evidence;
 mod explain;
 mod identity;
+pub mod lineage;
 mod model;
 mod partition;
 mod partition_session;
