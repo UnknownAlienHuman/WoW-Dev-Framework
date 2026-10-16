@@ -15,6 +15,8 @@ use wow_search::reference::ReferencePagePolicy;
 const SOURCE_ROOTS: &str = "wow-search.reference-sources";
 const HANDLE_SCHEMA: &str = "wow-service/native-reference-search-handle/1";
 const DOCUMENT_HANDLE_SCHEMA: &str = "wow-service/native-reference-document-search-handle/1";
+const DOCUMENTATION_HANDLE_SCHEMA: &str =
+    "wow-service/native-reference-documentation-search-handle/1";
 
 pub struct ReferenceIndexBuildRequest {
     operation_id: OperationId,
@@ -25,6 +27,7 @@ pub struct ReferenceIndexBuildRequest {
     store_limits: SearchStoreLimits,
     max_output_bytes: NonZeroU64,
     permission: LocalMetadataPermission,
+    include_documentation: bool,
 }
 impl ReferenceIndexBuildRequest {
     #[allow(clippy::too_many_arguments)]
@@ -52,7 +55,12 @@ impl ReferenceIndexBuildRequest {
             store_limits,
             max_output_bytes,
             permission,
+            include_documentation: false,
         })
+    }
+    pub fn with_documentation(mut self) -> Self {
+        self.include_documentation = true;
+        self
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,10 +76,26 @@ pub(super) struct Handle {
     bounds: SearchBounds,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     native_documents: Option<wow_reference::native_view::NativeReferenceDocuments>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present_documentation_flag"
+    )]
+    include_documentation: Option<bool>,
+}
+fn present_documentation_flag<'de, D: serde::Deserializer<'de>>(
+    input: D,
+) -> Result<Option<bool>, D::Error> {
+    bool::deserialize(input).map(Some)
 }
 fn handle_profile(handle: &Handle) -> ServiceResult<ReferenceSearchProfile> {
+    if handle.include_documentation == Some(false) {
+        return Err(mismatch());
+    }
     if handle.schema
-        != if handle.native_documents.is_some() {
+        != if handle.include_documentation == Some(true) {
+            DOCUMENTATION_HANDLE_SCHEMA
+        } else if handle.native_documents.is_some() {
             DOCUMENT_HANDLE_SCHEMA
         } else {
             HANDLE_SCHEMA
@@ -79,8 +103,17 @@ fn handle_profile(handle: &Handle) -> ServiceResult<ReferenceSearchProfile> {
     {
         return Err(mismatch());
     }
-    let profile = ReferenceSearchProfile::new_documents(handle.bounds, handle.native_documents)
-        .map_err(map_search_error)?;
+    let profile = if handle.include_documentation == Some(true) {
+        if handle.native_documents
+            != Some(wow_reference::native_view::NativeReferenceDocuments::SourceDeclarationsV1)
+        {
+            return Err(mismatch());
+        }
+        ReferenceSearchProfile::documentation_inventory(handle.bounds)
+    } else {
+        ReferenceSearchProfile::new_documents(handle.bounds, handle.native_documents)
+    }
+    .map_err(map_search_error)?;
     if profile.digest() != handle.search_profile_digest {
         return Err(mismatch());
     }
@@ -164,17 +197,29 @@ pub(super) fn build(
     stop: &AtomicBool,
 ) -> ServiceResult<Box<[u8]>> {
     check_cancelled(stop)?;
-    let (operation_id, digest, public_digest) = durable_identity(
-        "wow-service/reference-search-build/1",
-        &request.operation_id,
-        &(
-            &request.config_digest,
-            request.bounds,
-            request.store_limits,
-            request.max_output_bytes,
-            "local_metadata_only",
-        ),
-    )?;
+    let original_identity = (
+        &request.config_digest,
+        request.bounds,
+        request.store_limits,
+        request.max_output_bytes,
+        "local_metadata_only",
+    );
+    let (operation_id, digest, public_digest) = if request.include_documentation {
+        durable_identity(
+            "wow-service/reference-search-build/1",
+            &request.operation_id,
+            &(
+                original_identity,
+                "native-reference-documentation-inventory/1",
+            ),
+        )
+    } else {
+        durable_identity(
+            "wow-service/reference-search-build/1",
+            &request.operation_id,
+            &original_identity,
+        )
+    }?;
     let mut store = open_durable_search_store(&request.search_store, request.store_limits)?;
     match start_durable_operation(
         &mut store,
@@ -192,6 +237,12 @@ pub(super) fn build(
             crate::source_reference::read_local_source_reference(&request.source_config, stop)?;
         if source.configuration_digest().to_string() != request.config_digest.as_str() {
             return Err(mismatch());
+        }
+        if request.include_documentation
+            && source.native_documents()
+                != Some(wow_reference::native_view::NativeReferenceDocuments::SourceDeclarationsV1)
+        {
+            return Err(invalid());
         }
         let owner_object = PersistentReferenceStore::new(&mut store)
             .prepare_view(&source.reference().view)
@@ -226,9 +277,12 @@ pub(super) fn build(
             failures,
         )
         .map_err(map_search_error)?;
-        let profile =
+        let profile = if request.include_documentation {
+            ReferenceSearchProfile::documentation_inventory(request.bounds)
+        } else {
             ReferenceSearchProfile::new_documents(request.bounds, source.native_documents())
-                .map_err(map_search_error)?;
+        }
+        .map_err(map_search_error)?;
         let shard = prepare_reference_callable_shard(
             source.reference(),
             binding,
@@ -239,7 +293,9 @@ pub(super) fn build(
         )
         .map_err(map_search_error)?;
         let handle = Handle {
-            schema: if source.native_documents().is_some() {
+            schema: if request.include_documentation {
+                DOCUMENTATION_HANDLE_SCHEMA
+            } else if source.native_documents().is_some() {
                 DOCUMENT_HANDLE_SCHEMA
             } else {
                 HANDLE_SCHEMA
@@ -253,6 +309,7 @@ pub(super) fn build(
             search_profile_digest: profile.digest().into(),
             bounds: request.bounds,
             native_documents: source.native_documents(),
+            include_documentation: request.include_documentation.then_some(true),
         };
         let count = shard.document_count();
         add_root(
@@ -278,11 +335,11 @@ pub(super) fn build(
             &request.operation_id,
             &public_digest,
             &serde_json::json!({"status":"retained","resource_closure":"closed","handle":handle,
-                "document_count":count,"projection":match source.native_documents() {
+                "document_count":count,"projection":if request.include_documentation { "native_reference_documentation_inventory" } else { match source.native_documents() {
                     Some(wow_reference::native_view::NativeReferenceDocuments::SourceDeclarationsV1) => "native_source_declarations",
                     Some(wow_reference::native_view::NativeReferenceDocuments::CallablesAndEventsV1) => "native_callables_and_events",
                     None => "native_global_and_namespace_callables",
-                },
+                } },
                 "source_acquisition_partial":source.is_partial(),"source_freshness":"unverified-current",
                 "privacy_scope":"local_metadata_only","license_state":"not_evaluated"}),
             request.max_output_bytes.get(),

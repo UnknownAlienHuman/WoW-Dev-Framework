@@ -8,6 +8,113 @@ use wow_reference::native_model::{SystemOwner, TableFact, array, normalize_docum
 const REV: &str = "1111111111111111111111111111111111111111";
 
 #[test]
+fn native_documentation_ports_preserve_source_states_and_record_custody() {
+    use wow_core::ReferenceGenerationId;
+    use wow_reference::ReferenceRecord;
+    use wow_reference::native_view::{
+        NativeCallableCorpus, NativeDocumentation, NativeReferenceDocuments,
+        project_native_documents,
+    };
+    let source = r#"APIDocumentation:AddDocumentationTable({Name="Docs",Type="System",Environment="All",
+Functions={{Name="Read",Type="Function",Documentation={"first","second"}}},
+Events={{Name="Good",LiteralName="DOC_GOOD",Documentation={"event"}},
+ {Name="Bad",LiteralName="DOC_BAD",Documentation={false}},
+ {Name="Missing",LiteralName="DOC_MISSING"}},
+Tables={{Name="Empty",Type="Structure",Documentation={},Fields={}},
+ {Name="Gapped",Type="Structure",Documentation={[2]="gapped"},Fields={}}}})"#;
+    let stop = AtomicBool::new(false);
+    let projection = project_native_documents(
+        &[read(source)],
+        "Mainline",
+        ReferenceGenerationId::derive(&"native-documentation-port").unwrap(),
+        NativeCallableCorpus::explicit_partial(),
+        None,
+        NativeReferenceDocuments::SourceDeclarationsV1,
+        &stop,
+    )
+    .unwrap();
+    let record = |key: &str| {
+        projection
+            .view
+            .partitions()
+            .iter()
+            .flat_map(|partition| partition.records())
+            .find(|record| record.key() == key)
+            .unwrap()
+    };
+    assert!(
+        matches!(projection.callable_signature(record("function:Read"), &stop).unwrap().documentation(),
+        NativeDocumentation::Recorded(lines) if lines == ["first", "second"])
+    );
+    let good = projection
+        .event_signature(record("event:DOC_GOOD"), &stop)
+        .unwrap();
+    assert!(
+        matches!(good.documentation(), NativeDocumentation::Recorded(lines) if lines == ["event"])
+    );
+    assert!(
+        serde_json::to_value(good)
+            .unwrap()
+            .get("documentation")
+            .is_none()
+    );
+    assert!(matches!(
+        projection
+            .event_signature(record("event:DOC_BAD"), &stop)
+            .unwrap()
+            .documentation(),
+        NativeDocumentation::Unsupported
+    ));
+    assert!(matches!(
+        projection
+            .event_signature(record("event:DOC_MISSING"), &stop)
+            .unwrap()
+            .documentation(),
+        NativeDocumentation::NotStated
+    ));
+    let empty = projection
+        .declaration_signature(record("declaration:structure:Empty"), &stop)
+        .unwrap();
+    assert!(
+        matches!(empty.documentation(), NativeDocumentation::Recorded(lines) if lines.is_empty())
+    );
+    assert!(
+        serde_json::to_value(empty)
+            .unwrap()
+            .get("documentation")
+            .is_none()
+    );
+    assert!(matches!(
+        projection
+            .declaration_signature(record("declaration:structure:Gapped"), &stop)
+            .unwrap()
+            .documentation(),
+        NativeDocumentation::Unsupported
+    ));
+    let original = record("event:DOC_GOOD");
+    let foreign = ReferenceRecord::new(
+        original.key(),
+        original.kind(),
+        "{}",
+        original
+            .source_ids()
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        Vec::new(),
+    )
+    .unwrap();
+    assert!(projection.event_signature(&foreign, &stop).is_err());
+    assert_eq!(
+        projection
+            .event_signature(original, &AtomicBool::new(true))
+            .unwrap_err()
+            .code,
+        NativeErrorCode::Cancelled
+    );
+}
+
+#[test]
 fn native_declarations_are_original_sealed_and_selection_isolated() {
     use wow_core::ReferenceGenerationId;
     use wow_reference::native_view::{

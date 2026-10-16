@@ -103,6 +103,13 @@ impl NativeCallableSignature<'_> {
     pub fn namespace(&self) -> Option<&str> {
         self.signature.namespace.as_deref()
     }
+    /// Original ordered documentation, borrowed from the sealed source cache.
+    pub fn documentation(&self) -> NativeDocumentation<'_> {
+        self.signature.documentation.as_deref().map_or(
+            NativeDocumentation::NotStated,
+            NativeDocumentation::Recorded,
+        )
+    }
     pub const fn reference_generation(&self) -> &str {
         self.reference_generation
     }

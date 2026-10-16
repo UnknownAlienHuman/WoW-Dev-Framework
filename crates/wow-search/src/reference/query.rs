@@ -11,6 +11,8 @@ pub use pagination::{ReferencePage, ReferencePageCursor, ReferencePagePolicy};
 const REQUEST_SCHEMA: &str = "wow-search/native-reference-query/1";
 const FIELD_SHAPE_REQUEST_SCHEMA: &str = "wow-search/native-reference-field-shape-query/1";
 const FIELD_SHAPE_QUERY_PROFILE: &str = "wow-search/native-reference-field-shape/1";
+const DOCUMENTATION_REQUEST_SCHEMA: &str = "wow-search/native-reference-documentation-query/1";
+const DOCUMENTATION_QUERY_PROFILE: &str = "wow-search/native-reference-documentation-retrieval/1";
 const QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape/1";
 const RANK_PROFILE: &str = "wow-search/reference-authority-ordinal-fusion/1";
 const SIM_QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape-similarity/1";
@@ -114,7 +116,7 @@ impl ReferenceQueryRequest {
         request.required_lanes.sort();
         if !matches!(
             request.schema.as_str(),
-            REQUEST_SCHEMA | FIELD_SHAPE_REQUEST_SCHEMA
+            REQUEST_SCHEMA | FIELD_SHAPE_REQUEST_SCHEMA | DOCUMENTATION_REQUEST_SCHEMA
         ) || request.enabled_lanes.is_empty()
             || request.enabled_lanes.len() > 9
             || request.required_lanes.len() > 9
@@ -334,6 +336,7 @@ impl ReferenceSearchShard {
         stop: &AtomicBool,
     ) -> SearchResult<ReferenceQueryResult> {
         check(stop)?;
+        self.validate_query_component(request)?;
         if owner.generation_id() != self.manifest.reference_generation
             || owner.self_digest() != self.manifest.reference_view_digest
         {
@@ -543,13 +546,26 @@ impl ReferenceSearchShard {
                                     ))
                                 }
                                 Lane::LiteralText if text_ids.contains(&document.entity_key) => {
-                                    Some((
-                                        7,
-                                        "literal_canonical_identifier_candidate",
-                                        name_origin(document, true),
-                                        name_digest(document)?,
-                                        identity("", &document.canonical_qualified_name)?,
-                                    ))
+                                    Some(if self.manifest.include_documentation.is_some() {
+                                        (
+                                            7,
+                                            "literal_reference_documentation_candidate",
+                                            documentation::origin(document),
+                                            identity("", &document.documentation)?,
+                                            identity(
+                                                "",
+                                                &documentation::row_text(document, self.bounds)?,
+                                            )?,
+                                        )
+                                    } else {
+                                        (
+                                            7,
+                                            "literal_canonical_identifier_candidate",
+                                            name_origin(document, true),
+                                            name_digest(document)?,
+                                            identity("", &document.canonical_qualified_name)?,
+                                        )
+                                    })
                                 }
                                 Lane::StructuredShape
                                     if s.shape
@@ -684,6 +700,10 @@ impl ReferenceSearchShard {
         #[derive(Serialize)]
         struct OwnerSummary<'a> {
             #[serde(skip_serializing_if = "Option::is_none")]
+            include_documentation: Option<bool>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            documentation_coverage: Option<documentation::Coverage>,
+            #[serde(skip_serializing_if = "Option::is_none")]
             native_documents: Option<NativeReferenceDocuments>,
             schema: &'a str,
             profile_digest: &'a str,
@@ -703,6 +723,8 @@ impl ReferenceSearchShard {
             license_state: &'a str,
         }
         let summary = OwnerSummary {
+            include_documentation: self.manifest.include_documentation,
+            documentation_coverage: documentation::coverage(&self.manifest),
             native_documents: self.manifest.native_documents,
             schema: &self.manifest.schema,
             profile_digest: &self.manifest.profile_digest,
@@ -835,7 +857,9 @@ fn include_signal<'a>(
         .ok_or(SearchError::FileSetBudgetExceeded)?;
     let normalization = similarity.as_ref().map_or_else(
         || {
-            if field == "NativeCallableSignature.namespace()+name()" {
+            if class == "literal_reference_documentation_candidate" {
+                documentation::INDEX_PROFILE
+            } else if field == "NativeCallableSignature.namespace()+name()" {
                 "owner-namespace-dot-name/1"
             } else {
                 "case-preserving-owner-fields/1"
@@ -953,6 +977,9 @@ fn capture_query_profile(
     selection: Option<NativeReferenceDocuments>,
     request: &ReferenceQueryRequest,
 ) -> &'static str {
+    if request.schema == DOCUMENTATION_REQUEST_SCHEMA {
+        return DOCUMENTATION_QUERY_PROFILE;
+    }
     if request.schema == FIELD_SHAPE_REQUEST_SCHEMA {
         return FIELD_SHAPE_QUERY_PROFILE;
     }
@@ -969,6 +996,14 @@ fn capture_query_profile(
     }
 }
 impl ReferenceSearchShard {
+    fn validate_query_component(&self, request: &ReferenceQueryRequest) -> SearchResult<()> {
+        if self.manifest.include_documentation.is_some()
+            != (request.schema == DOCUMENTATION_REQUEST_SCHEMA)
+        {
+            return Err(SearchError::InvalidProfile);
+        }
+        Ok(())
+    }
     pub(crate) fn validate_federation_summary(
         &self,
         summary: &serde_json::Value,
@@ -983,6 +1018,7 @@ impl ReferenceSearchShard {
                 .map_err(|_| SearchError::OwnerEvidenceInvalid)?,
             stop,
         )?;
+        self.validate_query_component(&request)?;
         let profile = capture_query_profile(self.manifest.native_documents, &request);
         let query = identity(
             "reference-search-query:",
@@ -1001,6 +1037,12 @@ impl ReferenceSearchShard {
             "native_projection_profile":self.manifest.native_projection_profile,"source_origins":self.manifest.source_origins,
             "partitions":self.manifest.partitions,"conflicts":self.manifest.conflicts,"issues":self.manifest.issues,"owner_negative_authority":self.manifest.owner_negative_authority,
             "projected_document_count":self.manifest.documents.len(),"privacy_scope":self.manifest.privacy_scope,"license_state":self.manifest.license_state});
+        if let Some(include) = self.manifest.include_documentation {
+            owner["include_documentation"] = serde_json::json!(include);
+            owner["documentation_coverage"] =
+                serde_json::to_value(documentation::coverage(&self.manifest))
+                    .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+        }
         if let Some(selection) = self.manifest.native_documents {
             owner["native_documents"] =
                 serde_json::to_value(selection).map_err(|_| SearchError::OwnerEvidenceInvalid)?;

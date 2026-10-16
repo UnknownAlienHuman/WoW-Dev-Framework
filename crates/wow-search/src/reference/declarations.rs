@@ -98,6 +98,12 @@ pub(super) fn capture(
             });
         }
         let document = Document {
+            documentation: manifest
+                .include_documentation
+                .map(|_| {
+                    documentation::Documentation::capture(declaration.documentation(), bounds, stop)
+                })
+                .transpose()?,
             entity_key: record.key().into(),
             owner_record_digest: declaration.record_digest().into(),
             source: source.clone(),

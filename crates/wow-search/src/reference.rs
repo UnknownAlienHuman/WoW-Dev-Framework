@@ -10,6 +10,7 @@ use wow_reference::{
 use wow_store::StoreLimits;
 
 mod declarations;
+mod documentation;
 mod query;
 pub use query::{
     ReferencePage, ReferencePageCursor, ReferencePagePolicy, ReferenceQueryRequest,
@@ -22,6 +23,10 @@ const DOCUMENT_MANIFEST_SCHEMA: &str = "wow-search/native-reference-callable-eve
 const DECLARATION_PROFILE_SCHEMA: &str =
     "wow-search/native-reference-source-declarations-profile/1";
 const DECLARATION_MANIFEST_SCHEMA: &str = "wow-search/native-reference-source-declarations-shard/1";
+const DOCUMENTATION_PROFILE_SCHEMA: &str =
+    "wow-search/native-reference-documentation-inventory-profile/1";
+const DOCUMENTATION_MANIFEST_SCHEMA: &str =
+    "wow-search/native-reference-documentation-inventory-shard/1";
 use wow_reference::native_view::{
     NATIVE_DECLARATION_PARTITION, NATIVE_EVENT_PARTITION, NativeDeclarationKind,
     NativeDeclarationScalar, NativeReferenceDocuments,
@@ -44,6 +49,7 @@ pub struct ReferenceSearchProfile {
     bounds: SearchBounds,
     digest: Box<str>,
     native_documents: Option<NativeReferenceDocuments>,
+    include_documentation: bool,
 }
 impl ReferenceSearchProfile {
     pub fn new(bounds: SearchBounds) -> SearchResult<Self> {
@@ -57,6 +63,7 @@ impl ReferenceSearchProfile {
         Ok(Self {
             bounds,
             native_documents,
+            include_documentation: false,
             digest: identity(
                 "",
                 &(
@@ -73,6 +80,29 @@ impl ReferenceSearchProfile {
     }
     pub fn digest(&self) -> &str {
         &self.digest
+    }
+    pub fn documentation_inventory(bounds: SearchBounds) -> SearchResult<Self> {
+        let mut profile =
+            Self::new_documents(bounds, Some(NativeReferenceDocuments::SourceDeclarationsV1))?;
+        profile.digest = identity(
+            "",
+            &(
+                DOCUMENTATION_PROFILE_SCHEMA,
+                DOCUMENTATION_MANIFEST_SCHEMA,
+                &profile.digest,
+                "original-source-documentation-only-fts/1",
+                documentation::INDEX_PROFILE,
+            ),
+        )?;
+        profile.include_documentation = true;
+        Ok(profile)
+    }
+    fn manifest_schema(&self) -> &'static str {
+        if self.include_documentation {
+            DOCUMENTATION_MANIFEST_SCHEMA
+        } else {
+            profile_schemas(self.native_documents).1
+        }
     }
 }
 
@@ -151,6 +181,8 @@ struct Document {
     event: Option<EventDocument>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     declaration: Option<declarations::DeclarationDocument>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    documentation: Option<documentation::Documentation>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -182,6 +214,8 @@ struct Manifest {
     schema: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     native_documents: Option<NativeReferenceDocuments>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    include_documentation: Option<bool>,
     profile_digest: Box<str>,
     binding: ReferenceSearchBinding,
     reference_generation: String,
@@ -315,8 +349,9 @@ pub fn prepare_reference_callable_shard(
         }
     }
     let mut manifest = Manifest {
-        schema: profile_schemas(profile.native_documents).1.into(),
+        schema: profile.manifest_schema().into(),
         native_documents: profile.native_documents,
+        include_documentation: profile.include_documentation.then_some(true),
         profile_digest: profile.digest.clone(),
         binding,
         reference_generation: native.view.generation_id().into(),
@@ -414,6 +449,12 @@ pub fn prepare_reference_callable_shard(
                 .collect()
         };
         let document = Document {
+            documentation: profile
+                .include_documentation
+                .then(|| {
+                    documentation::Documentation::capture(signature.documentation(), bounds, stop)
+                })
+                .transpose()?,
             entity_key: record.key().into(),
             owner_record_digest: signature.record_digest().into(),
             source: origins
@@ -484,6 +525,12 @@ pub fn prepare_reference_callable_shard(
                 });
             }
             let document = Document {
+                documentation: profile
+                    .include_documentation
+                    .then(|| {
+                        documentation::Documentation::capture(event.documentation(), bounds, stop)
+                    })
+                    .transpose()?,
                 entity_key: record.key().into(),
                 owner_record_digest: event.record_digest().into(),
                 source: source.clone(),
@@ -534,9 +581,12 @@ pub fn prepare_reference_callable_shard(
         .documents
         .iter()
         .map(|d| {
-            SearchStoreDocument::new(d.entity_key.as_str(), d.canonical_qualified_name.as_str())
+            Ok(SearchStoreDocument::new(
+                d.entity_key.as_str(),
+                documentation::row_text(d, bounds)?,
+            ))
         })
-        .collect::<Vec<_>>();
+        .collect::<SearchResult<Vec<_>>>()?;
     let physical = SearchStore::prepare(
         SearchStoreProfile::new(profile.digest.to_string(), bounds.physical()?)?,
         logical_id,
@@ -551,6 +601,7 @@ pub fn prepare_reference_callable_shard(
 pub struct ReferenceSearchShard {
     manifest: Manifest,
     physical: PublishedSearchShard,
+    bounds: SearchBounds,
 }
 impl ReferenceSearchShard {
     pub fn release(self, store: &mut Store) -> SearchResult<()> {
@@ -590,8 +641,9 @@ pub fn open_reference_callable_shard(
         let bytes = physical.reader().owner_manifest_bytes();
         let manifest: Manifest =
             serde_json::from_slice(bytes).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
-        if manifest.schema != profile_schemas(profile.native_documents).1
+        if manifest.schema != profile.manifest_schema()
             || manifest.native_documents != profile.native_documents
+            || manifest.include_documentation != profile.include_documentation.then_some(true)
             || manifest.profile_digest != profile.digest
             || manifest.reference_generation != reference.generation_id()
             || manifest.reference_view_digest != reference.self_digest()
@@ -705,7 +757,8 @@ pub fn open_reference_callable_shard(
                         .map_err(|_| SearchError::OwnerEvidenceInvalid)?
                 || record.source_ids().len() != 1
                 || record.source_ids()[0].as_ref() != doc.source.source_id
-                || row.owner_metadata_label() != doc.canonical_qualified_name
+                || row.owner_metadata_label() != documentation::row_text(doc, profile.bounds)?
+                || doc.documentation.is_some() != profile.include_documentation
                 || doc.type_authority != "original_source_type_identities_unresolved"
                 || doc.canonical_qualified_name
                     != doc.namespace.as_ref().map_or_else(
@@ -736,7 +789,11 @@ pub fn open_reference_callable_shard(
         Ok(manifest)
     })();
     match result {
-        Ok(manifest) => Ok(ReferenceSearchShard { manifest, physical }),
+        Ok(manifest) => Ok(ReferenceSearchShard {
+            manifest,
+            physical,
+            bounds: profile.bounds,
+        }),
         Err(error) => Err(release_after_owner_error(physical, store, error)),
     }
 }

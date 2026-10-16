@@ -19,6 +19,7 @@ use crate::{
 };
 
 mod declarations;
+mod documentation;
 mod events;
 mod signatures;
 mod type_resolution;
@@ -26,6 +27,8 @@ pub use declarations::{
     NativeDeclarationKind, NativeDeclarationScalar, NativeDeclarationSignature,
     NativeDeclarationValue,
 };
+use documentation::CapturedDocumentation;
+pub use documentation::NativeDocumentation;
 pub use events::NativeEventSignature;
 pub const NATIVE_DECLARATION_PARTITION: &str = "reference.native.apidoc.declaration";
 pub const NATIVE_DECLARATION_VIEW_PROFILE: &str = "wow-reference/native-source-declarations-view/1";

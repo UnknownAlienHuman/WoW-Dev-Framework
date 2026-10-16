@@ -174,6 +174,53 @@ no truncation/conflict and no partial acquisition. An exact conflicted key is
 `conflict_blocked`; empty text/shape/prefix remains nonauthoritative. No runtime,
 Secret/combat/taint safety or caller-intent authority follows from these records.
 
+## Documentation inventory
+
+An explicit `search reference build --include-documentation` selects
+`native_reference_documentation_inventory`. Its source configuration must select
+`native_documents: "source_declarations_v1"`. The original native callable,
+event, structure, callback, enumeration, constant and ScriptObject records remain
+the exact entities. This component adds their source `Documentation` fields;
+it does not index full source files, arbitrary comments or opaque record payloads.
+
+The exact handle uses `wow-service/native-reference-documentation-search-handle/1`
+with `include_documentation: true`. Build/query/retire, Reference pages, federation
+and captured federation pages use their existing operations and retention roots.
+No implicit build or current/profile fallback is added. Preserve the whole handle.
+
+Use `wow-search/native-reference-documentation-query/1` with the existing request
+envelope and finite lane/candidate/scan/result bounds. In this component,
+`literal_text` with `literal_text` lane searches **documentation only** through
+the existing safe native literal FTS5 query. Names are available through the
+existing exact-name, namespace/member, prefix and similarity selectors, and
+the original field-shape selectors are supported. Documentation queries require
+this component; the other query schemas cannot silently select its text index.
+Old components and requests keep their original identifier-only FTS bytes and
+behavior.
+
+Each returned document retains the original ordered strings, original native
+record/source identity and one of `recorded`, `not_stated` or `unsupported`.
+An explicit empty string array is recorded; an absent field is not stated.
+Non-array, gapped or non-string event/declaration documentation remains unsupported
+without erasing the original entity. Original callable normalization refusals
+remain in the native owner's issues/omissions. Whole-corpus documentation counts
+remain visible in `owner.documentation_coverage`, even when no candidate matches.
+
+The index joins original lines with spaces and replaces whitespace/control
+characters with spaces under `original-documentation-whitespace-to-space/1`.
+Original strings are retained without that transformation. A single physical
+blank represents an empty token stream for the existing nonempty row contract;
+it is never source metadata and cannot match a valid text query. Bounds apply to
+the full encoded field; over-cap input refuses rather than truncating evidence.
+
+Text signals are `literal_reference_documentation_candidate`, band 7, with the
+actual callable/event/declaration documentation port, original and indexed value
+digests and normalization profile. Their authority class is
+`ReferenceContractDocumentation`; mentions never become exact names, aliases,
+replacement or runtime facts. Empty text results carry no absence authority.
+Documentation is untrusted data and remains subject to the explicit local
+metadata permission and the retained `license_state: not_evaluated`.
+
 ## Retire
 
 ```text

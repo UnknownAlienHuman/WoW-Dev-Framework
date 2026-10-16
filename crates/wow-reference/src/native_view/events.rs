@@ -15,6 +15,7 @@ struct EventRow {
     digest: String,
     source_id: String,
     data: EventData,
+    documentation: CapturedDocumentation,
 }
 
 /// Original event record and literal identity. No public constructor/deserializer.
@@ -27,6 +28,8 @@ pub struct NativeEventSignature<'a> {
     record_digest: &'a str,
     source_id: &'a str,
     data: &'a EventData,
+    #[serde(skip)]
+    documentation: &'a CapturedDocumentation,
 }
 impl NativeEventSignature<'_> {
     pub fn definition_name(&self) -> &str {
@@ -40,6 +43,9 @@ impl NativeEventSignature<'_> {
     }
     pub fn payload(&self) -> &[NativeCallableField] {
         &self.data.payload
+    }
+    pub fn documentation(&self) -> NativeDocumentation<'_> {
+        self.documentation.view()
     }
     pub const fn reference_generation(&self) -> &str {
         self.reference_generation
@@ -184,6 +190,7 @@ fn capture_row(
         payload.push(NativeCallableField::capture(field));
     }
     Ok(EventRow {
+        documentation: CapturedDocumentation::capture(event.raw, stop)?,
         digest: record
             .digest()
             .map_err(|_| error(NativeErrorCode::InvalidIdentity))?,
@@ -235,6 +242,7 @@ impl EventCatalog {
             record_digest: &row.digest,
             source_id: &row.source_id,
             data: &row.data,
+            documentation: &row.documentation,
         })
     }
 }

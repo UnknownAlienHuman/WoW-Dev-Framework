@@ -65,6 +65,7 @@ struct DeclarationRow {
     digest: String,
     source_id: String,
     data: DeclarationData,
+    documentation: CapturedDocumentation,
 }
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct NativeDeclarationSignature<'a> {
@@ -75,6 +76,8 @@ pub struct NativeDeclarationSignature<'a> {
     record_digest: &'a str,
     source_id: &'a str,
     data: &'a DeclarationData,
+    #[serde(skip)]
+    documentation: &'a CapturedDocumentation,
 }
 impl NativeDeclarationSignature<'_> {
     pub const fn kind(&self) -> NativeDeclarationKind {
@@ -100,6 +103,9 @@ impl NativeDeclarationSignature<'_> {
     }
     pub fn original_base(&self) -> Option<&str> {
         self.data.original_base.as_deref()
+    }
+    pub fn documentation(&self) -> NativeDocumentation<'_> {
+        self.documentation.view()
     }
     pub const fn reference_generation(&self) -> &str {
         self.reference_generation
@@ -280,6 +286,7 @@ impl DeclarationBuild {
         };
         let data = input.capture(stop)?;
         let row = DeclarationRow {
+            documentation: CapturedDocumentation::capture(raw, stop)?,
             digest: record
                 .digest()
                 .map_err(|_| error(NativeErrorCode::InvalidIdentity))?,
@@ -419,6 +426,7 @@ impl DeclarationCatalog {
             record_digest: &row.digest,
             source_id: &row.source_id,
             data: &row.data,
+            documentation: &row.documentation,
         })
     }
 }
