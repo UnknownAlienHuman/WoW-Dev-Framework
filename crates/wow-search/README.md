@@ -63,6 +63,10 @@ The explicit [source declaration corpus](../../apps/wow/SEARCH_REFERENCE_DECLARA
 adds original structures, callback types, enum/constant families and ScriptObject
 type declarations through the same sealed native owner and retained lifecycle.
 The historical preimplementation freeze is not accepted.
+The [exact primary/Reference federation](../../apps/wow/SEARCH_FEDERATION.md)
+binds compatible genuine owner results, preserves universe identities and fuses
+authority bands/local ordinals under explicit priority and whole-union bounds.
+Optional Blizzard UI admission and federated continuation remain separate scope.
 
 The explicit file-set component uses a separately named metadata profile and
 `wow-search/project-file-set-shard-manifest/1`. It preserves the single-file

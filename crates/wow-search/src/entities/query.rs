@@ -118,8 +118,12 @@ pub struct EntityQueryResult {
     bytes: Box<[u8]>,
     status: &'static str,
     profile_digest: Box<str>,
+    project_kind: wow_project::ProjectKind,
 }
 impl EntityQueryResult {
+    pub(crate) fn project_kind(&self) -> wow_project::ProjectKind {
+        self.project_kind
+    }
     pub fn canonical_bytes(&self) -> &[u8] {
         &self.bytes
     }
@@ -444,6 +448,7 @@ impl EntitySearchShard {
             bytes: bytes.into_boxed_slice(),
             status,
             profile_digest: self.profile_digest().into(),
+            project_kind: pair.project().configuration().project_kind(),
         })
     }
 }

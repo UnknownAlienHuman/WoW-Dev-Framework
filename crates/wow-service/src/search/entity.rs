@@ -203,67 +203,8 @@ pub(super) fn execute(
         {
             return Err(unavailable());
         }
-        let source = crate::live_project::LiveProjectStore::open_retained_owner_store(
-            &binding.project_store_root,
-        )?;
-        let source_result = (|| {
-            let profile = DurableProfile::GraphEntities(request.profile.clone());
-            let docs = Documents::GraphEntities;
-            let hold = validate_source_hold_binding(
-                &source,
-                store.store_instance_id().map_err(map_store_error)?,
-                binding,
-                &request.generation,
-                &docs,
-                &profile,
-                request.store_limits,
-            )?;
-            if !source_hold_present(&source, &hold, stop)? {
-                return Err(unavailable());
-            }
-            let read = source
-                .read(&ReadSelector::Exact(request.generation.clone()), stop)
-                .map_err(map_store_error)?;
-            let result = (|| {
-                let pair = wow_project::replay::publication::AcquiredProjectPair::read(&read, stop)
-                    .map_err(map_project_error)?;
-                let lease = SearchStoreLeaseRequest::new(
-                    lease_id_for("entity-search", &public_digest)?,
-                    "wow-service-search",
-                    LogicalEpoch::new(request.lease_expires_after),
-                )
-                .map_err(map_store_error)?;
-                let shard = open_project_entity_shard(
-                    &mut store,
-                    &request.logical_id,
-                    &request.object_id,
-                    &request.generation,
-                    &request.profile,
-                    request.permission,
-                    lease,
-                    stop,
-                )
-                .map_err(map_search_error)?;
-                let result = shard
-                    .retrieve(&read, &pair, &request.query, stop)
-                    .map_err(map_search_error);
-                shard.release(&mut store).map_err(map_search_error)?;
-                result
-            })();
-            let close = read.close();
-            if close.is_err() {
-                return Err(source_hold_outcome_unknown(&hold));
-            }
-            if !source_hold_present(&source, &hold, stop)? {
-                return Err(unavailable());
-            }
-            result
-        })();
-        let close = source.close();
-        if close.is_err() {
-            return Err(source_hold_binding_outcome_unknown(binding));
-        }
-        let result = source_result?;
+        let result = acquire_result(request, &mut store, &public_digest, stop)?;
+
         batch
             .add_catalog_mutation(CatalogMutation::set(
                 catalog,
@@ -347,4 +288,103 @@ fn unavailable() -> ServiceError {
         ServiceErrorCode::ExactGenerationUnavailable,
         "exact ProjectEntity shard/source hold unavailable",
     )
+}
+
+pub(super) fn acquire_result(
+    request: &EntityRetrievalRequest,
+    store: &mut Store,
+    public_digest: &str,
+    stop: &AtomicBool,
+) -> ServiceResult<wow_search::entities::EntityQueryResult> {
+    let (catalog, path) = search_catalog_key(&request.logical_id)?;
+    if store
+        .catalog_entry(&catalog, &path)
+        .map_err(map_store_error)?
+        .is_none_or(|entry| entry.object_id() != &request.object_id)
+    {
+        return Err(unavailable());
+    }
+    let binding = &request.source_hold;
+    let source = crate::live_project::LiveProjectStore::open_retained_owner_store(
+        &binding.project_store_root,
+    )?;
+    let source_result = (|| {
+        let profile = DurableProfile::GraphEntities(request.profile.clone());
+        let docs = Documents::GraphEntities;
+        let hold = validate_source_hold_binding(
+            &source,
+            store.store_instance_id().map_err(map_store_error)?,
+            binding,
+            &request.generation,
+            &docs,
+            &profile,
+            request.store_limits,
+        )?;
+        if !source_hold_present(&source, &hold, stop)? {
+            return Err(unavailable());
+        }
+        let read = source
+            .read(&ReadSelector::Exact(request.generation.clone()), stop)
+            .map_err(map_store_error)?;
+        let result = (|| {
+            let pair = wow_project::replay::publication::AcquiredProjectPair::read(&read, stop)
+                .map_err(map_project_error)?;
+            let lease = SearchStoreLeaseRequest::new(
+                lease_id_for("entity-search", public_digest)?,
+                "wow-service-search",
+                LogicalEpoch::new(request.lease_expires_after),
+            )
+            .map_err(map_store_error)?;
+            let shard = open_project_entity_shard(
+                store,
+                &request.logical_id,
+                &request.object_id,
+                &request.generation,
+                &request.profile,
+                request.permission,
+                lease,
+                stop,
+            )
+            .map_err(map_search_error)?;
+            let result = shard
+                .retrieve(&read, &pair, &request.query, stop)
+                .map_err(map_search_error);
+            shard.release(store).map_err(map_search_error)?;
+            result
+        })();
+        let close = read.close();
+        if close.is_err() {
+            return Err(source_hold_outcome_unknown(&hold));
+        }
+        if !source_hold_present(&source, &hold, stop)? {
+            return Err(unavailable());
+        }
+        result
+    })();
+    let close = source.close();
+    if close.is_err() {
+        return Err(source_hold_binding_outcome_unknown(binding));
+    }
+
+    source_result
+}
+
+pub(super) fn federation_input(request: &EntityRetrievalRequest) -> serde_json::Value {
+    serde_json::json!({"generation":request.generation,"logical_id":request.logical_id,"object_id":request.object_id,
+        "profile_digest":request.profile.digest(),"query":request.query,"build_operation_id":request.source_hold.build_operation_id.as_str(),
+        "source_epoch":request.source_hold.source_store_epoch_id,"hold_id":request.source_hold.retention_root_id,"hold_digest":request.source_hold.retention_root_digest})
+}
+pub(super) fn fence_result(
+    request: &EntityRetrievalRequest,
+    batch: &mut WriteBatch,
+) -> ServiceResult<()> {
+    let (catalog, path) = search_catalog_key(&request.logical_id)?;
+    batch
+        .add_catalog_mutation(CatalogMutation::set(
+            catalog,
+            path,
+            CatalogExpectation::Exact(request.object_id.clone()),
+            request.object_id.clone(),
+        ))
+        .map_err(map_store_error)
 }

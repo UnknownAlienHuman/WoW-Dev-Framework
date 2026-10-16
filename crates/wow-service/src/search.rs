@@ -5,7 +5,9 @@
 
 mod documents;
 mod entity;
+mod federation;
 pub use entity::{EntityContinueRequest, EntityResultReleaseRequest, EntityRetrievalRequest};
+pub use federation::FederationRequest;
 mod reference;
 pub use reference::{
     ReferenceContinueRequest, ReferenceIndexBuildRequest, ReferenceResultReleaseRequest,
@@ -456,6 +458,13 @@ pub struct SearchOperationService {
 }
 
 impl SearchOperationService {
+    pub fn federate_search(
+        &self,
+        request: &FederationRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        federation::execute(request, stop)
+    }
     pub fn continue_entity_results(
         &self,
         request: &EntityContinueRequest,

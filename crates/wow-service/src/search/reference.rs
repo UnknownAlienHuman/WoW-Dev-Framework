@@ -340,52 +340,7 @@ pub(super) fn execute(
     let mut batch = WriteBatch::new();
     let outcome = (|| {
         let h = &request.handle;
-        require_root(
-            &store,
-            SEARCH_SHARD_CATALOG,
-            &h.logical_shard_id,
-            &h.object_id,
-        )?;
-        require_root(
-            &store,
-            SOURCE_ROOTS,
-            &h.logical_shard_id,
-            &h.reference_view_object_id,
-        )?;
-        let owner = PersistentReferenceStore::new(&mut store)
-            .read_exact(&h.reference_view_object_id)
-            .map_err(reference_error)?
-            .ok_or_else(unavailable)?;
-        if owner.generation_id() != h.reference_generation
-            || owner.self_digest() != h.reference_view_digest
-        {
-            return Err(mismatch());
-        }
-        let profile = handle_profile(h)?;
-        let lease = SearchStoreLeaseRequest::new(
-            lease_id_for("reference-search", &public_digest)?,
-            "wow-service-search",
-            LogicalEpoch::new(request.lease_expires_after),
-        )
-        .map_err(map_store_error)?;
-        let shard = open_reference_callable_shard(
-            &mut store,
-            &h.logical_shard_id,
-            &h.object_id,
-            &profile,
-            &h.reference_view_object_id,
-            &owner,
-            request.permission,
-            lease,
-            stop,
-        )
-        .map_err(map_search_error)?;
-        let query = request.query.as_ref().map(|query| {
-            shard
-                .retrieve(query, &owner, stop)
-                .map_err(map_search_error)
-        });
-        shard.release(&mut store).map_err(map_search_error)?;
+        let query = acquire_result(request, &mut store, &public_digest, stop)?;
         if retire {
             for (catalog, target) in [
                 (SEARCH_SHARD_CATALOG, &h.object_id),
@@ -548,4 +503,84 @@ fn unavailable() -> ServiceError {
         ServiceErrorCode::ExactGenerationUnavailable,
         "exact native Reference Search roots or owner object are unavailable",
     )
+}
+
+pub(super) fn acquire_result(
+    request: &ReferenceShardRequest,
+    store: &mut Store,
+    public_digest: &str,
+    stop: &AtomicBool,
+) -> ServiceResult<Option<ServiceResult<wow_search::reference::ReferenceQueryResult>>> {
+    let h = &request.handle;
+    require_root(
+        store,
+        SEARCH_SHARD_CATALOG,
+        &h.logical_shard_id,
+        &h.object_id,
+    )?;
+    require_root(
+        store,
+        SOURCE_ROOTS,
+        &h.logical_shard_id,
+        &h.reference_view_object_id,
+    )?;
+    let owner = PersistentReferenceStore::new(store)
+        .read_exact(&h.reference_view_object_id)
+        .map_err(reference_error)?
+        .ok_or_else(unavailable)?;
+    if owner.generation_id() != h.reference_generation
+        || owner.self_digest() != h.reference_view_digest
+    {
+        return Err(mismatch());
+    }
+    let profile = handle_profile(h)?;
+    let lease = SearchStoreLeaseRequest::new(
+        lease_id_for("reference-search", public_digest)?,
+        "wow-service-search",
+        LogicalEpoch::new(request.lease_expires_after),
+    )
+    .map_err(map_store_error)?;
+    let shard = open_reference_callable_shard(
+        store,
+        &h.logical_shard_id,
+        &h.object_id,
+        &profile,
+        &h.reference_view_object_id,
+        &owner,
+        request.permission,
+        lease,
+        stop,
+    )
+    .map_err(map_search_error)?;
+    let query = request.query.as_ref().map(|query| {
+        shard
+            .retrieve(query, &owner, stop)
+            .map_err(map_search_error)
+    });
+    shard.release(store).map_err(map_search_error)?;
+
+    Ok(query)
+}
+pub(super) fn federation_input(request: &ReferenceShardRequest) -> serde_json::Value {
+    serde_json::json!({"handle":request.handle,"query":request.query})
+}
+pub(super) fn fence_result(
+    request: &ReferenceShardRequest,
+    batch: &mut WriteBatch,
+) -> ServiceResult<()> {
+    let h = &request.handle;
+    for (catalog, target) in [
+        (SEARCH_SHARD_CATALOG, &h.object_id),
+        (SOURCE_ROOTS, &h.reference_view_object_id),
+    ] {
+        batch
+            .add_catalog_mutation(CatalogMutation::set(
+                CatalogName::new(catalog).map_err(map_store_error)?,
+                CatalogPath::new(h.logical_shard_id.clone()).map_err(map_store_error)?,
+                CatalogExpectation::Exact(target.clone()),
+                target.clone(),
+            ))
+            .map_err(map_store_error)?;
+    }
+    Ok(())
 }

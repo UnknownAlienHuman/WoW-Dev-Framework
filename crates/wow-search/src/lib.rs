@@ -30,6 +30,7 @@ use wow_store::{
 pub use wow_store::search::SearchStoreLeaseRequest;
 
 pub mod entities;
+pub mod federation;
 mod file_set;
 mod page_budget;
 pub mod reference;

@@ -378,6 +378,7 @@ mod tests {
             bytes: encode(&envelope)?.into_boxed_slice(),
             status: "candidate_only",
             profile_digest: "recorded-profile".into(),
+            project_kind: wow_project::ProjectKind::Repository,
         };
         let first = result.page(&policy, None, &stop)?;
         let cursor = first
