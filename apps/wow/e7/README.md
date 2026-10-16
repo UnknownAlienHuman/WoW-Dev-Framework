@@ -6,7 +6,9 @@
 
 The executable subset is `wow transport capabilities` and
 `wow mcp --transport stdio --profile mcp-2025-11-25-stdio-v1`, with fixed
-`wow.status` and the exact profile resource. The other host modes below remain
+`wow.status` and the exact profile resource. An explicit registered Context
+profile adds native inspection; see [MCP mapping](MCP_TOOL_RESOURCE_MAPPING.md).
+The other host modes below remain
 specified and unimplemented; their inventory does not advertise runtime support.
 
 The final host contract covers one-shot CLI, local daemon, LSP 3.18 stdio,
@@ -69,8 +71,6 @@ The last mode is disabled unless an explicit local-only profile is configured. N
 
 ```text
 documentation frontier: E7-A
-implementation frontier: not-started
-Cargo.toml: absent
-Rust source: absent
-CI/workflows: absent
+implementation frontier: bounded status/session and registered native Context MCP
+full E7-A acceptance: open
 ```

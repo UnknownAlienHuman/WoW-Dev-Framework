@@ -2,6 +2,46 @@
 
 **Status:** normative initial non-mutating profile for MCP revision 2025-11-25.
 
+## Executable registered Context subset (Issue #176)
+
+```text
+wow mcp --transport stdio --profile mcp-2025-11-25-stdio-context-v1 --context-host <ABSOLUTE-REGULAR-FILE> --allow-local-metadata-only
+```
+
+Startup reads one bounded inert E3 native host file and explicitly authorizes local
+metadata. The fixed tools are `wow.status` and `wow.context_inspect`; the resource
+`wow://profiles/mcp-2025-11-25-stdio-context-v1` returns the exact registration,
+schemas, limits and digests. `wow transport capabilities` continues to describe
+the original status-only profile; inspect the selected startup resource for this
+operator-specific profile. No tool accepts host paths, roots or configuration.
+
+Context arguments are the strict object `projectStoreId`, `storeGenerationId`,
+`root: {kind: "project" | "graph_entity", id: <exact-id>}`, and
+`level: "l0" | "l1" | "both"`. The registration must match startup, the generation
+is an exact retained `project-store-generation:sha256:...`, and the root must be
+admitted by that native generation. `current` and inferred selections are absent.
+This subset uses Primary default L0/L1 metadata, with source bodies excluded.
+
+One registered Service call invokes E3 Inspect and preserves its native envelope
+in `structuredContent` and canonical JSON text. Native Failed/Cancelled sets
+`isError`; Partial/Truncated remains data. Admission failures are redacted tool
+errors. Registration state is `configured_metadata_only`, not a materialized
+workspace. Only metadata IDs and the semantic host-binding digest are exposed;
+filesystem routing stays private.
+
+The synchronous process admits one session/request and no queue. Wire progress,
+wire cancellation, reconnect, document/workspace mutation and daemon remain
+unsupported. A process stop flag reaches active native work; idle-stdin signal
+interruption is not qualified. EOF closes the frontend session synchronously;
+native owners close before their envelope is returned. Frames stay at 64 KiB and
+depth 32; native responses have a 64 MiB serialized limit, checked before output,
+including the structured envelope and escaped compatibility text.
+
+The original `mcp-2025-11-25-stdio-v1` registry, profile, status wire and 64 KiB
+limits remain frozen. The inventories below describe the broader final contract,
+not additional currently advertised tools. Full E7-A/client/platform acceptance
+remains open under #125.
+
 ## Fixed tools
 
 The concrete registry is generated only from implemented service operations. Initial names and exact mappings are:

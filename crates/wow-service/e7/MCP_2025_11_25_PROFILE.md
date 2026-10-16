@@ -1,6 +1,16 @@
 # E7-A Model Context Protocol 2025-11-25 profile
 
-**Status:** normative supported profile; implementation has not started.
+**Status:** normative final profile; executable bounded subsets are recorded in
+`CONTRACT.json`. Full E7-A acceptance remains open.
+
+The original status-only `mcp-2025-11-25-stdio-v1` remains byte-compatible.
+Issue #176 adds the explicit `mcp-2025-11-25-stdio-context-v1`: one approved
+configured metadata-only host, exact generation/root and fixed native
+`context_inspect` operation, without workspace registration from tool arguments.
+Its actual executable grammar and restrictions are in
+[`apps/wow/e7/MCP_TOOL_RESOURCE_MAPPING.md`](../../../apps/wow/e7/MCP_TOOL_RESOURCE_MAPPING.md).
+Progress, wire cancellation and other broader capabilities listed below remain
+unsupported in these synchronous subsets.
 
 Official protocol reference: <https://modelcontextprotocol.io/specification/2025-11-25/>
 

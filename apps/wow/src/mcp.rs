@@ -3,15 +3,18 @@
 use std::ffi::OsString;
 use std::fmt;
 use std::io::{self, BufRead, BufReader, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Number, Value, json};
 use wow_service::frontend::{
     FrontendCapabilitySet, FrontendClientIdentity, FrontendService, FrontendSessionId,
-    FrontendSessionOpenRequest, MCP_MAX_FRAME_BYTES, MCP_MAX_JSON_DEPTH, MCP_MAX_OUTPUT_BYTES,
-    MCP_PROFILE_RESOURCE_URI, MCP_PROTOCOL_REVISION, MCP_STATUS_TOOL_NAME, MCP_STDIO_PROFILE_ID,
+    FrontendSessionOpenRequest, MCP_CONTEXT_PROFILE_ID, MCP_CONTEXT_TOOL_NAME, MCP_MAX_FRAME_BYTES,
+    MCP_MAX_JSON_DEPTH, MCP_MAX_OUTPUT_BYTES, MCP_PROTOCOL_REVISION, MCP_STATUS_TOOL_NAME,
+    MCP_STDIO_PROFILE_ID,
 };
+mod context;
 use wow_service::{ServiceError, ServiceErrorCode};
 
 pub mod transport_capabilities;
@@ -24,6 +27,12 @@ const MAX_REQUEST_ID_BYTES: usize = 256;
 const STDERR_MESSAGE: &str = "wow: MCP stdio request failed";
 
 pub fn run(arguments: Vec<OsString>) -> u8 {
+    if arguments
+        .get(4)
+        .is_some_and(|value| value == MCP_CONTEXT_PROFILE_ID)
+    {
+        return context::run(arguments);
+    }
     if arguments.len() != 5
         || arguments[0] != "mcp"
         || arguments[1] != "--transport"
@@ -55,18 +64,33 @@ pub fn run(arguments: Vec<OsString>) -> u8 {
 
 fn run_stdio<R: BufRead, W: Write, E: Write>(
     service: &FrontendService,
+    reader: R,
+    stdout: &mut W,
+    stderr: &mut E,
+) -> u8 {
+    run_stdio_with_stop(service, reader, stdout, stderr, &AtomicBool::new(false))
+}
+
+fn run_stdio_with_stop<R: BufRead, W: Write, E: Write>(
+    service: &FrontendService,
     mut reader: R,
     stdout: &mut W,
     stderr: &mut E,
+    stop: &AtomicBool,
 ) -> u8 {
     let mut server = McpServer {
         service,
         phase: SessionPhase::AwaitInitialize,
+        stop,
     };
     let mut frame = Vec::with_capacity(4096);
     let mut exit_code = 0;
 
     loop {
+        if stop.load(Ordering::Acquire) {
+            exit_code = 130;
+            break;
+        }
         frame.clear();
         match read_frame(&mut reader, &mut frame) {
             Ok(false) => break,
@@ -143,6 +167,7 @@ impl SessionPhase {
 struct McpServer<'a> {
     service: &'a FrontendService,
     phase: SessionPhase,
+    stop: &'a AtomicBool,
 }
 
 impl McpServer<'_> {
@@ -167,6 +192,20 @@ impl McpServer<'_> {
         message: RpcMessage,
         output: &mut W,
     ) -> Result<Control, ()> {
+        if message.method == "notifications/cancelled"
+            && message.id.is_none()
+            && self
+                .service
+                .frontend_capabilities()
+                .profile
+                .profile_id
+                .as_ref()
+                == MCP_CONTEXT_PROFILE_ID
+        {
+            // This synchronous profile declares wire cancellation unavailable.
+            // A notification read after completion cannot restart owner work.
+            return Ok(Control::Continue);
+        }
         if message.method == "ping" {
             if message.id.is_none() {
                 return Ok(Control::Close(2));
@@ -236,7 +275,12 @@ impl McpServer<'_> {
             .service
             .frontend_session_open(FrontendSessionOpenRequest {
                 protocol_revision: MCP_PROTOCOL_REVISION.into(),
-                profile_id: MCP_STDIO_PROFILE_ID.into(),
+                profile_id: self
+                    .service
+                    .frontend_capabilities()
+                    .profile
+                    .profile_id
+                    .clone(),
                 transport: "stdio".into(),
                 client,
             }) {
@@ -260,7 +304,7 @@ impl McpServer<'_> {
                     "title": "WoW Dev Framework",
                     "version": env!("CARGO_PKG_VERSION")
                 },
-                "instructions": "This stdio profile exposes only the fixed wow.status tool and exact profile manifest resource. Status reports frontend session and registry state; it does not inspect a project or run analysis."
+                "instructions": context::instructions(self.service)
             }
         });
         write_message(output, &response).map_err(|_| ())?;
@@ -302,34 +346,15 @@ impl McpServer<'_> {
             return self.invalid_params(Some(id), output);
         }
         let capabilities = self.service.frontend_capabilities();
-        let Some(tool) = selected_status_tool(capabilities) else {
-            return self.internal_error(Some(id), output);
-        };
-        let input_schema = match serde_json::from_str::<Value>(&tool.input_schema_json) {
-            Ok(value) => value,
-            Err(_) => return self.internal_error(Some(id), output),
-        };
-        let output_schema = match serde_json::from_str::<Value>(&tool.output_schema_json) {
-            Ok(value) => value,
-            Err(_) => return self.internal_error(Some(id), output),
+        let tools = match context::listed_tools(capabilities) {
+            Ok(tools) => tools,
+            Err(()) => return self.internal_error(Some(id), output),
         };
         let response = json!({
             "jsonrpc": "2.0",
             "id": id,
             "result": {
-                "tools": [{
-                    "name": tool.name,
-                    "title": "WoW frontend status",
-                    "description": tool.description,
-                    "inputSchema": input_schema,
-                    "outputSchema": output_schema,
-                    "annotations": {
-                        "readOnlyHint": tool.read_only_hint,
-                        "destructiveHint": tool.destructive_hint,
-                        "idempotentHint": tool.idempotent_hint,
-                        "openWorldHint": tool.open_world_hint
-                    }
-                }]
+                "tools": tools
             }
         });
         write_message(output, &response).map_err(|_| ())?;
@@ -350,6 +375,9 @@ impl McpServer<'_> {
         let Some(name) = params.get("name").and_then(Value::as_str) else {
             return self.invalid_params(Some(id), output);
         };
+        if name == MCP_CONTEXT_TOOL_NAME && context::enabled(self.service) {
+            return self.context_inspect_call(id, params.get("arguments"), output);
+        }
         if name != MCP_STATUS_TOOL_NAME {
             return self.invalid_params(Some(id), output);
         }
@@ -398,7 +426,7 @@ impl McpServer<'_> {
                 "resources": [{
                     "uri": resource.uri,
                     "name": resource.name,
-                    "description": format!("Exact manifest for profile {}; digest {}", MCP_STDIO_PROFILE_ID, capabilities.profile_digest),
+                    "description": format!("Exact manifest for profile {}; digest {}", capabilities.profile.profile_id, capabilities.profile_digest),
                     "mimeType": resource.mime_type
                 }]
             }
@@ -418,7 +446,15 @@ impl McpServer<'_> {
             Ok(params) => params,
             Err(()) => return self.invalid_params(Some(id), output),
         };
-        if params.get("uri").and_then(Value::as_str) != Some(MCP_PROFILE_RESOURCE_URI) {
+        if params.get("uri").and_then(Value::as_str)
+            != self
+                .service
+                .frontend_capabilities()
+                .profile
+                .resource_uris
+                .first()
+                .map(|uri| uri.as_ref())
+        {
             return self.invalid_params(Some(id), output);
         }
         let capabilities = self.service.frontend_capabilities();
@@ -878,9 +914,10 @@ fn exact_object<'a>(
 fn selected_status_tool(
     capabilities: &FrontendCapabilitySet,
 ) -> Option<&wow_service::frontend::FrontendMcpToolDescriptor> {
-    (capabilities.tools.len() == 1)
-        .then(|| capabilities.tools.first())
-        .flatten()
+    capabilities
+        .tools
+        .iter()
+        .find(|tool| tool.name.as_ref() == MCP_STATUS_TOOL_NAME)
         .filter(|tool| {
             tool.name.as_ref() == MCP_STATUS_TOOL_NAME
                 && tool.service_operation.as_ref() == "frontend_status"
@@ -896,7 +933,13 @@ fn selected_profile_resource(
     (capabilities.resources.len() == 1)
         .then(|| capabilities.resources.first())
         .flatten()
-        .filter(|resource| resource.uri.as_ref() == MCP_PROFILE_RESOURCE_URI)
+        .filter(|resource| {
+            capabilities
+                .profile
+                .resource_uris
+                .first()
+                .is_some_and(|uri| uri == &resource.uri)
+        })
 }
 
 fn error_response(id: Value, code: i32, message: &str) -> Value {
@@ -914,21 +957,52 @@ fn write_result<W: Write>(output: &mut W, id: Option<Value>, result: Value) -> i
 }
 
 fn write_message<W: Write>(output: &mut W, message: &Value) -> io::Result<()> {
+    write_message_with_limit(output, message, MCP_MAX_OUTPUT_BYTES)
+}
+
+fn write_message_with_limit<W: Write>(
+    output: &mut W,
+    message: &Value,
+    limit: usize,
+) -> io::Result<()> {
+    // Measure with a bounded sink before allocating the encoded response. Never
+    // emit a partial JSON frame when a result exceeds its selected profile.
+    let mut size = ResponseSize { bytes: 0, limit };
+    serde_json::to_writer(&mut size, message).map_err(io::Error::other)?;
     let bytes = serde_json::to_vec(message).map_err(|_| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             "MCP response serialization failed",
         )
     })?;
-    if bytes.len() > MCP_MAX_OUTPUT_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "MCP response exceeds profile limit",
-        ));
-    }
     output.write_all(&bytes)?;
     output.write_all(b"\n")?;
     output.flush()
+}
+
+struct ResponseSize {
+    bytes: usize,
+    limit: usize,
+}
+
+impl Write for ResponseSize {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.bytes = self
+            .bytes
+            .checked_add(bytes.len())
+            .filter(|size| *size <= self.limit)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "MCP response exceeds profile limit",
+                )
+            })?;
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 fn diagnostic(message: &str) {
@@ -942,8 +1016,21 @@ fn diagnostic_to<W: Write>(stderr: &mut W, message: &str) {
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
+    use wow_service::frontend::MCP_PROFILE_RESOURCE_URI;
 
     use super::*;
+
+    #[test]
+    fn output_limit_counts_escaped_bytes_before_writing_any_frame() -> io::Result<()> {
+        let message = json!({"text": "\n\"\\"});
+        let encoded = serde_json::to_vec(&message)?;
+        let mut output = Vec::new();
+        assert!(write_message_with_limit(&mut output, &message, encoded.len() - 1).is_err());
+        assert!(output.is_empty());
+        write_message_with_limit(&mut output, &message, encoded.len())?;
+        assert_eq!(output, [encoded.as_slice(), b"\n"].concat());
+        Ok(())
+    }
 
     fn initialize(id: u64) -> String {
         format!(
@@ -1067,6 +1154,7 @@ mod tests {
         let mut server = McpServer {
             service: &service,
             phase: SessionPhase::Ready { session_id },
+            stop: &AtomicBool::new(false),
         };
         let frames = [
             r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"wow.status","arguments":{"extra":true}}}"#,

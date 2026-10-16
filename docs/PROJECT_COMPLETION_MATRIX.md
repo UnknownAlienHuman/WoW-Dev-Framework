@@ -89,7 +89,7 @@ The selected alias handoff does not qualify complete composite/alias type invent
 | E4-A–E4-C | Partial selected exact ProjectFile search owner and Service/CLI one-shot and durable build/query/retire/GC; E4-B not started | Complete SearchStore/lane/ranking/miss/continuation and durability/fault qualification in #169; lineage/migration/static impact remain separate |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
 | E6-A–E6-B | Not started; optional/disabled | External candidates never block the local lane or gain exact/negative authority |
-| E7-A | Partial selected Service registry/session owner and MCP 2025-11-25 stdio frontend: `wow transport capabilities`, fixed `wow.status` and exact profile resource; first subset closed in #170 | Broader frontend operations, daemon/LSP, protocol conformance and E7-A acceptance remain open in #125 |
+| E7-A | Partial selected Service registry/session owner and MCP 2025-11-25 stdio frontend: frozen status-only profile (#170) and opt-in registered native `wow.context_inspect` with exact generation/root, unchanged E3 metadata and checked close (#176); exact profile resources | Broader frontend operations, workspace/documents, wire cancellation, daemon/LSP, protocol conformance and E7-A acceptance remain open in #125 |
 | E7-B | Not started | Build/sign/bundle/install/update/rollback/support |
 
 ## Immediate execution order

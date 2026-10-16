@@ -6,7 +6,11 @@
 
 `src/frontend.rs` implements the first fixed MCP stdio profile's immutable
 registry, bounded sessions, status/capabilities and checked close operations.
-The selected application exposes `wow.status` and the exact profile resource.
+The original application profile exposes `wow.status` and its exact profile
+resource. The explicit `mcp-2025-11-25-stdio-context-v1` profile additionally binds
+one approved metadata-only native Context host and exposes `wow.context_inspect`
+through the existing E3 operation. Registration is configured metadata, with
+actual acquisition and membership checked on use; it is not workspace acceptance.
 The remaining operations below are the final contract inventory; workspace,
 document, daemon and LSP functionality is not implemented by this subset.
 

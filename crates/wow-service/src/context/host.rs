@@ -76,6 +76,16 @@ impl ContextMapHostInput {
     pub(crate) fn registration_id(&self) -> &str {
         &self.project_store_id
     }
+    pub(crate) fn project_identity(&self) -> &str {
+        self.project_id.as_str()
+    }
+    pub(crate) fn reference_identity(&self) -> (&str, &str, &str) {
+        (
+            self.reference_profile.profile_id().as_str(),
+            self.reference.generation_id(),
+            self.reference.self_digest(),
+        )
+    }
 
     /// Compare original cross-owner metadata with the actual typed host input;
     /// this does not reconstruct a Reference owner from a Search projection.
@@ -113,7 +123,7 @@ impl ContextMapHostInput {
         host.validate(stop)?;
         Ok(host)
     }
-    pub(super) fn validate(&self, stop: &AtomicBool) -> ServiceResult<()> {
+    pub(crate) fn validate(&self, stop: &AtomicBool) -> ServiceResult<()> {
         checkpoint(stop)?;
         let schema_valid = matches!(
             self.schema.as_ref(),

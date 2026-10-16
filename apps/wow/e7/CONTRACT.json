@@ -42,6 +42,18 @@
     },
     "full_e7_a_conformance": "not-accepted"
   },
+  "registered_context_subset": {
+    "activation_issue": 176,
+    "transport_profile": "mcp-2025-11-25-stdio-context-v1",
+    "startup": "--context-host <absolute-regular-file> --allow-local-metadata-only",
+    "registration_state": "configured_metadata_only",
+    "tools": ["wow.status -> frontend_status", "wow.context_inspect -> context_inspect"],
+    "resource": "wow://profiles/mcp-2025-11-25-stdio-context-v1",
+    "arguments": ["projectStoreId", "storeGenerationId", "root", "level"],
+    "bounds": {"frame_bytes": 65536, "native_output_bytes": 67108864, "json_depth": 32, "active_requests": 1, "queued_requests": 0},
+    "unsupported": ["wire-progress", "wire-cancellation", "workspace-document-mutation", "daemon", "reconnect"],
+    "full_e7_a_conformance": "not-accepted"
+  },
   "framework_dependencies": [
     "wow-service"
   ],

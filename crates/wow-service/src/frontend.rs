@@ -1,7 +1,7 @@
 //! Bounded, transport-neutral frontend registry and in-memory session owner.
 //!
-//! This module owns only the first MCP stdio profile's exact capability and
-//! session state. It does not wrap project, search, context, or analysis work.
+//! This module owns exact MCP capabilities and session state. Its opt-in Context
+//! adapter reuses the native service operation without moving owner algorithms.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
@@ -11,6 +11,12 @@ use sha2::{Digest, Sha256};
 
 use crate::identity::canonical_digest;
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
+mod context;
+pub use context::{
+    FrontendContextInspectRequest, FrontendContextRegistrationDescriptor,
+    MCP_CONTEXT_MAX_OUTPUT_BYTES, MCP_CONTEXT_PROFILE_ID, MCP_CONTEXT_PROFILE_RESOURCE_URI,
+    MCP_CONTEXT_TOOL_NAME,
+};
 
 pub const FRONTEND_REGISTRY_ID: &str = "wow-service/e7-a/frontend-session-operation-registry";
 pub const MCP_PROTOCOL_REVISION: &str = "2025-11-25";
@@ -121,6 +127,8 @@ pub struct FrontendMcpProfile {
     pub tool_names: Vec<Box<str>>,
     pub resource_uris: Vec<Box<str>>,
     pub limits: FrontendResourceLimits,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_registration: Option<FrontendContextRegistrationDescriptor>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -346,6 +354,7 @@ impl FrontendOperationRegistry {
                 max_active_requests: MCP_MAX_ACTIVE_REQUESTS,
                 max_queued_requests: MCP_MAX_QUEUED_REQUESTS,
             },
+            context_registration: None,
         };
         // Lists are reviewed data; sorting makes the digest independent of edits
         // to construction order while preserving the one-tool mapping.
@@ -410,6 +419,7 @@ struct ActiveFrontendSession {
 pub struct FrontendService {
     registry: FrontendOperationRegistry,
     active_session: Mutex<Option<ActiveFrontendSession>>,
+    context_registration: Option<context::RegisteredContextHost>,
 }
 
 impl FrontendService {
@@ -417,6 +427,7 @@ impl FrontendService {
         Ok(Self {
             registry: FrontendOperationRegistry::new()?,
             active_session: Mutex::new(None),
+            context_registration: None,
         })
     }
 
@@ -438,7 +449,7 @@ impl FrontendService {
         request: FrontendSessionOpenRequest,
     ) -> ServiceResult<FrontendSessionSnapshot> {
         if request.protocol_revision.as_ref() != MCP_PROTOCOL_REVISION
-            || request.profile_id.as_ref() != MCP_STDIO_PROFILE_ID
+            || request.profile_id != self.registry.capabilities.profile.profile_id
             || request.transport.as_ref() != "stdio"
         {
             return Err(invalid_frontend_request("unsupported frontend profile"));
@@ -501,11 +512,16 @@ impl FrontendService {
             .filter(|session| session.session_id == session_id)
             .ok_or_else(|| invalid_frontend_request("frontend session is not open"))?;
         Ok(FrontendStatus {
-            schema: STATUS_SCHEMA.into(),
+            schema: if self.context_registration.is_some() {
+                context::CONTEXT_STATUS_SCHEMA
+            } else {
+                STATUS_SCHEMA
+            }
+            .into(),
             session_id: session.session_id,
             state: "open".into(),
             client: session.client.clone(),
-            profile_id: MCP_STDIO_PROFILE_ID.into(),
+            profile_id: self.registry.capabilities.profile.profile_id.clone(),
             registry_digest: self.registry.capabilities.registry_digest.clone(),
             profile_digest: self.registry.capabilities.profile_digest.clone(),
         })
@@ -531,11 +547,16 @@ impl FrontendService {
 
     fn snapshot(&self, session: &ActiveFrontendSession) -> FrontendSessionSnapshot {
         FrontendSessionSnapshot {
-            schema: SESSION_SCHEMA.into(),
+            schema: if self.context_registration.is_some() {
+                context::CONTEXT_SESSION_SCHEMA
+            } else {
+                SESSION_SCHEMA
+            }
+            .into(),
             session_id: session.session_id,
             state: "open".into(),
             client: session.client.clone(),
-            profile_id: MCP_STDIO_PROFILE_ID.into(),
+            profile_id: self.registry.capabilities.profile.profile_id.clone(),
             registry_digest: self.registry.capabilities.registry_digest.clone(),
             profile_digest: self.registry.capabilities.profile_digest.clone(),
         }

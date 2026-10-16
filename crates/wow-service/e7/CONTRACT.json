@@ -22,6 +22,16 @@
     "profile_digest": "frontend-profile:sha256:2c743eec8a457cbde35824fb2b440b1646bf59c5e1d1f0d2d752e6845f362730",
     "full_e7_a_conformance": "not-accepted"
   },
+  "registered_context_subset": {
+    "activation_issue": 176,
+    "mcp_profile": "mcp-2025-11-25-stdio-context-v1",
+    "registration_state": "configured_metadata_only",
+    "mcp_tools": ["wow.status -> frontend_status", "wow.context_inspect -> context_inspect"],
+    "host_identity": "registration/project/Reference identities and existing semantic host-binding digest; filesystem routing excluded",
+    "selection": "exact retained Store generation and explicit Primary root/level",
+    "native_result": "unchanged E3 Context Inspect envelope after checked reverse closure",
+    "full_e7_a_conformance": "not-accepted"
+  },
   "application_contract": "apps/wow/e7/CONTRACT.json",
   "protocol_profiles": {
     "local_daemon": "wow-local-jsonrpc/1",
