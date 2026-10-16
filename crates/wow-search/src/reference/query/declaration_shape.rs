@@ -45,16 +45,7 @@ impl DeclarationShape {
             valid_text(name)?;
         }
         for filters in [&self.fields, &self.arguments, &self.returns] {
-            if filters.len() > 128 {
-                return Err(SearchError::InvalidProfile);
-            }
-            let mut positions = std::collections::BTreeSet::new();
-            for filter in filters {
-                valid_text(&filter.original_type)?;
-                if !positions.insert(filter.position) {
-                    return Err(SearchError::InvalidProfile);
-                }
-            }
+            validate_fields(filters)?;
         }
         Ok(())
     }

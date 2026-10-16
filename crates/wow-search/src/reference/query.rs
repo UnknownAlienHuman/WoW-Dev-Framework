@@ -2,11 +2,15 @@
 use super::*;
 use crate::SearchRetrievalLane as Lane;
 mod declaration_shape;
+mod field_shape;
 mod pagination;
 mod similar_lane;
 mod similarity;
+use field_shape::{FieldFilter, fields_match, validate_fields};
 pub use pagination::{ReferencePage, ReferencePageCursor, ReferencePagePolicy};
 const REQUEST_SCHEMA: &str = "wow-search/native-reference-query/1";
+const FIELD_SHAPE_REQUEST_SCHEMA: &str = "wow-search/native-reference-field-shape-query/1";
+const FIELD_SHAPE_QUERY_PROFILE: &str = "wow-search/native-reference-field-shape/1";
 const QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape/1";
 const RANK_PROFILE: &str = "wow-search/reference-authority-ordinal-fusion/1";
 const SIM_QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape-similarity/1";
@@ -59,25 +63,12 @@ struct Shape {
     return_count: Option<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     arguments: Vec<FieldFilter>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    returns: Vec<FieldFilter>,
     #[serde(skip_serializing_if = "Option::is_none")]
     event_payload_count: Option<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     event_payload: Vec<FieldFilter>,
-}
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct FieldFilter {
-    position: u32,
-    original_type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    nilability: Option<Nilability>,
-}
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum Nilability {
-    Unspecified,
-    AllowsNil,
-    DisallowsNil,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -121,8 +112,10 @@ impl ReferenceQueryRequest {
             serde_json::from_slice(bytes).map_err(|_| SearchError::InvalidProfile)?;
         request.enabled_lanes.sort();
         request.required_lanes.sort();
-        if request.schema != REQUEST_SCHEMA
-            || request.enabled_lanes.is_empty()
+        if !matches!(
+            request.schema.as_str(),
+            REQUEST_SCHEMA | FIELD_SHAPE_REQUEST_SCHEMA
+        ) || request.enabled_lanes.is_empty()
             || request.enabled_lanes.len() > 9
             || request.required_lanes.len() > 9
             || request.enabled_lanes.windows(2).any(|p| p[0] == p[1])
@@ -133,6 +126,9 @@ impl ReferenceQueryRequest {
                 .any(|l| !request.enabled_lanes.contains(l))
         {
             return Err(SearchError::InvalidProfile);
+        }
+        if request.schema == REQUEST_SCHEMA {
+            validate_legacy_shape(bytes)?;
         }
         let s = &request.selectors;
         if let Some(key) = &s.entity_key {
@@ -184,14 +180,17 @@ impl ReferenceQueryRequest {
             if (shape.argument_count.is_none()
                 && shape.return_count.is_none()
                 && shape.arguments.is_empty()
+                && shape.returns.is_empty()
                 && shape.event_payload_count.is_none()
                 && shape.event_payload.is_empty()
                 && shape.declaration.is_none())
                 || shape.arguments.len() > 128
+                || shape.returns.len() > 128
                 || shape.event_payload.len() > 128
                 || ((shape.argument_count.is_some()
                     || shape.return_count.is_some()
-                    || !shape.arguments.is_empty())
+                    || !shape.arguments.is_empty()
+                    || !shape.returns.is_empty())
                     && (shape.event_payload_count.is_some() || !shape.event_payload.is_empty()))
             {
                 return Err(SearchError::InvalidProfile);
@@ -200,6 +199,7 @@ impl ReferenceQueryRequest {
                 if shape.argument_count.is_some()
                     || shape.return_count.is_some()
                     || !shape.arguments.is_empty()
+                    || !shape.returns.is_empty()
                     || shape.event_payload_count.is_some()
                     || !shape.event_payload.is_empty()
                 {
@@ -207,19 +207,8 @@ impl ReferenceQueryRequest {
                 }
                 declaration.validate()?;
             }
-            let mut positions = std::collections::BTreeSet::new();
-            for field in &shape.arguments {
-                valid_text(&field.original_type)?;
-                if !positions.insert(field.position) {
-                    return Err(SearchError::InvalidProfile);
-                }
-            }
-            positions.clear();
-            for field in &shape.event_payload {
-                valid_text(&field.original_type)?;
-                if !positions.insert(field.position) {
-                    return Err(SearchError::InvalidProfile);
-                }
+            for fields in [&shape.arguments, &shape.returns, &shape.event_payload] {
+                validate_fields(fields)?;
             }
         }
         if let Some(similarity) = &s.identifier_similarity {
@@ -235,6 +224,49 @@ impl ReferenceQueryRequest {
         check(stop)?;
         Ok(request)
     }
+}
+
+// Preserve the old closed schema, including explicit empty/null extension keys.
+// Typed decoding above still rejects duplicate fields before this compatibility check.
+fn validate_legacy_shape(bytes: &[u8]) -> SearchResult<()> {
+    let value: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|_| SearchError::InvalidProfile)?;
+    let Some(shape) = value
+        .pointer("/selectors/shape")
+        .and_then(serde_json::Value::as_object)
+    else {
+        return Ok(());
+    };
+    if shape.contains_key("returns") {
+        return Err(SearchError::InvalidProfile);
+    }
+    let contains_inner = |object: &serde_json::Map<String, serde_json::Value>, key: &str| {
+        object
+            .get(key)
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|fields| {
+                fields.iter().any(|field| {
+                    field
+                        .as_object()
+                        .is_some_and(|field| field.contains_key("inner_type"))
+                })
+            })
+    };
+    if ["arguments", "event_payload"]
+        .iter()
+        .any(|key| contains_inner(shape, key))
+        || shape
+            .get("declaration")
+            .and_then(serde_json::Value::as_object)
+            .is_some_and(|declaration| {
+                ["fields", "arguments", "returns"]
+                    .iter()
+                    .any(|key| contains_inner(declaration, key))
+            })
+    {
+        return Err(SearchError::InvalidProfile);
+    }
+    Ok(())
 }
 fn valid_text(value: &str) -> SearchResult<()> {
     if value.trim().is_empty() || value.len() > 4096 || value.chars().any(char::is_control) {
@@ -878,6 +910,7 @@ fn shape_matches(document: &Document, shape: &Shape) -> bool {
         return shape.argument_count.is_none()
             && shape.return_count.is_none()
             && shape.arguments.is_empty()
+            && shape.returns.is_empty()
             && shape
                 .event_payload_count
                 .is_none_or(|count| count as usize == event.payload.len())
@@ -892,33 +925,8 @@ fn shape_matches(document: &Document, shape: &Shape) -> bool {
         && shape
             .return_count
             .is_none_or(|n| n as usize == document.returns.len())
-        && shape.arguments.iter().all(|filter| {
-            document
-                .arguments
-                .get(filter.position as usize)
-                .is_some_and(|field| {
-                    field.original_type == filter.original_type
-                        && match filter.nilability {
-                            None => true,
-                            Some(Nilability::Unspecified) => field.nilable.is_none(),
-                            Some(Nilability::AllowsNil) => field.nilable == Some(true),
-                            Some(Nilability::DisallowsNil) => field.nilable == Some(false),
-                        }
-                })
-        })
-}
-fn fields_match(fields: &[Field], filters: &[FieldFilter]) -> bool {
-    filters.iter().all(|filter| {
-        fields.get(filter.position as usize).is_some_and(|field| {
-            field.original_type == filter.original_type
-                && match filter.nilability {
-                    None => true,
-                    Some(Nilability::Unspecified) => field.nilable.is_none(),
-                    Some(Nilability::AllowsNil) => field.nilable == Some(true),
-                    Some(Nilability::DisallowsNil) => field.nilable == Some(false),
-                }
-        })
-    })
+        && fields_match(&document.arguments, &shape.arguments)
+        && fields_match(&document.returns, &shape.returns)
 }
 fn shape_digest(document: &Document) -> SearchResult<Box<str>> {
     if let Some(declaration) = &document.declaration {
@@ -945,6 +953,9 @@ fn capture_query_profile(
     selection: Option<NativeReferenceDocuments>,
     request: &ReferenceQueryRequest,
 ) -> &'static str {
+    if request.schema == FIELD_SHAPE_REQUEST_SCHEMA {
+        return FIELD_SHAPE_QUERY_PROFILE;
+    }
     let similar = request.selectors.identifier_similarity.is_some();
     match (selection, similar) {
         (Some(NativeReferenceDocuments::SourceDeclarationsV1), true) => {
@@ -1063,6 +1074,43 @@ impl ReferenceSearchShard {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn field_shape_schema_is_explicit_and_preserves_kind_boundaries() -> SearchResult<()> {
+        let stop = AtomicBool::new(false);
+        let input = json!({"schema":FIELD_SHAPE_REQUEST_SCHEMA,"selectors":{"shape":{
+            "returns":[{"position":0,"original_type":"table","inner_type":{"kind":"equals","original_type":"number"},"nilability":"allows_nil"}]}},
+            "enabled_lanes":["structured_shape"],"required_lanes":["structured_shape"],
+            "max_scanned_documents":4,"max_candidates":4,"max_signals":8,"max_result_bytes":65536});
+        let encode = |value: &serde_json::Value| {
+            serde_json::to_vec(value).map_err(|_| SearchError::InvalidProfile)
+        };
+        let request = ReferenceQueryRequest::from_json_slice(&encode(&input)?, &stop)?;
+        assert_eq!(
+            capture_query_profile(None, &request),
+            FIELD_SHAPE_QUERY_PROFILE
+        );
+        let canonical =
+            wow_core::canonical_json_bytes(&request).map_err(|_| SearchError::InvalidProfile)?;
+        assert_eq!(
+            canonical,
+            wow_core::canonical_json_bytes(&input).map_err(|_| SearchError::InvalidProfile)?
+        );
+        let mut bad = input.clone();
+        bad["schema"] = json!(REQUEST_SCHEMA);
+        assert!(ReferenceQueryRequest::from_json_slice(&encode(&bad)?, &stop).is_err());
+        bad["selectors"]["shape"]["returns"] = json!([]);
+        assert!(ReferenceQueryRequest::from_json_slice(&encode(&bad)?, &stop).is_err());
+        bad["selectors"]["shape"] =
+            json!({"arguments":[{"position":0,"original_type":"table","inner_type":null}]});
+        assert!(ReferenceQueryRequest::from_json_slice(&encode(&bad)?, &stop).is_err());
+        bad = input.clone();
+        bad["selectors"]["shape"]["event_payload_count"] = json!(0);
+        assert!(ReferenceQueryRequest::from_json_slice(&encode(&bad)?, &stop).is_err());
+        bad = input;
+        bad["selectors"]["shape"]["declaration"] = json!({"kind":"callback"});
+        assert!(ReferenceQueryRequest::from_json_slice(&encode(&bad)?, &stop).is_err());
+        Ok(())
+    }
     #[test]
     fn closed_reference_request_preserves_missing_fields_and_owner_key_grammar() -> SearchResult<()>
     {

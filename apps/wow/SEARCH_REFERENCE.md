@@ -97,6 +97,47 @@ classification, corrected/resolved type equivalence and receiver inheritance
 are not queried by this profile. An available upstream type-resolution profile
 is retained as metadata. Shape signals are Candidate.
 
+### Original field-shape queries
+
+Select `"schema": "wow-search/native-reference-field-shape-query/1"` to filter
+ordered callable return fields as well as arguments, event payloads, structure
+fields and callback arguments/returns. This uses the same retained shard handle,
+query command, federation and captured-page lifecycle; no index rebuild is needed.
+For example, the following `selectors` searches a callable's first return:
+
+```json
+{
+  "shape": {
+    "return_count": 1,
+    "returns": [{
+      "position": 0,
+      "original_type": "table",
+      "inner_type": {"kind": "equals", "original_type": "number"},
+      "nilability": "allows_nil"
+    }]
+  }
+}
+```
+
+The remaining request envelope and finite budgets are the same as above. Enable
+`structured_shape`. Each field filter requires its original outer `original_type`;
+optional `inner_type` is either `{"kind":"unspecified"}` for metadata the owner
+did not state, or `{"kind":"equals","original_type":"..."}` for exact recorded
+text. Omitting `inner_type` leaves that field unconstrained. Case is preserved;
+missing metadata never matches an explicit inner type. These filters also apply
+inside the existing event `event_payload` and declaration `fields`, `arguments`
+and `returns` arrays. Callable, event and declaration selectors cannot be mixed.
+Positions remain zero based and unique within each array, with at most 128 filters
+per array. Out-of-range positions match nothing; no type equivalence, widening,
+default, variadic, runtime or absence conclusion is inferred.
+
+The new schema selects `wow-search/native-reference-field-shape/1`; its exact
+request and retained shard bind the query identity. Shape signals remain band-7
+Candidate evidence with original field, record, source and value digests. Legacy
+`wow-search/native-reference-query/1` rejects callable `returns` and `inner_type`
+extension keys and retains its original query/profile/result bytes. Existing
+declaration-return filters in that legacy schema remain supported.
+
 The result is an immutable
 `wow-search/native-reference-result-set/1` manifest with complete whole-candidate
 name/namespace/field/source projections and every retained signal. Each signal
