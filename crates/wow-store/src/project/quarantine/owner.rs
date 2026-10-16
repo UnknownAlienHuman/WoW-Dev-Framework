@@ -153,6 +153,7 @@ pub(super) fn open_owned(root: &Path, catalog: &RecordCatalog) -> StoreResult<Ow
         }
     }
     let life = Rc::new(Lifetime {
+        custody: std::sync::Arc::new(()),
         _lock: Rc::new(lock),
         _instance_lock: instance_lock,
         leases: RefCell::new(BTreeMap::new()),

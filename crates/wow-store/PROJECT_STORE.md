@@ -65,3 +65,13 @@ A reader observes the old publication set or the new publication set, never a mi
 - no schema/runtime-profile upgrade in place when it changes epoch compatibility;
 - no benchmark claim before executable implementation;
 - no Rust or Cargo activation during this documentation phase.
+## Borrowed read custody
+
+`ReadSnapshot::origin` supplies a nonserializable weak origin; `custody` supplies
+a live borrowed scope. Only that actual snapshot's origin matches the scope;
+two scopes share an opened owner only when their private runtime owner token is
+the same. These values expose no SQL, path, connection or serialized pointer.
+Weak origins cannot keep a transaction/lease/lock alive; borrowed custody prevents
+closing its snapshot while used. Logical EpochId equality is not runtime custody.
+The first consumer is Project's exact retained generation pair (#177). Existing
+read/epoch/generation bytes and logical association behavior remain unchanged.

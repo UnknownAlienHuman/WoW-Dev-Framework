@@ -12,6 +12,14 @@
   "operation_inventory_role": "specified final E0-D surface; the selected capability rows describe existing code without accepting the complete package",
   "capability_routing": [
     {
+      "capability": "retained-native-generation-pair",
+      "status": "partial-functional",
+      "owners": [{"path": "crates/wow-project/src/replay/publication/generation_pair.rs", "symbol": "RetainedGenerationPair::bind"}],
+      "application_routes": [{"path": "crates/wow-service/src/live_project/generation_pair.rs", "symbol": "read_live_project_generation_pair"}, {"path": "apps/wow/src/project/pair.rs", "symbol": "run"}],
+      "acceptance_status": "pending",
+      "blocking_issues": [120]
+    },
+    {
       "capability": "native-project-publication",
       "status": "partial-functional",
       "owners": [{"path": "crates/wow-project/src/publication.rs", "symbol": "publish_initial_cancellable"}, {"path": "crates/wow-project/src/publication.rs", "symbol": "apply_update_cancellable"}, {"path": "crates/wow-project/src/snapshot.rs", "symbol": "open_view"}],

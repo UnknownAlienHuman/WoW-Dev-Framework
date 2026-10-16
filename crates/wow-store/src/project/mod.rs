@@ -37,7 +37,9 @@ pub use quarantine::{
     CurrentObservation, PointerReadFailure, QuarantineInspection, QuarantineReceipt,
     QuarantineReference, QuarantinedStore,
 };
-pub use read::{ReadSelector, ReadSnapshot, ValidatedRead};
+pub use read::{
+    ReadSelector, ReadSnapshot, ReadSnapshotCustody, ReadSnapshotOrigin, ValidatedRead,
+};
 pub use recovery::{
     AcknowledgmentState, CurrentState, RecoveryDisposition, RecoveryIncident, RecoveryOperation,
     RecoveryReport, RecoveryScope, ScopeCoverage, ScopeState,

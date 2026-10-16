@@ -18,6 +18,7 @@ type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 mod current_recovery;
 mod durable;
 mod gc;
+mod generation_pair;
 mod library_modes;
 #[path = "migration_tests.rs"]
 mod migration;
@@ -43,6 +44,17 @@ fn input_bundle_with_plans(
         &wow_project::load::ProjectPackageLoadPlan,
         &wow_project::load::ProjectPackageMainPlan,
     )>,
+) -> TestResult<ProjectInputBundle> {
+    input_bundle_with_budget(files, plan, packages, ProjectBudgetPolicy::fixture_e0()?)
+}
+fn input_bundle_with_budget(
+    files: Vec<ProjectInputFile>,
+    plan: Option<&wow_project::load::ProjectLoadPlan>,
+    packages: Option<(
+        &wow_project::load::ProjectPackageLoadPlan,
+        &wow_project::load::ProjectPackageMainPlan,
+    )>,
+    budget: ProjectBudgetPolicy,
 ) -> TestResult<ProjectInputBundle> {
     // Synthetic test identities authorize no product compatibility/acceptance.
     let backend = EmmyBackendIdentity::new(
@@ -92,7 +104,7 @@ fn input_bundle_with_plans(
     )?)
     .logical_root("fixtures/project-pair/main")
     .capability_policy(ProjectCapabilityPolicy::degraded_e0()?)
-    .budget_policy(ProjectBudgetPolicy::fixture_e0()?);
+    .budget_policy(budget);
     let builder = match plan {
         Some(plan) => builder.load_plan(plan)?,
         None => builder,

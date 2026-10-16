@@ -59,6 +59,22 @@ struct OwnerSpec {
 
 const PROJECT_CAPABILITIES: &[CapabilitySpec] = &[
     CapabilitySpec {
+        name: "retained-native-generation-pair",
+        owners: &[(
+            "crates/wow-project/src/replay/publication/generation_pair.rs",
+            "RetainedGenerationPair::bind",
+        )],
+        application_routes: &[
+            (
+                "crates/wow-service/src/live_project/generation_pair.rs",
+                "read_live_project_generation_pair",
+            ),
+            ("apps/wow/src/project/pair.rs", "run"),
+        ],
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
         name: "native-project-publication",
         owners: &[
             (

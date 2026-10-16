@@ -4,7 +4,33 @@ use super::{
 };
 use crate::{OperationId, StoreError, StoreErrorCode, StoreResult};
 use rusqlite::{Connection, OptionalExtension, params};
-use std::{rc::Rc, sync::atomic::AtomicBool};
+use std::{
+    rc::Rc,
+    sync::{Arc, Weak, atomic::AtomicBool},
+};
+
+/// Nonserializable origin of a native read. It cannot retain a lease or lock.
+#[derive(Clone)]
+pub struct ReadSnapshotOrigin {
+    read: Weak<()>,
+}
+impl ReadSnapshotOrigin {
+    pub fn matches(&self, live: &ReadSnapshotCustody<'_>) -> bool {
+        Weak::ptr_eq(&self.read, &Arc::downgrade(live.read))
+    }
+}
+
+/// Borrowed live custody: retaining this value prevents closing its snapshot.
+/// Runtime addresses are neither exposed nor part of a serialized identity.
+pub struct ReadSnapshotCustody<'a> {
+    owner: &'a Arc<()>,
+    read: &'a Arc<()>,
+}
+impl ReadSnapshotCustody<'_> {
+    pub fn same_open_owner(&self, other: &Self) -> bool {
+        Arc::ptr_eq(self.owner, other.owner)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum ReadSelector {
@@ -24,6 +50,7 @@ pub struct ReadSnapshot {
     current_at_acquisition: Option<CurrentPublication>,
     epoch: EpochManifest,
     life: Rc<Lifetime>,
+    custody: Arc<()>,
 }
 impl ReadSnapshot {
     pub(super) fn acquire(
@@ -82,6 +109,7 @@ impl ReadSnapshot {
             current_at_acquisition: current,
             epoch: db.epoch.clone(),
             life: Rc::clone(&db.life),
+            custody: Arc::new(()),
         })
     }
     /// End this read transaction and check native connection closure. The lease
@@ -101,6 +129,17 @@ impl ReadSnapshot {
     }
     pub fn manifest(&self) -> &GenerationManifest {
         &self.manifest
+    }
+    pub fn origin(&self) -> ReadSnapshotOrigin {
+        ReadSnapshotOrigin {
+            read: Arc::downgrade(&self.custody),
+        }
+    }
+    pub fn custody(&self) -> ReadSnapshotCustody<'_> {
+        ReadSnapshotCustody {
+            owner: &self.life.custody,
+            read: &self.custody,
+        }
     }
     pub fn epoch(&self) -> &EpochManifest {
         &self.epoch

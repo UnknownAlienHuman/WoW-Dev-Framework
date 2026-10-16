@@ -654,6 +654,7 @@ fn open_artifact(root: &Path, epoch: EpochManifest, lock: File) -> StoreResult<D
         root: root.to_owned(),
         selection: None,
         life: Rc::new(Lifetime {
+            custody: std::sync::Arc::new(()),
             _lock: Rc::new(lock),
             _instance_lock: None,
             leases: RefCell::new(BTreeMap::new()),

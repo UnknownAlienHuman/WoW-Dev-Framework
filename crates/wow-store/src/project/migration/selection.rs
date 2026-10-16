@@ -423,6 +423,7 @@ impl ProjectStore {
             lock.try_lock()
                 .map_err(|_| failure(StoreErrorCode::WriterBusy))?;
             Rc::new(Lifetime {
+                custody: std::sync::Arc::new(()),
                 _lock: Rc::clone(&self.db.life._lock),
                 _instance_lock: Some(Rc::new(lock)),
                 leases: RefCell::new(BTreeMap::new()),
@@ -509,6 +510,7 @@ fn working_from_backup(
             root: portable.root.clone(),
             selection: None,
             life: Rc::new(Lifetime {
+                custody: std::sync::Arc::new(()),
                 _lock: Rc::clone(&source._lock),
                 _instance_lock: Some(Rc::clone(&portable.store.db.life._lock)),
                 leases: RefCell::new(BTreeMap::new()),
@@ -573,6 +575,7 @@ fn open_working_target(
             root: root.clone(),
             selection: None,
             life: Rc::new(Lifetime {
+                custody: std::sync::Arc::new(()),
                 _lock: Rc::clone(&source._lock),
                 _instance_lock: Some(Rc::new(lock)),
                 leases: RefCell::new(BTreeMap::new()),

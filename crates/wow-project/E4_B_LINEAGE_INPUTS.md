@@ -2,6 +2,12 @@
 
 **Status:** normative supporting contract for [`wow-graph/e4`](../wow-graph/e4/README.md); implementation has not started.
 
+The producer operations below remain unimplemented. Their exact native
+before/after prerequisite is now separately exposed by
+[`RetainedGenerationPair`](RETAINED_GENERATION_PAIR.md) and `wow project pair`
+under #177. Pair metadata/compatibility is not a producer partition, Candidate
+graph, lineage assertion or sealed lineage snapshot.
+
 `wow-project` owns project/source/analyzer/recognizer generation facts that can support cross-generation lineage candidate and change analysis. It does not own accepted lineage assertions, review promotion, replacement authority, migration recipes, or static impact traversal.
 
 ## Producer operations
