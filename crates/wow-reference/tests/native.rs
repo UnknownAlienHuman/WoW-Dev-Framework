@@ -8,6 +8,118 @@ use wow_reference::native_model::{SystemOwner, TableFact, array, normalize_docum
 const REV: &str = "1111111111111111111111111111111111111111";
 
 #[test]
+fn native_restriction_port_keeps_partition_identity_and_unresolved_subjects() {
+    use wow_core::ReferenceGenerationId;
+    use wow_reference::native_view::{
+        NATIVE_RESTRICTION_PARTITION, NativeCallableCorpus, NativeReferenceDocuments,
+        NativeRestrictionKind, NativeRestrictionScope, project_native_documents,
+        restriction_entity_id, restriction_origin_id,
+    };
+    let source = r#"APIDocumentation:AddDocumentationTable({Name="One",Type="System",Namespace="C_One",Environment="All",Functions={
+{Name="Read",Type="Function",SecretReturns=true,Returns={{Name="value",Type="number"}}},
+{Name="Conflict",Type="Function",SecretReturns=true,Returns={{Name="value",Type="number"}}}}})
+APIDocumentation:AddDocumentationTable({Name="Two",Type="System",Namespace="C_One",Environment="All",Functions={{Name="Conflict",Type="Function",Returns={{Name="value",Type="bool"}}}}})
+APIDocumentation:AddDocumentationTable({Name="Global",Type="System",Environment="All",Functions={{Name="canaccessvalue",Type="Function",Arguments={{Name="value",Type="LuaValueReference",Nilable=false}},Returns={{Name="ok",Type="bool",Nilable=false}}}}})"#;
+    let stop = AtomicBool::new(false);
+    let selection = ReferenceGenerationId::derive(&"native-restriction-read-port").unwrap();
+    let documents = [read(source)];
+    let build = |corpus| {
+        project_native_documents(
+            &documents,
+            "Mainline",
+            selection,
+            corpus,
+            None,
+            NativeReferenceDocuments::SourceDeclarationsV1,
+            &stop,
+        )
+        .unwrap()
+    };
+    let projection = build(NativeCallableCorpus::manifest_toc(1, 1, true));
+    let records = projection
+        .view
+        .partitions()
+        .iter()
+        .find(|part| part.id() == NATIVE_RESTRICTION_PARTITION)
+        .unwrap()
+        .records();
+    assert_eq!(records.len(), 3);
+    for record in records {
+        let signature = projection.restriction_signature(record, &stop).unwrap();
+        assert_eq!(signature.record_key(), record.key());
+        assert_eq!(signature.subject_key(), record.key());
+        assert_ne!(signature.entity_id(), record.key());
+        assert_eq!(
+            signature.entity_id(),
+            restriction_entity_id(projection.view.generation_id(), record.key()).unwrap()
+        );
+        assert_eq!(signature.record_digest(), record.digest().unwrap());
+        assert_eq!(signature.facets(), record.restrictions());
+        let origin = projection
+            .sources
+            .iter()
+            .find(|source| source.id == signature.source_id())
+            .unwrap();
+        assert_eq!(
+            origin.id,
+            restriction_origin_id(
+                projection.schema,
+                signature.kind(),
+                REV,
+                &origin.path,
+                &origin.sha256,
+                origin.span
+            )
+            .unwrap()
+        );
+        if record.key() == "function:C_One.Conflict" {
+            assert!(signature.subject_conflicted());
+            assert!(signature.subject_record_digest().is_none());
+        } else {
+            assert!(!signature.subject_conflicted());
+            assert!(signature.subject_record_digest().is_some());
+        }
+        assert_eq!(
+            signature.scope(),
+            match signature.kind() {
+                NativeRestrictionKind::SecretReturn =>
+                    NativeRestrictionScope::FirstReturnUnconditionalSource,
+                NativeRestrictionKind::AccessPredicate =>
+                    NativeRestrictionScope::FirstArgumentTrueImmediateCaller,
+            }
+        );
+        assert_eq!(
+            projection
+                .restriction_signature(record, &AtomicBool::new(true))
+                .unwrap_err()
+                .code,
+            NativeErrorCode::Cancelled
+        );
+        let foreign = wow_reference::ReferenceRecord::new(
+            record.key(),
+            record.kind(),
+            "foreign",
+            record
+                .source_ids()
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+            record.restrictions().to_vec(),
+        )
+        .unwrap();
+        assert!(projection.restriction_signature(&foreign, &stop).is_err());
+    }
+    let partial = build(NativeCallableCorpus::explicit_partial());
+    assert!(partial.restriction_signature(&records[0], &stop).is_err());
+    assert!(
+        serde_json::to_value(&projection)
+            .unwrap()
+            .get("restrictions")
+            .is_none()
+    );
+}
+
+#[test]
 fn native_documentation_ports_preserve_source_states_and_record_custody() {
     use wow_core::ReferenceGenerationId;
     use wow_reference::ReferenceRecord;

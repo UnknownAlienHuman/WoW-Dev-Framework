@@ -12,6 +12,7 @@ use wow_store::StoreLimits;
 mod declarations;
 mod documentation;
 mod query;
+mod restrictions;
 pub use query::{
     ReferencePage, ReferencePageCursor, ReferencePagePolicy, ReferenceQueryRequest,
     ReferenceQueryResult,
@@ -27,6 +28,8 @@ const DOCUMENTATION_PROFILE_SCHEMA: &str =
     "wow-search/native-reference-documentation-inventory-profile/1";
 const DOCUMENTATION_MANIFEST_SCHEMA: &str =
     "wow-search/native-reference-documentation-inventory-shard/1";
+const INVENTORY_PROFILE_SCHEMA: &str = "wow-search/native-reference-inventory-profile/1";
+const INVENTORY_MANIFEST_SCHEMA: &str = "wow-search/native-reference-inventory-shard/1";
 use wow_reference::native_view::{
     NATIVE_DECLARATION_PARTITION, NATIVE_EVENT_PARTITION, NativeDeclarationKind,
     NativeDeclarationScalar, NativeReferenceDocuments,
@@ -50,6 +53,7 @@ pub struct ReferenceSearchProfile {
     digest: Box<str>,
     native_documents: Option<NativeReferenceDocuments>,
     include_documentation: bool,
+    include_restrictions: bool,
 }
 impl ReferenceSearchProfile {
     pub fn new(bounds: SearchBounds) -> SearchResult<Self> {
@@ -64,6 +68,7 @@ impl ReferenceSearchProfile {
             bounds,
             native_documents,
             include_documentation: false,
+            include_restrictions: false,
             digest: identity(
                 "",
                 &(
@@ -97,8 +102,24 @@ impl ReferenceSearchProfile {
         profile.include_documentation = true;
         Ok(profile)
     }
+    pub fn inventory(bounds: SearchBounds) -> SearchResult<Self> {
+        let mut profile = Self::documentation_inventory(bounds)?;
+        profile.digest = identity(
+            "",
+            &(
+                INVENTORY_PROFILE_SCHEMA,
+                INVENTORY_MANIFEST_SCHEMA,
+                &profile.digest,
+                "native-positive-restriction-facets-with-scoped-identity/1",
+            ),
+        )?;
+        profile.include_restrictions = true;
+        Ok(profile)
+    }
     fn manifest_schema(&self) -> &'static str {
-        if self.include_documentation {
+        if self.include_restrictions {
+            INVENTORY_MANIFEST_SCHEMA
+        } else if self.include_documentation {
             DOCUMENTATION_MANIFEST_SCHEMA
         } else {
             profile_schemas(self.native_documents).1
@@ -183,6 +204,8 @@ struct Document {
     declaration: Option<declarations::DeclarationDocument>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     documentation: Option<documentation::Documentation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    restriction: Option<restrictions::RestrictionDocument>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -216,6 +239,8 @@ struct Manifest {
     native_documents: Option<NativeReferenceDocuments>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     include_documentation: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    include_restrictions: Option<bool>,
     profile_digest: Box<str>,
     binding: ReferenceSearchBinding,
     reference_generation: String,
@@ -317,6 +342,20 @@ pub fn prepare_reference_callable_shard(
         .and_then(|count| {
             count.checked_add(declaration_partition.map_or(0, |part| part.records().len()))
         })
+        .and_then(|count| {
+            count.checked_add(if profile.include_restrictions {
+                native
+                    .view
+                    .partitions()
+                    .iter()
+                    .find(|part| {
+                        part.id() == wow_reference::native_view::NATIVE_RESTRICTION_PARTITION
+                    })
+                    .map_or(0, |part| part.records().len())
+            } else {
+                0
+            })
+        })
         .ok_or(SearchError::FileSetOverCapacity)?;
     if count == 0 || count > bounds.max_documents.get() as usize {
         return Err(SearchError::FileSetOverCapacity);
@@ -352,6 +391,7 @@ pub fn prepare_reference_callable_shard(
         schema: profile.manifest_schema().into(),
         native_documents: profile.native_documents,
         include_documentation: profile.include_documentation.then_some(true),
+        include_restrictions: profile.include_restrictions.then_some(true),
         profile_digest: profile.digest.clone(),
         binding,
         reference_generation: native.view.generation_id().into(),
@@ -449,6 +489,7 @@ pub fn prepare_reference_callable_shard(
                 .collect()
         };
         let document = Document {
+            restriction: None,
             documentation: profile
                 .include_documentation
                 .then(|| {
@@ -525,6 +566,7 @@ pub fn prepare_reference_callable_shard(
                 });
             }
             let document = Document {
+                restriction: None,
                 documentation: profile
                     .include_documentation
                     .then(|| {
@@ -559,6 +601,24 @@ pub fn prepare_reference_callable_shard(
     }
     if let Some(partition) = declaration_partition {
         declarations::capture(
+            native,
+            partition,
+            &origins,
+            &mut manifest,
+            bounds,
+            &mut charged,
+            stop,
+        )?;
+    }
+    if profile.include_restrictions {
+        let partition = native
+            .view
+            .partitions()
+            .iter()
+            .find(|part| part.id() == wow_reference::native_view::NATIVE_RESTRICTION_PARTITION)
+            .filter(|part| part.coverage() == CoverageStatus::Partial)
+            .ok_or(SearchError::OwnerEvidenceInvalid)?;
+        restrictions::capture(
             native,
             partition,
             &origins,
@@ -644,6 +704,7 @@ pub fn open_reference_callable_shard(
         if manifest.schema != profile.manifest_schema()
             || manifest.native_documents != profile.native_documents
             || manifest.include_documentation != profile.include_documentation.then_some(true)
+            || manifest.include_restrictions != profile.include_restrictions.then_some(true)
             || manifest.profile_digest != profile.digest
             || manifest.reference_generation != reference.generation_id()
             || manifest.reference_view_digest != reference.self_digest()
@@ -673,7 +734,11 @@ pub fn open_reference_callable_shard(
             .iter()
             .find(|p| p.id() == NATIVE_API_PARTITION)
             .ok_or(SearchError::OwnerEvidenceInvalid)?;
-        let mut records = partition.records().iter().collect::<Vec<_>>();
+        let mut records = partition
+            .records()
+            .iter()
+            .map(|record| (record.key().to_owned(), record))
+            .collect::<Vec<_>>();
         if profile.native_documents.is_some() {
             let events = reference
                 .partitions()
@@ -683,7 +748,12 @@ pub fn open_reference_callable_shard(
             if events.coverage() != CoverageStatus::Partial {
                 return Err(SearchError::OwnerEvidenceInvalid);
             }
-            records.extend(events.records());
+            records.extend(
+                events
+                    .records()
+                    .iter()
+                    .map(|record| (record.key().to_owned(), record)),
+            );
         }
         if profile.native_documents == Some(NativeReferenceDocuments::SourceDeclarationsV1) {
             let declarations = reference
@@ -694,9 +764,33 @@ pub fn open_reference_callable_shard(
             if declarations.coverage() != CoverageStatus::Partial {
                 return Err(SearchError::OwnerEvidenceInvalid);
             }
-            records.extend(declarations.records());
+            records.extend(
+                declarations
+                    .records()
+                    .iter()
+                    .map(|record| (record.key().to_owned(), record)),
+            );
         }
-        records.sort_by_key(|record| record.key());
+        if profile.include_restrictions {
+            let partition = reference
+                .partitions()
+                .iter()
+                .find(|part| part.id() == wow_reference::native_view::NATIVE_RESTRICTION_PARTITION)
+                .filter(|part| part.coverage() == CoverageStatus::Partial)
+                .ok_or(SearchError::OwnerEvidenceInvalid)?;
+            for record in partition.records() {
+                check(stop)?;
+                records.push((
+                    wow_reference::native_view::restriction_entity_id(
+                        reference.generation_id(),
+                        record.key(),
+                    )
+                    .map_err(native_error)?,
+                    record,
+                ));
+            }
+        }
+        records.sort_by(|a, b| a.0.cmp(&b.0));
         if records.len() != manifest.documents.len() {
             return Err(SearchError::OwnerEvidenceInvalid);
         }
@@ -721,7 +815,12 @@ pub fn open_reference_callable_shard(
         {
             return Err(SearchError::OwnerEvidenceInvalid);
         }
-        for (doc, record) in manifest.documents.iter().zip(records) {
+        let subject_index = if profile.include_restrictions {
+            Some(restrictions::SubjectIndex::new(reference, stop)?)
+        } else {
+            None
+        };
+        for (doc, (entity_id, record)) in manifest.documents.iter().zip(records) {
             check(stop)?;
             let origin_id = if doc.declaration.is_some() {
                 wow_reference::native_view::declaration_origin_id
@@ -734,9 +833,11 @@ pub fn open_reference_callable_shard(
                 .reader()
                 .exact_id(&doc.entity_key)?
                 .ok_or(SearchError::OwnerEvidenceInvalid)?;
-            if doc.entity_key != record.key()
+            if doc.entity_key != entity_id
                 || record.kind()
-                    != if let Some(declaration) = &doc.declaration {
+                    != if doc.restriction.is_some() {
+                        ReferenceRecordKind::Restriction
+                    } else if let Some(declaration) = &doc.declaration {
                         declaration.kind.record_kind()
                     } else if doc.event.is_some() {
                         ReferenceRecordKind::Event
@@ -745,6 +846,8 @@ pub fn open_reference_callable_shard(
                     }
                 || (doc.event.is_some() && profile.native_documents.is_none())
                 || !declarations::valid_document(doc, profile.native_documents)
+                || (doc.restriction.is_some() && !profile.include_restrictions)
+                || !restrictions::valid(doc, record, reference, subject_index.as_ref())?
                 || doc.event.as_ref().is_some_and(|event| {
                     event.literal_name != doc.canonical_short_name
                         || !doc.arguments.is_empty()
@@ -759,7 +862,12 @@ pub fn open_reference_callable_shard(
                 || record.source_ids()[0].as_ref() != doc.source.source_id
                 || row.owner_metadata_label() != documentation::row_text(doc, profile.bounds)?
                 || doc.documentation.is_some() != profile.include_documentation
-                || doc.type_authority != "original_source_type_identities_unresolved"
+                || doc.type_authority
+                    != if doc.restriction.is_some() {
+                        "original_source_restriction_facets_only"
+                    } else {
+                        "original_source_type_identities_unresolved"
+                    }
                 || doc.canonical_qualified_name
                     != doc.namespace.as_ref().map_or_else(
                         || doc.canonical_short_name.clone(),
@@ -770,16 +878,30 @@ pub fn open_reference_callable_shard(
                     .binary_search_by(|source| source.source_id.cmp(&doc.source.source_id))
                     .ok()
                     .is_none_or(|index| manifest.source_origins[index] != doc.source)
-                || origin_id(
-                    &manifest.native_projection_profile,
-                    &manifest.binding.source_revision,
-                    &doc.source.path,
-                    &doc.source.sha256,
-                    wow_reference::native::Span {
-                        start: doc.source.byte_range[0],
-                        end: doc.source.byte_range[1],
-                    },
-                )
+                || (if let Some(restriction) = &doc.restriction {
+                    wow_reference::native_view::restriction_origin_id(
+                        &manifest.native_projection_profile,
+                        restriction.kind,
+                        &manifest.binding.source_revision,
+                        &doc.source.path,
+                        &doc.source.sha256,
+                        wow_reference::native::Span {
+                            start: doc.source.byte_range[0],
+                            end: doc.source.byte_range[1],
+                        },
+                    )
+                } else {
+                    origin_id(
+                        &manifest.native_projection_profile,
+                        &manifest.binding.source_revision,
+                        &doc.source.path,
+                        &doc.source.sha256,
+                        wow_reference::native::Span {
+                            start: doc.source.byte_range[0],
+                            end: doc.source.byte_range[1],
+                        },
+                    )
+                })
                 .map_err(native_error)?
                     != doc.source.source_id
             {

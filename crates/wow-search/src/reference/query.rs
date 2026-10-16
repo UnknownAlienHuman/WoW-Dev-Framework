@@ -13,6 +13,9 @@ const FIELD_SHAPE_REQUEST_SCHEMA: &str = "wow-search/native-reference-field-shap
 const FIELD_SHAPE_QUERY_PROFILE: &str = "wow-search/native-reference-field-shape/1";
 const DOCUMENTATION_REQUEST_SCHEMA: &str = "wow-search/native-reference-documentation-query/1";
 const DOCUMENTATION_QUERY_PROFILE: &str = "wow-search/native-reference-documentation-retrieval/1";
+const INVENTORY_REQUEST_SCHEMA: &str = "wow-search/native-reference-inventory-query/1";
+const INVENTORY_QUERY_PROFILE: &str = "wow-search/native-reference-inventory-retrieval/1";
+const INVENTORY_RANK_PROFILE: &str = "wow-search/reference-inventory-authority-ordinal-fusion/1";
 const QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape/1";
 const RANK_PROFILE: &str = "wow-search/reference-authority-ordinal-fusion/1";
 const SIM_QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape-similarity/1";
@@ -57,6 +60,8 @@ struct Member {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Shape {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    restriction: Option<restrictions::RestrictionShape>,
     #[serde(skip_serializing_if = "Option::is_none")]
     declaration: Option<declaration_shape::DeclarationShape>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -116,7 +121,10 @@ impl ReferenceQueryRequest {
         request.required_lanes.sort();
         if !matches!(
             request.schema.as_str(),
-            REQUEST_SCHEMA | FIELD_SHAPE_REQUEST_SCHEMA | DOCUMENTATION_REQUEST_SCHEMA
+            REQUEST_SCHEMA
+                | FIELD_SHAPE_REQUEST_SCHEMA
+                | DOCUMENTATION_REQUEST_SCHEMA
+                | INVENTORY_REQUEST_SCHEMA
         ) || request.enabled_lanes.is_empty()
             || request.enabled_lanes.len() > 9
             || request.required_lanes.len() > 9
@@ -131,6 +139,17 @@ impl ReferenceQueryRequest {
         }
         if request.schema == REQUEST_SCHEMA {
             validate_legacy_shape(bytes)?;
+        }
+        if request.schema != INVENTORY_REQUEST_SCHEMA {
+            let value: serde_json::Value =
+                serde_json::from_slice(bytes).map_err(|_| SearchError::InvalidProfile)?;
+            if value
+                .pointer("/selectors/shape")
+                .and_then(serde_json::Value::as_object)
+                .is_some_and(|shape| shape.contains_key("restriction"))
+            {
+                return Err(SearchError::InvalidProfile);
+            }
         }
         let s = &request.selectors;
         if let Some(key) = &s.entity_key {
@@ -186,6 +205,7 @@ impl ReferenceQueryRequest {
                 && shape.event_payload_count.is_none()
                 && shape.event_payload.is_empty()
                 && shape.declaration.is_none())
+                && shape.restriction.is_none()
                 || shape.arguments.len() > 128
                 || shape.returns.len() > 128
                 || shape.event_payload.len() > 128
@@ -204,10 +224,24 @@ impl ReferenceQueryRequest {
                     || !shape.returns.is_empty()
                     || shape.event_payload_count.is_some()
                     || !shape.event_payload.is_empty()
+                    || shape.restriction.is_some()
                 {
                     return Err(SearchError::InvalidProfile);
                 }
                 declaration.validate()?;
+            }
+            if let Some(restriction) = &shape.restriction {
+                if shape.declaration.is_some()
+                    || shape.argument_count.is_some()
+                    || shape.return_count.is_some()
+                    || !shape.arguments.is_empty()
+                    || !shape.returns.is_empty()
+                    || shape.event_payload_count.is_some()
+                    || !shape.event_payload.is_empty()
+                {
+                    return Err(SearchError::InvalidProfile);
+                }
+                restriction.validate()?;
             }
             for fields in [&shape.arguments, &shape.returns, &shape.event_payload] {
                 validate_fields(fields)?;
@@ -270,7 +304,7 @@ fn validate_legacy_shape(bytes: &[u8]) -> SearchResult<()> {
     }
     Ok(())
 }
-fn valid_text(value: &str) -> SearchResult<()> {
+pub(super) fn valid_text(value: &str) -> SearchResult<()> {
     if value.trim().is_empty() || value.len() > 4096 || value.chars().any(char::is_control) {
         Err(SearchError::InvalidProfile)
     } else {
@@ -352,7 +386,9 @@ impl ReferenceSearchShard {
             ),
         )?;
         let query_profile = capture_query_profile(self.manifest.native_documents, request);
-        let ranking_profile = if request.selectors.identifier_similarity.is_some() {
+        let ranking_profile = if self.manifest.include_restrictions.is_some() {
+            INVENTORY_RANK_PROFILE
+        } else if request.selectors.identifier_similarity.is_some() {
             SIM_RANK_PROFILE
         } else {
             RANK_PROFILE
@@ -472,8 +508,9 @@ impl ReferenceSearchShard {
                                     ))
                                 }
                                 Lane::ExactCanonicalName
-                                    if s.qualified_name.as_deref()
-                                        == Some(&document.canonical_qualified_name) =>
+                                    if document.restriction.is_none()
+                                        && s.qualified_name.as_deref()
+                                            == Some(&document.canonical_qualified_name) =>
                                 {
                                     Some((
                                         1,
@@ -488,8 +525,9 @@ impl ReferenceSearchShard {
                                     ))
                                 }
                                 Lane::ExactCanonicalName
-                                    if s.short_name.as_deref()
-                                        == Some(&document.canonical_short_name) =>
+                                    if document.restriction.is_none()
+                                        && s.short_name.as_deref()
+                                            == Some(&document.canonical_short_name) =>
                                 {
                                     Some((
                                         2,
@@ -574,8 +612,14 @@ impl ReferenceSearchShard {
                                 {
                                     Some((
                                         7,
-                                        "original_signature_shape_candidate",
-                                        if document.declaration.is_some() {
+                                        if document.restriction.is_some() {
+                                            "native_restriction_shape_candidate"
+                                        } else {
+                                            "original_signature_shape_candidate"
+                                        },
+                                        if document.restriction.is_some() {
+                                            "NativeRestrictionSignature.kind()/facets()/subject_key()"
+                                        } else if document.declaration.is_some() {
                                             "NativeDeclarationSignature.kind()+fields()+arguments()+returns()+values()"
                                         } else if document.event.is_some() {
                                             "NativeEventSignature.payload()"
@@ -590,6 +634,7 @@ impl ReferenceSearchShard {
                             };
                             let mut matches = matched.into_iter().collect::<Vec<_>>();
                             if lane == Lane::ExactCanonicalName
+                                && document.restriction.is_none()
                                 && s.qualified_name.as_deref()
                                     == Some(&document.canonical_qualified_name)
                                 && s.short_name.as_deref() == Some(&document.canonical_short_name)
@@ -700,6 +745,8 @@ impl ReferenceSearchShard {
         #[derive(Serialize)]
         struct OwnerSummary<'a> {
             #[serde(skip_serializing_if = "Option::is_none")]
+            include_restrictions: Option<bool>,
+            #[serde(skip_serializing_if = "Option::is_none")]
             include_documentation: Option<bool>,
             #[serde(skip_serializing_if = "Option::is_none")]
             documentation_coverage: Option<documentation::Coverage>,
@@ -723,6 +770,7 @@ impl ReferenceSearchShard {
             license_state: &'a str,
         }
         let summary = OwnerSummary {
+            include_restrictions: self.manifest.include_restrictions,
             include_documentation: self.manifest.include_documentation,
             documentation_coverage: documentation::coverage(&self.manifest),
             native_documents: self.manifest.native_documents,
@@ -835,6 +883,16 @@ fn include_signal<'a>(
         return Ok(false);
     }
     let (band, class, field, original, normalized) = material;
+    let band = if band != 0
+        && document
+            .restriction
+            .as_ref()
+            .is_some_and(|data| data.subject_record_digest.is_none())
+    {
+        band.max(10)
+    } else {
+        band
+    };
     let candidate_id = identity(
         "reference-search-candidate:",
         &(universe, query_id, &document.entity_key),
@@ -900,6 +958,9 @@ fn include_signal<'a>(
     Ok(true)
 }
 fn name_digest(document: &Document) -> SearchResult<Box<str>> {
+    if document.restriction.is_some() {
+        return identity("", &document.canonical_short_name);
+    }
     if let Some(declaration) = &document.declaration {
         return identity("", &declaration.name);
     }
@@ -921,6 +982,15 @@ fn name_digest(document: &Document) -> SearchResult<Box<str>> {
     )
 }
 fn shape_matches(document: &Document, shape: &Shape) -> bool {
+    if let Some(filter) = &shape.restriction {
+        return document
+            .restriction
+            .as_ref()
+            .is_some_and(|data| filter.matches(data));
+    }
+    if document.restriction.is_some() {
+        return false;
+    }
     if let Some(declaration) = &shape.declaration {
         return document
             .declaration
@@ -953,7 +1023,9 @@ fn shape_matches(document: &Document, shape: &Shape) -> bool {
         && fields_match(&document.returns, &shape.returns)
 }
 fn shape_digest(document: &Document) -> SearchResult<Box<str>> {
-    if let Some(declaration) = &document.declaration {
+    if let Some(restriction) = &document.restriction {
+        identity("", restriction)
+    } else if let Some(declaration) = &document.declaration {
         identity("", declaration)
     } else if let Some(event) = &document.event {
         identity("", &event.payload)
@@ -962,7 +1034,9 @@ fn shape_digest(document: &Document) -> SearchResult<Box<str>> {
     }
 }
 fn name_origin(document: &Document, qualified: bool) -> &'static str {
-    if document.declaration.is_some() {
+    if document.restriction.is_some() {
+        "NativeRestrictionSignature.facets().id()"
+    } else if document.declaration.is_some() {
         "NativeDeclarationSignature.name()"
     } else if document.event.is_some() {
         "NativeEventSignature.literal_name()"
@@ -977,6 +1051,9 @@ fn capture_query_profile(
     selection: Option<NativeReferenceDocuments>,
     request: &ReferenceQueryRequest,
 ) -> &'static str {
+    if request.schema == INVENTORY_REQUEST_SCHEMA {
+        return INVENTORY_QUERY_PROFILE;
+    }
     if request.schema == DOCUMENTATION_REQUEST_SCHEMA {
         return DOCUMENTATION_QUERY_PROFILE;
     }
@@ -997,8 +1074,13 @@ fn capture_query_profile(
 }
 impl ReferenceSearchShard {
     fn validate_query_component(&self, request: &ReferenceQueryRequest) -> SearchResult<()> {
-        if self.manifest.include_documentation.is_some()
+        if self.manifest.include_restrictions.is_some() {
+            if request.schema != INVENTORY_REQUEST_SCHEMA {
+                return Err(SearchError::InvalidProfile);
+            }
+        } else if self.manifest.include_documentation.is_some()
             != (request.schema == DOCUMENTATION_REQUEST_SCHEMA)
+            || request.schema == INVENTORY_REQUEST_SCHEMA
         {
             return Err(SearchError::InvalidProfile);
         }
@@ -1042,6 +1124,9 @@ impl ReferenceSearchShard {
             owner["documentation_coverage"] =
                 serde_json::to_value(documentation::coverage(&self.manifest))
                     .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+        }
+        if let Some(include) = self.manifest.include_restrictions {
+            owner["include_restrictions"] = serde_json::json!(include);
         }
         if let Some(selection) = self.manifest.native_documents {
             owner["native_documents"] =

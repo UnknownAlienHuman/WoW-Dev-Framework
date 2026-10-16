@@ -98,6 +98,7 @@ pub(super) fn capture(
             });
         }
         let document = Document {
+            restriction: None,
             documentation: manifest
                 .include_documentation
                 .map(|_| {

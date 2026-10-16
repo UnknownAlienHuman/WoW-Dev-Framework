@@ -221,6 +221,63 @@ replacement or runtime facts. Empty text results carry no absence authority.
 Documentation is untrusted data and remains subject to the explicit local
 metadata permission and the retained `license_state: not_evaluated`.
 
+## Full native Reference inventory
+
+`search reference build --reference-inventory` selects
+`native_reference_inventory`. It includes the original source declarations and
+documentation plus the already produced `reference.native.apidoc.restriction`
+partition. The configuration must select `source_declarations_v1` and genuine
+manifested TOC input; an explicit pinned-file list cannot supply this capability.
+This flag and `--include-documentation` are mutually exclusive.
+
+Preserve the exact `wow-service/native-reference-inventory-search-handle/1`
+handle, with both include flags true. Query it using
+`wow-search/native-reference-inventory-query/1`; other components' query schemas
+cannot silently select this inventory. Existing operations, native Store,
+federation, original Reference replay pages and captured federation pages remain
+the consumers. `literal_text` retains documentation-only FTS semantics.
+
+For example, enable the `structured_shape` lane with:
+
+```json
+{
+  "shape": {
+    "restriction": {
+      "kind": "secret_return",
+      "scope": "first_return_unconditional_source",
+      "facet_id": "secret.return",
+      "state": "restricted",
+      "subject_binding": "exact"
+    }
+  }
+}
+```
+
+Restriction shape fields are optional, but at least one is required. The finite
+`kind` values are `secret_return` and `access_predicate`; scopes are
+`first_return_unconditional_source` and `first_argument_true_immediate_caller`.
+An optional `subject_entity_key` is the original API owner key.
+`subject_binding` accepts `exact`, `unresolved` or `conflicted`. Restriction,
+callable, event and declaration shape selectors cannot be mixed.
+
+Each facet candidate retains its original owner partition/key, digest, typed
+facet/state/evidence, exact field origin and recorded subject name/key/scope.
+Its owner-produced `reference-restriction:...` identity is separate from the API
+key: both partitions may use the same original record key. A genuine API target
+digest is present only when that exact record exists. Missing/conflicted targets
+remain unresolved, and nonidentity signals cap at band 10; resolved subject shape
+matches remain Candidate band 7. Exact lookup of the scoped facet entity ID is
+identity band 0. A facet's identifier does not become a canonical API name.
+
+These are the existing positive static source observations only. First-return
+scope does not expand to all returns; the predicate is bound to the immediate
+caller and a true result. `allowed`/`restricted` describe that original facet
+scope, never blanket runtime safety. False, omitted, conditional or unsupported
+Secret metadata does not create a negative facet. Restriction coverage remains
+Partial even when the native API callable partition is Complete. Derived facet
+records have no documentation field; their subject's documentation remains on
+its own API record. Older profiles, handles, queries and result bytes are retained.
+
 ## Retire
 
 ```text

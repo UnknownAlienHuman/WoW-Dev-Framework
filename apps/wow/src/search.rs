@@ -33,7 +33,7 @@ const FEDERATION_HELP: &str = "wow search federated --request-json <wow-service/
 const ENTITY_PAGES_HELP: &str = "ProjectEntity query accepts optional --page-json <wow-search/project-entity-page-policy/1 JSON>. wow search entities continue --continuation-json <EXACT-TOKEN> and wow search entities results release --session-object-id <EXACT> use the same --search-store and original Store/output limits, --operation-id and --allow-local-metadata-only. Pages retain the original Search capture and shard; continuation does not recompute native Graph owners.\n";
 const ENTITIES_HELP: &str = "ProjectEntity index build/retire use --graph-entities instead of --file-id/--file-ids. wow search entities --store-root <ORIGINAL-PROJECT-STORE> --generation <EXACT> --search-store <SEARCH-STORE> --search-shard-id <ID> --object-id <ID> --profile-digest <DIGEST> --build-operation-id <ORIGINAL> --source-store-epoch-id <EXACT> --source-generation-hold-id <EXACT> --source-generation-hold-digest <EXACT> --query-json <CLOSED-ENTITY-QUERY> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Search/Store/output bounds>. Actual graph seed expansion uses native Graph owners; opaque owner keys are metadata, not canonical names.\n";
 const REFERENCE_PAGES_HELP: &str = "Native Reference query accepts optional --page-json <wow-search/native-reference-page-policy/1 JSON>. wow search reference continue --continuation-json <EXACT-TOKEN> --search-store <SAME-STORE> --operation-id <ID> --allow-local-metadata-only <original Store/output limits>. wow search reference results release --session-object-id <EXACT> --search-store <SAME-STORE> --operation-id <ID> --allow-local-metadata-only <Store/output limits>. Result, shard and original ReferenceView remain rooted until explicit release.\n";
-const REFERENCE_HELP: &str = "wow search reference build [--include-documentation] --config <PINNED-SOURCE-REFERENCE-JSON> --expect-config-sha256 <DIGEST> --search-store <STORE> --operation-id <ID> --allow-local-metadata-only <Search/Store/output bounds>\nwow search reference query --handle-json <EXACT-HANDLE> --query-json <CLOSED-QUERY> --search-store <SAME-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output bounds>\nwow search reference retire --handle-json <EXACT-HANDLE> --search-store <SAME-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output bounds>\n";
+const REFERENCE_HELP: &str = "wow search reference build [--include-documentation|--reference-inventory] --config <PINNED-SOURCE-REFERENCE-JSON> --expect-config-sha256 <DIGEST> --search-store <STORE> --operation-id <ID> --allow-local-metadata-only <Search/Store/output bounds>\nwow search reference query --handle-json <EXACT-HANDLE> --query-json <CLOSED-QUERY> --search-store <SAME-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output bounds>\nwow search reference retire --handle-json <EXACT-HANDLE> --search-store <SAME-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output bounds>\n";
 const RETRIEVAL_HELP: &str = "wow search retrieve --search-store <STORE> --generation <EXACT> --search-shard-id <ID> --object-id <ID> --profile-digest <DIGEST> --query-json <CLOSED-QUERY-JSON> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <finite bounds>. This operation selects the exact file-set component and returns an immutable ranked result manifest. Without --page-json it advertises no continuation.\n";
 const PAGINATION_HELP: &str = "Optional retrieve --page-json <CLOSED-PAGE-POLICY> retains an immutable result and exact shard before returning page one. wow search continue --continuation-json <EXACT-TOKEN> --search-store <STORE> --operation-id <ID> --allow-local-metadata-only <original Store/output limits>. wow search results release --session-object-id <EXACT> --search-store <STORE> --operation-id <ID> --allow-local-metadata-only <Store/output limits> releases both roots; completed response replay remains retained.\n";
 const DURABLE_FILE_SET_HELP: &str = "Durable index build/retire accept either --file-id <ID> or --file-ids <JSON-array-of-exact-IDs>. Durable query uses its real --file-id plus --file-set for that component. Preserve the full original selection and source-hold receipt for retirement.\n";
@@ -438,6 +438,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             "--config",
             "--expect-config-sha256",
             "--include-documentation",
+            "--reference-inventory",
         ]),
         "reference-query" => allowed.extend_from_slice(&[
             "--handle-json",
@@ -717,6 +718,11 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             .map_err(|_| "invalid exact Reference session release")?,
         ),
         "reference-build" => {
+            if options.contains_key("--include-documentation")
+                && options.contains_key("--reference-inventory")
+            {
+                return Err("conflicting Reference projection flags");
+            }
             let request = ReferenceIndexBuildRequest::new(
                 OperationId::new(required_text(&options, "--operation-id")?)
                     .map_err(|_| "invalid --operation-id")?,
@@ -729,7 +735,9 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
                 LocalMetadataPermission::authorize_local_metadata_only(),
             )
             .map_err(|_| "invalid native Reference Search build request")?;
-            DurableCommand::ReferenceBuild(if options.contains_key("--include-documentation") {
+            DurableCommand::ReferenceBuild(if options.contains_key("--reference-inventory") {
+                request.with_inventory()
+            } else if options.contains_key("--include-documentation") {
                 request.with_documentation()
             } else {
                 request
@@ -1061,8 +1069,11 @@ fn parse_durable_options(
             || option == "--source-declarations"
             || option == "--source-inventory"
             || option == "--include-documentation"
+            || option == "--reference-inventory"
         {
-            let key = if option == "--include-documentation" {
+            let key = if option == "--reference-inventory" {
+                "--reference-inventory"
+            } else if option == "--include-documentation" {
                 "--include-documentation"
             } else if option == "--source-inventory" {
                 "--source-inventory"

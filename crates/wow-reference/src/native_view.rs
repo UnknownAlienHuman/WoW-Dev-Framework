@@ -21,6 +21,7 @@ use crate::{
 mod declarations;
 mod documentation;
 mod events;
+mod restrictions;
 mod signatures;
 mod type_resolution;
 pub use declarations::{
@@ -28,6 +29,27 @@ pub use declarations::{
     NativeDeclarationValue,
 };
 use documentation::CapturedDocumentation;
+pub use restrictions::{NativeRestrictionKind, NativeRestrictionSignature, restriction_entity_id};
+use restrictions::{RestrictionCatalog, RestrictionRow};
+/// The two exact static scopes already emitted by the native restriction producer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeRestrictionScope {
+    FirstReturnUnconditionalSource,
+    FirstArgumentTrueImmediateCaller,
+}
+impl NativeRestrictionSignature<'_> {
+    pub fn scope(&self) -> NativeRestrictionScope {
+        match self.kind() {
+            NativeRestrictionKind::SecretReturn => {
+                NativeRestrictionScope::FirstReturnUnconditionalSource
+            }
+            NativeRestrictionKind::AccessPredicate => {
+                NativeRestrictionScope::FirstArgumentTrueImmediateCaller
+            }
+        }
+    }
+}
 pub use documentation::NativeDocumentation;
 pub use events::NativeEventSignature;
 pub const NATIVE_DECLARATION_PARTITION: &str = "reference.native.apidoc.declaration";
@@ -160,9 +182,18 @@ pub struct NativeViewProjection {
     declarations: declarations::DeclarationCatalog,
     #[serde(skip)]
     native_documents: Option<NativeReferenceDocuments>,
+    #[serde(skip)]
+    restrictions: RestrictionCatalog,
 }
 
 impl NativeViewProjection {
+    pub fn restriction_signature(
+        &self,
+        record: &ReferenceRecord,
+        stop: &AtomicBool,
+    ) -> Result<NativeRestrictionSignature<'_>, NativeError> {
+        self.restrictions.read(record, stop)
+    }
     pub fn event_signature(
         &self,
         record: &ReferenceRecord,
@@ -401,6 +432,7 @@ fn project_callables_inner(
 
     let mut api_grouped: BTreeMap<String, Vec<ReferenceRecord>> = BTreeMap::new();
     let mut restriction_grouped: BTreeMap<String, Vec<ReferenceRecord>> = BTreeMap::new();
+    let mut restriction_rows: BTreeMap<String, Vec<RestrictionRow>> = BTreeMap::new();
     let mut signatures: BTreeMap<String, Vec<signatures::SignatureRow>> = BTreeMap::new();
     let mut event_build = events::EventBuild::new(include_events);
     let mut declaration_build = declarations::DeclarationBuild::new(include_declarations);
@@ -540,9 +572,11 @@ fn project_callables_inner(
                         function,
                         &key,
                         &mut restriction_grouped,
+                        &mut restriction_rows,
                         &mut sources,
                         &mut issues,
                         &mut candidate_bytes,
+                        stop,
                     )?;
                 }
             }
@@ -653,6 +687,7 @@ fn project_callables_inner(
     let signatures = signatures::SignatureCatalog::finish(&view, signatures, stop)?;
     let events = event_build.finish(&view, stop)?;
     let declarations = declaration_build.finish(&view, stop)?;
+    let restrictions = RestrictionCatalog::finish(&view, restriction_rows, stop)?;
     checkpoint(stop)?;
     Ok(NativeViewProjection {
         schema: projection_profile,
@@ -666,6 +701,7 @@ fn project_callables_inner(
         events,
         declarations,
         native_documents,
+        restrictions,
     })
 }
 
@@ -678,9 +714,11 @@ fn project_restrictions(
     function: &CallableFact<'_>,
     key: &str,
     grouped: &mut BTreeMap<String, Vec<ReferenceRecord>>,
+    rows: &mut BTreeMap<String, Vec<RestrictionRow>>,
     sources: &mut Vec<NativeViewSource>,
     issues: &mut Vec<NativeViewIssue>,
     candidate_bytes: &mut usize,
+    stop: &AtomicBool,
 ) -> Result<(), NativeError> {
     let fields = object(function.raw).map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
     for field in function.raw.fields().into_iter().flatten() {
@@ -725,6 +763,15 @@ fn project_restrictions(
                     vec![facet],
                 )
                 .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
+                rows.entry(key.to_owned())
+                    .or_default()
+                    .push(RestrictionRow::capture(
+                        &record,
+                        NativeRestrictionKind::SecretReturn,
+                        namespace,
+                        function.name,
+                        stop,
+                    )?);
                 grouped.entry(key.to_owned()).or_default().push(record);
                 sources.push(NativeViewSource {
                     id,
@@ -765,6 +812,15 @@ fn project_restrictions(
                 vec![facet],
             )
             .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
+            rows.entry(NATIVE_ACCESS_PREDICATE_ENTITY.to_owned())
+                .or_default()
+                .push(RestrictionRow::capture(
+                    &record,
+                    NativeRestrictionKind::AccessPredicate,
+                    namespace,
+                    function.name,
+                    stop,
+                )?);
             grouped
                 .entry(NATIVE_ACCESS_PREDICATE_ENTITY.to_owned())
                 .or_default()
@@ -833,6 +889,17 @@ pub fn callable_origin_id(
     span: Span,
 ) -> Result<String, NativeError> {
     checked_origin_id(profile, "callable", revision, path, sha256, span)
+}
+
+pub fn restriction_origin_id(
+    profile: &str,
+    kind: NativeRestrictionKind,
+    revision: &str,
+    path: &str,
+    sha256: &str,
+    span: Span,
+) -> Result<String, NativeError> {
+    checked_origin_id(profile, kind.source_kind(), revision, path, sha256, span)
 }
 
 pub fn event_origin_id(
