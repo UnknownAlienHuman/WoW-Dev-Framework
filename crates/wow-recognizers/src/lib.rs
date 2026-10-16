@@ -13,6 +13,8 @@ mod facts;
 mod graph;
 mod identity;
 mod matcher;
+mod matcher_witness;
+pub use matcher_witness::OriginalMatcherWitness;
 mod model;
 mod pack;
 mod plan;

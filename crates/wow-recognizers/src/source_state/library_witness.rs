@@ -1,11 +1,10 @@
 //! Opt-in W6 proof projection; legacy packs and their output bytes stay intact.
 use super::*;
-use std::io::{self, Write};
+use crate::matcher_witness::charge;
 use wow_graph::{GraphDerivationRecord, GraphProducerPartition};
 
 pub const SOURCE_STATE_LIBRARY_WITNESS_PROFILE: &str =
     "wow-recognizers/source-library/witness-derivation/1";
-const MAX_WITNESS_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_ENTITY_WITNESSES: usize = 64;
 
 /// Original matcher result, not a reconstructed match from proposal strings.
@@ -38,29 +37,11 @@ pub(super) fn capture(
     used: &mut u64,
     stop: &AtomicBool,
 ) -> RecognizerResult<PendingWitness> {
-    let crate::RecognizerProposedAssertion::Relation {
-        match_id,
-        decisive_fact_ids,
-        ..
-    } = proposal
-    else {
-        return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
-    };
-    let index = outcome
-        .matches()
-        .binary_search_by(|item| item.match_id().cmp(match_id))
-        .map_err(|_| failure(RecognizerErrorCode::AdapterBindingMissing))?;
-    let matched = &outcome.matches()[index];
-    if matched.decisive_fact_ids() != decisive_fact_ids
-        || matched.confidence() != proposal.confidence()
-    {
-        return Err(failure(RecognizerErrorCode::AdapterFactMismatch));
-    }
-    charge(&(proposal.output_id(), matched), used, stop)?;
+    let captured = crate::matcher_witness::capture(outcome, proposal, used, stop)?;
     Ok(PendingWitness {
-        output_id: proposal.output_id().into(),
-        matched: matched.clone(),
-        rule_version: outcome.rule_version(),
+        output_id: captured.witness.output_id,
+        matched: captured.witness.matched,
+        rule_version: captured.rule_version,
     })
 }
 
@@ -160,33 +141,4 @@ pub(super) fn attach(
     )
     .map_err(graph_error)?;
     batch.with_assertion_records(records).map_err(graph_error)
-}
-
-fn charge(value: &impl Serialize, used: &mut u64, stop: &AtomicBool) -> RecognizerResult<()> {
-    let mut counter = Counter { used, stop };
-    if serde_json::to_writer(&mut counter, value).is_err() {
-        checkpoint(stop)?;
-        return Err(failure(RecognizerErrorCode::BudgetExceeded));
-    }
-    checkpoint(stop)
-}
-struct Counter<'a> {
-    used: &'a mut u64,
-    stop: &'a AtomicBool,
-}
-impl Write for Counter<'_> {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        if self.stop.load(Ordering::Acquire) {
-            return Err(io::Error::other("cancelled"));
-        }
-        *self.used = self
-            .used
-            .checked_add(bytes.len() as u64)
-            .filter(|used| *used <= MAX_WITNESS_BYTES)
-            .ok_or_else(|| io::Error::other("witness byte bound"))?;
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
 }

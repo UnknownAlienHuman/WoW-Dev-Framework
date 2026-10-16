@@ -79,6 +79,7 @@ pub(super) fn publish_signals(
     source: &GraphPartitionSnapshot,
     crosswalk: &SourceGraphAddressCrosswalk<'_, '_>,
     library_witnesses: Option<wow_project::LibraryWitnessRecipe>,
+    signal_witnesses: Option<wow_project::SignalWitnessRecipe>,
     stop: &AtomicBool,
 ) -> ServiceResult<(
     GraphPartitionSnapshot,
@@ -111,7 +112,13 @@ pub(super) fn publish_signals(
         })
         .collect::<BTreeMap<_, _>>();
     // core.signal.native_frame_event@1
-    let frame = w1_recognize_native_frame_events(
+    let frame_owner = match signal_witnesses {
+        Some(wow_project::SignalWitnessRecipe::MatcherV1) => {
+            wow_recognizers::source_signals::w1_recognize_native_frame_event_witnesses
+        }
+        None => w1_recognize_native_frame_events,
+    };
+    let frame = frame_owner(
         W1Input {
             owner: source,
             source_partition: crosswalk.analyzer_partition(source, stop)?,
@@ -170,7 +177,13 @@ pub(super) fn publish_signals(
     let owner_view = &bridge_snapshot;
 
     // core.signal.custom_registry_producer@1 and _subscription@1
-    let custom = w3_recognize_signals(
+    let custom_owner = match signal_witnesses {
+        Some(wow_project::SignalWitnessRecipe::MatcherV1) => {
+            wow_recognizers::source_signals::w3_recognize_signal_witnesses
+        }
+        None => w3_recognize_signals,
+    };
+    let custom = custom_owner(
         W3Input {
             owner: owner_view,
             source_partition: crosswalk.analyzer_partition(owner_view, stop)?,
@@ -191,7 +204,13 @@ pub(super) fn publish_signals(
     let owner_view = &custom_snapshot;
 
     // core.signal.cvar_callback@1
-    let cvar = recognize_source_cvar_callbacks(
+    let cvar_owner = match signal_witnesses {
+        Some(wow_project::SignalWitnessRecipe::MatcherV1) => {
+            wow_recognizers::source_signals::recognize_source_cvar_witnesses
+        }
+        None => recognize_source_cvar_callbacks,
+    };
+    let cvar = cvar_owner(
         W3Input {
             owner: owner_view,
             source_partition: crosswalk.analyzer_partition(owner_view, stop)?,

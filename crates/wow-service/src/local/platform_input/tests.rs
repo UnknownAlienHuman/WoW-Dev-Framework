@@ -9,6 +9,7 @@ mod function_fingerprints;
 mod library_witnesses;
 mod native_type_resolution;
 mod project_budgets;
+mod signal_witnesses;
 mod w5_secure_hooks;
 mod xml_classification;
 use serde_json::{Value, json};

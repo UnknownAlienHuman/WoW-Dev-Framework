@@ -27,6 +27,12 @@ use crate::platform_source::{PlatformPackageBinding, PlatformPackageSpecializati
 pub enum LibraryWitnessRecipe {
     MatcherV1,
 }
+/// Retain original W1/W3/W4 matcher outputs and their Graph derivations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SignalWitnessRecipe {
+    MatcherV1,
+}
 pub use graph_capabilities::{PlatformGraphCapabilities, PlatformGraphCapability};
 use platform::RetainedPlatformPackages;
 use xml_classification::RetainedXmlClassification;
@@ -642,6 +648,8 @@ pub struct ProjectConfiguration {
     state_projection: Option<StateProjectionRecipe>,
     #[serde(skip_serializing_if = "Option::is_none")]
     library_witnesses: Option<LibraryWitnessRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signal_witnesses: Option<SignalWitnessRecipe>,
 }
 
 impl ProjectConfiguration {
@@ -936,6 +944,7 @@ impl ProjectConfiguration {
             self.native_api_uses,
             self.state_projection,
             self.library_witnesses,
+            self.signal_witnesses,
         )?;
         if expected != self.configuration_digest {
             return Err(ProjectError::new(
@@ -1101,6 +1110,53 @@ impl ProjectConfiguration {
         self.library_witnesses
     }
 
+    #[must_use]
+    pub const fn signal_witnesses(&self) -> Option<SignalWitnessRecipe> {
+        self.signal_witnesses
+    }
+
+    pub(crate) fn with_signal_witnesses(
+        mut self,
+        recipe: SignalWitnessRecipe,
+    ) -> ProjectResult<Self> {
+        if self.signal_witnesses.is_some() {
+            return Err(ProjectError::new(
+                ProjectErrorCode::InvalidConfiguration,
+                ProjectPhase::Configuration,
+                "signal witness recipe is already selected",
+            ));
+        }
+        self.signal_witnesses = Some(recipe);
+        self.configuration_digest = configuration_digest(
+            &self.project_id,
+            self.project_kind,
+            &self.workspace_id,
+            &self.source_origin_id,
+            &self.logical_root,
+            &self.selected_profile,
+            self.reference_generation,
+            &self.analyzer_binding,
+            &self.capability_policy,
+            self.budget_policy,
+            self.load_plan_digest,
+            self.package_load_plan_digest,
+            self.package_main_plan_digest,
+            self.platform_package_binding_digest,
+            self.package_xml_binding_profile,
+            self.platform_graph_profile,
+            self.xml_schema_classification.as_ref(),
+            self.physical_function_declarations,
+            self.physical_function_signatures,
+            self.native_library_input_digest,
+            self.native_api_uses,
+            self.state_projection,
+            self.library_witnesses,
+            self.signal_witnesses,
+        )?;
+        self.validate()?;
+        Ok(self)
+    }
+
     pub(crate) fn with_library_witnesses(
         mut self,
         recipe: LibraryWitnessRecipe,
@@ -1137,6 +1193,7 @@ impl ProjectConfiguration {
             self.native_api_uses,
             self.state_projection,
             self.library_witnesses,
+            self.signal_witnesses,
         )?;
         self.validate()?;
         Ok(self)
@@ -1184,6 +1241,7 @@ impl ProjectConfiguration {
             self.native_api_uses,
             self.state_projection,
             self.library_witnesses,
+            self.signal_witnesses,
         )?;
         self.validate()?;
         Ok(self)
@@ -1228,6 +1286,7 @@ impl ProjectConfiguration {
             self.native_api_uses,
             self.state_projection,
             self.library_witnesses,
+            self.signal_witnesses,
         )?;
         self.validate()?;
         Ok(self)
@@ -1272,6 +1331,7 @@ impl ProjectConfiguration {
             self.native_api_uses,
             self.state_projection,
             self.library_witnesses,
+            self.signal_witnesses,
         )?;
         self.validate()?;
         Ok(self)
@@ -1305,6 +1365,7 @@ pub struct ProjectConfigurationBuilder {
     physical_function_signatures: Option<PhysicalFunctionSignatureRecipe>,
     state_projection: Option<StateProjectionRecipe>,
     library_witnesses: Option<LibraryWitnessRecipe>,
+    signal_witnesses: Option<SignalWitnessRecipe>,
 }
 
 impl ProjectConfigurationBuilder {
@@ -1341,6 +1402,7 @@ impl ProjectConfigurationBuilder {
             physical_function_signatures: None,
             state_projection: None,
             library_witnesses: None,
+            signal_witnesses: None,
         }
     }
 
@@ -1384,6 +1446,12 @@ impl ProjectConfigurationBuilder {
     #[must_use]
     pub const fn with_library_witnesses(mut self, recipe: LibraryWitnessRecipe) -> Self {
         self.library_witnesses = Some(recipe);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_signal_witnesses(mut self, recipe: SignalWitnessRecipe) -> Self {
+        self.signal_witnesses = Some(recipe);
         self
     }
 
@@ -1578,6 +1646,7 @@ impl ProjectConfigurationBuilder {
             None,
             self.state_projection,
             self.library_witnesses,
+            self.signal_witnesses,
         )?;
         let configuration = ProjectConfiguration {
             project_id: self.project_id,
@@ -1610,6 +1679,7 @@ impl ProjectConfigurationBuilder {
             native_api_uses: None,
             state_projection: self.state_projection,
             library_witnesses: self.library_witnesses,
+            signal_witnesses: self.signal_witnesses,
         };
         configuration.validate()?;
         Ok(configuration)
@@ -1641,6 +1711,7 @@ fn configuration_digest(
     native_api_uses: Option<NativeApiUseRecipe>,
     state_projection: Option<StateProjectionRecipe>,
     library_witnesses: Option<LibraryWitnessRecipe>,
+    signal_witnesses: Option<SignalWitnessRecipe>,
 ) -> ProjectResult<ContentDigest<CanonicalResult>> {
     #[derive(Serialize)]
     struct Identity<'a> {
@@ -1685,6 +1756,8 @@ fn configuration_digest(
         state_projection: Option<StateProjectionRecipe>,
         #[serde(skip_serializing_if = "Option::is_none")]
         library_witnesses: Option<LibraryWitnessRecipe>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        signal_witnesses: Option<SignalWitnessRecipe>,
     }
     canonical_digest(
         "wow-project/configuration/e0-d/1",
@@ -1716,6 +1789,7 @@ fn configuration_digest(
             native_api_uses,
             state_projection,
             library_witnesses,
+            signal_witnesses,
         },
         ProjectPhase::Configuration,
     )

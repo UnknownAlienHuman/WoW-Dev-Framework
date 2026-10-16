@@ -83,6 +83,28 @@ The profile bounds witness metadata at 16 MiB and the derivation fan-in at 64
 witnesses per library. Exceeding either refuses the selected projection rather
 than keeping a successful prefix. Other owner/Graph/output limits still apply.
 
+The independent `"signal_witnesses": "matcher_v1"` selector retains original
+W1 native-event, W3 custom-signal and W4 CVar matcher outputs, rule outcome state,
+blockers and truncation, and their Graph derivations. It composes with the Library
+selector; omission preserves successful legacy artifacts and retained recipes.
+Ordinary selected source graphs register the existing W3 source-function
+emitter/subscription definitions under `source-signals-1` (or
+`native-api-source-signals-1` when the independent API-use component is selected).
+Direct platform capability selection stays independent.
+
+Every W3 corroborating producer is retained. A dependent subscription inherits
+the weakest producer confidence; `confirmed` means compatible producer presence,
+not a confidence upgrade. Missing producers stay Possible with an explicit
+derivation boundary. Selected W3 relation IDs bind the original matcher proposal;
+unselected W3 preserves its historical call-derived IDs. Missing CVar callbacks
+are omitted instead of producing an unencodable JSON null. No callback endpoint,
+runtime event, authoritative absence, or loaded-state claim is inferred.
+
+The three selected signal owners use the same 16 MiB per-owner witness bound and
+64-input Graph derivation/fan-in limits. Native retained admission recomputes each
+selected producer before success. Ordinary bundle reads accept only the exact
+closed selector/projection combination and retain imported-artifact boundaries.
+
 `status` validates input/configuration and reports components without running the
 analyzer. Until a check materializes a snapshot, project state is partial and
 `current_context` is absent. It does not claim an on-disk published generation.

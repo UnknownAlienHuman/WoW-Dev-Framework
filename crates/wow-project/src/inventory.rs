@@ -595,6 +595,14 @@ impl ProjectInputBundle {
         Ok(self)
     }
 
+    pub fn with_signal_witnesses(
+        mut self,
+        recipe: crate::SignalWitnessRecipe,
+    ) -> ProjectResult<Self> {
+        self.configuration = self.configuration.with_signal_witnesses(recipe)?;
+        Ok(self)
+    }
+
     pub(crate) fn into_parts(
         self,
     ) -> (

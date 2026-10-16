@@ -483,7 +483,25 @@ fn registry_with_native_api(
     recipe: DirectRecipe,
     native_api: bool,
 ) -> ProjectResult<GraphRegistryBundle> {
-    let custom_signal_relations = !native_api && recipe.custom_signal_relations();
+    registry_with_components(project_kind, raw_inventory, recipe, native_api, false)
+}
+
+fn registry_with_components(
+    project_kind: ProjectKind,
+    raw_inventory: bool,
+    recipe: DirectRecipe,
+    native_api: bool,
+    ordinary_signal_sites: bool,
+) -> ProjectResult<GraphRegistryBundle> {
+    if ordinary_signal_sites
+        && (project_kind == ProjectKind::BlizzardUiPlatformSource
+            || raw_inventory
+            || !matches!(recipe, DirectRecipe::Original))
+    {
+        return Err(invalid());
+    }
+    let custom_signal_relations =
+        ordinary_signal_sites || (!native_api && recipe.custom_signal_relations());
     let universe_class = match project_kind {
         ProjectKind::Fixture | ProjectKind::Repository => "project",
         ProjectKind::BlizzardUiPlatformSource => "blizzard_ui_source",
@@ -910,7 +928,14 @@ fn registry_with_native_api(
         let (api, uses) = native_api_callable_registry_definitions()?;
         entities.push(api);
         relations.push(uses);
-        "native-api-uses-1".into()
+        if ordinary_signal_sites {
+            "native-api-source-signals-1"
+        } else {
+            "native-api-uses-1"
+        }
+        .into()
+    } else if ordinary_signal_sites {
+        "source-signals-1".into()
     } else {
         match recipe {
             DirectRecipe::Capabilities(capabilities) => capabilities.version_id(),
@@ -1217,11 +1242,14 @@ fn collect_source_graph_proposals_for_recipe(
         },
     )?;
     let raw_selected = raw_inventory::selected(config);
-    let registry = registry_with_native_api(
+    let registry = registry_with_components(
         config.project_kind(),
         raw_selected,
         recipe,
         config.native_api_uses().is_some(),
+        config.signal_witnesses().is_some()
+            && config.platform_graph_profile().is_none()
+            && config.project_kind() != ProjectKind::BlizzardUiPlatformSource,
     )?;
     let universe = match config.project_kind() {
         ProjectKind::BlizzardUiPlatformSource => {

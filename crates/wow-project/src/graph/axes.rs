@@ -356,6 +356,21 @@ mod tests {
         let legacy_native_api =
             registry_with_native_api(ProjectKind::Fixture, false, DirectRecipe::Original, true)?;
         assert_eq!(legacy_native_api.version(), "native-api-uses-1");
+        let selected = super::super::registry_with_components(
+            ProjectKind::Fixture,
+            false,
+            DirectRecipe::Original,
+            false,
+            true,
+        )?;
+        assert_eq!(selected.version(), "source-signals-1");
+        let emitter = selected
+            .relation_kind("source_emits_custom_signal")
+            .ok_or("selected source emitter")?;
+        assert!(emitter.allows_source_kind("lua_source_function"));
+        assert!(emitter.allows_target_kind("custom_signal"));
+        assert!(emitter.allows_confidence(GraphConfidence::Possible));
+        source_graph_axis_profile(&selected, GraphAxis::Registration)?;
         assert!(
             legacy_native_api
                 .relation_kind("source_emits_custom_signal")

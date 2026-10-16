@@ -235,6 +235,18 @@ pub(super) struct ReplayConfiguration {
         deserialize_with = "non_null_library_witnesses"
     )]
     library_witnesses: Option<crate::LibraryWitnessRecipe>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null_signal_witnesses"
+    )]
+    signal_witnesses: Option<crate::SignalWitnessRecipe>,
+}
+
+fn non_null_signal_witnesses<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<crate::SignalWitnessRecipe>, D::Error> {
+    crate::SignalWitnessRecipe::deserialize(deserializer).map(Some)
 }
 
 fn non_null_library_witnesses<'de, D: serde::Deserializer<'de>>(
@@ -280,6 +292,9 @@ fn non_null_physical_function_signatures<'de, D: serde::Deserializer<'de>>(
 }
 
 impl ReplayConfiguration {
+    pub(super) const fn signal_witnesses(&self) -> Option<crate::SignalWitnessRecipe> {
+        self.signal_witnesses
+    }
     pub(super) const fn library_witnesses(&self) -> Option<crate::LibraryWitnessRecipe> {
         self.library_witnesses
     }
@@ -356,6 +371,7 @@ impl ReplayConfiguration {
             native_api_uses: config.native_api_uses(),
             state_projection: config.state_projection(),
             library_witnesses: config.library_witnesses(),
+            signal_witnesses: config.signal_witnesses(),
         })
     }
     pub(super) fn profile(&self) -> &ProfileIdentity {
@@ -473,6 +489,10 @@ impl ReplayConfiguration {
         };
         let config = match self.library_witnesses {
             Some(recipe) => config.with_library_witnesses(recipe)?,
+            None => config,
+        };
+        let config = match self.signal_witnesses {
+            Some(recipe) => config.with_signal_witnesses(recipe)?,
             None => config,
         };
         if config.configuration_digest() != self.expected_configuration_digest {

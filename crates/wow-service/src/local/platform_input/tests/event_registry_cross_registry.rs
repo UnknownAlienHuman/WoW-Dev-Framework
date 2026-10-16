@@ -18,11 +18,17 @@ RegistryB = {TriggerEvent = EventRegistry.TriggerEvent, RegisterCallback = Event
 
 #[test]
 fn distinct_registries_do_not_cross_confirm_the_same_event_key() -> TestResult {
-    assert_receiver_scope(true)?;
-    assert_receiver_scope(false)
+    assert_receiver_scope(true, false)?;
+    assert_receiver_scope(false, false)
 }
 
-fn assert_receiver_scope(library_receivers: bool) -> TestResult {
+#[test]
+fn distinct_registry_witnesses_keep_main_and_library_proof_scopes() -> TestResult {
+    assert_receiver_scope(true, true)?;
+    assert_receiver_scope(false, true)
+}
+
+fn assert_receiver_scope(library_receivers: bool, witnesses: bool) -> TestResult {
     let (root, mut config) = native_fixture()?;
     config["graph_profile"] = serde_json::to_value(PlatformGraphProfile::DirectCapabilitiesV1(
         PlatformGraphCapabilities::new(&[
@@ -57,7 +63,12 @@ end
     );
     event_registry_custom::replace_source_file(&root, &mut config, "UI/main.lua", &main)?;
     let stop = AtomicBool::new(false);
-    let input = LocalProjectInput::from_config_path(&root.0.join("project.json"), &stop)?;
+    let mut input = LocalProjectInput::from_config_path(&root.0.join("project.json"), &stop)?;
+    if witnesses {
+        input.bundle = input
+            .bundle
+            .with_signal_witnesses(wow_project::SignalWitnessRecipe::MatcherV1)?;
+    }
     let mut publisher = ProjectPublisher::with_function_call_facts();
     publisher.publish_initial_cancellable(input.bundle.clone(), &stop)?;
     let project = publisher.open_current()?;
@@ -100,7 +111,11 @@ end
     let custom = &value["custom_recognition"];
     assert_eq!(
         custom["profile"],
-        wow_recognizers::source_signals::W3_RECEIVER_SIGNAL_IDENTITY_PROFILE
+        if witnesses {
+            "wow-recognizers/lua-custom-signals/witness-derivation/1"
+        } else {
+            wow_recognizers::source_signals::W3_RECEIVER_SIGNAL_IDENTITY_PROFILE
+        }
     );
     assert_eq!(custom["analyzer_report_id"], report.analysis_id());
     let producers = custom["producers"].as_array().ok_or("producers")?;
@@ -164,7 +179,14 @@ end
     assert_eq!(signals.len(), 2);
     assert_ne!(signals[0], signals[1]);
     for (row, confidence) in [
-        (confirmed, GraphConfidence::Derived),
+        (
+            confirmed,
+            if witnesses {
+                GraphConfidence::Possible
+            } else {
+                GraphConfidence::Derived
+            },
+        ),
         (unconfirmed, GraphConfidence::Possible),
     ] {
         let id = row["relation_proposal_id"]
@@ -224,6 +246,29 @@ end
         &stop,
     )?;
     let acquired = AcquiredProjectPair::read(&read, &stop)?;
+    if witnesses {
+        assert_eq!(
+            acquired.project().configuration().signal_witnesses(),
+            Some(wow_project::SignalWitnessRecipe::MatcherV1)
+        );
+        crate::graph::validate_native_api_reopen(&acquired, &stop)?;
+        assert_eq!(
+            confirmed["witness"]["corroborating_relations"]
+                .as_array()
+                .ok_or("all same-receiver proofs")?
+                .len(),
+            2
+        );
+        let unresolved = subscriptions
+            .iter()
+            .find(|row| row["confirmed"] == false)
+            .ok_or("unconfirmed receiver")?;
+        assert!(
+            unresolved["witness"]
+                .get("corroborating_relations")
+                .is_none()
+        );
+    }
     assert_eq!(acquired.project().snapshot_id(), project.snapshot_id());
     assert_eq!(
         acquired.graph().snapshot().snapshot_id(),

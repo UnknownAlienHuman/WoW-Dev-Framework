@@ -313,6 +313,7 @@ pub(super) fn capture_once(
         &snapshot,
         addresses,
         native.project().configuration().library_witnesses(),
+        native.project().configuration().signal_witnesses(),
         stop,
     )
     .map_err(|failure| stage_error("signals", failure))?;

@@ -39,8 +39,8 @@ mod xml_fingerprints;
 pub use xml_fingerprints::{
     XmlFingerprintManifest, XmlFingerprintRecord, XmlFingerprintSelection, XmlFingerprintTarget,
 };
-mod library_witness_reopen;
 mod lua_mixins;
+mod matcher_witness_reopen;
 mod materialized;
 mod native_api;
 mod native_api_reopen;
@@ -212,6 +212,8 @@ pub struct GraphBuildRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     library_witnesses: Option<wow_project::LibraryWitnessRecipe>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    signal_witnesses: Option<wow_project::SignalWitnessRecipe>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     function_fingerprints: Option<FunctionFingerprintSelection>,
     #[serde(skip_serializing_if = "Option::is_none")]
     xml_fingerprints: Option<XmlFingerprintSelection>,
@@ -239,6 +241,7 @@ impl GraphBuildRequest {
             physical_function_signatures: None,
             native_api_uses: None,
             library_witnesses: None,
+            signal_witnesses: None,
             function_fingerprints: None,
             xml_fingerprints: None,
         })
@@ -257,6 +260,7 @@ impl GraphBuildRequest {
         self.physical_function_signatures = None;
         self.native_api_uses = None;
         self.library_witnesses = None;
+        self.signal_witnesses = None;
         match profile {
             wow_project::PlatformGraphProfile::PackageProjectionV1 => {
                 self.schema = "wow-service/graph-build-request/10";
@@ -297,12 +301,17 @@ impl GraphBuildRequest {
         request.physical_function_signatures = configuration.physical_function_signatures();
         request.native_api_uses = configuration.native_api_uses();
         request.library_witnesses = configuration.library_witnesses();
+        request.signal_witnesses = configuration.signal_witnesses();
         request.projection = wow_project::graph::source_graph_profile(configuration);
         request.select_component_schema();
         request
     }
 
     fn select_component_schema(&mut self) {
+        if self.signal_witnesses.is_some() {
+            self.schema = "wow-service/graph-build-request/signal-witnesses/1";
+            return;
+        }
         if self.library_witnesses.is_some() {
             self.schema = "wow-service/graph-build-request/library-witnesses/1";
             return;
@@ -393,6 +402,9 @@ impl GraphBuildRequest {
             return Err(error(ServiceErrorCode::IdentityMismatch));
         }
         if self.library_witnesses != project.configuration().library_witnesses() {
+            return Err(error(ServiceErrorCode::IdentityMismatch));
+        }
+        if self.signal_witnesses != project.configuration().signal_witnesses() {
             return Err(error(ServiceErrorCode::IdentityMismatch));
         }
         if self.projection != wow_project::graph::source_graph_profile(project.configuration()) {
@@ -1166,6 +1178,7 @@ fn compose_backend_diagnosed(
         &snapshot,
         &addresses,
         project.configuration().library_witnesses(),
+        project.configuration().signal_witnesses(),
         stop,
     )
     .map_err(|e| stage_error("signals", e))?;

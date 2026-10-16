@@ -121,6 +121,20 @@ Every proposal retains:
 
 A graph assertion cannot claim stronger confidence or provenance than the proposal/input permits.
 
+The explicit `SignalWitnessRecipe::MatcherV1` application path retains original
+W1/W3/W4 matcher Entity/Relation outputs and outcome state, separately from the
+aggregated entity and per-relation Graph confidence. Shared entities depend on
+all retained relation assertions; W3 subscriptions additionally depend on every
+compatible same-receiver producer. The selected W3 projection uses the original
+matcher proposal ID so retained Graph identity binds the original match/facts.
+Its legacy unselected projection keeps its earlier IDs. Possible corroboration
+cannot become a Derived dependency. Actual missing producer support stays explicit.
+
+The shared small capture primitive also serves the existing W6 witness path
+without changing its serialized receipt shape. Original matcher records are
+copied only after finite byte admission. No second matcher, parser, inferred
+callback, cross-receiver merge or additional graph truth store is introduced.
+
 ## Partition identity
 
 ```text
