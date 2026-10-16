@@ -2,6 +2,8 @@
 use super::*;
 use crate::identifier_distance::{DistanceResult, bounded_distance, normalize};
 use std::collections::BTreeSet;
+mod explanation;
+pub use explanation::ObservationCandidateExplanation;
 const QUERY_PROFILE: &str = "wow-search/recorded-source-fact-name-member-prefix-text-similarity/1";
 const DECLARATION_QUERY_PROFILE: &str =
     "wow-search/recorded-source-declaration-name-member-prefix-text-similarity/1";

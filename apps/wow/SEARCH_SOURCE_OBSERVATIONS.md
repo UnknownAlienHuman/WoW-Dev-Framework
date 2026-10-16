@@ -68,6 +68,43 @@ Context selection and frontend registration remain separate #169/W22 scopes. Syn
 functional proof does not qualify vendor/current source, Ketho parity, a client
 runtime, the full corpus or launch acceptance.
 
+## Explain an exact completed Source result
+
+`wow search observations explain` accepts one strict `--explain-json` input:
+
+```json
+{
+  "schema": "wow-service/source-observation-explain-input/1",
+  "query_operation_id": "original-completed-query-operation",
+  "query_request_digest": "sha256:...",
+  "result_set_id": "source-observation-result:sha256:...",
+  "candidate_id": "source-observation-candidate:sha256:..."
+}
+```
+
+Supply `--search-store`, a new `--operation-id`, `--lease-expires-after`, explicit
+`--allow-local-metadata-only`, the original Search bounds and the Store/output
+limits. The bounds must reproduce the profile in the original query receipt;
+they cannot select a different profile. The original receipt determines its
+observation, declaration or inventory component. Query, generation, shard,
+source-mode and page overrides are rejected.
+
+One Service operation reads the exact completed query receipt, validates its
+operation/digest and full original result through the genuine retained Search
+shard, and returns the unchanged explicitly selected candidate plus original
+whole-query context and status. It does not execute another query, open Project
+or source files, resolve Current, reinterpret owner facts or infer user selection.
+The original query response and default request/result bytes remain unchanged;
+no extra session or storage/index profile is introduced.
+
+New explanation operations require the original shard's exact active catalog
+entry. Its retirement or physical collection refuses a new read even though the
+historical query receipt remains recorded. An already completed explanation
+replays its exact durable response before reopening the original receipt or
+shard, including after retirement/GC. The temporary native shard read is checked
+closed before the response is atomically recorded with a catalog fence. The Store
+must already exist; explanation never creates a missing Store or rebuilds data.
+
 ## Explicit named function declarations
 
 Use `--source-declarations` instead of `--source-observations` on build/retire,

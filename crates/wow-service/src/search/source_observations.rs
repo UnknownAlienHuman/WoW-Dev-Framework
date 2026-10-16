@@ -6,6 +6,9 @@ use wow_search::source_observations::{
 };
 use wow_store::ObjectId;
 
+pub(in crate::search) mod explanation;
+pub use explanation::SourceObservationExplainRequest;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ObservationComponent {

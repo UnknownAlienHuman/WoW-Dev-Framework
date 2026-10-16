@@ -7,7 +7,7 @@ mod federation;
 mod query;
 mod slots;
 pub use federation::BoundObservationQueryResult;
-pub use query::{ObservationQueryRequest, ObservationQueryResult};
+pub use query::{ObservationCandidateExplanation, ObservationQueryRequest, ObservationQueryResult};
 use slots::SlotKey;
 const PROFILE: &str = "wow-search/project-source-observation-profile/1";
 const MANIFEST: &str = "wow-search/project-source-observation-shard/1";

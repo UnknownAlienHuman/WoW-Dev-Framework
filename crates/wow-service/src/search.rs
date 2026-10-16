@@ -23,7 +23,9 @@ pub use retrieval::{SearchContinueRequest, SearchResultReleaseRequest, SearchRet
 mod file_set;
 mod source_observations;
 use documents::{Documents, Profile as DurableProfile, Selection as DurableSelection};
-pub use source_observations::{ObservationComponent, SourceObservationRetrievalRequest};
+pub use source_observations::{
+    ObservationComponent, SourceObservationExplainRequest, SourceObservationRetrievalRequest,
+};
 
 use std::{
     num::NonZeroU64,
@@ -527,6 +529,13 @@ impl SearchOperationService {
         stop: &AtomicBool,
     ) -> ServiceResult<Box<[u8]>> {
         source_observations::execute(request, stop)
+    }
+    pub fn explain_source_observation_candidate(
+        &self,
+        request: &SourceObservationExplainRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        source_observations::explanation::execute(request, stop)
     }
     pub fn retrieve_entities(
         &self,
