@@ -3,6 +3,9 @@
 use super::*;
 use serde::Deserialize;
 
+pub(super) mod context;
+pub use context::SearchContextRequest;
+
 #[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum EntityKind {
@@ -127,130 +130,18 @@ pub(super) fn execute(
         DurableOperationStart::Started => {}
     }
     let outcome = (|| {
-        let record = store
-            .operation(
-                &StoreOperationId::new(request.input.explanation_operation_id.clone())
-                    .map_err(map_store_error)?,
-            )
-            .map_err(map_store_error)?
-            .ok_or_else(unavailable)?;
-        if record.state() != StoreOperationState::Completed
-            || record.request_digest().as_str() != request.input.explanation_request_digest
-        {
-            return Err(mismatch());
-        }
-        let original_bytes =
-            read_completed_response(&store, &record, request.store_limits.max_object_bytes)?;
-        let original: serde_json::Value =
-            serde_json::from_slice(&original_bytes).map_err(|_| mismatch())?;
-        let operation = field(&original, "operation")?;
-        let schema = match operation {
-            "search_project_entities_explain" => {
-                "wow-search/project-entity-candidate-explanation/1"
-            }
-            "search_reference_explain" => "wow-search/native-reference-candidate-explanation/1",
-            "search_source_observations_explain" => {
-                "wow-search/source-observation-candidate-explanation/1"
-            }
-            "search_federated_explain" => "wow-search/federated-candidate-explanation/1",
-            _ => return Err(mismatch()),
-        };
-        let payload = original.get("payload").ok_or_else(mismatch)?;
-        let explained = payload.get("explanation").ok_or_else(mismatch)?;
-        if field(&original, "result_id")? != request.input.explanation_result_id
-            || field(payload, "resource_closure")? != "closed"
-            || field(explained, "schema")? != schema
-            || field(explained, "result_set_id")? != request.input.result_set_id
-            || field(explained, "candidate_id")? != request.input.candidate_id
-            || field(payload, "status")? != field(explained, "status")?
-            || canonical_digest("sha256:", explained)?.as_ref()
-                != request.input.expected_explanation_digest
-        {
-            return Err(mismatch());
-        }
-        // The journal object and operation are immutable. This is an inert
-        // selection of already-validated Search data, not a native owner decoder.
-        let candidate = explained.get("candidate").ok_or_else(mismatch)?;
-        if field(candidate, "candidate_id")? != request.input.candidate_id
-            || canonical_digest("sha256:", candidate)?.as_ref()
-                != request.input.expected_candidate_digest
-        {
-            return Err(mismatch());
-        }
-        let component = if operation == "search_federated_explain" {
-            candidate.get("original_candidate").ok_or_else(mismatch)?
-        } else {
-            candidate
-        };
-        let expected_operation = match request.input.entity_kind {
-            EntityKind::ProjectGraphEntity => "search_project_entities_explain",
-            EntityKind::ReferenceDocument => "search_reference_explain",
-            EntityKind::SourceObservation => "search_source_observations_explain",
-        };
-        if operation != expected_operation && operation != "search_federated_explain" {
-            return Err(mismatch());
-        }
-        let entity_path = match request.input.entity_kind {
-            EntityKind::ProjectGraphEntity => "/document/entity/node_id",
-            EntityKind::ReferenceDocument => "/document/entity_key",
-            EntityKind::SourceObservation => "/document/fact_id",
-        };
-        if component
-            .pointer(entity_path)
-            .and_then(serde_json::Value::as_str)
-            != Some(&request.input.expected_entity_id)
-        {
-            return Err(mismatch());
-        }
-        check_cancelled(stop)?;
-        let binding_keys = [
-            "universe_id",
-            "universe_set_id",
-            "shard_id",
-            "query_id",
-            "result_query_id",
-            "normalized_query_id",
-            "search_profile_digest",
-            "federation_profile",
-            "ranking_profile",
-        ];
-        let binding: serde_json::Map<String, serde_json::Value> = explained
-            .as_object()
-            .ok_or_else(mismatch)?
-            .iter()
-            .filter(|(key, _)| binding_keys.contains(&key.as_str()))
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect();
-        let mut receipt = serde_json::json!({
-            "schema":"wow-service/search-selection-receipt/1",
-            "explanation_operation_id":request.input.explanation_operation_id,
-            "explanation_request_digest":request.input.explanation_request_digest,
-            "explanation_result_id":request.input.explanation_result_id,
-            "explanation_digest":request.input.expected_explanation_digest,
-            "result_set_id":request.input.result_set_id,
-            "candidate_id":request.input.candidate_id,
-            "candidate_digest":request.input.expected_candidate_digest,
-            "search_binding":binding,
-            "original_rank_tuple":candidate.get("rank_tuple").ok_or_else(mismatch)?,
-            "owner_entity":{"kind":request.input.entity_kind,"id":request.input.expected_entity_id},
-            "selection_origin":request.input.selection_origin,
-            "target_action":request.input.target_action,
-            "original_status":field(explained,"status")?,
-            "context_admission":"not_requested",
-            "authority":"explicit_selection_only",
-            "nonclaims":["intent_verification","entity_fact_authority_upgrade","context_owner_acquisition","context_root_mapping","edit_or_tool_authorization"]
-        });
-        let receipt_id = canonical_digest("search-selection-receipt:", &receipt)?;
-        receipt
-            .as_object_mut()
-            .ok_or_else(mismatch)?
-            .insert("receipt_id".into(), receipt_id.to_string().into());
+        let (receipt, explained) = materialize_selection(
+            &store,
+            &request.input,
+            request.store_limits.max_object_bytes,
+            stop,
+        )?;
         durable_response(
             "search_select",
             &request.operation_id,
             &public_digest,
             &serde_json::json!({
-                "status":field(explained,"status")?,"resource_closure":"closed",
+                "status":field(&explained,"status")?,"resource_closure":"closed",
                 "selection_receipt":receipt
             }),
             request.max_output_bytes.get(),
@@ -280,6 +171,129 @@ pub(super) fn execute(
         request.max_output_bytes.get(),
     )
     .map_err(|error| operation_failure(error, &request.operation_id))
+}
+
+fn materialize_selection(
+    store: &Store,
+    input: &Input,
+    max_read_bytes: u64,
+    stop: &AtomicBool,
+) -> ServiceResult<(serde_json::Value, serde_json::Value)> {
+    check_cancelled(stop)?;
+    let record = store
+        .operation(
+            &StoreOperationId::new(input.explanation_operation_id.clone())
+                .map_err(map_store_error)?,
+        )
+        .map_err(map_store_error)?
+        .ok_or_else(unavailable)?;
+    if record.state() != StoreOperationState::Completed
+        || record.request_digest().as_str() != input.explanation_request_digest
+    {
+        return Err(mismatch());
+    }
+    let original_bytes = read_completed_response(store, &record, max_read_bytes)?;
+    let original: serde_json::Value =
+        serde_json::from_slice(&original_bytes).map_err(|_| mismatch())?;
+    let operation = field(&original, "operation")?;
+    let schema = match operation {
+        "search_project_entities_explain" => "wow-search/project-entity-candidate-explanation/1",
+        "search_reference_explain" => "wow-search/native-reference-candidate-explanation/1",
+        "search_source_observations_explain" => {
+            "wow-search/source-observation-candidate-explanation/1"
+        }
+        "search_federated_explain" => "wow-search/federated-candidate-explanation/1",
+        _ => return Err(mismatch()),
+    };
+    let payload = original.get("payload").ok_or_else(mismatch)?;
+    let explained = payload.get("explanation").ok_or_else(mismatch)?;
+    if field(&original, "result_id")? != input.explanation_result_id
+        || field(payload, "resource_closure")? != "closed"
+        || field(explained, "schema")? != schema
+        || field(explained, "result_set_id")? != input.result_set_id
+        || field(explained, "candidate_id")? != input.candidate_id
+        || field(payload, "status")? != field(explained, "status")?
+        || canonical_digest("sha256:", explained)?.as_ref() != input.expected_explanation_digest
+    {
+        return Err(mismatch());
+    }
+    // The journal object and operation are immutable. This is an inert
+    // selection of already-validated Search data, not a native owner decoder.
+    let candidate = explained.get("candidate").ok_or_else(mismatch)?;
+    if field(candidate, "candidate_id")? != input.candidate_id
+        || canonical_digest("sha256:", candidate)?.as_ref() != input.expected_candidate_digest
+    {
+        return Err(mismatch());
+    }
+    let component = if operation == "search_federated_explain" {
+        candidate.get("original_candidate").ok_or_else(mismatch)?
+    } else {
+        candidate
+    };
+    let expected_operation = match input.entity_kind {
+        EntityKind::ProjectGraphEntity => "search_project_entities_explain",
+        EntityKind::ReferenceDocument => "search_reference_explain",
+        EntityKind::SourceObservation => "search_source_observations_explain",
+    };
+    if operation != expected_operation && operation != "search_federated_explain" {
+        return Err(mismatch());
+    }
+    let entity_path = match input.entity_kind {
+        EntityKind::ProjectGraphEntity => "/document/entity/node_id",
+        EntityKind::ReferenceDocument => "/document/entity_key",
+        EntityKind::SourceObservation => "/document/fact_id",
+    };
+    if component
+        .pointer(entity_path)
+        .and_then(serde_json::Value::as_str)
+        != Some(&input.expected_entity_id)
+    {
+        return Err(mismatch());
+    }
+    check_cancelled(stop)?;
+    let binding_keys = [
+        "universe_id",
+        "universe_set_id",
+        "shard_id",
+        "query_id",
+        "result_query_id",
+        "normalized_query_id",
+        "search_profile_digest",
+        "federation_profile",
+        "ranking_profile",
+    ];
+    let binding: serde_json::Map<String, serde_json::Value> = explained
+        .as_object()
+        .ok_or_else(mismatch)?
+        .iter()
+        .filter(|(key, _)| binding_keys.contains(&key.as_str()))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    let mut receipt = serde_json::json!({
+        "schema":"wow-service/search-selection-receipt/1",
+        "explanation_operation_id":input.explanation_operation_id,
+        "explanation_request_digest":input.explanation_request_digest,
+        "explanation_result_id":input.explanation_result_id,
+        "explanation_digest":input.expected_explanation_digest,
+        "result_set_id":input.result_set_id,
+        "candidate_id":input.candidate_id,
+        "candidate_digest":input.expected_candidate_digest,
+        "search_binding":binding,
+        "original_rank_tuple":candidate.get("rank_tuple").ok_or_else(mismatch)?,
+        "owner_entity":{"kind":input.entity_kind,"id":input.expected_entity_id},
+        "selection_origin":input.selection_origin,
+        "target_action":input.target_action,
+        "original_status":field(explained,"status")?,
+        "context_admission":"not_requested",
+        "authority":"explicit_selection_only",
+        "nonclaims":["intent_verification","entity_fact_authority_upgrade","context_owner_acquisition","context_root_mapping","edit_or_tool_authorization"]
+    });
+    let receipt_id = canonical_digest("search-selection-receipt:", &receipt)?;
+    receipt
+        .as_object_mut()
+        .ok_or_else(mismatch)?
+        .insert("receipt_id".into(), receipt_id.to_string().into());
+    Ok((receipt, explained.clone()))
 }
 
 fn field<'a>(data: &'a serde_json::Value, key: &str) -> ServiceResult<&'a str> {

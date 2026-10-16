@@ -57,6 +57,49 @@ impl Limits {
     }
 }
 impl ContextMapHostInput {
+    /// Exact semantic configuration for a consuming durable operation. Host
+    /// filesystem routing and continuation locations are deliberately excluded.
+    pub(crate) fn semantic_binding_digest(&self) -> ServiceResult<Box<str>> {
+        crate::identity::canonical_digest(
+            "wow-service/context-host-binding/1:",
+            &(
+                &self.schema,
+                &self.project_store_id,
+                &self.project_id,
+                &self.reference_profile,
+                &self.reference,
+                &self.limits,
+            ),
+        )
+    }
+
+    pub(crate) fn registration_id(&self) -> &str {
+        &self.project_store_id
+    }
+
+    /// Compare original cross-owner metadata with the actual typed host input;
+    /// this does not reconstruct a Reference owner from a Search projection.
+    pub(crate) fn reference_guard(
+        &self,
+        generation: &str,
+        profile: &serde_json::Value,
+        view_digest: Option<&str>,
+    ) -> ServiceResult<super::ContextMapReferenceGuard> {
+        if self.reference.generation_id() != generation
+            || serde_json::to_value(&self.reference_profile)
+                .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?
+                != *profile
+            || view_digest.is_some_and(|digest| self.reference.self_digest() != digest)
+        {
+            return Err(failure(ServiceErrorCode::IdentityMismatch));
+        }
+        super::ContextMapReferenceGuard::new(
+            self.reference_profile.profile_id().as_str(),
+            self.reference.generation_id(),
+            self.reference.self_digest(),
+        )
+    }
+
     /// Pure bounded transport admission. No filesystem/store/source acquisition.
     pub fn from_json_slice(bytes: &[u8], stop: &AtomicBool) -> ServiceResult<Self> {
         let host: Self = crate::graph::input::decode(

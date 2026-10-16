@@ -21,10 +21,10 @@ use wow_service::{
         FederationRequest, FederationResultReleaseRequest, LocalMetadataPermission,
         ObservationComponent, ReferenceContinueRequest, ReferenceExplainRequest,
         ReferenceIndexBuildRequest, ReferenceResultReleaseRequest, ReferenceShardRequest,
-        SearchBounds, SearchBuildQueryRequest, SearchContinueRequest, SearchIndexBuildRequest,
-        SearchOperationService, SearchResultReleaseRequest, SearchRetrievalRequest,
-        SearchContextRequest, SearchSelectionRequest, SearchShardQueryRequest, SearchShardRetireRequest,
-        SearchSourceHoldBinding, SearchStoreGcRequest, SearchStoreLimits,
+        SearchBounds, SearchBuildQueryRequest, SearchContextRequest, SearchContinueRequest,
+        SearchIndexBuildRequest, SearchOperationService, SearchResultReleaseRequest,
+        SearchRetrievalRequest, SearchSelectionRequest, SearchShardQueryRequest,
+        SearchShardRetireRequest, SearchSourceHoldBinding, SearchStoreGcRequest, SearchStoreLimits,
         SourceObservationExplainRequest, SourceObservationRetrievalRequest,
     },
 };
@@ -54,7 +54,6 @@ const OBSERVED_FEDERATION_HELP: &str = "Observed source slots use wow-service/ex
 const INVENTORY_HELP: &str = "--source-inventory selects native local/member/function/global-access observations with wow-search/source-inventory-query/1. recorded_slot accepts typed string/integer/boolean keys, explicit access_kind and direct_only|include_possible alias policy; blocked/incomplete paths cannot be exact slots. Federation source_component=source_inventory reuses captured pages. See SEARCH_SOURCE_OBSERVATIONS.md.\n";
 const MAX_ARGUMENT_BYTES: usize = 128 * 1024;
 const MAX_VALUE_BYTES: usize = 32 * 1024;
-const MAX_CONTEXT_JSON_BYTES: usize = 64 * 1024;
 
 const VALUE_OPTIONS: &[&str] = &[
     "--store-root",
@@ -176,14 +175,18 @@ fn run_with_io<W: Write, E: Write>(
             Err(_) => 4,
         };
     }
-    match parse_durable(&arguments) {
+    match parse_durable(&arguments, stop) {
         Ok(Some(parsed)) => {
             return run_durable(parsed, stop, stdout, stderr);
         }
         Ok(None) => {}
         Err(message) => {
             diagnostic(stderr, message);
-            return 64;
+            return if stop.load(Ordering::Acquire) {
+                130
+            } else {
+                64
+            };
         }
     }
     let parsed = match parse(arguments) {
@@ -410,7 +413,10 @@ fn is_help(arguments: &[OsString]) -> bool {
             && arguments.iter().any(|v| v == "--help" || v == "-h"))
 }
 
-fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, &'static str> {
+fn parse_durable(
+    arguments: &[OsString],
+    stop: &AtomicBool,
+) -> Result<Option<ParsedDurableSearch>, &'static str> {
     if arguments.first().map(OsString::as_os_str) != Some(std::ffi::OsStr::new("search")) {
         return Ok(None);
     }
@@ -670,9 +676,12 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             SearchContextRequest::new(
                 OperationId::new(required_text(&options, "--operation-id")?)
                     .map_err(|_| "invalid --operation-id")?,
-                PathBuf::from(required(&options, "--context-host")?),
+                store_path,
                 required_text(&options, "--context-json")?.as_bytes(),
-                read_context_host(required(&options, "--context-host")?, stop)?,
+                read_context_host(
+                    std::path::Path::new(required(&options, "--context-host")?),
+                    stop,
+                )?,
                 store_limits,
                 max_output_bytes,
                 LocalMetadataPermission::authorize_local_metadata_only(),
@@ -1407,6 +1416,9 @@ fn read_context_host_bytes(
     path: &std::path::Path,
     stop: &AtomicBool,
 ) -> Result<Vec<u8>, &'static str> {
+    if stop.load(Ordering::Acquire) {
+        return Err("native context host input cancelled");
+    }
     let mut bytes = Vec::new();
     if path.as_os_str() == "-" {
         let stdin = std::io::stdin();
@@ -1418,6 +1430,12 @@ fn read_context_host_bytes(
     } else {
         if !path.is_absolute() {
             return Err("--context-host must be an absolute file path or -");
+        }
+        if !std::fs::metadata(path)
+            .map_err(|_| "cannot inspect native context host file")?
+            .is_file()
+        {
+            return Err("--context-host must name a regular file");
         }
         std::fs::File::open(path)
             .and_then(|file| {

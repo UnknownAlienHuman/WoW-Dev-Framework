@@ -24,7 +24,7 @@ mod file_set;
 mod selection;
 mod source_observations;
 use documents::{Documents, Profile as DurableProfile, Selection as DurableSelection};
-pub use selection::SearchSelectionRequest;
+pub use selection::{SearchContextRequest, SearchSelectionRequest};
 pub use source_observations::{
     ObservationComponent, SourceObservationExplainRequest, SourceObservationRetrievalRequest,
 };
@@ -469,6 +469,13 @@ pub struct SearchOperationService {
 }
 
 impl SearchOperationService {
+    pub fn context_for_selection(
+        &self,
+        request: &SearchContextRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        selection::context::execute(request, stop)
+    }
     pub fn select_candidate(
         &self,
         request: &SearchSelectionRequest,
