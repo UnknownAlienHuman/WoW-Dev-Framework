@@ -29,6 +29,32 @@ and GC; no second graph, traversal, search backend or persistence layout exists.
 
 ## Exact retained query
 
+### Query-wide original entity-kind scope
+
+Use `schema: "wow-search/project-entity-filtered-query/1"` with the same query
+class and bounds, plus required `filters: {"entity_kinds": ["lua_source_function"]}`.
+The closed list is nonempty, unique, at most 512 IDs, normalized in exact
+case-sensitive order. Each requested ID must exist in the original digest-bound
+Graph registry; an unsupported kind fails the operation instead of producing an
+empty success. A registered kind with no records remains a supported empty query.
+The old schema rejects this field, including explicit null.
+
+All four query classes restrict returned candidates by `GraphNode.kind()`.
+Exact owner keys remain opaque metadata; filtering never produces absence
+authority. Linear scans retain their visited-document charges. Excluded hits
+do not consume the caller's candidate cap. Related traversal uses its original
+seeds, edges, confidence and bounds, retaining original intermediate witnesses;
+only returned targets are scoped. It does not prune traversal by kind or
+upgrade Candidate authority. Original requested evidence/explanations remain.
+
+The new query interpretation is `wow-search/project-entity-owner-kind-scope/1`;
+shards, handles, source holds and old unfiltered request/result bytes stay intact.
+Standalone and federated captured continuation bind the original normalized
+request and recheck the candidate kind against exact retained Search documents.
+They neither rerun Graph/the original query nor permit a cursor filter override.
+
+### Commands and unfiltered request
+
 ```text
 wow search entities --store-root <SAME-ORIGINAL-PROJECT-STORE>
   --generation <EXACT> --search-store <SAME-SEARCH-STORE>

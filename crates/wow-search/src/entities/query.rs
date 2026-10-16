@@ -1,5 +1,6 @@
 //! Closed ProjectEntity retrieval and owner-executed seeded graph expansion.
 use super::*;
+mod filters;
 mod pagination;
 pub use pagination::{EntityPage, EntityPageCursor, EntityPagePolicy};
 use std::collections::BTreeMap;
@@ -8,6 +9,8 @@ use wow_graph::{
     GraphRelationKind, GraphSubgraphConfidence, GraphSubgraphLimits, GraphSubgraphQuery,
 };
 const REQUEST_SCHEMA: &str = "wow-search/project-entity-query/1";
+const FILTERED_REQUEST_SCHEMA: &str = "wow-search/project-entity-filtered-query/1";
+const FILTERED_QUERY_PROFILE: &str = "wow-search/project-entity-owner-kind-scope/1";
 const QUERY_PROFILE: &str = "wow-search/project-entity-identity-key-text-seeded-graph/1";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -71,6 +74,12 @@ enum Query {
 #[serde(deny_unknown_fields)]
 pub struct EntityQueryRequest {
     schema: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present_filters"
+    )]
+    filters: Option<filters::Filters>,
     query: Query,
     max_scanned_documents: NonZeroU32,
     max_candidates: NonZeroU32,
@@ -78,7 +87,24 @@ pub struct EntityQueryRequest {
     max_total_support_scans: NonZeroU64,
     max_result_bytes: NonZeroU64,
 }
+fn present_filters<'de, D: serde::Deserializer<'de>>(
+    input: D,
+) -> Result<Option<filters::Filters>, D::Error> {
+    filters::Filters::deserialize(input).map(Some)
+}
 impl EntityQueryRequest {
+    fn profile(&self) -> &'static str {
+        if self.schema == FILTERED_REQUEST_SCHEMA {
+            FILTERED_QUERY_PROFILE
+        } else {
+            QUERY_PROFILE
+        }
+    }
+    fn accepts_kind(&self, kind: &str) -> bool {
+        self.filters
+            .as_ref()
+            .is_none_or(|filters| filters.accepts_kind(kind))
+    }
     pub fn from_json_slice(bytes: &[u8], stop: &AtomicBool) -> SearchResult<Self> {
         check(stop)?;
         if bytes.len() > 65536 {
@@ -86,8 +112,15 @@ impl EntityQueryRequest {
         }
         let mut request: Self =
             serde_json::from_slice(bytes).map_err(|_| SearchError::InvalidProfile)?;
-        if request.schema != REQUEST_SCHEMA {
+        if !matches!(
+            request.schema.as_str(),
+            REQUEST_SCHEMA | FILTERED_REQUEST_SCHEMA
+        ) || (request.schema == FILTERED_REQUEST_SCHEMA) != request.filters.is_some()
+        {
             return Err(SearchError::InvalidProfile);
+        }
+        if let Some(filters) = &mut request.filters {
+            filters.validate()?;
         }
         request.explanation_limits.validate().map_err(graph_error)?;
         match &mut request.query {
@@ -166,7 +199,7 @@ impl EntitySearchShard {
         &self,
         summary: &serde_json::Value,
         stop: &AtomicBool,
-    ) -> SearchResult<()> {
+    ) -> SearchResult<EntityQueryRequest> {
         check(stop)?;
         let request_value = summary
             .get("request")
@@ -178,7 +211,7 @@ impl EntitySearchShard {
         )?;
         let expected_query = digest(
             "entity-search-query:",
-            &(QUERY_PROFILE, self.logical_id(), &request),
+            &(request.profile(), self.logical_id(), &request),
         )?;
         let expected_universe = digest(
             "entity-search-universe:",
@@ -192,7 +225,7 @@ impl EntitySearchShard {
             || summary
                 .get("query_profile")
                 .and_then(serde_json::Value::as_str)
-                != Some(QUERY_PROFILE)
+                != Some(request.profile())
             || summary
                 .get("result_query_id")
                 .and_then(serde_json::Value::as_str)
@@ -213,17 +246,18 @@ impl EntitySearchShard {
                         .map_err(|_| SearchError::OwnerEvidenceInvalid)?,
                 )
             || request_value
-                != &serde_json::to_value(request).map_err(|_| SearchError::OwnerEvidenceInvalid)?
+                != &serde_json::to_value(&request).map_err(|_| SearchError::OwnerEvidenceInvalid)?
         {
             return Err(SearchError::OwnerEvidenceInvalid);
         }
-        Ok(())
+        Ok(request)
     }
     /// Validate recorded Search data after its component summary has been bound.
     pub(crate) fn validate_federation_candidate(
         &self,
         query_id: &str,
         candidate: &serde_json::Value,
+        request: &EntityQueryRequest,
         stop: &AtomicBool,
     ) -> SearchResult<()> {
         check(stop)?;
@@ -237,8 +271,12 @@ impl EntitySearchShard {
             .binary_search_by(|document| document.entity_id().as_str().cmp(id))
             .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
         let document = &self.manifest.documents[index];
-        if candidate.get("document")
-            != Some(&serde_json::to_value(document).map_err(|_| SearchError::OwnerEvidenceInvalid)?)
+        if !request.accepts_kind(document.entity_kind())
+            || candidate.get("document")
+                != Some(
+                    &serde_json::to_value(document)
+                        .map_err(|_| SearchError::OwnerEvidenceInvalid)?,
+                )
             || candidate
                 .get("candidate_id")
                 .and_then(serde_json::Value::as_str)
@@ -274,9 +312,17 @@ impl EntitySearchShard {
         {
             return Err(SearchError::OwnerEvidenceInvalid);
         }
+        if request.filters.as_ref().is_some_and(|filters| {
+            filters
+                .entity_kinds
+                .iter()
+                .any(|kind| pair.graph().registry().entity_kind(kind).is_none())
+        }) {
+            return Err(SearchError::InvalidProfile);
+        }
         let query_id = digest(
             "entity-search-query:",
-            &(QUERY_PROFILE, self.logical_id(), request),
+            &(request.profile(), self.logical_id(), request),
         )?;
         let universe = digest(
             "entity-search-universe:",
@@ -295,14 +341,16 @@ impl EntitySearchShard {
                     .binary_search_by(|d| d.entity_id().cmp(entity_id))
                 {
                     let doc = &self.manifest.documents[index];
-                    candidates.push(candidate(
-                        &query_id,
-                        doc,
-                        "exact_entity_identity",
-                        0,
-                        [0, 0, 0],
-                        None,
-                    )?);
+                    if request.accepts_kind(doc.entity_kind()) {
+                        candidates.push(candidate(
+                            &query_id,
+                            doc,
+                            "exact_entity_identity",
+                            0,
+                            [0, 0, 0],
+                            None,
+                        )?);
+                    }
                 }
             }
             Query::ExactOwnerKey { owner_key } => {
@@ -313,7 +361,9 @@ impl EntitySearchShard {
                         break;
                     }
                     scanned += 1;
-                    if doc.owner_metadata_key() == owner_key {
+                    if doc.owner_metadata_key() == owner_key
+                        && request.accepts_kind(doc.entity_kind())
+                    {
                         if candidates.len() >= request.max_candidates.get() as usize {
                             truncated = true;
                             break;
@@ -334,10 +384,6 @@ impl EntitySearchShard {
                 found.sort_by(|a, b| a.document_id().cmp(b.document_id()));
                 for (rank, hit) in found.iter().enumerate() {
                     check(stop)?;
-                    if candidates.len() >= request.max_candidates.get() as usize {
-                        truncated = true;
-                        break;
-                    }
                     let id = GraphNodeId::new(hit.document_id()).map_err(graph_error)?;
                     let index = self
                         .manifest
@@ -347,6 +393,13 @@ impl EntitySearchShard {
                     let doc = &self.manifest.documents[index];
                     if hit.owner_metadata_label() != doc.owner_metadata_key() {
                         return Err(SearchError::OwnerEvidenceInvalid);
+                    }
+                    if !request.accepts_kind(doc.entity_kind()) {
+                        continue;
+                    }
+                    if candidates.len() >= request.max_candidates.get() as usize {
+                        truncated = true;
+                        break;
                     }
                     candidates.push(candidate(
                         &query_id,
@@ -392,15 +445,18 @@ impl EntitySearchShard {
             });
             for path in paths {
                 check(stop)?;
-                if candidates.len() >= request.max_candidates.get() as usize {
-                    truncated = true;
-                    break;
-                }
                 let index = self
                     .manifest
                     .documents
                     .binary_search_by(|d| d.entity_id().cmp(path.target))
                     .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+                if !request.accepts_kind(self.manifest.documents[index].entity_kind()) {
+                    continue;
+                }
+                if candidates.len() >= request.max_candidates.get() as usize {
+                    truncated = true;
+                    break;
+                }
                 for step in &path.steps {
                     subjects.insert(
                         (1u8, step.original_edge.edge_id().as_str().to_owned()),
@@ -518,7 +574,7 @@ impl EntitySearchShard {
         }
         let payload = Payload {
             schema: "wow-search/project-entity-result-set/1",
-            query_profile: QUERY_PROFILE,
+            query_profile: request.profile(),
             result_query_id: &query_id,
             universe_id: &universe,
             shard_id: self.logical_id(),

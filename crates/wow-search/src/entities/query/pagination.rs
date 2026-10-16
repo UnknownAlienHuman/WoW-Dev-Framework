@@ -270,7 +270,7 @@ impl EntitySearchShard {
             .ok_or(SearchError::OwnerEvidenceInvalid)?;
         let query_id = digest(
             "entity-search-query:",
-            &(QUERY_PROFILE, self.logical_id(), request),
+            &(request.profile(), self.logical_id(), request),
         )?;
         let universe = digest(
             "entity-search-universe:",
@@ -286,7 +286,7 @@ impl EntitySearchShard {
             || text_field(&envelope, "result_set_id")?
                 != digest("project-entity-result-set:", payload)?.as_ref()
             || text_field(payload, "schema")? != "wow-search/project-entity-result-set/1"
-            || text_field(payload, "query_profile")? != QUERY_PROFILE
+            || text_field(payload, "query_profile")? != request.profile()
             || text_field(payload, "result_query_id")? != query_id.as_ref()
             || text_field(payload, "universe_id")? != universe.as_ref()
             || text_field(payload, "shard_id")? != self.logical_id()
@@ -330,7 +330,8 @@ impl EntitySearchShard {
                     .ok_or(SearchError::OwnerEvidenceInvalid)?,
             )
             .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
-            if !ids.insert(id)
+            if !request.accepts_kind(document.entity_kind())
+                || !ids.insert(id)
                 || previous.is_some_and(|old| old >= (rank, id))
                 || candidate.get("document")
                     != Some(

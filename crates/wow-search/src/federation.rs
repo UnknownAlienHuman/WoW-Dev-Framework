@@ -345,20 +345,26 @@ impl RetainedSourceShard<'_> {
         self,
         summary: &serde_json::Value,
         stop: &AtomicBool,
-    ) -> SearchResult<()> {
+    ) -> SearchResult<Option<crate::entities::EntityQueryRequest>> {
         match self {
-            Self::Entities(s) => s.validate_federation_summary(summary, stop),
-            Self::Observations(s) => s.validate_federation_summary(summary, stop),
+            Self::Entities(s) => s.validate_federation_summary(summary, stop).map(Some),
+            Self::Observations(s) => s.validate_federation_summary(summary, stop).map(|()| None),
         }
     }
     fn validate_federation_candidate(
         self,
         query: &str,
         candidate: &serde_json::Value,
+        request: Option<&crate::entities::EntityQueryRequest>,
         stop: &AtomicBool,
     ) -> SearchResult<()> {
         match self {
-            Self::Entities(s) => s.validate_federation_candidate(query, candidate, stop),
+            Self::Entities(s) => s.validate_federation_candidate(
+                query,
+                candidate,
+                request.ok_or(SearchError::OwnerEvidenceInvalid)?,
+                stop,
+            ),
             Self::Observations(s) => s.validate_federation_candidate(query, candidate, stop),
         }
     }

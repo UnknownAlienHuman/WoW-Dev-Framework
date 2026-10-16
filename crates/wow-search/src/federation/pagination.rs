@@ -359,10 +359,12 @@ fn page_retained_impl(
     let b = b_capture
         .map(|capture| field(capture, "result_summary"))
         .transpose()?;
-    primary.validate_federation_summary(p, stop)?;
-    if let (Some(shard), Some(summary)) = (blizzard, b) {
-        shard.validate_federation_summary(summary, stop)?;
-    }
+    let primary_request = primary.validate_federation_summary(p, stop)?;
+    let blizzard_request = if let (Some(shard), Some(summary)) = (blizzard, b) {
+        shard.validate_federation_summary(summary, stop)?
+    } else {
+        None
+    };
     let reference_request = reference.validate_federation_summary(r, stop)?;
     if p.get("candidates").is_some()
         || r.get("candidates").is_some()
@@ -544,11 +546,21 @@ fn page_retained_impl(
         };
         let component_universe = text_field(summary, "universe_id")?;
         if class == FederationUniverse::PrimaryUserProject {
-            primary.validate_federation_candidate(component_query, original, stop)?;
+            primary.validate_federation_candidate(
+                component_query,
+                original,
+                primary_request.as_ref(),
+                stop,
+            )?;
         } else if class == FederationUniverse::BlizzardUiSource {
             blizzard
                 .ok_or(SearchError::OwnerEvidenceInvalid)?
-                .validate_federation_candidate(component_query, original, stop)?;
+                .validate_federation_candidate(
+                    component_query,
+                    original,
+                    blizzard_request.as_ref(),
+                    stop,
+                )?;
         } else {
             reference.validate_federation_candidate(
                 component_query,
