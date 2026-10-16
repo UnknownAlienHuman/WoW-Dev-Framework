@@ -17,6 +17,16 @@ It does not own WoW platform truth. API existence and restriction facets come fr
 
 ## E0-C outcome
 
+Named function-declaration bindings are available through the sealed native
+`SourceFunctionFact::binding_name()` port and its explicit disposition state.
+The adapter reads ordinary local/global and static dot/colon declaration tokens;
+anonymous/assigned closures and unsupported/missing/over-cap names remain separate.
+Names retain exact token/name/declaration spans and confer source-syntax authority
+only. This bounded private cache is excluded from original report serialization,
+so existing report IDs, budgets, graph/replay bytes and declared-header comparison
+recipes remain intact. `ProjectView::function_binding_metadata` supplies the borrowed
+record to the selected Search consumer; serialized metadata is not native custody.
+
 A future implementation agent must be able to prove this seam:
 
 ```text

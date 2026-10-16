@@ -25,6 +25,7 @@ mod budget;
 mod declaration;
 mod hook_targets;
 mod location_index;
+mod names;
 mod shape;
 mod signature;
 #[cfg(test)]
@@ -38,6 +39,7 @@ pub use declaration::{
 };
 pub use hook_targets::{HookTargetRecipe, SourceHookTarget, SourceHookTargetForm};
 use location_index::AccessLocationIndex;
+pub use names::{SourceFunctionBindingName, SourceFunctionBindingState};
 pub use shape::{
     FunctionShapeEvent, FunctionShapeNode, FunctionShapeToken, SourceFunctionShape,
     SourceFunctionShapeUnavailable, SourceFunctionShapeUnsupported,
@@ -103,6 +105,10 @@ pub struct SourceFunctionFact {
     shape: Option<SourceFunctionShape>,
     #[serde(skip_serializing_if = "Option::is_none")]
     signature: Option<SourceFunctionSignature>,
+    /// Native syntax cache. Existing report/replay identities bind the original
+    /// whole-file digest and function occurrence; their serialized bytes stay intact.
+    #[serde(skip)]
+    binding_name: names::BindingNameObservation,
 }
 impl SourceFunctionFact {
     pub fn fact_id(&self) -> &str {
@@ -134,6 +140,13 @@ impl SourceFunctionFact {
     /// Selected typed observation from the same native signature index.
     pub fn signature(&self) -> Option<&SourceFunctionSignature> {
         self.signature.as_ref()
+    }
+    /// Recorded declaration syntax, never an inferred assignment/alias/runtime name.
+    pub fn binding_name(&self) -> Option<&SourceFunctionBindingName> {
+        self.binding_name.name()
+    }
+    pub fn binding_name_state(&self) -> SourceFunctionBindingState {
+        self.binding_name.state()
     }
 }
 
@@ -607,6 +620,9 @@ impl FunctionCallReport {
             .map(|f| (f.path.as_str(), f))
             .collect::<BTreeMap<_, _>>();
         for function in &self.functions {
+            function
+                .binding_name
+                .validate(function.kind, function.span, stop)?;
             match (self.signature_recipe, &function.signature) {
                 (None, None) => {}
                 (Some(_), Some(observation)) => {
@@ -1608,6 +1624,7 @@ pub(crate) fn collect_with_components(
                     kind: SourceFunctionKind::Chunk,
                     span: SourceSpan::whole_file(),
                     parent_function_id: None,
+                    binding_name: names::BindingNameObservation::chunk(),
                     signature: if signature_recipe.is_some() {
                         let observation = SourceFunctionSignature::chunk();
                         declaration_bytes.charge(&observation, stop)?;
@@ -1713,6 +1730,7 @@ pub(crate) fn collect_with_components(
                     };
                     functions.push(SourceFunctionFact {
                         fact_id: id.clone(),
+                        binding_name: names::observe(&closure, file, stop)?,
                         path: file.path().into(),
                         content_digest: file.content_sha256().into(),
                         kind: SourceFunctionKind::Closure,

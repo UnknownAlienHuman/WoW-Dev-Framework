@@ -13,6 +13,7 @@ use wow_search::{
     SearchFileSetOpenRequest, SearchFileSetPrepareRequest, SearchFileSetShard,
     open_project_file_set_shard, prepare_project_file_set_shard,
 };
+pub(super) const DECLARATIONS_COMPONENT: &str = "project_source_declarations_v1";
 pub(super) const OBSERVATION_COMPONENT: &str = "project_source_observations_v1";
 pub(super) const ENTITY_COMPONENT: &str = "project_graph_entities_v1";
 
@@ -100,7 +101,7 @@ pub(super) enum Selection {
     Single(Box<str>),
     FileSet(ProjectFileSetSelection),
     GraphEntities,
-    SourceObservations,
+    SourceObservations(bool),
 }
 
 #[derive(Serialize)]
@@ -155,10 +156,14 @@ impl Selection {
                 file_ids: Some(selection.ids()),
                 document_component: Some(FILE_SET_COMPONENT),
             },
-            Self::SourceObservations => Identity {
+            Self::SourceObservations(declarations) => Identity {
                 file_id: None,
                 file_ids: None,
-                document_component: Some(OBSERVATION_COMPONENT),
+                document_component: Some(if *declarations {
+                    DECLARATIONS_COMPONENT
+                } else {
+                    OBSERVATION_COMPONENT
+                }),
             },
             Self::GraphEntities => Identity {
                 file_id: None,
@@ -175,7 +180,9 @@ impl Selection {
             )),
             Self::FileSet(selection) => Ok(Documents::FileSet(selection)),
             Self::GraphEntities => Ok(Documents::GraphEntities),
-            Self::SourceObservations => Ok(Documents::SourceObservations),
+            Self::SourceObservations(declarations) => {
+                Ok(Documents::SourceObservations(*declarations))
+            }
         }
     }
 }
@@ -184,7 +191,7 @@ pub(super) enum Documents<'a> {
     Single(ProjectFileId),
     FileSet(&'a ProjectFileSetSelection),
     GraphEntities,
-    SourceObservations,
+    SourceObservations(bool),
 }
 
 impl Documents<'_> {
@@ -200,10 +207,14 @@ impl Documents<'_> {
                 file_ids: Some(selection.ids()),
                 document_component: Some(FILE_SET_COMPONENT),
             },
-            Self::SourceObservations => Identity {
+            Self::SourceObservations(declarations) => Identity {
                 file_id: None,
                 file_ids: None,
-                document_component: Some(OBSERVATION_COMPONENT),
+                document_component: Some(if *declarations {
+                    DECLARATIONS_COMPONENT
+                } else {
+                    OBSERVATION_COMPONENT
+                }),
             },
             Self::GraphEntities => Identity {
                 file_id: None,
@@ -217,7 +228,7 @@ impl Documents<'_> {
             Self::Single(id) => Some(id),
             Self::FileSet(_) => None,
             Self::GraphEntities => None,
-            Self::SourceObservations => None,
+            Self::SourceObservations(_) => None,
         }
     }
 }
@@ -234,9 +245,14 @@ impl Profile {
         bounds: SearchBounds,
         selection: &Selection,
     ) -> ServiceResult<Self> {
-        if matches!(selection, Selection::SourceObservations) {
+        if let Selection::SourceObservations(declarations) = selection {
             Ok(Self::SourceObservations(
-                ObservationSearchProfile::new(bounds).map_err(map_search_error)?,
+                if *declarations {
+                    ObservationSearchProfile::with_function_declarations(bounds)
+                } else {
+                    ObservationSearchProfile::new(bounds)
+                }
+                .map_err(map_search_error)?,
             ))
         } else if matches!(selection, Selection::GraphEntities) {
             Ok(Self::GraphEntities(
@@ -270,7 +286,13 @@ impl Profile {
             Self::Single(_) => None,
             Self::FileSet(_) => Some(FILE_SET_COMPONENT),
             Self::GraphEntities(_) => Some(ENTITY_COMPONENT),
-            Self::SourceObservations(_) => Some(OBSERVATION_COMPONENT),
+            Self::SourceObservations(profile) => {
+                Some(if profile.includes_function_declarations() {
+                    DECLARATIONS_COMPONENT
+                } else {
+                    OBSERVATION_COMPONENT
+                })
+            }
         }
     }
     pub(super) fn prepare(
@@ -283,7 +305,9 @@ impl Profile {
         stop: &AtomicBool,
     ) -> ServiceResult<Prepared> {
         match (self, documents) {
-            (Self::SourceObservations(profile), Documents::SourceObservations) => {
+            (Self::SourceObservations(profile), Documents::SourceObservations(selected))
+                if profile.includes_function_declarations() == *selected =>
+            {
                 Ok(Prepared::SourceObservations(
                     prepare_source_observation_shard(
                         read,
@@ -431,7 +455,9 @@ impl Profile {
                     .map(|document| document.entity_id())
                     .eq(selection.ids().iter()),
                 (Opened::GraphEntities(_), Documents::GraphEntities) => true,
-                (Opened::SourceObservations(_), Documents::SourceObservations) => true,
+                (Opened::SourceObservations(shard), Documents::SourceObservations(selected)) => {
+                    shard.includes_function_declarations() == *selected
+                }
                 _ => false,
             };
             if !matches {

@@ -3,6 +3,8 @@ use super::*;
 use crate::identifier_distance::{DistanceResult, bounded_distance, normalize};
 use std::collections::BTreeSet;
 const QUERY_PROFILE: &str = "wow-search/recorded-source-fact-name-member-prefix-text-similarity/1";
+const DECLARATION_QUERY_PROFILE: &str =
+    "wow-search/recorded-source-declaration-name-member-prefix-text-similarity/1";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "class", rename_all = "snake_case", deny_unknown_fields)]
@@ -49,10 +51,16 @@ impl ObservationQueryRequest {
         }
         let request: Self =
             serde_json::from_slice(bytes).map_err(|_| SearchError::InvalidProfile)?;
-        if request.schema != "wow-search/source-observation-query/1"
+        let declarations = request.schema == "wow-search/source-observation-declaration-query/1";
+        if (!declarations && request.schema != "wow-search/source-observation-query/1")
             || request.kinds.is_empty()
-            || request.kinds.len() > 2
-            || request.kinds.windows(2).any(|p| p[0] == p[1])
+            || request.kinds.len() > if declarations { 3 } else { 2 }
+            || request
+                .kinds
+                .iter()
+                .enumerate()
+                .any(|(index, kind)| request.kinds[..index].contains(kind))
+            || !declarations && request.kinds.contains(&Kind::FunctionDeclaration)
         {
             return Err(SearchError::InvalidProfile);
         }
@@ -110,12 +118,21 @@ impl ObservationSearchShard {
         stop: &AtomicBool,
     ) -> SearchResult<ObservationQueryResult> {
         check(stop)?;
+        let declarations = self.manifest.function_names.is_some();
+        if (request.schema == "wow-search/source-observation-declaration-query/1") != declarations {
+            return Err(SearchError::InvalidProfile);
+        }
+        let query_profile = if declarations {
+            DECLARATION_QUERY_PROFILE
+        } else {
+            QUERY_PROFILE
+        };
         if request.max_candidates > self.bounds.max_candidate_results {
             return Err(SearchError::InvalidProfile);
         }
         let query_id = identity(
             "source-observation-query:",
-            &(QUERY_PROFILE, self.logical_id(), request),
+            &(query_profile, self.logical_id(), request),
         )?;
         let mut text_ids = BTreeSet::new();
         let mut truncated = false;
@@ -174,17 +191,32 @@ impl ObservationSearchShard {
                     Query::ExactFact { fact_id } if fact_id.as_str() == document.fact_id() => {
                         (0, "exact_owner_fact_identity", None)
                     }
-                    Query::RecordedName { name } if name.as_str() == document.recorded_name() => {
+                    Query::RecordedName { name }
+                        if name.as_str() == document.recorded_name()
+                            || document.recorded_short_name.as_deref() == Some(name) =>
+                    {
                         (1, "exact_recorded_source_name", None)
                     }
                     Query::RecordedMember { receiver, member }
-                        if document.kind == Kind::MemberReference
-                            && document.recorded_receiver.as_deref() == Some(receiver)
-                            && member.as_str() == document.recorded_name() =>
+                        if matches!(
+                            document.kind,
+                            Kind::MemberReference | Kind::FunctionDeclaration
+                        ) && document.recorded_receiver.as_deref() == Some(receiver)
+                            && member.as_str()
+                                == document
+                                    .recorded_short_name
+                                    .as_deref()
+                                    .unwrap_or(document.recorded_name()) =>
                     {
                         (1, "exact_recorded_receiver_member_syntax", None)
                     }
-                    Query::Prefix { prefix } if document.recorded_name.starts_with(prefix) => {
+                    Query::Prefix { prefix }
+                        if document.recorded_name.starts_with(prefix)
+                            || document
+                                .recorded_short_name
+                                .as_deref()
+                                .is_some_and(|s| s.starts_with(prefix)) =>
+                    {
                         (2, "recorded_name_prefix_candidate", None)
                     }
                     Query::LiteralName { .. } if text_ids.contains(document.fact_id()) => {
@@ -196,12 +228,25 @@ impl ObservationSearchShard {
                         max_prefiltered_documents,
                         ..
                     } => {
-                        let length = document.recorded_name.chars().count();
-                        if length > 132 {
-                            excluded_long_identifiers += 1;
-                            continue;
+                        let fields = [
+                            Some(document.recorded_name()),
+                            document
+                                .recorded_short_name
+                                .as_deref()
+                                .filter(|name| *name != document.recorded_name()),
+                        ];
+                        let mut eligible = false;
+                        for field in fields.into_iter().flatten() {
+                            let length = field.chars().count();
+                            if length > 132 {
+                                excluded_long_identifiers += 1;
+                            } else if similarity_query.len().abs_diff(length)
+                                <= *max_distance as usize
+                            {
+                                eligible = true;
+                            }
                         }
-                        if similarity_query.len().abs_diff(length) > *max_distance as usize {
+                        if !eligible {
                             continue;
                         }
                         if prefiltered == max_prefiltered_documents.get() {
@@ -209,22 +254,39 @@ impl ObservationSearchShard {
                             break;
                         }
                         prefiltered += 1;
-                        match bounded_distance(
-                            &similarity_query,
-                            &normalize(document.recorded_name(), *ascii_fold),
-                            *max_distance,
-                            &mut remaining_cells,
-                            stop,
-                        )? {
-                            DistanceResult::Within(distance) => {
-                                (4, "identifier_similarity_candidate", Some(distance))
+                        let mut best: Option<u32> = None;
+                        let mut exhausted = false;
+                        for field in fields.into_iter().flatten() {
+                            check(stop)?;
+                            let length = field.chars().count();
+                            if length > 132
+                                || similarity_query.len().abs_diff(length) > *max_distance as usize
+                            {
+                                continue;
                             }
-                            DistanceResult::Outside => continue,
-                            DistanceResult::Exhausted => {
-                                truncated = true;
-                                break;
+                            match bounded_distance(
+                                &similarity_query,
+                                &normalize(field, *ascii_fold),
+                                *max_distance,
+                                &mut remaining_cells,
+                                stop,
+                            )? {
+                                DistanceResult::Within(distance) => {
+                                    best = Some(best.map_or(distance, |old| old.min(distance)));
+                                }
+                                DistanceResult::Outside => {}
+                                DistanceResult::Exhausted => {
+                                    exhausted = true;
+                                    break;
+                                }
                             }
                         }
+                        if exhausted {
+                            truncated = true;
+                            break;
+                        }
+                        let Some(distance) = best else { continue };
+                        (4, "identifier_similarity_candidate", Some(distance))
                     }
                     _ => continue,
                 };
@@ -287,7 +349,7 @@ impl ObservationSearchShard {
             "candidate_only"
         };
         let value = serde_json::json!({
-            "schema":"wow-search/source-observation-result-set/1", "query_profile":QUERY_PROFILE,
+            "schema":if declarations {"wow-search/source-observation-declaration-result-set/1"} else {"wow-search/source-observation-result-set/1"}, "query_profile":query_profile,
             "query_id":query_id, "request":request, "shard_id":self.logical_id(), "profile_digest":self.profile_digest(),
             "owner":self.manifest.owner, "project_kind":self.manifest.project_kind,
             "platform_source_profile":self.manifest.platform_source_profile, "platform_package_binding":self.manifest.platform_package_binding,
@@ -302,6 +364,12 @@ impl ObservationSearchShard {
             "nonclaims":["canonical_name","alias","runtime_target","platform_availability","complete_source_fact_coverage"]
         });
         let mut value = value;
+        if let Some(coverage) = &self.manifest.function_names {
+            value
+                .as_object_mut()
+                .ok_or(SearchError::OwnerEvidenceInvalid)?
+                .insert("function_names".into(), super::value(coverage)?);
+        }
         // E0 canonical JSON excludes null; absent platform evidence stays absent.
         if self.manifest.platform_source_profile.is_none() {
             value

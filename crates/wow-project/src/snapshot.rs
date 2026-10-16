@@ -556,6 +556,11 @@ impl ProjectView {
     pub fn local_flow_report(&self) -> &EmmyLocalFlowReport {
         self.snapshot.analyzer_binding().local_flow_report()
     }
+    /// Native source functions for this exact Project generation, irrespective
+    /// of ordinary or direct-platform Graph layout. No Graph membership claim.
+    pub fn function_call_report(&self) -> Option<&wow_emmy::function_calls::FunctionCallReport> {
+        self.snapshot.analyzer_binding().function_call_report()
+    }
 
     #[must_use]
     pub fn generic_diagnostics_for_file(

@@ -6,6 +6,15 @@ use wow_search::source_observations::{
 use wow_store::ObjectId;
 
 impl SearchIndexBuildRequest {
+    pub fn with_function_declarations(mut self) -> ServiceResult<Self> {
+        if !matches!(self.selection, DurableSelection::SourceObservations(false)) {
+            return Err(invalid());
+        }
+        ObservationSearchProfile::with_function_declarations(self.bounds)
+            .map_err(map_search_error)?;
+        self.selection = DurableSelection::SourceObservations(true);
+        Ok(self)
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn new_source_observations(
         operation_id: OperationId,
@@ -26,7 +35,7 @@ impl SearchIndexBuildRequest {
             project_store_root,
             search_store_path,
             store_generation_id: store_generation_id.into(),
-            selection: DurableSelection::SourceObservations,
+            selection: DurableSelection::SourceObservations(false),
             bounds,
             store_limits,
             max_output_bytes,
@@ -35,6 +44,15 @@ impl SearchIndexBuildRequest {
     }
 }
 impl SearchShardRetireRequest {
+    pub fn with_function_declarations(mut self) -> ServiceResult<Self> {
+        if !matches!(self.selection, DurableSelection::SourceObservations(false)) {
+            return Err(invalid());
+        }
+        ObservationSearchProfile::with_function_declarations(self.bounds)
+            .map_err(map_search_error)?;
+        self.selection = DurableSelection::SourceObservations(true);
+        Ok(self)
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn new_source_observations(
         operation_id: OperationId,
@@ -59,7 +77,7 @@ impl SearchShardRetireRequest {
             search_store_path,
             source_hold,
             store_generation_id: store_generation_id.into(),
-            selection: DurableSelection::SourceObservations,
+            selection: DurableSelection::SourceObservations(false),
             logical_shard_id: logical_shard_id.into(),
             object_id: object_id.into(),
             profile_digest: profile_digest.into(),
@@ -101,11 +119,50 @@ impl SourceObservationRetrievalRequest {
         permission: LocalMetadataPermission,
         stop: &AtomicBool,
     ) -> ServiceResult<Self> {
+        Self::new_selected(
+            operation_id,
+            search_store_path,
+            generation,
+            logical_id,
+            object_id,
+            profile_digest,
+            query_json,
+            bounds,
+            store_limits,
+            max_output_bytes,
+            lease_expires_after,
+            permission,
+            false,
+            stop,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_selected(
+        operation_id: OperationId,
+        search_store_path: PathBuf,
+        generation: &str,
+        logical_id: &str,
+        object_id: &str,
+        profile_digest: &str,
+        query_json: &[u8],
+        bounds: SearchBounds,
+        store_limits: SearchStoreLimits,
+        max_output_bytes: NonZeroU64,
+        lease_expires_after: u64,
+        permission: LocalMetadataPermission,
+        include_function_declarations: bool,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Self> {
         check_cancelled(stop)?;
         if !search_store_path.is_absolute() || lease_expires_after == 0 {
             return Err(invalid());
         }
-        let profile = ObservationSearchProfile::new(bounds).map_err(map_search_error)?;
+        let profile = if include_function_declarations {
+            ObservationSearchProfile::with_function_declarations(bounds)
+        } else {
+            ObservationSearchProfile::new(bounds)
+        }
+        .map_err(map_search_error)?;
         if profile.digest() != profile_digest {
             return Err(failure(
                 ServiceErrorCode::IdentityMismatch,

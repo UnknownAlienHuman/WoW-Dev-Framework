@@ -12,12 +12,14 @@ const MANIFEST: &str = "wow-search/project-source-observation-shard/1";
 pub struct ObservationSearchProfile {
     bounds: SearchBounds,
     digest: Box<str>,
+    declarations: bool,
 }
 impl ObservationSearchProfile {
     pub fn new(bounds: SearchBounds) -> SearchResult<Self> {
         bounds.physical()?;
         Ok(Self {
             bounds,
+            declarations: false,
             digest: identity(
                 "",
                 &(
@@ -35,6 +37,23 @@ impl ObservationSearchProfile {
     pub fn digest(&self) -> &str {
         &self.digest
     }
+    pub fn with_function_declarations(bounds: SearchBounds) -> SearchResult<Self> {
+        let mut profile = Self::new(bounds)?;
+        profile.digest = identity(
+            "",
+            &(
+                "wow-search/project-source-observation-declarations-profile/1",
+                &profile.digest,
+                "native-named-function-binding-syntax/1;qualified-short-name-and-member",
+                "immutable-native-custody-only",
+            ),
+        )?;
+        profile.declarations = true;
+        Ok(profile)
+    }
+    pub fn includes_function_declarations(&self) -> bool {
+        self.declarations
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,6 +61,7 @@ impl ObservationSearchProfile {
 enum Kind {
     LocalBinding,
     MemberReference,
+    FunctionDeclaration,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -52,6 +72,8 @@ pub struct ObservationDocument {
     path: Box<str>,
     content_sha256: Box<str>,
     recorded_name: Box<str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    recorded_short_name: Option<Box<str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     recorded_receiver: Option<Box<str>>,
     source_handle: SourceHandle,
@@ -69,6 +91,7 @@ impl ObservationDocument {
         match self.kind {
             Kind::LocalBinding => "local_binding",
             Kind::MemberReference => "member_reference",
+            Kind::FunctionDeclaration => "function_declaration",
         }
     }
 }
@@ -88,7 +111,18 @@ struct ObservationManifest {
     main_snapshot_id: Box<str>,
     local_file_coverage: Vec<serde_json::Value>,
     member_file_coverage: Vec<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    function_names: Option<FunctionNameCoverage>,
     documents: Vec<ObservationDocument>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FunctionNameCoverage {
+    producer_profile: Box<str>,
+    function_analysis_id: Box<str>,
+    source_health_complete: bool,
+    states: std::collections::BTreeMap<String, u32>,
+    files: Vec<serde_json::Value>,
 }
 pub struct PreparedObservationShard {
     manifest: ObservationManifest,
@@ -134,11 +168,50 @@ pub fn prepare_source_observation_shard(
     let project = pair.project();
     let local = project.local_flow_report();
     let member = project.member_call_report();
+    let report = if profile.declarations {
+        Some(
+            project
+                .function_call_report()
+                .ok_or(SearchError::OwnerEvidenceInvalid)?,
+        )
+    } else {
+        None
+    };
+    let mut function_names = report.map(|r| FunctionNameCoverage {
+        producer_profile: "wow-emmy/named-function-binding-syntax/1".into(),
+        function_analysis_id: r.analysis_id().into(),
+        source_health_complete: r.source_health_complete(),
+        states: std::collections::BTreeMap::new(),
+        files: Vec::new(),
+    });
+    let mut named_count = 0usize;
+    if let (Some(report), Some(coverage)) = (report, &mut function_names) {
+        if report.main_snapshot_id() != local.main_snapshot_id() {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
+        for fact in report.functions() {
+            check(stop)?;
+            // Census genuine owner facts before allocating per-document custody
+            // handles. The source join is mandatory during capture below.
+            let state = value(&fact.binding_name_state())?
+                .as_str()
+                .ok_or(SearchError::OwnerEvidenceInvalid)?
+                .to_owned();
+            let count = coverage.states.entry(state).or_default();
+            *count = count
+                .checked_add(1)
+                .ok_or(SearchError::FileSetOverCapacity)?;
+            named_count = named_count
+                .checked_add(usize::from(fact.binding_name().is_some()))
+                .ok_or(SearchError::FileSetOverCapacity)?;
+        }
+    }
     // Census the whole selected corpus before copying facts or preparing physical storage.
     let count = local
         .bindings()
         .len()
         .checked_add(member.references().len())
+        .and_then(|n| n.checked_add(named_count))
         .ok_or(SearchError::FileSetOverCapacity)?;
     if count > profile.bounds.max_documents.get() as usize {
         return Err(SearchError::FileSetOverCapacity);
@@ -179,6 +252,7 @@ pub fn prepare_source_observation_shard(
         main_snapshot_id: local.main_snapshot_id().into(),
         local_file_coverage: Vec::new(),
         member_file_coverage: Vec::new(),
+        function_names,
         documents: Vec::new(),
     };
     let evidence_count = manifest.owner.graph_partitions.iter().try_fold(
@@ -189,6 +263,7 @@ pub fn prepare_source_observation_shard(
             .checked_add(manifest.owner.graph_coverage.len())
             .and_then(|n| n.checked_add(local.files().len()))
             .and_then(|n| n.checked_add(member.files().len()))
+            .and_then(|n| n.checked_add(report.map_or(0, |r| r.files().len())))
             .ok_or(SearchError::FileSetBudgetExceeded)?,
         |n, partition| {
             n.checked_add(1)
@@ -201,6 +276,18 @@ pub fn prepare_source_observation_shard(
     }
     let mut charged = size(&manifest)?;
     charge(&mut charged, 0, profile.bounds)?;
+    if let (Some(report), Some(coverage)) = (report, &mut manifest.function_names) {
+        for file in report.files() {
+            check(stop)?;
+            let file = value(file)?;
+            charge(
+                &mut charged,
+                size(&file)? + u64::from(!coverage.files.is_empty()),
+                profile.bounds,
+            )?;
+            coverage.files.push(file);
+        }
+    }
     for report in local.files() {
         check(stop)?;
         let report = value(report)?;
@@ -226,6 +313,7 @@ pub fn prepare_source_observation_shard(
                        path: &str,
                        sha: &str,
                        name: &str,
+                       short_name: Option<&str>,
                        receiver: Option<&str>,
                        span: SourceSpan,
                        fact: serde_json::Value|
@@ -233,6 +321,9 @@ pub fn prepare_source_observation_shard(
         check(stop)?;
         if fact_id.len() > profile.bounds.max_document_id_bytes.get() as usize
             || name.len() > profile.bounds.max_owner_metadata_label_bytes.get() as usize
+            || short_name.is_some_and(|n| {
+                n.len() > profile.bounds.max_owner_metadata_label_bytes.get() as usize
+            })
             || receiver.is_some_and(|r| {
                 r.len() > profile.bounds.max_owner_metadata_label_bytes.get() as usize
             })
@@ -257,6 +348,7 @@ pub fn prepare_source_observation_shard(
             path: path.into(),
             content_sha256: sha.into(),
             recorded_name: name.into(),
+            recorded_short_name: short_name.map(Into::into),
             recorded_receiver: receiver.map(Into::into),
             source_handle: project.source_handle(path, span, None)?,
             owner_fact: fact,
@@ -277,6 +369,7 @@ pub fn prepare_source_observation_shard(
             fact.content_sha256(),
             fact.name(),
             None,
+            None,
             fact.declaration_span(),
             value(fact)?,
         )?;
@@ -288,10 +381,37 @@ pub fn prepare_source_observation_shard(
             fact.path(),
             fact.content_sha256(),
             fact.member(),
+            None,
             Some(fact.receiver()),
             fact.reference_span(),
             value(fact)?,
         )?;
+    }
+    if let Some(report) = report {
+        for fact in report.functions() {
+            check(stop)?;
+            let metadata = project
+                .function_binding_metadata(fact.fact_id())?
+                .ok_or(SearchError::OwnerEvidenceInvalid)?;
+            if let Some(name) = metadata.binding_name() {
+                let evidence = serde_json::json!({"function_id": metadata.fact().fact_id(), "binding_name":name,
+                    "function_fact_span":fact.span(), "function_content_digest":fact.content_digest(),
+                    "function_source_handle":metadata.source_handle(),
+                    "scope":metadata.scope(),
+                    "function_analysis_id":metadata.function_analysis_id()});
+                capture(
+                    fact.fact_id(),
+                    Kind::FunctionDeclaration,
+                    fact.path(),
+                    fact.content_digest(),
+                    name.qualified_name(),
+                    Some(name.short_name()),
+                    name.receiver(),
+                    name.name_span(),
+                    evidence,
+                )?;
+            }
+        }
     }
     manifest.documents.sort_by(|a, b| a.fact_id.cmp(&b.fact_id));
     if manifest
@@ -329,6 +449,9 @@ pub struct ObservationSearchShard {
     bounds: SearchBounds,
 }
 impl ObservationSearchShard {
+    pub fn includes_function_declarations(&self) -> bool {
+        self.manifest.function_names.is_some()
+    }
     pub fn logical_id(&self) -> &str {
         self.physical.search_shard_id()
     }
@@ -374,6 +497,7 @@ pub fn open_source_observation_shard(
             serde_json::from_slice(bytes).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
         if manifest.schema.as_ref() != MANIFEST
             || manifest.profile_digest != profile.digest
+            || manifest.function_names.is_some() != profile.declarations
             || manifest.owner.source.store_generation_id.as_ref() != generation.as_str()
             || wow_core::canonical_json_bytes(&manifest)
                 .map_err(|_| SearchError::OwnerEvidenceInvalid)?

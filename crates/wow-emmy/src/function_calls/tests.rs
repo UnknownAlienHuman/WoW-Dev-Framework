@@ -7,6 +7,7 @@ use crate::{
 use emmylua_parser::{LuaChunk, LuaLanguageLevel, LuaParser, ParserConfig};
 
 mod hook_targets;
+mod names;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 

@@ -3,8 +3,8 @@
 use serde::Serialize;
 use wow_core::{ContentDigest, SourceContent, SourceSpan};
 use wow_emmy::function_calls::{
-    PhysicalFunctionDeclarationRecipe, PhysicalFunctionSignatureRecipe, SourceFunctionDeclaration,
-    SourceFunctionKind, SourceFunctionSignature,
+    FunctionCallReport, PhysicalFunctionDeclarationRecipe, PhysicalFunctionSignatureRecipe,
+    SourceFunctionDeclaration, SourceFunctionFact, SourceFunctionKind, SourceFunctionSignature,
 };
 
 use super::{ProjectGraphFunction, ProjectGraphProvenance, invalid};
@@ -157,27 +157,7 @@ impl ProjectGraphProvenance {
         {
             return Err(invalid());
         }
-        let scope = match (fact.kind(), fact.parent_function_id()) {
-            (SourceFunctionKind::Chunk, None) => ProjectCallableScope::Chunk,
-            (SourceFunctionKind::Closure, Some(parent_id)) => {
-                let index = report
-                    .functions()
-                    .binary_search_by(|parent| parent.fact_id().cmp(parent_id))
-                    .map_err(|_| invalid())?;
-                let parent = &report.functions()[index];
-                if parent.fact_id() == fact.fact_id()
-                    || parent.path() != fact.path()
-                    || parent.content_digest() != fact.content_digest()
-                {
-                    return Err(invalid());
-                }
-                match parent.kind() {
-                    SourceFunctionKind::Chunk => ProjectCallableScope::ChunkScopeClosure,
-                    SourceFunctionKind::Closure => ProjectCallableScope::NestedClosure,
-                }
-            }
-            _ => return Err(invalid()),
-        };
+        let scope = native_scope(report, fact)?;
         let declaration_state = match (report.declaration_recipe(), fact.declaration()) {
             (None, None) => ProjectCallableFacetState::NotSelected,
             (Some(_), Some(SourceFunctionDeclaration::Observed { .. })) => {
@@ -221,5 +201,98 @@ impl ProjectGraphProvenance {
                 observation: fact.signature(),
             },
         }))
+    }
+}
+
+/// Source-owned native function custody, independent of the selected graph layout.
+/// It does not attest accepted Graph membership, canonical APIs or runtime loading.
+pub struct ProjectFunctionBindingMetadata<'a> {
+    fact: &'a SourceFunctionFact,
+    function_analysis_id: &'a str,
+    source_handle: wow_core::SourceHandle,
+    scope: ProjectCallableScope,
+}
+impl<'a> ProjectFunctionBindingMetadata<'a> {
+    pub const fn fact(&self) -> &'a SourceFunctionFact {
+        self.fact
+    }
+    pub const fn function_analysis_id(&self) -> &'a str {
+        self.function_analysis_id
+    }
+    pub const fn source_handle(&self) -> &wow_core::SourceHandle {
+        &self.source_handle
+    }
+    pub const fn scope(&self) -> ProjectCallableScope {
+        self.scope
+    }
+    pub fn binding_name(&self) -> Option<&'a wow_emmy::function_calls::SourceFunctionBindingName> {
+        self.fact.binding_name()
+    }
+    pub fn binding_name_state(&self) -> wow_emmy::function_calls::SourceFunctionBindingState {
+        self.fact.binding_name_state()
+    }
+}
+impl crate::ProjectView {
+    /// Borrow one exact native function after joining the immutable source registry.
+    pub fn function_binding_metadata(
+        &self,
+        id: &str,
+    ) -> ProjectResult<Option<ProjectFunctionBindingMetadata<'_>>> {
+        let Some(report) = self.function_call_report() else {
+            return Ok(None);
+        };
+        let Ok(index) = report
+            .functions()
+            .binary_search_by(|fact| fact.fact_id().cmp(id))
+        else {
+            return Ok(None);
+        };
+        let fact = &report.functions()[index];
+        let bad_binding = || {
+            crate::ProjectError::new(
+                crate::ProjectErrorCode::AnalyzerSnapshotMismatch,
+                ProjectPhase::View,
+                "native function fact does not bind this immutable Project source",
+            )
+        };
+        let file = self.file_by_path(fact.path())?.ok_or_else(bad_binding)?;
+        if report.main_snapshot_id() != self.local_flow_report().main_snapshot_id()
+            || file.content_digest().to_string() != fact.content_digest()
+        {
+            return Err(bad_binding());
+        }
+        let source_handle = self.source_handle(fact.path(), fact.span(), None)?;
+        Ok(Some(ProjectFunctionBindingMetadata {
+            fact,
+            function_analysis_id: report.analysis_id(),
+            source_handle,
+            scope: native_scope(report, fact)?,
+        }))
+    }
+}
+fn native_scope(
+    report: &FunctionCallReport,
+    fact: &SourceFunctionFact,
+) -> ProjectResult<ProjectCallableScope> {
+    match (fact.kind(), fact.parent_function_id()) {
+        (SourceFunctionKind::Chunk, None) => Ok(ProjectCallableScope::Chunk),
+        (SourceFunctionKind::Closure, Some(id)) => {
+            let index = report
+                .functions()
+                .binary_search_by(|parent| parent.fact_id().cmp(id))
+                .map_err(|_| invalid())?;
+            let parent = &report.functions()[index];
+            if parent.fact_id() == fact.fact_id()
+                || parent.path() != fact.path()
+                || parent.content_digest() != fact.content_digest()
+            {
+                return Err(invalid());
+            }
+            Ok(match parent.kind() {
+                SourceFunctionKind::Chunk => ProjectCallableScope::ChunkScopeClosure,
+                SourceFunctionKind::Closure => ProjectCallableScope::NestedClosure,
+            })
+        }
+        _ => Err(invalid()),
     }
 }
