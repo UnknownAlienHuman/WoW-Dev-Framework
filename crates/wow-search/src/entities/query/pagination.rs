@@ -379,6 +379,8 @@ mod tests {
             status: "candidate_only",
             profile_digest: "recorded-profile".into(),
             project_kind: wow_project::ProjectKind::Repository,
+            platform_profile: None,
+            platform_binding: None,
         };
         let first = result.page(&policy, None, &stop)?;
         let cursor = first

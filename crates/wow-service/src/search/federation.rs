@@ -1,7 +1,9 @@
 //! One exact Store, two genuinely validated Search owners, one durable operation.
 use super::*;
 use serde::Deserialize;
-use wow_search::federation::{FederationPagePolicy, FederationQueryRequest, federate};
+use wow_search::federation::{
+    FederationPagePolicy, FederationQueryRequest, federate, federate_with_blizzard,
+};
 pub(in crate::search) mod pagination;
 pub use pagination::{FederationContinueRequest, FederationResultReleaseRequest};
 #[derive(Deserialize)]
@@ -9,6 +11,8 @@ pub use pagination::{FederationContinueRequest, FederationResultReleaseRequest};
 struct Input {
     schema: String,
     primary: Primary,
+    #[serde(default, deserialize_with = "present_source")]
+    blizzard: Option<Primary>,
     reference: Reference,
     query: serde_json::Value,
 }
@@ -37,6 +41,7 @@ pub struct FederationRequest {
     operation_id: OperationId,
     search_store: PathBuf,
     primary: EntityRetrievalRequest,
+    blizzard: Option<EntityRetrievalRequest>,
     reference: ReferenceShardRequest,
     query: FederationQueryRequest,
     store_limits: SearchStoreLimits,
@@ -61,33 +66,45 @@ impl FederationRequest {
             return Err(invalid());
         }
         let input: Input = serde_json::from_slice(input_json).map_err(|_| invalid())?;
-        if input.schema != "wow-service/exact-search-federation-input/1" {
+        let query = FederationQueryRequest::from_json_slice(&encode(&input.query)?, stop)
+            .map_err(map_search_error)?;
+        let platform = query.requires_blizzard();
+        if input.schema
+            != if platform {
+                "wow-service/exact-platform-search-federation-input/1"
+            } else {
+                "wow-service/exact-search-federation-input/1"
+            }
+            || platform != input.blizzard.is_some()
+        {
             return Err(invalid());
         }
         let p = input.primary;
-        let hold = SearchSourceHoldBinding::new(
-            p.project_store_root,
-            OperationId::new(p.build_operation_id).map_err(|_| invalid())?,
-            p.source_store_epoch_id,
-            p.source_generation_hold_id,
-            p.source_generation_hold_digest,
-        )?;
-        let primary = EntityRetrievalRequest::new(
-            operation_id.clone(),
-            search_store.clone(),
-            hold,
-            &p.generation,
-            &p.logical_shard_id,
-            &p.object_id,
-            &p.profile_digest,
-            &encode(&p.query)?,
-            p.bounds,
+        let primary = source_request(
+            p,
+            &operation_id,
+            &search_store,
             store_limits,
             max_output_bytes,
             lease_expires_after,
             permission,
             stop,
         )?;
+        let blizzard = input
+            .blizzard
+            .map(|source| {
+                source_request(
+                    source,
+                    &operation_id,
+                    &search_store,
+                    store_limits,
+                    max_output_bytes,
+                    lease_expires_after,
+                    permission,
+                    stop,
+                )
+            })
+            .transpose()?;
         let reference = ReferenceShardRequest::new(
             operation_id.clone(),
             search_store.clone(),
@@ -99,12 +116,11 @@ impl FederationRequest {
             permission,
             stop,
         )?;
-        let query = FederationQueryRequest::from_json_slice(&encode(&input.query)?, stop)
-            .map_err(map_search_error)?;
         Ok(Self {
             operation_id,
             search_store,
             primary,
+            blizzard,
             reference,
             query,
             store_limits,
@@ -118,6 +134,46 @@ impl FederationRequest {
             Some(FederationPagePolicy::from_json_slice(bytes, stop).map_err(map_search_error)?);
         Ok(self)
     }
+}
+fn present_source<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Primary>, D::Error> {
+    Primary::deserialize(deserializer).map(Some)
+}
+#[allow(clippy::too_many_arguments)]
+fn source_request(
+    p: Primary,
+    operation_id: &OperationId,
+    search_store: &std::path::Path,
+    store_limits: SearchStoreLimits,
+    max_output_bytes: NonZeroU64,
+    lease_expires_after: u64,
+    permission: LocalMetadataPermission,
+    stop: &AtomicBool,
+) -> ServiceResult<EntityRetrievalRequest> {
+    let hold = SearchSourceHoldBinding::new(
+        p.project_store_root,
+        OperationId::new(p.build_operation_id).map_err(|_| invalid())?,
+        p.source_store_epoch_id,
+        p.source_generation_hold_id,
+        p.source_generation_hold_digest,
+    )?;
+    EntityRetrievalRequest::new(
+        operation_id.clone(),
+        search_store.to_path_buf(),
+        hold,
+        &p.generation,
+        &p.logical_shard_id,
+        &p.object_id,
+        &p.profile_digest,
+        &encode(&p.query)?,
+        p.bounds,
+        store_limits,
+        max_output_bytes,
+        lease_expires_after,
+        permission,
+        stop,
+    )
 }
 fn encode(value: &serde_json::Value) -> ServiceResult<Vec<u8>> {
     canonical_json_bytes(value).map_err(|_| invalid())
@@ -133,7 +189,22 @@ pub(super) fn execute(request: &FederationRequest, stop: &AtomicBool) -> Service
         request.lease_expires_after,
         "local_metadata_only",
     );
-    let (operation_id, digest, public_digest) = if let Some(policy) = &request.page_policy {
+    let (operation_id, digest, public_digest) = if let Some(blizzard) = &request.blizzard {
+        let extended = (&identity, entity::federation_input(blizzard));
+        if let Some(policy) = &request.page_policy {
+            durable_identity(
+                "wow-service/exact-platform-search-federation-page-request/1",
+                &request.operation_id,
+                &(&extended, policy),
+            )?
+        } else {
+            durable_identity(
+                "wow-service/exact-platform-search-federation-request/1",
+                &request.operation_id,
+                &extended,
+            )?
+        }
+    } else if let Some(policy) = &request.page_policy {
         durable_identity(
             "wow-service/exact-search-federation-page-request/1",
             &request.operation_id,
@@ -159,12 +230,33 @@ pub(super) fn execute(request: &FederationRequest, stop: &AtomicBool) -> Service
     let mut batch = WriteBatch::new();
     let outcome = (|| {
         let primary = entity::acquire_result(&request.primary, &mut store, &public_digest, stop)?;
+        let blizzard = request
+            .blizzard
+            .as_ref()
+            .map(|source| {
+                entity::acquire_result_as(
+                    source,
+                    &mut store,
+                    &public_digest,
+                    "blizzard-search",
+                    stop,
+                )
+            })
+            .transpose()?;
         let reference =
             reference::acquire_result(&request.reference, &mut store, &public_digest, stop)?
                 .ok_or_else(invalid)??;
-        let result =
-            federate(&primary, &reference, &request.query, stop).map_err(map_search_error)?;
+        let result = match &blizzard {
+            Some(blizzard) => {
+                federate_with_blizzard(&primary, blizzard, &reference, &request.query, stop)
+            }
+            None => federate(&primary, &reference, &request.query, stop),
+        }
+        .map_err(map_search_error)?;
         entity::fence_result(&request.primary, &mut batch)?;
+        if let Some(blizzard) = &request.blizzard {
+            entity::fence_result(blizzard, &mut batch)?;
+        }
         reference::fence_result(&request.reference, &mut batch)?;
         if let Some(policy) = &request.page_policy {
             return pagination::start(

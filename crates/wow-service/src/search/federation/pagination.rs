@@ -2,8 +2,10 @@
 use super::*;
 use wow_search::federation::{
     FederationPage, FederationPageCursor, FederationQueryResult, page_retained_federation,
+    page_retained_federation_with_blizzard,
 };
 const SESSION_SCHEMA: &str = "wow-service/federated-search-session/1";
+const PLATFORM_SESSION_SCHEMA: &str = "wow-service/platform-federated-search-session/1";
 const SESSION_KIND: &str = "wow.search.federated-result-session";
 const ROOT_CATALOG: &str = "wow-search.federated-result-sessions";
 const TOKEN_SCHEMA: &str = "wow-service/federated-search-continuation/1";
@@ -23,6 +25,12 @@ struct Session {
     original_request_digest: String,
     start_operation_id: String,
     primary: entity::EntityRetainedBinding,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present_binding"
+    )]
+    blizzard: Option<entity::EntityRetainedBinding>,
     reference: reference::Handle,
     query: FederationQueryRequest,
     policy: FederationPagePolicy,
@@ -113,10 +121,16 @@ pub(super) fn start(
 ) -> ServiceResult<Box<[u8]>> {
     let page = result.page(policy, None, stop).map_err(map_search_error)?;
     let session = Session {
-        schema: SESSION_SCHEMA.into(),
+        schema: if request.blizzard.is_some() {
+            PLATFORM_SESSION_SCHEMA
+        } else {
+            SESSION_SCHEMA
+        }
+        .into(),
         original_request_digest: digest.into(),
         start_operation_id: request.operation_id.as_str().into(),
         primary: entity::retained_binding(&request.primary),
+        blizzard: request.blizzard.as_ref().map(entity::retained_binding),
         reference: reference::retained_handle(&request.reference),
         query: request.query.clone(),
         policy: policy.clone(),
@@ -234,26 +248,65 @@ pub(in crate::search) fn continue_result(
         // Always release primary, including any later Reference open/validate/
         // release error. The inner result cannot return out of the outer scope.
         let page_result = (|| {
-            let reference = reference::open_retained_shard(
-                &session.reference,
-                &mut store,
-                &public_digest,
-                session.lease_expires_after,
-                request.permission,
-                stop,
-            )?;
-            let page = page_retained_federation(
-                &primary,
-                &reference,
-                &retained,
-                &session.query,
-                &session.policy,
-                Some(&request.continuation.cursor),
-                stop,
-            )
-            .map_err(map_search_error);
-            reference.release(&mut store).map_err(map_search_error)?;
-            page
+            let blizzard = session
+                .blizzard
+                .as_ref()
+                .map(|binding| {
+                    entity::open_retained_shard_as(
+                        binding,
+                        &mut store,
+                        &public_digest,
+                        "federated-page-blizzard",
+                        session.lease_expires_after,
+                        request.permission,
+                        stop,
+                    )
+                })
+                .transpose()?;
+            let reference_result = (|| {
+                let reference = reference::open_retained_shard(
+                    &session.reference,
+                    &mut store,
+                    &public_digest,
+                    session.lease_expires_after,
+                    request.permission,
+                    stop,
+                )?;
+                let page = if let Some(blizzard) = &blizzard {
+                    page_retained_federation_with_blizzard(
+                        &primary,
+                        blizzard,
+                        &reference,
+                        &retained,
+                        &session.query,
+                        &session.policy,
+                        Some(&request.continuation.cursor),
+                        stop,
+                    )
+                } else {
+                    page_retained_federation(
+                        &primary,
+                        &reference,
+                        &retained,
+                        &session.query,
+                        &session.policy,
+                        Some(&request.continuation.cursor),
+                        stop,
+                    )
+                }
+                .map_err(map_search_error);
+                reference.release(&mut store).map_err(map_search_error)?;
+                page
+            })();
+            if let Some(blizzard) = blizzard {
+                preserve_named_closure_errors(
+                    reference_result,
+                    blizzard.release(&mut store).map_err(map_search_error),
+                    "blizzard",
+                )
+            } else {
+                reference_result
+            }
         })();
         let primary_close = primary.release(&mut store).map_err(map_search_error);
         let page = preserve_closure_errors(page_result, primary_close)?;
@@ -336,14 +389,18 @@ pub(in crate::search) fn release_result(
         stop,
     )
 }
-fn roots(id: &wow_store::ObjectId, session: &Session) -> [(&'static str, wow_store::ObjectId); 4] {
+fn roots(id: &wow_store::ObjectId, session: &Session) -> Vec<(&'static str, wow_store::ObjectId)> {
     let (reference, view) = reference::retained_objects(&session.reference);
-    [
+    let mut roots = vec![
         ("result", id.clone()),
         ("primary", session.primary.object_id.clone()),
         ("reference", reference),
         ("reference_view", view),
-    ]
+    ];
+    if let Some(blizzard) = &session.blizzard {
+        roots.push(("blizzard", blizzard.object_id.clone()));
+    }
+    roots
 }
 fn root_key(id: &wow_store::ObjectId, root: &str) -> ServiceResult<(CatalogName, CatalogPath)> {
     let key = canonical_digest("sha256:", id)?;
@@ -371,7 +428,15 @@ fn load_session(store: &Store, id: &wow_store::ObjectId) -> ServiceResult<Sessio
     }
     let session: Session =
         serde_json::from_slice(object.canonical_json()).map_err(|_| invalid())?;
-    if session.schema != SESSION_SCHEMA || session.privacy_scope != "local_metadata_only" {
+    if session.schema
+        != if session.blizzard.is_some() {
+            PLATFORM_SESSION_SCHEMA
+        } else {
+            SESSION_SCHEMA
+        }
+        || session.query.requires_blizzard() != session.blizzard.is_some()
+        || session.privacy_scope != "local_metadata_only"
+    {
         return Err(mismatch());
     }
     for (root, target) in roots(id, &session) {
@@ -413,12 +478,24 @@ fn response(
         receipt_request_digest: digest.into(),
         cursor: cursor.clone(),
     });
+    let page_value: serde_json::Value =
+        serde_json::from_slice(page.canonical_bytes()).map_err(|_| invalid())?;
+    let has_blizzard = page_value
+        .get("result_summary")
+        .and_then(|summary| summary.get("blizzard_ui"))
+        .and_then(|state| state.get("state"))
+        .and_then(serde_json::Value::as_str)
+        == Some("required_exact");
     let payload = PageOutcome {
         status,
         resource_closure: "closed",
         session_object_id: id,
-        retention: "exact_result_primary_reference_shard_and_reference_view_roots_until_explicit_release",
-        page: serde_json::from_slice(page.canonical_bytes()).map_err(|_| invalid())?,
+        retention: if has_blizzard {
+            "exact_result_primary_blizzard_reference_shards_and_reference_view_roots_until_explicit_release"
+        } else {
+            "exact_result_primary_reference_shard_and_reference_view_roots_until_explicit_release"
+        },
+        page: page_value,
         continuation,
     };
     durable_response(operation, operation_id, digest, &payload, max_bytes)
@@ -439,18 +516,30 @@ fn preserve_closure_errors(
     result: ServiceResult<FederationPage>,
     closed: ServiceResult<()>,
 ) -> ServiceResult<FederationPage> {
+    preserve_named_closure_errors(result, closed, "primary")
+}
+fn preserve_named_closure_errors(
+    result: ServiceResult<FederationPage>,
+    closed: ServiceResult<()>,
+    owner: &str,
+) -> ServiceResult<FederationPage> {
     match (result, closed) {
         (Ok(page), Ok(())) => Ok(page),
         (Err(error), Ok(())) | (Ok(_), Err(error)) => Err(error),
         (Err(prior), Err(close)) => Err(ServiceError::new(
             ServiceErrorCode::StoreOutcomeUnknown,
             format!(
-                "federated page prior failure: {}; primary close failure: {}",
+                "federated page prior failure: {}; {owner} close failure: {}",
                 prior.message(),
                 close.message()
             ),
         )),
     }
+}
+fn present_binding<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<entity::EntityRetainedBinding>, D::Error> {
+    entity::EntityRetainedBinding::deserialize(deserializer).map(Some)
 }
 #[cfg(test)]
 mod tests {
@@ -473,6 +562,41 @@ mod tests {
             error.message().contains("reference-123") && error.message().contains("reference-456")
         );
         assert!(error.message().contains("primary-123") && error.message().contains("primary-456"));
+        Ok(())
+    }
+    #[test]
+    fn three_close_failures_keep_every_owner_identity() -> ServiceResult<()> {
+        let reference: ServiceResult<FederationPage> = Err(failure(
+            ServiceErrorCode::StoreOutcomeUnknown,
+            "reference lease=ref-third object=ref-object",
+        ));
+        let both = preserve_named_closure_errors(
+            reference,
+            Err(failure(
+                ServiceErrorCode::StoreOutcomeUnknown,
+                "blizzard lease=bliz-third object=bliz-object",
+            )),
+            "blizzard",
+        );
+        let all = preserve_closure_errors(
+            both,
+            Err(failure(
+                ServiceErrorCode::StoreOutcomeUnknown,
+                "primary lease=primary-third object=primary-object",
+            )),
+        );
+        let error = all.err().ok_or_else(invalid)?;
+        assert_eq!(error.code(), ServiceErrorCode::StoreOutcomeUnknown);
+        for identity in [
+            "ref-third",
+            "ref-object",
+            "bliz-third",
+            "bliz-object",
+            "primary-third",
+            "primary-object",
+        ] {
+            assert!(error.message().contains(identity));
+        }
         Ok(())
     }
 }

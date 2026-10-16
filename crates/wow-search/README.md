@@ -68,7 +68,9 @@ binds compatible genuine owner results, preserves universe identities and fuses
 authority bands/local ordinals under explicit priority and whole-union bounds.
 Optional [captured federation pages](../../apps/wow/SEARCH_FEDERATED_PAGINATION.md)
 retain result, both shards and the exact ReferenceView through continuation/release.
-Blizzard UI admission remains separate scope.
+The [required Blizzard UI profile](../../apps/wow/SEARCH_BLIZZARD_FEDERATION.md)
+admits a genuine platform source/package owner as a third exact universe, with
+its original source grade/bindings and five-root captured continuation.
 
 The explicit file-set component uses a separately named metadata profile and
 `wow-search/project-file-set-shard-manifest/1`. It preserves the single-file

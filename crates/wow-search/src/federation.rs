@@ -6,22 +6,27 @@ use std::collections::BTreeSet;
 mod pagination;
 pub use pagination::{
     FederationPage, FederationPageCursor, FederationPagePolicy, page_retained_federation,
+    page_retained_federation_with_blizzard,
 };
 
 const REQUEST_SCHEMA: &str = "wow-search/exact-primary-reference-query/1";
 const PROFILE: &str = "wow-search/exact-primary-reference-federation/1";
+const PLATFORM_REQUEST_SCHEMA: &str = "wow-search/exact-primary-platform-reference-query/1";
+const PLATFORM_PROFILE: &str = "wow-search/exact-primary-platform-reference-federation/1";
 const RANK_PROFILE: &str = "wow-search/federated-authority-universe-ordinal/1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FederationUniverse {
     PrimaryUserProject,
+    BlizzardUiSource,
     ReferencePlatformContract,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum BlizzardSelection {
     Excluded,
+    Required,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -46,19 +51,40 @@ impl FederationQueryRequest {
         Ok(request)
     }
     fn validate(&self) -> SearchResult<()> {
-        if self.schema != REQUEST_SCHEMA
-            || self.universe_priority.len() != 2
+        let platform = self.requires_blizzard();
+        let expected = if platform { 3 } else { 2 };
+        if self.schema
+            != if platform {
+                PLATFORM_REQUEST_SCHEMA
+            } else {
+                REQUEST_SCHEMA
+            }
+            || self.universe_priority.len() != expected
             || self
                 .universe_priority
                 .iter()
                 .copied()
                 .collect::<BTreeSet<_>>()
                 .len()
-                != 2
+                != expected
+            || (!platform
+                && self
+                    .universe_priority
+                    .contains(&FederationUniverse::BlizzardUiSource))
         {
             return Err(SearchError::InvalidProfile);
         }
         Ok(())
+    }
+    pub fn requires_blizzard(&self) -> bool {
+        matches!(self.blizzard_ui, BlizzardSelection::Required)
+    }
+    fn profile(&self) -> &'static str {
+        if self.requires_blizzard() {
+            PLATFORM_PROFILE
+        } else {
+            PROFILE
+        }
     }
 }
 pub struct FederationQueryResult {
@@ -75,6 +101,10 @@ impl FederationQueryResult {
 }
 #[derive(Serialize)]
 struct Binding<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    platform_profile: Option<&'a wow_project::platform_source::BlizzardUiSourceProfile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    platform_binding: Option<&'a wow_project::platform_source::PlatformPackageBinding>,
     #[serde(skip_serializing_if = "Option::is_none")]
     project_kind: Option<wow_project::ProjectKind>,
     universe_class: FederationUniverse,
@@ -109,6 +139,9 @@ pub fn federate(
 ) -> SearchResult<FederationQueryResult> {
     check(stop)?;
     request.validate()?;
+    if request.requires_blizzard() {
+        return Err(SearchError::OwnerEvidenceInvalid);
+    }
     let bytes = primary
         .canonical_bytes()
         .len()
@@ -123,6 +156,64 @@ pub fn federate(
     let reference: serde_json::Value = serde_json::from_slice(reference.canonical_bytes())
         .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
     fuse(&primary, &reference, primary_kind, request, stop)
+}
+pub fn federate_with_blizzard(
+    primary: &EntityQueryResult,
+    blizzard: &EntityQueryResult,
+    reference: &ReferenceQueryResult,
+    request: &FederationQueryRequest,
+    stop: &AtomicBool,
+) -> SearchResult<FederationQueryResult> {
+    check(stop)?;
+    request.validate()?;
+    if !request.requires_blizzard()
+        || blizzard.project_kind() != wow_project::ProjectKind::BlizzardUiPlatformSource
+    {
+        return Err(SearchError::OwnerEvidenceInvalid);
+    }
+    let (platform_profile, platform_binding) = blizzard
+        .platform_proof()
+        .ok_or(SearchError::OwnerEvidenceInvalid)?;
+    platform_profile
+        .validate()
+        .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+    if platform_binding.profile_digest() != platform_profile.digest()
+        || platform_binding.target() != platform_profile.target()
+    {
+        return Err(SearchError::OwnerEvidenceInvalid);
+    }
+    let size = primary
+        .canonical_bytes()
+        .len()
+        .checked_add(blizzard.canonical_bytes().len())
+        .and_then(|bytes| bytes.checked_add(reference.canonical_bytes().len()))
+        .ok_or(SearchError::FileSetBudgetExceeded)?;
+    if size as u64 > request.max_component_result_bytes.get() {
+        return Err(SearchError::FileSetBudgetExceeded);
+    }
+    let p: serde_json::Value = serde_json::from_slice(primary.canonical_bytes())
+        .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+    let b: serde_json::Value = serde_json::from_slice(blizzard.canonical_bytes())
+        .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+    let r: serde_json::Value = serde_json::from_slice(reference.canonical_bytes())
+        .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+    fuse_components(
+        &p,
+        &r,
+        primary.project_kind(),
+        Some(BlizzardCapture {
+            capture: &b,
+            profile: platform_profile,
+            binding: platform_binding,
+        }),
+        request,
+        stop,
+    )
+}
+struct BlizzardCapture<'a> {
+    capture: &'a serde_json::Value,
+    profile: &'a wow_project::platform_source::BlizzardUiSourceProfile,
+    binding: &'a wow_project::platform_source::PlatformPackageBinding,
 }
 fn field<'a>(value: &'a serde_json::Value, name: &str) -> SearchResult<&'a serde_json::Value> {
     value.get(name).ok_or(SearchError::OwnerEvidenceInvalid)
@@ -172,6 +263,19 @@ fn fuse(
     request: &FederationQueryRequest,
     stop: &AtomicBool,
 ) -> SearchResult<FederationQueryResult> {
+    fuse_components(primary, reference, primary_kind, None, request, stop)
+}
+fn fuse_components(
+    primary: &serde_json::Value,
+    reference: &serde_json::Value,
+    primary_kind: wow_project::ProjectKind,
+    blizzard: Option<BlizzardCapture<'_>>,
+    request: &FederationQueryRequest,
+    stop: &AtomicBool,
+) -> SearchResult<FederationQueryResult> {
+    if request.requires_blizzard() != blizzard.is_some() {
+        return Err(SearchError::OwnerEvidenceInvalid);
+    }
     if primary_kind == wow_project::ProjectKind::BlizzardUiPlatformSource {
         return Err(SearchError::OwnerEvidenceInvalid);
     }
@@ -195,51 +299,101 @@ fn fuse(
     {
         return Err(SearchError::OwnerEvidenceInvalid);
     }
-    let bindings = [
-        Binding {
-            project_kind: Some(primary_kind),
-            universe_class: FederationUniverse::PrimaryUserProject,
-            universe_id: text_field(p, "universe_id")?,
-            shard_id: text_field(p, "shard_id")?,
-            component_profile: text_field(p, "query_profile")?,
-        },
-        Binding {
-            project_kind: None,
-            universe_class: FederationUniverse::ReferencePlatformContract,
-            universe_id: text_field(r, "universe_id")?,
-            shard_id: text_field(r, "shard_id")?,
-            component_profile: text_field(r, "query_profile")?,
-        },
-    ];
+    let mut bindings = vec![Binding {
+        platform_profile: None,
+        platform_binding: None,
+        project_kind: Some(primary_kind),
+        universe_class: FederationUniverse::PrimaryUserProject,
+        universe_id: text_field(p, "universe_id")?,
+        shard_id: text_field(p, "shard_id")?,
+        component_profile: text_field(p, "query_profile")?,
+    }];
+    let mut captures = vec![(primary, p)];
+    if let Some(blizzard) = &blizzard {
+        let b = field(blizzard.capture, "payload")?;
+        let b_source = field(field(b, "owner")?, "source")?;
+        if text_field(b, "schema")? != "wow-search/project-entity-result-set/1"
+            || field(b_source, "project_profile")? != field(source, "project_profile")?
+            || field(b_source, "reference_generation_id")?
+                != field(source, "reference_generation_id")?
+            || field(b_source, "graph_universe_id")? == field(source, "graph_universe_id")?
+            || serde_json::to_value(&blizzard.profile.target().reference_profile)
+                .map_err(|_| SearchError::OwnerEvidenceInvalid)?
+                != *field(source, "project_profile")?
+            || blizzard.profile.target().reference_generation.to_string()
+                != text_field(source, "reference_generation_id")?
+        {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
+        bindings.push(Binding {
+            platform_profile: Some(blizzard.profile),
+            platform_binding: Some(blizzard.binding),
+            project_kind: Some(wow_project::ProjectKind::BlizzardUiPlatformSource),
+            universe_class: FederationUniverse::BlizzardUiSource,
+            universe_id: text_field(b, "universe_id")?,
+            shard_id: text_field(b, "shard_id")?,
+            component_profile: text_field(b, "query_profile")?,
+        });
+        captures.push((blizzard.capture, b));
+    }
+    bindings.push(Binding {
+        platform_profile: None,
+        platform_binding: None,
+        project_kind: None,
+        universe_class: FederationUniverse::ReferencePlatformContract,
+        universe_id: text_field(r, "universe_id")?,
+        shard_id: text_field(r, "shard_id")?,
+        component_profile: text_field(r, "query_profile")?,
+    });
+    captures.push((reference, r));
     let universe_set_id = digest(
         "search-universe-set:",
         &(
-            PROFILE,
+            request.profile(),
             &bindings,
             field(source, "project_profile")?,
             field(source, "reference_generation_id")?,
-            "blizzard_ui_excluded_by_request",
+            if request.requires_blizzard() {
+                "blizzard_ui_required_exact"
+            } else {
+                "blizzard_ui_excluded_by_request"
+            },
         ),
     )?;
-    let query_id = digest(
-        "federated-search-query:",
-        &(
-            PROFILE,
-            &universe_set_id,
-            text_field(p, "result_query_id")?,
-            text_field(r, "normalized_query_id")?,
-            request,
-        ),
-    )?;
-    let count = rows(p)?
-        .len()
-        .checked_add(rows(r)?.len())
-        .ok_or(SearchError::FileSetBudgetExceeded)?;
+    let query_id = if let Some(blizzard) = &blizzard {
+        digest(
+            "federated-search-query:",
+            &(
+                request.profile(),
+                &universe_set_id,
+                text_field(p, "result_query_id")?,
+                text_field(field(blizzard.capture, "payload")?, "result_query_id")?,
+                text_field(r, "normalized_query_id")?,
+                request,
+            ),
+        )?
+    } else {
+        digest(
+            "federated-search-query:",
+            &(
+                PROFILE,
+                &universe_set_id,
+                text_field(p, "result_query_id")?,
+                text_field(r, "normalized_query_id")?,
+                request,
+            ),
+        )?
+    };
+    let count = captures.iter().try_fold(0usize, |count, (_, payload)| {
+        count
+            .checked_add(rows(payload)?.len())
+            .ok_or(SearchError::FileSetBudgetExceeded)
+    })?;
     if count > request.max_input_candidates.get() as usize {
         return Err(SearchError::FileSetBudgetExceeded);
     }
     let mut candidates = Vec::new();
-    for (index, (capture, payload)) in [(primary, p), (reference, r)].into_iter().enumerate() {
+    for (index, (capture, payload)) in captures.iter().copied().enumerate() {
         let binding = &bindings[index];
         let priority = request
             .universe_priority
@@ -261,8 +415,9 @@ fn fuse(
                 .and_then(|value| u32::try_from(value).ok())
                 .filter(|value| *value <= 10)
                 .ok_or(SearchError::OwnerEvidenceInvalid)?;
-            let metadata_cap =
-                index == 0 && text_field(candidate, "match_class")? == "exact_recorded_owner_key";
+            let metadata_cap = binding.universe_class
+                != FederationUniverse::ReferencePlatformContract
+                && text_field(candidate, "match_class")? == "exact_recorded_owner_key";
             let band = if metadata_cap {
                 source_band.max(4)
             } else {
@@ -313,7 +468,10 @@ fn fuse(
         .len()
         .saturating_sub(request.max_candidates.get() as usize);
     candidates.truncate(request.max_candidates.get() as usize);
-    let states = [text_field(p, "status")?, text_field(r, "status")?];
+    let states = captures
+        .iter()
+        .map(|(_, payload)| text_field(payload, "status"))
+        .collect::<SearchResult<Vec<_>>>()?;
     let status = if omitted > 0 || states.contains(&"truncated") {
         "truncated"
     } else if states.contains(&"lane_unavailable") {
@@ -335,11 +493,15 @@ fn fuse(
     } else {
         "no_candidates_under_executed_lanes"
     };
-    let payload = serde_json::json!({"schema":"wow-search/federated-result-set/1","federation_profile":PROFILE,"ranking_profile":RANK_PROFILE,
+    let mut payload = serde_json::json!({"schema":"wow-search/federated-result-set/1","federation_profile":request.profile(),"ranking_profile":RANK_PROFILE,
         "query_id":query_id,"universe_set_id":universe_set_id,"request":request,"universes":bindings,"status":status,
         "absence_authoritative":false,"blizzard_ui":{"state":"excluded_by_request"},"privacy_scope":"local_metadata_only","license_state":"not_evaluated",
         "candidate_signals_omitted_by_cap":omitted,"rr_scale":1000000,"rr_offset":60,"candidates":candidates,
         "components":{"primary_user_project":summary(primary)?,"reference_platform_contract":summary(reference)?}});
+    if let Some(blizzard) = &blizzard {
+        payload["blizzard_ui"] = serde_json::json!({"state":"required_exact"});
+        payload["components"]["blizzard_ui_source"] = summary(blizzard.capture)?;
+    }
     let result_set_id = digest("federated-search-result-set:", &payload)?;
     let bytes = wow_core::canonical_json_bytes(
         &serde_json::json!({"result_set_id":result_set_id,"payload":payload}),
@@ -359,6 +521,83 @@ fn fuse(
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn third_universe_policy_is_explicit_closed_and_does_not_widen_legacy() -> SearchResult<()> {
+        let stop = AtomicBool::new(false);
+        let value = json!({"schema":PLATFORM_REQUEST_SCHEMA,"blizzard_ui":"required","universe_priority":["primary_user_project","blizzard_ui_source","reference_platform_contract"],
+            "max_component_result_bytes":65536,"max_input_candidates":8,"max_candidates":8,"max_result_bytes":65536});
+        let parse = |value: &serde_json::Value| {
+            FederationQueryRequest::from_json_slice(
+                &wow_core::canonical_json_bytes(value).map_err(|_| SearchError::InvalidProfile)?,
+                &stop,
+            )
+        };
+        assert!(parse(&value)?.requires_blizzard());
+        let mut wrong = value.clone();
+        wrong["schema"] = json!(REQUEST_SCHEMA);
+        assert!(parse(&wrong).is_err());
+        wrong = value.clone();
+        wrong["blizzard_ui"] = json!("excluded");
+        assert!(parse(&wrong).is_err());
+        wrong = value.clone();
+        wrong["universe_priority"] = json!(["primary_user_project", "reference_platform_contract"]);
+        assert!(parse(&wrong).is_err());
+        wrong = value.clone();
+        wrong["universe_priority"] = json!([
+            "blizzard_ui_source",
+            "blizzard_ui_source",
+            "reference_platform_contract"
+        ]);
+        assert!(parse(&wrong).is_err());
+        Ok(())
+    }
+    #[test]
+    fn fixture_source_admission_cannot_take_vendor_grade() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use wow_core::{
+            ContentDigest, ProfileIdentityBuilder, ProfileKind, ReferenceGenerationId,
+            SchemaVersionEntry, SourceKind, SourceLogicalSnapshot,
+        };
+        use wow_project::platform_source::{
+            BlizzardUiSourceProfile, BlizzardUiSourceProfileRequest, PlatformRootSpec,
+            PlatformSourceClass, PlatformTarget, SourceAdmissionLimits,
+        };
+        let profile = ProfileIdentityBuilder::new(
+            "profile:fixture:three-admission".parse()?,
+            ProfileKind::Fixture,
+            "retail",
+            1,
+            SourceKind::SyntheticFixture,
+            "fixture-reference",
+            ContentDigest::<SourceLogicalSnapshot>::from_bytes([7; 32]),
+        )
+        .schema_versions(vec![SchemaVersionEntry::new(
+            "schema:wow:fixture-e0".parse()?,
+            "1.0.0".parse()?,
+        )])
+        .fixture_scope("typed source-class admission control only")
+        .build()?;
+        let mut input = BlizzardUiSourceProfileRequest {
+            profile_id: "profile:fixture:three-source".parse()?,
+            source_class: PlatformSourceClass::SyntheticFixture,
+            target: PlatformTarget {
+                product: "fixture".into(),
+                channel: "fixture".into(),
+                reference_profile: profile,
+                reference_generation: ReferenceGenerationId::derive(&"fixture-reference")?,
+            },
+            roots: vec![PlatformRootSpec {
+                root: "UI".into(),
+                selected_tocs: vec!["UI/Fixture.toc".into()],
+            }],
+            exclusions: Vec::new(),
+            limits: SourceAdmissionLimits::new(8, 65536, 65536, 65536)?,
+        };
+        assert!(BlizzardUiSourceProfile::new(input.clone()).is_ok());
+        input.source_class = PlatformSourceClass::VendorUiSourceMirror;
+        assert!(BlizzardUiSourceProfile::new(input).is_err());
+        Ok(())
+    }
     #[test]
     fn exact_compatibility_authority_caps_priority_and_complete_input_bounds() -> SearchResult<()> {
         let fuse = |primary: &serde_json::Value,

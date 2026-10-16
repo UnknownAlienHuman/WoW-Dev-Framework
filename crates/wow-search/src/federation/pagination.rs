@@ -253,8 +253,48 @@ pub fn page_retained_federation(
     cursor: Option<&FederationPageCursor>,
     stop: &AtomicBool,
 ) -> SearchResult<FederationPage> {
+    page_retained_impl(
+        primary, None, reference, bytes, request, policy, cursor, stop,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub fn page_retained_federation_with_blizzard(
+    primary: &crate::entities::EntitySearchShard,
+    blizzard: &crate::entities::EntitySearchShard,
+    reference: &crate::reference::ReferenceSearchShard,
+    bytes: &[u8],
+    request: &FederationQueryRequest,
+    policy: &FederationPagePolicy,
+    cursor: Option<&FederationPageCursor>,
+    stop: &AtomicBool,
+) -> SearchResult<FederationPage> {
+    page_retained_impl(
+        primary,
+        Some(blizzard),
+        reference,
+        bytes,
+        request,
+        policy,
+        cursor,
+        stop,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn page_retained_impl(
+    primary: &crate::entities::EntitySearchShard,
+    blizzard: Option<&crate::entities::EntitySearchShard>,
+    reference: &crate::reference::ReferenceSearchShard,
+    bytes: &[u8],
+    request: &FederationQueryRequest,
+    policy: &FederationPagePolicy,
+    cursor: Option<&FederationPageCursor>,
+    stop: &AtomicBool,
+) -> SearchResult<FederationPage> {
     check(stop)?;
     request.validate()?;
+    if request.requires_blizzard() != blizzard.is_some() {
+        return Err(SearchError::OwnerEvidenceInvalid);
+    }
     if bytes.len() as u64 > request.max_result_bytes.get() {
         return Err(SearchError::FileSetBudgetExceeded);
     }
@@ -268,14 +308,15 @@ pub fn page_retained_federation(
         || text_field(&envelope, "result_set_id")?
             != digest("federated-search-result-set:", payload)?.as_ref()
         || text_field(payload, "schema")? != "wow-search/federated-result-set/1"
-        || text_field(payload, "federation_profile")? != PROFILE
+        || text_field(payload, "federation_profile")? != request.profile()
         || text_field(payload, "ranking_profile")? != RANK_PROFILE
         || field(payload, "request")?
             != &serde_json::to_value(request).map_err(|_| SearchError::OwnerEvidenceInvalid)?
         || text_field(payload, "privacy_scope")? != "local_metadata_only"
         || text_field(payload, "license_state")? != "not_evaluated"
         || field(payload, "absence_authoritative")?.as_bool() != Some(false)
-        || field(payload, "blizzard_ui")? != &serde_json::json!({"state":"excluded_by_request"})
+        || field(payload, "blizzard_ui")?
+            != &serde_json::json!({"state":if request.requires_blizzard(){"required_exact"}else{"excluded_by_request"}})
     {
         return Err(SearchError::OwnerEvidenceInvalid);
     }
@@ -284,7 +325,18 @@ pub fn page_retained_federation(
     let reference_capture = field(components, "reference_platform_contract")?;
     let p = field(primary_capture, "result_summary")?;
     let r = field(reference_capture, "result_summary")?;
+    let b_capture = if blizzard.is_some() {
+        Some(field(components, "blizzard_ui_source")?)
+    } else {
+        None
+    };
+    let b = b_capture
+        .map(|capture| field(capture, "result_summary"))
+        .transpose()?;
     primary.validate_federation_summary(p, stop)?;
+    if let (Some(shard), Some(summary)) = (blizzard, b) {
+        shard.validate_federation_summary(summary, stop)?;
+    }
     reference.validate_federation_summary(r, stop)?;
     if p.get("candidates").is_some()
         || r.get("candidates").is_some()
@@ -297,8 +349,21 @@ pub fn page_retained_federation(
     }
     let p_count = number(primary_capture, "source_candidate_count")?;
     let r_count = number(reference_capture, "source_candidate_count")?;
+    let b_count = b_capture
+        .map(|capture| number(capture, "source_candidate_count"))
+        .transpose()?
+        .unwrap_or(0);
+    if let Some(capture) = b_capture
+        && (text_field(capture, "candidate_delivery")? != "selected_federated_candidates_only"
+            || field(capture, "result_summary")?
+                .get("candidates")
+                .is_some())
+    {
+        return Err(SearchError::OwnerEvidenceInvalid);
+    }
     let total = p_count
         .checked_add(r_count)
+        .and_then(|count| count.checked_add(b_count))
         .filter(|total| *total <= u64::from(request.max_input_candidates.get()))
         .ok_or(SearchError::FileSetBudgetExceeded)?;
     let p_owner = field(field(p, "owner")?, "source")?;
@@ -308,40 +373,95 @@ pub fn page_retained_federation(
     {
         return Err(SearchError::OwnerEvidenceInvalid);
     }
+    if let Some(b) = b {
+        let owner = field(field(b, "owner")?, "source")?;
+        if field(owner, "project_profile")? != field(p_owner, "project_profile")?
+            || field(owner, "reference_generation_id")?
+                != field(p_owner, "reference_generation_id")?
+            || field(owner, "graph_universe_id")? == field(p_owner, "graph_universe_id")?
+        {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
+    }
     let bindings = field(payload, "universes")?
         .as_array()
-        .filter(|rows| rows.len() == 2)
+        .filter(|rows| rows.len() == if request.requires_blizzard() { 3 } else { 2 })
         .ok_or(SearchError::OwnerEvidenceInvalid)?;
     let kind = text_field(&bindings[0], "project_kind")?;
     if !matches!(kind, "repository" | "fixture") {
         return Err(SearchError::OwnerEvidenceInvalid);
     }
-    let expected = serde_json::json!([
-        {"project_kind":kind,"universe_class":"primary_user_project","universe_id":text_field(p,"universe_id")?,"shard_id":text_field(p,"shard_id")?,"component_profile":text_field(p,"query_profile")?},
-        {"universe_class":"reference_platform_contract","universe_id":text_field(r,"universe_id")?,"shard_id":text_field(r,"shard_id")?,"component_profile":text_field(r,"query_profile")?}]);
-    if field(payload, "universes")? != &expected {
+    let mut expected = vec![
+        serde_json::json!({"project_kind":kind,"universe_class":"primary_user_project","universe_id":text_field(p,"universe_id")?,"shard_id":text_field(p,"shard_id")?,"component_profile":text_field(p,"query_profile")?}),
+    ];
+    if let Some(b) = b {
+        let binding = &bindings[1];
+        let profile = field(binding, "platform_profile")?;
+        let package = field(binding, "platform_binding")?;
+        let target = field(field(profile, "request")?, "target")?;
+        if text_field(profile, "schema")? != "wow-project/platform-source-profile/1"
+            || text_field(package, "schema")? != "wow-project/platform-package-binding/1"
+            || field(package, "profile_digest")? != field(profile, "digest")?
+            || field(package, "target")? != target
+            || field(target, "reference_profile")? != field(p_owner, "project_profile")?
+            || field(target, "reference_generation")? != field(p_owner, "reference_generation_id")?
+            || !matches!(
+                (
+                    text_field(field(profile, "request")?, "source_class")?,
+                    text_field(field(target, "reference_profile")?, "profile_kind")?
+                ),
+                ("synthetic_fixture", "fixture") | ("vendor_ui_source_mirror", "release")
+            )
+            || text_field(package, "source_snapshot_id")?.is_empty()
+            || text_field(package, "universe_id")?.is_empty()
+        {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
+        expected.push(serde_json::json!({"project_kind":"blizzard_ui_platform_source","platform_profile":profile,"platform_binding":package,
+            "universe_class":"blizzard_ui_source","universe_id":text_field(b,"universe_id")?,"shard_id":text_field(b,"shard_id")?,"component_profile":text_field(b,"query_profile")?}));
+    }
+    expected.push(serde_json::json!({"universe_class":"reference_platform_contract","universe_id":text_field(r,"universe_id")?,"shard_id":text_field(r,"shard_id")?,"component_profile":text_field(r,"query_profile")?}));
+    if field(payload, "universes")? != &serde_json::Value::Array(expected) {
         return Err(SearchError::OwnerEvidenceInvalid);
     }
     let universe = digest(
         "search-universe-set:",
         &(
-            PROFILE,
+            request.profile(),
             bindings,
             field(p_owner, "project_profile")?,
             field(p_owner, "reference_generation_id")?,
-            "blizzard_ui_excluded_by_request",
+            if request.requires_blizzard() {
+                "blizzard_ui_required_exact"
+            } else {
+                "blizzard_ui_excluded_by_request"
+            },
         ),
     )?;
-    let query_id = digest(
-        "federated-search-query:",
-        &(
-            PROFILE,
-            &universe,
-            text_field(p, "result_query_id")?,
-            text_field(r, "normalized_query_id")?,
-            request,
-        ),
-    )?;
+    let query_id = if let Some(b) = b {
+        digest(
+            "federated-search-query:",
+            &(
+                request.profile(),
+                &universe,
+                text_field(p, "result_query_id")?,
+                text_field(b, "result_query_id")?,
+                text_field(r, "normalized_query_id")?,
+                request,
+            ),
+        )?
+    } else {
+        digest(
+            "federated-search-query:",
+            &(
+                PROFILE,
+                &universe,
+                text_field(p, "result_query_id")?,
+                text_field(r, "normalized_query_id")?,
+                request,
+            ),
+        )?
+    };
     if text_field(payload, "universe_set_id")? != universe.as_ref()
         || text_field(payload, "query_id")? != query_id.as_ref()
         || number(payload, "rr_scale")? != 1_000_000
@@ -362,16 +482,23 @@ pub fn page_retained_federation(
         check(stop)?;
         let class = match text_field(candidate, "universe_class")? {
             "primary_user_project" => FederationUniverse::PrimaryUserProject,
+            "blizzard_ui_source" => FederationUniverse::BlizzardUiSource,
             "reference_platform_contract" => FederationUniverse::ReferencePlatformContract,
             _ => return Err(SearchError::OwnerEvidenceInvalid),
         };
         let (summary, capture, count) = if class == FederationUniverse::PrimaryUserProject {
             (p, primary_capture, p_count)
+        } else if class == FederationUniverse::BlizzardUiSource {
+            (
+                b.ok_or(SearchError::OwnerEvidenceInvalid)?,
+                b_capture.ok_or(SearchError::OwnerEvidenceInvalid)?,
+                b_count,
+            )
         } else {
             (r, reference_capture, r_count)
         };
         let original = field(candidate, "original_candidate")?;
-        let component_query = if class == FederationUniverse::PrimaryUserProject {
+        let component_query = if class != FederationUniverse::ReferencePlatformContract {
             text_field(summary, "result_query_id")?
         } else {
             text_field(summary, "normalized_query_id")?
@@ -379,6 +506,10 @@ pub fn page_retained_federation(
         let component_universe = text_field(summary, "universe_id")?;
         if class == FederationUniverse::PrimaryUserProject {
             primary.validate_federation_candidate(component_query, original, stop)?;
+        } else if class == FederationUniverse::BlizzardUiSource {
+            blizzard
+                .ok_or(SearchError::OwnerEvidenceInvalid)?
+                .validate_federation_candidate(component_query, original, stop)?;
         } else {
             reference.validate_federation_candidate(
                 component_query,
@@ -394,7 +525,7 @@ pub fn page_retained_federation(
             .and_then(|value| u32::try_from(value).ok())
             .filter(|band| *band <= 10)
             .ok_or(SearchError::OwnerEvidenceInvalid)?;
-        let capped = class == FederationUniverse::PrimaryUserProject
+        let capped = class != FederationUniverse::ReferencePlatformContract
             && text_field(original, "match_class")? == "exact_recorded_owner_key";
         let effective = if capped { band.max(4) } else { band };
         let ordinal = number(candidate, "component_candidate_ordinal")?;

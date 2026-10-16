@@ -47,10 +47,12 @@ The top-level `query` is a federation policy, for example:
 ```
 
 Both universe priorities are required exactly once. Order is explicit retrieval
-preference. This selected profile excludes optional Blizzard UI; it cannot label
+preference. This original profile excludes optional Blizzard UI; the separate
+[required Blizzard UI profile](SEARCH_BLIZZARD_FEDERATION.md) admits its genuine
+platform publication alongside primary/Reference. Neither can label
 a platform-source publication as primary. Search obtains original `ProjectKind`
 from the genuine Project owner through its sealed result. Blizzard UI owner
-admission and cross-profile comparison remain separate work.
+source class remains explicit; cross-profile comparison remains separate work.
 
 Normal binding requires the full original ProfileIdentity and Reference
 generation to agree exactly. Shard/query profiles, source/view/registry identities

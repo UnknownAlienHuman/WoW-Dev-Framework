@@ -14,7 +14,7 @@ Add `--page-json` to the existing exact `wow search federated` request:
 }
 ```
 
-The initial operation still runs both genuine owner queries and exact compatible
+The original initial operation still runs both genuine owner queries and exact compatible
 fusion. It stores the final ordered Search result and atomically retains four
 independent catalog roots: result session, primary SearchShard, Reference
 SearchShard and the original ReferenceView. Existing no-page request/digest/result
@@ -63,7 +63,12 @@ session release cannot remove another's custody. After the last release, native
 GC can collect both shards and ReferenceView. Exact completed response replay
 remains historical and creates no roots.
 
+The [required Blizzard UI profile](SEARCH_BLIZZARD_FEDERATION.md) adds its genuine
+platform source/package owner and a fifth independent shard root; continuation
+closes Reference, Blizzard, then primary on every path. Both source stores may be
+offline. Original four-root sessions and bytes remain valid when Blizzard is excluded.
+
 New page/session/cursor consumers have separately named wire identities; physical
-Store and admitted standalone/no-page profiles remain unchanged. This selected
-two-universe continuation does not qualify Blizzard UI admission, additional
-document kinds, aliases, native context selection or full E4/TierX/runtime/launch.
+Store and admitted standalone/no-page profiles remain unchanged. These selected
+continuations do not qualify a real vendor corpus, additional document kinds,
+aliases, native context selection or full E4/TierX/runtime/launch.

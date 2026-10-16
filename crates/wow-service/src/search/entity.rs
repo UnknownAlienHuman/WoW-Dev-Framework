@@ -296,6 +296,15 @@ pub(super) fn acquire_result(
     public_digest: &str,
     stop: &AtomicBool,
 ) -> ServiceResult<wow_search::entities::EntityQueryResult> {
+    acquire_result_as(request, store, public_digest, "entity-search", stop)
+}
+pub(super) fn acquire_result_as(
+    request: &EntityRetrievalRequest,
+    store: &mut Store,
+    public_digest: &str,
+    purpose: &str,
+    stop: &AtomicBool,
+) -> ServiceResult<wow_search::entities::EntityQueryResult> {
     let (catalog, path) = search_catalog_key(&request.logical_id)?;
     if store
         .catalog_entry(&catalog, &path)
@@ -330,7 +339,7 @@ pub(super) fn acquire_result(
             let pair = wow_project::replay::publication::AcquiredProjectPair::read(&read, stop)
                 .map_err(map_project_error)?;
             let lease = SearchStoreLeaseRequest::new(
-                lease_id_for("entity-search", public_digest)?,
+                lease_id_for(purpose, public_digest)?,
                 "wow-service-search",
                 LogicalEpoch::new(request.lease_expires_after),
             )
@@ -416,6 +425,26 @@ pub(super) fn open_retained_shard(
     permission: LocalMetadataPermission,
     stop: &AtomicBool,
 ) -> ServiceResult<wow_search::entities::EntitySearchShard> {
+    open_retained_shard_as(
+        binding,
+        store,
+        digest,
+        "federated-page-primary",
+        lease_expires_after,
+        permission,
+        stop,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) fn open_retained_shard_as(
+    binding: &EntityRetainedBinding,
+    store: &mut Store,
+    digest: &str,
+    purpose: &str,
+    lease_expires_after: u64,
+    permission: LocalMetadataPermission,
+    stop: &AtomicBool,
+) -> ServiceResult<wow_search::entities::EntitySearchShard> {
     let profile = EntitySearchProfile::new(binding.bounds).map_err(map_search_error)?;
     if profile.digest() != binding.profile_digest.as_ref() {
         return Err(failure(
@@ -424,7 +453,7 @@ pub(super) fn open_retained_shard(
         ));
     }
     let lease = SearchStoreLeaseRequest::new(
-        lease_id_for("federated-page-primary", digest)?,
+        lease_id_for(purpose, digest)?,
         "wow-service-search",
         LogicalEpoch::new(lease_expires_after),
     )

@@ -119,10 +119,23 @@ pub struct EntityQueryResult {
     status: &'static str,
     profile_digest: Box<str>,
     project_kind: wow_project::ProjectKind,
+    platform_profile: Option<wow_project::platform_source::BlizzardUiSourceProfile>,
+    platform_binding: Option<wow_project::platform_source::PlatformPackageBinding>,
 }
 impl EntityQueryResult {
     pub(crate) fn project_kind(&self) -> wow_project::ProjectKind {
         self.project_kind
+    }
+    pub(crate) fn platform_proof(
+        &self,
+    ) -> Option<(
+        &wow_project::platform_source::BlizzardUiSourceProfile,
+        &wow_project::platform_source::PlatformPackageBinding,
+    )> {
+        Some((
+            self.platform_profile.as_ref()?,
+            self.platform_binding.as_ref()?,
+        ))
     }
     pub fn canonical_bytes(&self) -> &[u8] {
         &self.bytes
@@ -541,6 +554,16 @@ impl EntitySearchShard {
             status,
             profile_digest: self.profile_digest().into(),
             project_kind: pair.project().configuration().project_kind(),
+            platform_profile: pair
+                .project()
+                .configuration()
+                .platform_packages()
+                .map(|packages| packages.source().profile().clone()),
+            platform_binding: pair
+                .project()
+                .configuration()
+                .platform_package_binding()
+                .cloned(),
         })
     }
 }
