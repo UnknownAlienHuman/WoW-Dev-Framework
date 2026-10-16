@@ -16,6 +16,137 @@ fn read(text: &str) -> DocumentationDocument {
     )
     .unwrap()
 }
+
+#[test]
+fn native_event_literal_payload_port_is_original_bound_and_conflict_safe() {
+    use wow_core::ReferenceGenerationId;
+    use wow_reference::native_view::{
+        NATIVE_API_PARTITION, NATIVE_EVENT_PARTITION, NativeCallableCorpus,
+        NativeReferenceDocuments, project_callable_event_documents, project_callables,
+    };
+    use wow_reference::{CoverageStatus, ReferenceRecord, ReferenceRecordKind};
+    let stop = AtomicBool::new(false);
+    let selection = ReferenceGenerationId::derive(&"native-event-port").unwrap();
+    let documents = vec![read(SOURCE)];
+    let legacy = project_callables(
+        &documents,
+        "Mainline",
+        selection,
+        NativeCallableCorpus::explicit_partial(),
+        &stop,
+    )
+    .unwrap();
+    assert!(legacy.native_documents().is_none());
+    let mixed = project_callable_event_documents(
+        &documents,
+        "Mainline",
+        selection,
+        NativeCallableCorpus::explicit_partial(),
+        None,
+        &stop,
+    )
+    .unwrap();
+    assert_eq!(
+        mixed.native_documents(),
+        Some(NativeReferenceDocuments::CallablesAndEventsV1)
+    );
+    assert_ne!(mixed.view.generation_id(), legacy.view.generation_id());
+    let event_part = mixed
+        .view
+        .partitions()
+        .iter()
+        .find(|part| part.id() == NATIVE_EVENT_PARTITION)
+        .unwrap();
+    assert_eq!(event_part.coverage(), CoverageStatus::Partial);
+    let record = &event_part.records()[0];
+    assert_eq!(record.kind(), ReferenceRecordKind::Event);
+    assert_eq!(record.key(), "event:EXAMPLE_CHANGED");
+    let event = mixed.event_signature(record, &stop).unwrap();
+    assert_eq!(event.literal_name(), "EXAMPLE_CHANGED");
+    assert_eq!(event.definition_name(), "Changed");
+    assert_eq!(event.namespace(), Some("C_Example"));
+    assert_eq!(event.reference_generation(), mixed.view.generation_id());
+    assert_eq!(event.reference_view_digest(), mixed.view.self_digest());
+    assert_eq!(event.payload()[0].name(), "value");
+    assert_eq!(event.payload()[0].type_name(), "number");
+    let span = event.payload()[0].source_span();
+    assert!(SOURCE[span.start..span.end].contains("Name=\"value\""));
+    let callable = &mixed
+        .view
+        .partitions()
+        .iter()
+        .find(|part| part.id() == NATIVE_API_PARTITION)
+        .unwrap()
+        .records()[0];
+    assert_eq!(
+        mixed
+            .callable_signature(callable, &stop)
+            .unwrap()
+            .reference_generation(),
+        mixed.view.generation_id()
+    );
+    let forged = ReferenceRecord::new(
+        record.key(),
+        ReferenceRecordKind::Event,
+        "changed",
+        record
+            .source_ids()
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        Vec::new(),
+    )
+    .unwrap();
+    assert!(mixed.event_signature(&forged, &stop).is_err());
+    assert_eq!(
+        mixed
+            .event_signature(record, &AtomicBool::new(true))
+            .unwrap_err()
+            .code,
+        NativeErrorCode::Cancelled
+    );
+    let other = SOURCE.replace("Type=\"number\"", "Type=\"bool\"");
+    let second = ingest_document(
+        REV,
+        "Interface/Other.lua",
+        &other,
+        &source_digest(other.as_bytes()),
+        &stop,
+    )
+    .unwrap();
+    let conflict = project_callable_event_documents(
+        &[read(SOURCE), second],
+        "Mainline",
+        selection,
+        NativeCallableCorpus::explicit_partial(),
+        None,
+        &stop,
+    )
+    .unwrap();
+    assert!(
+        conflict
+            .view
+            .partitions()
+            .iter()
+            .find(|part| part.id() == NATIVE_EVENT_PARTITION)
+            .unwrap()
+            .records()
+            .is_empty()
+    );
+    assert!(
+        conflict
+            .view
+            .conflicts()
+            .iter()
+            .any(|item| item.key() == "event:EXAMPLE_CHANGED")
+    );
+    let candidate = conflict
+        .candidates
+        .iter()
+        .find(|record| record.kind() == ReferenceRecordKind::Event)
+        .unwrap();
+    assert!(conflict.event_signature(candidate, &stop).is_err());
+}
 const SOURCE: &str = r#"-- inert source comments
 local api = {
  Name = "Example", Type = "System", Namespace = "C_Example", Environment = "All",

@@ -27,6 +27,8 @@ struct SourceReferenceInput {
     schema: String,
     profile: NativeProfile,
     native_source: NativeSourceInput,
+    #[serde(default, deserialize_with = "super::native_resources::present")]
+    native_documents: Option<wow_reference::native_view::NativeReferenceDocuments>,
 }
 
 /// Exact selected callable projection; no project, annotation or runtime claim.
@@ -48,6 +50,9 @@ pub struct SourceReferenceResult {
 }
 
 impl SourceReferenceResult {
+    pub fn native_documents(&self) -> Option<wow_reference::native_view::NativeReferenceDocuments> {
+        self.reference.native_documents()
+    }
     pub(crate) fn source_revision(&self) -> &str {
         &self.revision
     }
@@ -117,11 +122,13 @@ pub fn read_local_source_reference(
         input.profile.interface,
         stop,
     )?;
-    let built = project_native_reference(
+    let built = build_native_reference(
         &input.profile,
         &captured,
         source_manifest.as_ref(),
         None,
+        None,
+        input.native_documents,
         stop,
     )?;
     let reference_generation = built
@@ -176,6 +183,7 @@ pub(super) fn project_native_reference(
         source_manifest,
         correction_digest,
         None,
+        None,
         stop,
     )
 }
@@ -199,6 +207,7 @@ pub(super) fn project_native_reference_with_type_resolution(
         source_manifest,
         Some(digest),
         Some(corrections),
+        None,
         stop,
     )
 }
@@ -209,6 +218,7 @@ fn build_native_reference(
     source_manifest: Option<&SourceManifestReceipt>,
     correction_digest: Option<ContentDigest<CorrectionSet>>,
     corrections: Option<&ValidatedCorrections>,
+    native_documents: Option<wow_reference::native_view::NativeReferenceDocuments>,
     stop: &AtomicBool,
 ) -> ServiceResult<NativeReferenceBuild> {
     cancelled(stop)?;
@@ -285,7 +295,16 @@ fn build_native_reference(
     if documents.is_empty() {
         return Err(invalid("no native documentation was admitted"));
     }
-    let reference = if let Some(corrections) = corrections {
+    let reference = if native_documents.is_some() {
+        wow_reference::native_view::project_callable_event_documents(
+            &documents,
+            &requested.environment,
+            generation,
+            callable_corpus,
+            corrections,
+            stop,
+        )
+    } else if let Some(corrections) = corrections {
         wow_reference::native_view::project_callables_with_type_resolution(
             &documents,
             &requested.environment,

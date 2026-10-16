@@ -101,12 +101,12 @@ pub(super) fn run<'a>(
         let fields = [
             (
                 0u8,
-                "NativeCallableSignature.namespace()+name()",
+                name_origin(document, true),
                 &document.canonical_qualified_name,
             ),
             (
                 1u8,
-                "NativeCallableSignature.name()",
+                name_origin(document, false),
                 &document.canonical_short_name,
             ),
         ];

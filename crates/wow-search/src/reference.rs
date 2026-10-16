@@ -16,22 +16,41 @@ pub use query::{
 };
 const PROFILE_SCHEMA: &str = "wow-search/native-reference-callable-profile/1";
 const MANIFEST_SCHEMA: &str = "wow-search/native-reference-callable-shard/1";
+const DOCUMENT_PROFILE_SCHEMA: &str = "wow-search/native-reference-callable-event-profile/1";
+const DOCUMENT_MANIFEST_SCHEMA: &str = "wow-search/native-reference-callable-event-shard/1";
+use wow_reference::native_view::{NATIVE_EVENT_PARTITION, NativeReferenceDocuments};
 
 #[derive(Debug, Clone)]
 pub struct ReferenceSearchProfile {
     bounds: SearchBounds,
     digest: Box<str>,
+    native_documents: Option<NativeReferenceDocuments>,
 }
 impl ReferenceSearchProfile {
     pub fn new(bounds: SearchBounds) -> SearchResult<Self> {
+        Self::new_documents(bounds, None)
+    }
+    pub fn new_documents(
+        bounds: SearchBounds,
+        native_documents: Option<NativeReferenceDocuments>,
+    ) -> SearchResult<Self> {
         bounds.physical()?;
         Ok(Self {
             bounds,
+            native_documents,
             digest: identity(
                 "",
                 &(
-                    PROFILE_SCHEMA,
-                    MANIFEST_SCHEMA,
+                    if native_documents.is_some() {
+                        DOCUMENT_PROFILE_SCHEMA
+                    } else {
+                        PROFILE_SCHEMA
+                    },
+                    if native_documents.is_some() {
+                        DOCUMENT_MANIFEST_SCHEMA
+                    } else {
+                        MANIFEST_SCHEMA
+                    },
                     "canonical-name-namespace-source-signature/1",
                     "case-sensitive-identity/1",
                     FTS_CANDIDATE_PROFILE,
@@ -117,6 +136,17 @@ struct Document {
     arguments: Vec<Field>,
     returns: Vec<Field>,
     type_authority: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    event: Option<EventDocument>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EventDocument {
+    definition_name: String,
+    literal_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    definition_namespace: Option<String>,
+    payload: Vec<Field>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -137,6 +167,8 @@ struct ProjectionIssue {
 #[serde(deny_unknown_fields)]
 struct Manifest {
     schema: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    native_documents: Option<NativeReferenceDocuments>,
     profile_digest: Box<str>,
     binding: ReferenceSearchBinding,
     reference_generation: String,
@@ -197,13 +229,32 @@ pub fn prepare_reference_callable_shard(
         .validate()
         .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
     let bounds = profile.bounds;
+    if native.native_documents() != profile.native_documents {
+        return Err(SearchError::OwnerEvidenceInvalid);
+    }
     let partition = native
         .view
         .partitions()
         .iter()
         .find(|p| p.id() == NATIVE_API_PARTITION)
         .ok_or(SearchError::OwnerEvidenceInvalid)?;
-    let count = partition.records().len();
+    let event_partition = if profile.native_documents.is_some() {
+        Some(
+            native
+                .view
+                .partitions()
+                .iter()
+                .find(|part| part.id() == NATIVE_EVENT_PARTITION)
+                .ok_or(SearchError::OwnerEvidenceInvalid)?,
+        )
+    } else {
+        None
+    };
+    let count = partition
+        .records()
+        .len()
+        .checked_add(event_partition.map_or(0, |part| part.records().len()))
+        .ok_or(SearchError::FileSetOverCapacity)?;
     if count == 0 || count > bounds.max_documents.get() as usize {
         return Err(SearchError::FileSetOverCapacity);
     }
@@ -235,7 +286,13 @@ pub fn prepare_reference_callable_shard(
         }
     }
     let mut manifest = Manifest {
-        schema: MANIFEST_SCHEMA.into(),
+        schema: if profile.native_documents.is_some() {
+            DOCUMENT_MANIFEST_SCHEMA
+        } else {
+            MANIFEST_SCHEMA
+        }
+        .into(),
+        native_documents: profile.native_documents,
         profile_digest: profile.digest.clone(),
         binding,
         reference_generation: native.view.generation_id().into(),
@@ -345,6 +402,7 @@ pub fn prepare_reference_callable_shard(
             arguments: fields(signature.arguments())?,
             returns: fields(signature.returns())?,
             type_authority: "original_source_type_identities_unresolved".into(),
+            event: None,
         };
         charged = charged
             .checked_add(canonical_size(&document)? + u64::from(!manifest.documents.is_empty()))
@@ -353,6 +411,81 @@ pub fn prepare_reference_callable_shard(
             return Err(SearchError::FileSetBudgetExceeded);
         }
         manifest.documents.push(document);
+    }
+    if let Some(events) = event_partition {
+        for record in events.records() {
+            check(stop)?;
+            let event = native.event_signature(record, stop).map_err(native_error)?;
+            if event.reference_generation() != manifest.reference_generation
+                || event.reference_view_digest() != manifest.reference_view_digest
+                || event.record_key() != record.key()
+                || record.kind() != ReferenceRecordKind::Event
+            {
+                return Err(SearchError::OwnerEvidenceInvalid);
+            }
+            let source = origins
+                .get(event.source_id())
+                .ok_or(SearchError::OwnerEvidenceInvalid)?;
+            if wow_reference::native_view::event_origin_id(
+                native.schema,
+                &manifest.binding.source_revision,
+                &source.path,
+                &source.sha256,
+                wow_reference::native::Span {
+                    start: source.byte_range[0],
+                    end: source.byte_range[1],
+                },
+            )
+            .map_err(native_error)?
+                != source.source_id
+            {
+                return Err(SearchError::OwnerEvidenceInvalid);
+            }
+            if record.key().len() > bounds.max_document_id_bytes.get() as usize
+                || event.literal_name().len() > bounds.max_owner_metadata_label_bytes.get() as usize
+            {
+                return Err(SearchError::FileSetBudgetExceeded);
+            }
+            let mut payload = Vec::new();
+            for field in event.payload() {
+                check(stop)?;
+                let span = field.source_span();
+                payload.push(Field {
+                    name: field.name().into(),
+                    original_type: field.type_name().into(),
+                    original_inner_type: field.inner_type().map(str::to_owned),
+                    nilable: field.nilable(),
+                    byte_range: [span.start, span.end],
+                });
+            }
+            let document = Document {
+                entity_key: record.key().into(),
+                owner_record_digest: event.record_digest().into(),
+                source: source.clone(),
+                canonical_short_name: event.literal_name().into(),
+                namespace: None,
+                canonical_qualified_name: event.literal_name().into(),
+                arguments: Vec::new(),
+                returns: Vec::new(),
+                type_authority: "original_source_type_identities_unresolved".into(),
+                event: Some(EventDocument {
+                    definition_name: event.definition_name().into(),
+                    literal_name: event.literal_name().into(),
+                    definition_namespace: event.namespace().map(str::to_owned),
+                    payload,
+                }),
+            };
+            charged = charged
+                .checked_add(canonical_size(&document)? + u64::from(!manifest.documents.is_empty()))
+                .ok_or(SearchError::FileSetBudgetExceeded)?;
+            if charged > bounds.max_owner_manifest_bytes.get() {
+                return Err(SearchError::FileSetBudgetExceeded);
+            }
+            manifest.documents.push(document);
+        }
+        manifest
+            .documents
+            .sort_by(|a, b| a.entity_key.cmp(&b.entity_key));
     }
     let bytes =
         wow_core::canonical_json_bytes(&manifest).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
@@ -420,7 +553,13 @@ pub fn open_reference_callable_shard(
         let bytes = physical.reader().owner_manifest_bytes();
         let manifest: Manifest =
             serde_json::from_slice(bytes).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
-        if manifest.schema != MANIFEST_SCHEMA
+        if manifest.schema
+            != if profile.native_documents.is_some() {
+                DOCUMENT_MANIFEST_SCHEMA
+            } else {
+                MANIFEST_SCHEMA
+            }
+            || manifest.native_documents != profile.native_documents
             || manifest.profile_digest != profile.digest
             || manifest.reference_generation != reference.generation_id()
             || manifest.reference_view_digest != reference.self_digest()
@@ -450,7 +589,20 @@ pub fn open_reference_callable_shard(
             .iter()
             .find(|p| p.id() == NATIVE_API_PARTITION)
             .ok_or(SearchError::OwnerEvidenceInvalid)?;
-        if partition.records().len() != manifest.documents.len() {
+        let mut records = partition.records().iter().collect::<Vec<_>>();
+        if profile.native_documents.is_some() {
+            let events = reference
+                .partitions()
+                .iter()
+                .find(|part| part.id() == NATIVE_EVENT_PARTITION)
+                .ok_or(SearchError::OwnerEvidenceInvalid)?;
+            if events.coverage() != CoverageStatus::Partial {
+                return Err(SearchError::OwnerEvidenceInvalid);
+            }
+            records.extend(events.records());
+            records.sort_by_key(|record| record.key());
+        }
+        if records.len() != manifest.documents.len() {
             return Err(SearchError::OwnerEvidenceInvalid);
         }
         manifest
@@ -474,13 +626,31 @@ pub fn open_reference_callable_shard(
         {
             return Err(SearchError::OwnerEvidenceInvalid);
         }
-        for (doc, record) in manifest.documents.iter().zip(partition.records()) {
+        for (doc, record) in manifest.documents.iter().zip(records) {
             check(stop)?;
+            let origin_id = if doc.event.is_some() {
+                wow_reference::native_view::event_origin_id
+            } else {
+                wow_reference::native_view::callable_origin_id
+            };
             let row = physical
                 .reader()
                 .exact_id(&doc.entity_key)?
                 .ok_or(SearchError::OwnerEvidenceInvalid)?;
             if doc.entity_key != record.key()
+                || record.kind()
+                    != if doc.event.is_some() {
+                        ReferenceRecordKind::Event
+                    } else {
+                        ReferenceRecordKind::Api
+                    }
+                || (doc.event.is_some() && profile.native_documents.is_none())
+                || doc.event.as_ref().is_some_and(|event| {
+                    event.literal_name != doc.canonical_short_name
+                        || !doc.arguments.is_empty()
+                        || !doc.returns.is_empty()
+                        || doc.namespace.is_some()
+                })
                 || doc.owner_record_digest
                     != record
                         .digest()
@@ -499,7 +669,7 @@ pub fn open_reference_callable_shard(
                     .binary_search_by(|source| source.source_id.cmp(&doc.source.source_id))
                     .ok()
                     .is_none_or(|index| manifest.source_origins[index] != doc.source)
-                || wow_reference::native_view::callable_origin_id(
+                || origin_id(
                     &manifest.native_projection_profile,
                     &manifest.binding.source_revision,
                     &doc.source.path,

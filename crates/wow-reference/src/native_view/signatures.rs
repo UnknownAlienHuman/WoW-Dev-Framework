@@ -20,6 +20,17 @@ pub struct NativeCallableField {
 }
 
 impl NativeCallableField {
+    pub(super) fn capture(field: &FieldFact<'_>) -> Self {
+        Self {
+            name: field.name.to_owned(),
+            type_name: field.type_name.to_owned(),
+            inner_type: field.inner_type.map(str::to_owned),
+            nilable: field.nilable,
+            default: field.default.cloned(),
+            stride_index: field.stride_index.cloned(),
+            source_span: field.raw.span,
+        }
+    }
     /// Original captured member name, exactly as admitted from the source payload.
     pub fn name(&self) -> &str {
         self.name.as_str()
@@ -149,15 +160,7 @@ impl SignatureRow {
             let mut result = Vec::with_capacity(input.len());
             for field in input {
                 checkpoint(stop)?;
-                result.push(NativeCallableField {
-                    name: field.name.to_owned(),
-                    type_name: field.type_name.to_owned(),
-                    inner_type: field.inner_type.map(str::to_owned),
-                    nilable: field.nilable,
-                    default: field.default.cloned(),
-                    stride_index: field.stride_index.cloned(),
-                    source_span: field.raw.span,
-                });
+                result.push(NativeCallableField::capture(field));
             }
             Ok(result)
         };

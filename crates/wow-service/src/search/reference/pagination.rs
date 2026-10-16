@@ -239,10 +239,7 @@ pub(in crate::search) fn continue_result(
         {
             return Err(mismatch());
         }
-        let profile = ReferenceSearchProfile::new(h.bounds).map_err(map_search_error)?;
-        if profile.digest() != h.search_profile_digest || h.schema != HANDLE_SCHEMA {
-            return Err(mismatch());
-        }
+        let profile = handle_profile(h)?;
         let lease = SearchStoreLeaseRequest::new(
             lease_id_for("reference-page", &public_digest)?,
             "wow-service-search",

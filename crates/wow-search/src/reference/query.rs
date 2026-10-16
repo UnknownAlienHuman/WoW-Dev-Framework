@@ -10,6 +10,9 @@ const QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape/1";
 const RANK_PROFILE: &str = "wow-search/reference-authority-ordinal-fusion/1";
 const SIM_QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape-similarity/1";
 const SIM_RANK_PROFILE: &str = "wow-search/reference-authority-ordinal-fusion-similarity/1";
+const DOCUMENT_QUERY_PROFILE: &str = "wow-search/native-callable-event-name-payload/1";
+const DOCUMENT_SIM_QUERY_PROFILE: &str =
+    "wow-search/native-callable-event-name-payload-similarity/1";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -50,6 +53,10 @@ struct Shape {
     return_count: Option<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     arguments: Vec<FieldFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    event_payload_count: Option<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    event_payload: Vec<FieldFilter>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -170,13 +177,27 @@ impl ReferenceQueryRequest {
         if let Some(shape) = &s.shape {
             if (shape.argument_count.is_none()
                 && shape.return_count.is_none()
-                && shape.arguments.is_empty())
+                && shape.arguments.is_empty()
+                && shape.event_payload_count.is_none()
+                && shape.event_payload.is_empty())
                 || shape.arguments.len() > 128
+                || shape.event_payload.len() > 128
+                || ((shape.argument_count.is_some()
+                    || shape.return_count.is_some()
+                    || !shape.arguments.is_empty())
+                    && (shape.event_payload_count.is_some() || !shape.event_payload.is_empty()))
             {
                 return Err(SearchError::InvalidProfile);
             }
             let mut positions = std::collections::BTreeSet::new();
             for field in &shape.arguments {
+                valid_text(&field.original_type)?;
+                if !positions.insert(field.position) {
+                    return Err(SearchError::InvalidProfile);
+                }
+            }
+            positions.clear();
+            for field in &shape.event_payload {
                 valid_text(&field.original_type)?;
                 if !positions.insert(field.position) {
                     return Err(SearchError::InvalidProfile);
@@ -277,7 +298,13 @@ impl ReferenceSearchShard {
                 &self.manifest.reference_view_digest,
             ),
         )?;
-        let query_profile = if request.selectors.identifier_similarity.is_some() {
+        let query_profile = if self.manifest.native_documents.is_some() {
+            if request.selectors.identifier_similarity.is_some() {
+                DOCUMENT_SIM_QUERY_PROFILE
+            } else {
+                DOCUMENT_QUERY_PROFILE
+            }
+        } else if request.selectors.identifier_similarity.is_some() {
             SIM_QUERY_PROFILE
         } else {
             QUERY_PROFILE
@@ -329,7 +356,11 @@ impl ReferenceSearchShard {
                 };
                 state = if matches!(lane, Lane::ExactExplicitAlias | Lane::SeededGraph)
                     || (lane == Lane::IdentifierSimilarity && s.identifier_similarity.is_none())
-                {
+                    || (lane == Lane::StructuredShape
+                        && self.manifest.native_documents.is_none()
+                        && s.shape.as_ref().is_some_and(|shape| {
+                            shape.event_payload_count.is_some() || !shape.event_payload.is_empty()
+                        })) {
                     "missing_shard_capability"
                 } else if !supported {
                     "unsupported_query_class"
@@ -396,8 +427,12 @@ impl ReferenceSearchShard {
                                 {
                                     Some((
                                         1,
-                                        "exact_canonical_qualified_name",
-                                        "NativeCallableSignature.namespace()+name()",
+                                        if document.event.is_some() {
+                                            "exact_event_literal_name"
+                                        } else {
+                                            "exact_canonical_qualified_name"
+                                        },
+                                        name_origin(document, true),
                                         name_digest(document)?,
                                         identity("", &document.canonical_qualified_name)?,
                                     ))
@@ -408,8 +443,12 @@ impl ReferenceSearchShard {
                                 {
                                     Some((
                                         2,
-                                        "exact_canonical_short_name",
-                                        "NativeCallableSignature.name()",
+                                        if document.event.is_some() {
+                                            "exact_event_literal_name"
+                                        } else {
+                                            "exact_canonical_short_name"
+                                        },
+                                        name_origin(document, false),
                                         identity("", &document.canonical_short_name)?,
                                         identity("", &document.canonical_short_name)?,
                                     ))
@@ -440,11 +479,7 @@ impl ReferenceSearchShard {
                                     Some((
                                         5,
                                         "case_sensitive_identifier_prefix_candidate",
-                                        if qualified {
-                                            "NativeCallableSignature.namespace()+name()"
-                                        } else {
-                                            "NativeCallableSignature.name()"
-                                        },
+                                        name_origin(document, qualified),
                                         if qualified {
                                             name_digest(document)?
                                         } else {
@@ -464,7 +499,7 @@ impl ReferenceSearchShard {
                                     Some((
                                         7,
                                         "literal_canonical_identifier_candidate",
-                                        "NativeCallableSignature.namespace()+name()",
+                                        name_origin(document, true),
                                         name_digest(document)?,
                                         identity("", &document.canonical_qualified_name)?,
                                     ))
@@ -477,9 +512,13 @@ impl ReferenceSearchShard {
                                     Some((
                                         7,
                                         "original_signature_shape_candidate",
-                                        "NativeCallableSignature.arguments()/returns()",
-                                        identity("", &(&document.arguments, &document.returns))?,
-                                        identity("", &(&document.arguments, &document.returns))?,
+                                        if document.event.is_some() {
+                                            "NativeEventSignature.payload()"
+                                        } else {
+                                            "NativeCallableSignature.arguments()/returns()"
+                                        },
+                                        shape_digest(document)?,
+                                        shape_digest(document)?,
                                     ))
                                 }
                                 _ => None,
@@ -492,8 +531,12 @@ impl ReferenceSearchShard {
                             {
                                 matches.push((
                                     2,
-                                    "exact_canonical_short_name",
-                                    "NativeCallableSignature.name()",
+                                    if document.event.is_some() {
+                                        "exact_event_literal_name"
+                                    } else {
+                                        "exact_canonical_short_name"
+                                    },
+                                    name_origin(document, false),
                                     identity("", &document.canonical_short_name)?,
                                     identity("", &document.canonical_short_name)?,
                                 ));
@@ -551,16 +594,19 @@ impl ReferenceSearchShard {
             || request.selectors.short_name.is_some()
             || request.selectors.namespace_member.is_some();
         let conflict = request.selectors.entity_key.as_ref().is_some_and(|key| {
-            self.manifest
-                .conflicts
-                .iter()
-                .any(|c| c.partition_id() == NATIVE_API_PARTITION && c.key() == key)
+            self.manifest.conflicts.iter().any(|c| {
+                (c.partition_id() == NATIVE_API_PARTITION
+                    || (self.manifest.native_documents.is_some()
+                        && c.partition_id() == NATIVE_EVENT_PARTITION))
+                    && c.key() == key
+            })
         });
         let authoritative = !missing
             && !truncated
             && enumeration_complete
             && !self.manifest.binding.acquisition_partial
             && self.manifest.owner_negative_authority
+            && self.manifest.native_documents.is_none()
             && request
                 .selectors
                 .entity_key
@@ -585,6 +631,8 @@ impl ReferenceSearchShard {
         };
         #[derive(Serialize)]
         struct OwnerSummary<'a> {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            native_documents: Option<NativeReferenceDocuments>,
             schema: &'a str,
             profile_digest: &'a str,
             binding: &'a ReferenceSearchBinding,
@@ -603,6 +651,7 @@ impl ReferenceSearchShard {
             license_state: &'a str,
         }
         let summary = OwnerSummary {
+            native_documents: self.manifest.native_documents,
             schema: &self.manifest.schema,
             profile_digest: &self.manifest.profile_digest,
             binding: &self.manifest.binding,
@@ -775,6 +824,9 @@ fn include_signal<'a>(
     Ok(true)
 }
 fn name_digest(document: &Document) -> SearchResult<Box<str>> {
+    if let Some(event) = &document.event {
+        return identity("", &event.literal_name);
+    }
     #[derive(Serialize)]
     struct Name<'a> {
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -790,6 +842,18 @@ fn name_digest(document: &Document) -> SearchResult<Box<str>> {
     )
 }
 fn shape_matches(document: &Document, shape: &Shape) -> bool {
+    if let Some(event) = &document.event {
+        return shape.argument_count.is_none()
+            && shape.return_count.is_none()
+            && shape.arguments.is_empty()
+            && shape
+                .event_payload_count
+                .is_none_or(|count| count as usize == event.payload.len())
+            && fields_match(&event.payload, &shape.event_payload);
+    }
+    if shape.event_payload_count.is_some() || !shape.event_payload.is_empty() {
+        return false;
+    }
     shape
         .argument_count
         .is_none_or(|n| n as usize == document.arguments.len())
@@ -810,6 +874,35 @@ fn shape_matches(document: &Document, shape: &Shape) -> bool {
                         }
                 })
         })
+}
+fn fields_match(fields: &[Field], filters: &[FieldFilter]) -> bool {
+    filters.iter().all(|filter| {
+        fields.get(filter.position as usize).is_some_and(|field| {
+            field.original_type == filter.original_type
+                && match filter.nilability {
+                    None => true,
+                    Some(Nilability::Unspecified) => field.nilable.is_none(),
+                    Some(Nilability::AllowsNil) => field.nilable == Some(true),
+                    Some(Nilability::DisallowsNil) => field.nilable == Some(false),
+                }
+        })
+    })
+}
+fn shape_digest(document: &Document) -> SearchResult<Box<str>> {
+    if let Some(event) = &document.event {
+        identity("", &event.payload)
+    } else {
+        identity("", &(&document.arguments, &document.returns))
+    }
+}
+fn name_origin(document: &Document, qualified: bool) -> &'static str {
+    if document.event.is_some() {
+        "NativeEventSignature.literal_name()"
+    } else if qualified {
+        "NativeCallableSignature.namespace()+name()"
+    } else {
+        "NativeCallableSignature.name()"
+    }
 }
 
 #[cfg(test)]

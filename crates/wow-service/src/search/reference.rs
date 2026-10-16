@@ -14,6 +14,7 @@ pub use pagination::{ReferenceContinueRequest, ReferenceResultReleaseRequest};
 use wow_search::reference::ReferencePagePolicy;
 const SOURCE_ROOTS: &str = "wow-search.reference-sources";
 const HANDLE_SCHEMA: &str = "wow-service/native-reference-search-handle/1";
+const DOCUMENT_HANDLE_SCHEMA: &str = "wow-service/native-reference-document-search-handle/1";
 
 pub struct ReferenceIndexBuildRequest {
     operation_id: OperationId,
@@ -65,6 +66,25 @@ struct Handle {
     reference_view_digest: String,
     search_profile_digest: String,
     bounds: SearchBounds,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    native_documents: Option<wow_reference::native_view::NativeReferenceDocuments>,
+}
+fn handle_profile(handle: &Handle) -> ServiceResult<ReferenceSearchProfile> {
+    if handle.schema
+        != if handle.native_documents.is_some() {
+            DOCUMENT_HANDLE_SCHEMA
+        } else {
+            HANDLE_SCHEMA
+        }
+    {
+        return Err(mismatch());
+    }
+    let profile = ReferenceSearchProfile::new_documents(handle.bounds, handle.native_documents)
+        .map_err(map_search_error)?;
+    if profile.digest() != handle.search_profile_digest {
+        return Err(mismatch());
+    }
+    Ok(profile)
 }
 pub struct ReferenceShardRequest {
     operation_id: OperationId,
@@ -107,14 +127,7 @@ impl ReferenceShardRequest {
             return Err(invalid());
         }
         let handle: Handle = serde_json::from_slice(handle_json).map_err(|_| invalid())?;
-        if handle.schema != HANDLE_SCHEMA
-            || ReferenceSearchProfile::new(handle.bounds)
-                .map_err(map_search_error)?
-                .digest()
-                != handle.search_profile_digest
-        {
-            return Err(mismatch());
-        }
+        handle_profile(&handle)?;
         handle
             .reference_generation
             .parse::<wow_core::ReferenceGenerationId>()
@@ -213,7 +226,9 @@ pub(super) fn build(
             failures,
         )
         .map_err(map_search_error)?;
-        let profile = ReferenceSearchProfile::new(request.bounds).map_err(map_search_error)?;
+        let profile =
+            ReferenceSearchProfile::new_documents(request.bounds, source.native_documents())
+                .map_err(map_search_error)?;
         let shard = prepare_reference_callable_shard(
             source.reference(),
             binding,
@@ -224,7 +239,12 @@ pub(super) fn build(
         )
         .map_err(map_search_error)?;
         let handle = Handle {
-            schema: HANDLE_SCHEMA.into(),
+            schema: if source.native_documents().is_some() {
+                DOCUMENT_HANDLE_SCHEMA
+            } else {
+                HANDLE_SCHEMA
+            }
+            .into(),
             logical_shard_id: shard.logical_id().into(),
             object_id: shard.object_id().clone(),
             reference_view_object_id: source_object_id,
@@ -232,6 +252,7 @@ pub(super) fn build(
             reference_view_digest: shard.reference_view_digest().into(),
             search_profile_digest: profile.digest().into(),
             bounds: request.bounds,
+            native_documents: source.native_documents(),
         };
         let count = shard.document_count();
         add_root(
@@ -257,7 +278,7 @@ pub(super) fn build(
             &request.operation_id,
             &public_digest,
             &serde_json::json!({"status":"retained","resource_closure":"closed","handle":handle,
-                "document_count":count,"projection":"native_global_and_namespace_callables",
+                "document_count":count,"projection":if source.native_documents().is_some() { "native_callables_and_events" } else { "native_global_and_namespace_callables" },
                 "source_acquisition_partial":source.is_partial(),"source_freshness":"unverified-current",
                 "privacy_scope":"local_metadata_only","license_state":"not_evaluated"}),
             request.max_output_bytes.get(),
@@ -336,7 +357,7 @@ pub(super) fn execute(
         {
             return Err(mismatch());
         }
-        let profile = ReferenceSearchProfile::new(h.bounds).map_err(map_search_error)?;
+        let profile = handle_profile(h)?;
         let lease = SearchStoreLeaseRequest::new(
             lease_id_for("reference-search", &public_digest)?,
             "wow-service-search",

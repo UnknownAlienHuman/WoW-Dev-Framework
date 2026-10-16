@@ -18,9 +18,18 @@ use crate::{
     ReferenceView, RestrictionFacet, RestrictionState,
 };
 
+mod events;
 mod signatures;
 mod type_resolution;
+pub use events::NativeEventSignature;
 pub use signatures::{NativeCallableField, NativeCallableSignature, NativeCallableSignatureData};
+pub const NATIVE_EVENT_PARTITION: &str = "reference.native.apidoc.event";
+pub const NATIVE_DOCUMENT_VIEW_PROFILE: &str = "wow-reference/native-callable-event-view/1";
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeReferenceDocuments {
+    CallablesAndEventsV1,
+}
 pub use type_resolution::{
     CorrectionOutcome as NativeCallableCorrectionOutcome,
     FieldResolution as NativeCallableFieldResolution, NativeCallableTypeResolution,
@@ -134,9 +143,25 @@ pub struct NativeViewProjection {
     type_resolution_profile: Option<&'static str>,
     #[serde(skip)]
     signatures: signatures::SignatureCatalog,
+    #[serde(skip)]
+    events: events::EventCatalog,
 }
 
 impl NativeViewProjection {
+    pub fn event_signature(
+        &self,
+        record: &ReferenceRecord,
+        stop: &AtomicBool,
+    ) -> Result<NativeEventSignature<'_>, NativeError> {
+        self.events.read(record, stop)
+    }
+    pub const fn native_documents(&self) -> Option<NativeReferenceDocuments> {
+        if self.events.enabled() {
+            Some(NativeReferenceDocuments::CallablesAndEventsV1)
+        } else {
+            None
+        }
+    }
     /// Read genuine source-normalized data for one exact original callable record.
     /// The result retains its immutable original view binding, even if a caller
     /// subsequently replaces the public report's view field.
@@ -186,6 +211,7 @@ pub fn project_callables(
         selection,
         corpus,
         TypeResolutionSelection::Original,
+        false,
         stop,
     )
 }
@@ -206,6 +232,7 @@ pub fn project_callables_with_type_resolution(
         selection,
         corpus,
         TypeResolutionSelection::ExactNames(corrections),
+        false,
         stop,
     )
 }
@@ -215,12 +242,28 @@ enum TypeResolutionSelection<'a> {
     ExactNames(Option<&'a crate::native_corrections::ValidatedCorrections>),
 }
 
+/// Extend the same native normalization pass with original event literal/payload records.
+pub fn project_callable_event_documents(
+    documents: &[DocumentationDocument],
+    environment: &str,
+    selection: ReferenceGenerationId,
+    corpus: NativeCallableCorpus,
+    corrections: Option<&crate::native_corrections::ValidatedCorrections>,
+    stop: &AtomicBool,
+) -> Result<NativeViewProjection, NativeError> {
+    let types = corrections.map_or(TypeResolutionSelection::Original, |pack| {
+        TypeResolutionSelection::ExactNames(Some(pack))
+    });
+    project_callables_inner(documents, environment, selection, corpus, types, true, stop)
+}
+
 fn project_callables_inner(
     documents: &[DocumentationDocument],
     environment: &str,
     selection: ReferenceGenerationId,
     corpus: NativeCallableCorpus,
     type_resolution_selection: TypeResolutionSelection<'_>,
+    include_events: bool,
     stop: &AtomicBool,
 ) -> Result<NativeViewProjection, NativeError> {
     checkpoint(stop)?;
@@ -246,7 +289,11 @@ fn project_callables_inner(
         return Err(error(NativeErrorCode::Limit));
     }
     let revision = documents[0].revision();
-    let projection_profile = corpus.profile();
+    let projection_profile = if include_events {
+        NATIVE_DOCUMENT_VIEW_PROFILE
+    } else {
+        corpus.profile()
+    };
     let mut ordered = documents.iter().collect::<Vec<_>>();
     ordered.sort_by_key(|doc| doc.path());
     if ordered
@@ -307,6 +354,7 @@ fn project_callables_inner(
     let mut api_grouped: BTreeMap<String, Vec<ReferenceRecord>> = BTreeMap::new();
     let mut restriction_grouped: BTreeMap<String, Vec<ReferenceRecord>> = BTreeMap::new();
     let mut signatures: BTreeMap<String, Vec<signatures::SignatureRow>> = BTreeMap::new();
+    let mut event_build = events::EventBuild::new(include_events);
     let mut sources = Vec::new();
     let mut issues = Vec::new();
     let mut candidate_bytes = 0usize;
@@ -440,6 +488,15 @@ fn project_callables_inner(
                     )?;
                 }
             }
+            if include_events {
+                event_build.capture(
+                    doc,
+                    &system,
+                    projection_profile,
+                    &mut candidate_bytes,
+                    stop,
+                )?;
+            }
         }
     }
 
@@ -455,6 +512,21 @@ fn project_callables_inner(
     let api_partition = ReferencePartition::new(NATIVE_API_PARTITION, api_coverage, api_records)
         .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
     let mut partitions = vec![api_partition];
+    if include_events {
+        let (records, extra_candidates, extra_conflicts) = materialize(
+            NATIVE_EVENT_PARTITION,
+            std::mem::take(&mut event_build.grouped),
+            stop,
+        )?;
+        candidates.extend(extra_candidates);
+        conflicts.extend(extra_conflicts);
+        sources.append(&mut event_build.sources);
+        issues.append(&mut event_build.issues);
+        partitions.push(
+            ReferencePartition::new(NATIVE_EVENT_PARTITION, CoverageStatus::Partial, records)
+                .map_err(|_| error(NativeErrorCode::InvalidIdentity))?,
+        );
+    }
 
     if corpus.carries_restriction_facts() {
         let (restriction_records, restriction_candidates, restriction_conflicts) =
@@ -502,6 +574,7 @@ fn project_callables_inner(
         .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
     let type_resolution_profile = type_catalog.as_ref().map(|catalog| catalog.profile());
     let signatures = signatures::SignatureCatalog::finish(&view, signatures, stop)?;
+    let events = event_build.finish(&view, stop)?;
     checkpoint(stop)?;
     Ok(NativeViewProjection {
         schema: projection_profile,
@@ -512,6 +585,7 @@ fn project_callables_inner(
         negative_authority,
         type_resolution_profile,
         signatures,
+        events,
     })
 }
 
@@ -678,8 +752,33 @@ pub fn callable_origin_id(
     sha256: &str,
     span: Span,
 ) -> Result<String, NativeError> {
-    if !matches!(profile, NATIVE_VIEW_PROFILE | NATIVE_VIEW_AUTHORITY_PROFILE)
-        || !matches!(revision.len(), 40 | 64)
+    checked_origin_id(profile, "callable", revision, path, sha256, span)
+}
+
+pub fn event_origin_id(
+    profile: &str,
+    revision: &str,
+    path: &str,
+    sha256: &str,
+    span: Span,
+) -> Result<String, NativeError> {
+    if profile != NATIVE_DOCUMENT_VIEW_PROFILE {
+        return Err(error(NativeErrorCode::InvalidIdentity));
+    }
+    checked_origin_id(profile, "event", revision, path, sha256, span)
+}
+fn checked_origin_id(
+    profile: &str,
+    kind: &str,
+    revision: &str,
+    path: &str,
+    sha256: &str,
+    span: Span,
+) -> Result<String, NativeError> {
+    if !matches!(
+        profile,
+        NATIVE_VIEW_PROFILE | NATIVE_VIEW_AUTHORITY_PROFILE | NATIVE_DOCUMENT_VIEW_PROFILE
+    ) || !matches!(revision.len(), 40 | 64)
         || !revision
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
@@ -700,7 +799,7 @@ pub fn callable_origin_id(
     {
         return Err(error(NativeErrorCode::InvalidIdentity));
     }
-    origin_source_id(profile, "callable", revision, path, sha256, span)
+    origin_source_id(profile, kind, revision, path, sha256, span)
 }
 
 fn origin_source_id(

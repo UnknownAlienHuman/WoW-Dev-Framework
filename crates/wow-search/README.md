@@ -56,6 +56,9 @@ The separate [ProjectEntity component](../../apps/wow/SEARCH_PROJECT_ENTITIES.md
 indexes original materialized graph-node metadata and executes exact-seed
 Candidate graph retrieval through the held Graph owner. It reuses the existing
 Project generation hold and durable Search lifecycle.
+An explicitly selected [Reference event corpus](../../apps/wow/SEARCH_REFERENCE_EVENTS.md)
+adds original event literals/payloads to the same exact native Reference universe,
+with distinct shape semantics and the existing three-root page/retire/GC lifecycle.
 The historical preimplementation freeze is not accepted.
 
 The explicit file-set component uses a separately named metadata profile and
