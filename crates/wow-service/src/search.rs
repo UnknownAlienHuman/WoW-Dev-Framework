@@ -5,7 +5,7 @@
 
 mod documents;
 mod entity;
-pub use entity::EntityRetrievalRequest;
+pub use entity::{EntityContinueRequest, EntityResultReleaseRequest, EntityRetrievalRequest};
 mod reference;
 pub use reference::{
     ReferenceContinueRequest, ReferenceIndexBuildRequest, ReferenceResultReleaseRequest,
@@ -456,6 +456,20 @@ pub struct SearchOperationService {
 }
 
 impl SearchOperationService {
+    pub fn continue_entity_results(
+        &self,
+        request: &EntityContinueRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        entity::pagination::continue_result(request, stop)
+    }
+    pub fn release_entity_results(
+        &self,
+        request: &EntityResultReleaseRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        entity::pagination::release_result(request, stop)
+    }
     pub fn retrieve_entities(
         &self,
         request: &EntityRetrievalRequest,

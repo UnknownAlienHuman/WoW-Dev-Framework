@@ -1,7 +1,11 @@
 //! ProjectEntity consumers reuse the admitted durable Source-hold lifecycle.
 use super::*;
-use wow_search::entities::{EntityQueryRequest, EntitySearchProfile, open_project_entity_shard};
+use wow_search::entities::{
+    EntityPagePolicy, EntityQueryRequest, EntitySearchProfile, open_project_entity_shard,
+};
 use wow_store::ObjectId;
+pub(in crate::search) mod pagination;
+pub use pagination::{EntityContinueRequest, EntityResultReleaseRequest};
 
 impl SearchIndexBuildRequest {
     #[allow(clippy::too_many_arguments)]
@@ -78,6 +82,7 @@ pub struct EntityRetrievalRequest {
     object_id: ObjectId,
     profile: EntitySearchProfile,
     query: EntityQueryRequest,
+    page: Option<EntityPagePolicy>,
     store_limits: SearchStoreLimits,
     max_output_bytes: NonZeroU64,
     lease_expires_after: u64,
@@ -122,11 +127,16 @@ impl EntityRetrievalRequest {
             profile,
             query: EntityQueryRequest::from_json_slice(query_json, stop)
                 .map_err(map_search_error)?,
+            page: None,
             store_limits,
             max_output_bytes,
             lease_expires_after,
             permission,
         })
+    }
+    pub fn with_page_policy(mut self, bytes: &[u8], stop: &AtomicBool) -> ServiceResult<Self> {
+        self.page = Some(EntityPagePolicy::from_json_slice(bytes, stop).map_err(map_search_error)?);
+        Ok(self)
     }
 }
 #[derive(Serialize)]
@@ -136,6 +146,8 @@ struct Identity<'a> {
     object_id: &'a str,
     profile: &'a str,
     query: &'a EntityQueryRequest,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    page: Option<&'a EntityPagePolicy>,
     build_operation_id: &'a str,
     source_epoch: &'a str,
     source_hold_id: &'a str,
@@ -160,6 +172,7 @@ pub(super) fn execute(
             object_id: request.object_id.as_str(),
             profile: request.profile.digest(),
             query: &request.query,
+            page: request.page.as_ref(),
             build_operation_id: binding.build_operation_id.as_str(),
             source_epoch: &binding.source_store_epoch_id,
             source_hold_id: &binding.retention_root_id,
@@ -259,6 +272,17 @@ pub(super) fn execute(
                 request.object_id.clone(),
             ))
             .map_err(map_store_error)?;
+        if let Some(policy) = &request.page {
+            return pagination::start(
+                request,
+                policy,
+                &result,
+                &public_digest,
+                &mut store,
+                &mut batch,
+                stop,
+            );
+        }
         let value: serde_json::Value =
             serde_json::from_slice(result.canonical_bytes()).map_err(|_| invalid())?;
         durable_response(
@@ -271,6 +295,29 @@ pub(super) fn execute(
             request.max_output_bytes.get(),
         )
     })();
+    finish(
+        &mut store,
+        &operation_id,
+        &digest,
+        &request.operation_id,
+        outcome,
+        batch,
+        request.max_output_bytes.get(),
+        stop,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn finish(
+    store: &mut Store,
+    operation_id: &StoreOperationId,
+    digest: &RequestDigest,
+    public_id: &OperationId,
+    outcome: ServiceResult<Box<[u8]>>,
+    batch: WriteBatch,
+    max_bytes: u64,
+    stop: &AtomicBool,
+) -> ServiceResult<Box<[u8]>> {
     let bytes = match outcome.and_then(|bytes| {
         check_cancelled(stop)?;
         Ok(bytes)
@@ -278,23 +325,16 @@ pub(super) fn execute(
         Ok(bytes) => bytes,
         Err(error) => {
             let error = if error.code() == ServiceErrorCode::StoreOutcomeUnknown {
-                let _ = store.mark_outcome_unknown(&operation_id, &digest);
+                let _ = store.mark_outcome_unknown(operation_id, digest);
                 error
             } else {
-                record_no_effect(&mut store, &operation_id, &digest, error)
+                record_no_effect(store, operation_id, digest, error)
             };
-            return Err(operation_failure(error, &request.operation_id));
+            return Err(operation_failure(error, public_id));
         }
     };
-    complete_durable_operation(
-        &mut store,
-        &operation_id,
-        &digest,
-        batch,
-        &bytes,
-        request.max_output_bytes.get(),
-    )
-    .map_err(|error| operation_failure(error, &request.operation_id))
+    complete_durable_operation(store, operation_id, digest, batch, &bytes, max_bytes)
+        .map_err(|error| operation_failure(error, public_id))
 }
 fn invalid() -> ServiceError {
     failure(

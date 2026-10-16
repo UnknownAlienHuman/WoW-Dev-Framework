@@ -116,8 +116,10 @@ Missing owner assessment/resolution is never invented or promoted to success.
 
 Shard lease, held source read and SourceStore close before success. Completion
 CASes the exact shard catalog so retirement cannot resurrect it. Exact completed
-query replay is historical and needs no source read. This component advertises
-no continuation cursor yet. Metadata indexing is local with explicit permission;
+query replay is historical and needs no source read. Optional
+[whole-candidate result pages](SEARCH_ENTITY_PAGINATION.md) retain the exact Search
+capture and shard, then continue without recomputing native Graph owners.
+Metadata indexing is local with explicit permission;
 license/current/runtime acceptance is not implied.
 
 ## Retire and remaining acceptance
@@ -129,5 +131,5 @@ release another store's hold. Existing `search index gc` collects released shard
 Other source holds stay independent.
 
 Graph mechanics proof remains separate from current WoW/Tier X/runtime,
-all-path enumeration, other documents/aliases/federation/continuation and full
+all-path enumeration, other documents/aliases/federation and full
 E4/launch acceptance.

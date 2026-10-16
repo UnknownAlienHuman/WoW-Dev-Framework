@@ -1,5 +1,7 @@
 //! Closed ProjectEntity retrieval and owner-executed seeded graph expansion.
 use super::*;
+mod pagination;
+pub use pagination::{EntityPage, EntityPageCursor, EntityPagePolicy};
 use std::collections::BTreeMap;
 use wow_graph::{
     GraphDirection, GraphExplainLimits, GraphExplainQuery, GraphExplainSubject, GraphQueryState,
@@ -115,6 +117,7 @@ fn valid_text(value: &str) -> SearchResult<()> {
 pub struct EntityQueryResult {
     bytes: Box<[u8]>,
     status: &'static str,
+    profile_digest: Box<str>,
 }
 impl EntityQueryResult {
     pub fn canonical_bytes(&self) -> &[u8] {
@@ -440,6 +443,7 @@ impl EntitySearchShard {
         Ok(EntityQueryResult {
             bytes: bytes.into_boxed_slice(),
             status,
+            profile_digest: self.profile_digest().into(),
         })
     }
 }

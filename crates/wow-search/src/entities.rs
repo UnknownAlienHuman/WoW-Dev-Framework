@@ -4,7 +4,9 @@ use super::*;
 use wow_graph::{GraphLimits, GraphNode, GraphNodeId};
 mod discovery;
 mod query;
-pub use query::{EntityQueryRequest, EntityQueryResult};
+pub use query::{
+    EntityPage, EntityPageCursor, EntityPagePolicy, EntityQueryRequest, EntityQueryResult,
+};
 const PROFILE_SCHEMA: &str = "wow-search/project-graph-entity-profile/1";
 const MANIFEST_SCHEMA: &str = "wow-search/project-graph-entity-shard/1";
 
@@ -34,6 +36,9 @@ impl EntitySearchProfile {
     }
     pub fn digest(&self) -> &str {
         &self.digest
+    }
+    pub fn bounds(&self) -> SearchBounds {
+        self.bounds
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
