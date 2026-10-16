@@ -59,6 +59,9 @@ Project generation hold and durable Search lifecycle.
 An explicitly selected [Reference event corpus](../../apps/wow/SEARCH_REFERENCE_EVENTS.md)
 adds original event literals/payloads to the same exact native Reference universe,
 with distinct shape semantics and the existing three-root page/retire/GC lifecycle.
+The explicit [source declaration corpus](../../apps/wow/SEARCH_REFERENCE_DECLARATIONS.md)
+adds original structures, callback types, enum/constant families and ScriptObject
+type declarations through the same sealed native owner and retained lifecycle.
 The historical preimplementation freeze is not accepted.
 
 The explicit file-set component uses a separately named metadata profile and

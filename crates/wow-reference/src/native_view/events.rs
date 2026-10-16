@@ -204,9 +204,6 @@ pub(super) struct EventCatalog {
     rows: BTreeMap<String, EventRow>,
 }
 impl EventCatalog {
-    pub const fn enabled(&self) -> bool {
-        self.enabled
-    }
     pub fn read<'a>(
         &'a self,
         record: &ReferenceRecord,

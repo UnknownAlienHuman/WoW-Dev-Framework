@@ -6,6 +6,245 @@ use wow_reference::native::{
 use wow_reference::native_model::{SystemOwner, TableFact, array, normalize_document, object};
 
 const REV: &str = "1111111111111111111111111111111111111111";
+
+#[test]
+fn native_declarations_are_original_sealed_and_selection_isolated() {
+    use wow_core::ReferenceGenerationId;
+    use wow_reference::native_view::{
+        NATIVE_DECLARATION_PARTITION, NativeCallableCorpus, NativeDeclarationKind as Kind,
+        NativeDeclarationScalar as Scalar, NativeReferenceDocuments,
+        project_callable_event_documents, project_callables, project_native_documents,
+    };
+    use wow_reference::{CoverageStatus, ReferenceRecord, ReferenceView};
+    let source = r#"
+APIDocumentation:AddDocumentationTable({Name="System",Type="System",Namespace="C_Original",Environment="All",Tables={
+ {Name="Record",Type="Structure",Fields={{Name="flag",Type="bool",Nilable=false}}},
+ {Name="Handler",Type="CallbackType",Arguments={{Name="record",Type="Record"}},Returns={{Name="ok",Type="bool",Nilable=true}}},
+ {Name="Mode",Type="Enumeration",Fields={{Name="Hex",EnumValue=0x10},{Name="Wide",EnumValue=9007199254740993}}},
+ {Name="Flags",Type="Constants",Values={{Name="Enabled",Value=true},{Name="Label",Value="raw"},{Name="Dynamic",Value=Enum.Unknown.Value}}}
+}})
+APIDocumentation:AddDocumentationTable({Name="Widget",Type="ScriptObject",Environment="All",Functions={{Name="Method",Type="Function"}}})
+"#;
+    let stop = AtomicBool::new(false);
+    let selection = ReferenceGenerationId::derive(&"native-declaration-port").unwrap();
+    let docs = vec![read(source)];
+    let build = |docs: &[DocumentationDocument], stop: &AtomicBool| {
+        project_native_documents(
+            docs,
+            "Mainline",
+            selection,
+            NativeCallableCorpus::explicit_partial(),
+            None,
+            NativeReferenceDocuments::SourceDeclarationsV1,
+            stop,
+        )
+    };
+    let mut projection = build(&docs, &stop).unwrap();
+    let partition = projection
+        .view
+        .partitions()
+        .iter()
+        .find(|p| p.id() == NATIVE_DECLARATION_PARTITION)
+        .unwrap();
+    assert_eq!(partition.coverage(), CoverageStatus::Partial);
+    assert_eq!(partition.records().len(), 5);
+    for (key, kind) in [
+        ("structure:Record", Kind::Structure),
+        ("callback:Handler", Kind::Callback),
+        ("enumeration:Mode", Kind::Enumeration),
+        ("constants:Flags", Kind::Constants),
+        ("script_object:Widget", Kind::ScriptObject),
+    ] {
+        let record = partition
+            .records()
+            .iter()
+            .find(|r| r.key() == format!("declaration:{key}"))
+            .unwrap();
+        let signature = projection.declaration_signature(record, &stop).unwrap();
+        assert_eq!(signature.kind(), kind);
+        assert_eq!(record.kind(), kind.record_kind());
+        assert_eq!(
+            signature.reference_generation(),
+            projection.view.generation_id()
+        );
+        assert_eq!(
+            signature.reference_view_digest(),
+            projection.view.self_digest()
+        );
+        assert_eq!(signature.record_key(), record.key());
+        assert_eq!(signature.record_digest(), record.digest().unwrap());
+        assert_eq!(signature.source_id(), record.source_ids()[0].as_ref());
+        assert_eq!(
+            signature.definition_namespace(),
+            if kind == Kind::ScriptObject {
+                None
+            } else {
+                Some("C_Original")
+            }
+        );
+        match kind {
+            Kind::Structure => {
+                assert_eq!(signature.name(), "Record");
+                let field = &signature.fields()[0];
+                assert_eq!(field.nilable(), Some(false));
+                let span = field.source_span();
+                assert!(source[span.start..span.end].contains("Name=\"flag\""));
+            }
+            Kind::Callback => {
+                assert_eq!(signature.arguments()[0].type_name(), "Record");
+                assert_eq!(signature.returns()[0].nilable(), Some(true));
+            }
+            Kind::Enumeration => {
+                assert_eq!(
+                    signature.values()[0].value,
+                    Scalar::NumberLexeme("0x10".into())
+                );
+                assert_eq!(
+                    signature.values()[1].value,
+                    Scalar::NumberLexeme("9007199254740993".into())
+                );
+            }
+            Kind::Constants => {
+                assert_eq!(signature.values()[0].value, Scalar::Boolean(true));
+                assert_eq!(signature.values()[1].value, Scalar::String("raw".into()));
+                assert!(matches!(
+                    signature.values()[2].value,
+                    Scalar::UnresolvedDigest(_)
+                ));
+            }
+            Kind::ScriptObject => assert!(signature.arguments().is_empty()),
+        }
+    }
+    let record = partition.records()[0].clone();
+    let forged = ReferenceRecord::new(
+        record.key(),
+        record.kind(),
+        "changed",
+        record
+            .source_ids()
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        vec![],
+    )
+    .unwrap();
+    assert_eq!(
+        projection
+            .declaration_signature(&forged, &stop)
+            .unwrap_err()
+            .code,
+        NativeErrorCode::InvalidIdentity
+    );
+    let foreign_source = ReferenceRecord::new(
+        record.key(),
+        record.kind(),
+        record.payload(),
+        vec!["foreign-source".into()],
+        vec![],
+    )
+    .unwrap();
+    assert!(
+        projection
+            .declaration_signature(&foreign_source, &stop)
+            .is_err()
+    );
+    assert_eq!(
+        projection
+            .declaration_signature(&record, &AtomicBool::new(true))
+            .unwrap_err()
+            .code,
+        NativeErrorCode::Cancelled
+    );
+    assert_eq!(
+        build(&docs, &AtomicBool::new(true)).unwrap_err().code,
+        NativeErrorCode::Cancelled
+    );
+    let retained =
+        serde_json::to_value(projection.declaration_signature(&record, &stop).unwrap()).unwrap();
+    projection.view = ReferenceView::new(
+        "foreign-generation",
+        projection.view.partitions().to_vec(),
+        projection.view.conflicts().to_vec(),
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(projection.declaration_signature(&record, &stop).unwrap()).unwrap(),
+        retained
+    );
+    assert_ne!(
+        projection
+            .declaration_signature(&record, &stop)
+            .unwrap()
+            .reference_generation(),
+        projection.view.generation_id()
+    );
+    let legacy = project_callables(
+        &docs,
+        "Mainline",
+        selection,
+        NativeCallableCorpus::explicit_partial(),
+        &stop,
+    )
+    .unwrap();
+    let events = project_callable_event_documents(
+        &docs,
+        "Mainline",
+        selection,
+        NativeCallableCorpus::explicit_partial(),
+        None,
+        &stop,
+    )
+    .unwrap();
+    for older in [legacy, events] {
+        assert!(
+            !older
+                .view
+                .partitions()
+                .iter()
+                .any(|part| part.id() == NATIVE_DECLARATION_PARTITION)
+        );
+        assert!(older.declaration_signature(&record, &stop).is_err());
+    }
+    let other_source = source.replace(
+        "Type=\"bool\",Nilable=false",
+        "Type=\"number\",Nilable=false",
+    );
+    let second = ingest_document(
+        REV,
+        "Interface/Other.lua",
+        &other_source,
+        &source_digest(other_source.as_bytes()),
+        &stop,
+    )
+    .unwrap();
+    let conflict = build(&[read(source), second], &stop).unwrap();
+    assert!(
+        conflict
+            .view
+            .partitions()
+            .iter()
+            .find(|p| p.id() == NATIVE_DECLARATION_PARTITION)
+            .unwrap()
+            .records()
+            .is_empty()
+    );
+    assert_eq!(
+        conflict
+            .view
+            .conflicts()
+            .iter()
+            .filter(|c| c.partition_id() == NATIVE_DECLARATION_PARTITION)
+            .count(),
+        5
+    );
+    let candidate = conflict
+        .candidates
+        .iter()
+        .find(|r| r.key().starts_with("declaration:"))
+        .unwrap();
+    assert!(conflict.declaration_signature(candidate, &stop).is_err());
+}
+
 fn read(text: &str) -> DocumentationDocument {
     ingest_document(
         REV,

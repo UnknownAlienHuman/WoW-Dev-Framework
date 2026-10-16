@@ -295,13 +295,14 @@ fn build_native_reference(
     if documents.is_empty() {
         return Err(invalid("no native documentation was admitted"));
     }
-    let reference = if native_documents.is_some() {
-        wow_reference::native_view::project_callable_event_documents(
+    let reference = if let Some(documents_kind) = native_documents {
+        wow_reference::native_view::project_native_documents(
             &documents,
             &requested.environment,
             generation,
             callable_corpus,
             corrections,
+            documents_kind,
             stop,
         )
     } else if let Some(corrections) = corrections {

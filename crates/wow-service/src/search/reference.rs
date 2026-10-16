@@ -278,7 +278,11 @@ pub(super) fn build(
             &request.operation_id,
             &public_digest,
             &serde_json::json!({"status":"retained","resource_closure":"closed","handle":handle,
-                "document_count":count,"projection":if source.native_documents().is_some() { "native_callables_and_events" } else { "native_global_and_namespace_callables" },
+                "document_count":count,"projection":match source.native_documents() {
+                    Some(wow_reference::native_view::NativeReferenceDocuments::SourceDeclarationsV1) => "native_source_declarations",
+                    Some(wow_reference::native_view::NativeReferenceDocuments::CallablesAndEventsV1) => "native_callables_and_events",
+                    None => "native_global_and_namespace_callables",
+                },
                 "source_acquisition_partial":source.is_partial(),"source_freshness":"unverified-current",
                 "privacy_scope":"local_metadata_only","license_state":"not_evaluated"}),
             request.max_output_bytes.get(),

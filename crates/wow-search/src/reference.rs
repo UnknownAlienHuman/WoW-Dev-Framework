@@ -9,6 +9,7 @@ use wow_reference::{
 };
 use wow_store::StoreLimits;
 
+mod declarations;
 mod query;
 pub use query::{
     ReferencePage, ReferencePageCursor, ReferencePagePolicy, ReferenceQueryRequest,
@@ -18,7 +19,25 @@ const PROFILE_SCHEMA: &str = "wow-search/native-reference-callable-profile/1";
 const MANIFEST_SCHEMA: &str = "wow-search/native-reference-callable-shard/1";
 const DOCUMENT_PROFILE_SCHEMA: &str = "wow-search/native-reference-callable-event-profile/1";
 const DOCUMENT_MANIFEST_SCHEMA: &str = "wow-search/native-reference-callable-event-shard/1";
-use wow_reference::native_view::{NATIVE_EVENT_PARTITION, NativeReferenceDocuments};
+const DECLARATION_PROFILE_SCHEMA: &str =
+    "wow-search/native-reference-source-declarations-profile/1";
+const DECLARATION_MANIFEST_SCHEMA: &str = "wow-search/native-reference-source-declarations-shard/1";
+use wow_reference::native_view::{
+    NATIVE_DECLARATION_PARTITION, NATIVE_EVENT_PARTITION, NativeDeclarationKind,
+    NativeDeclarationScalar, NativeReferenceDocuments,
+};
+
+fn profile_schemas(selection: Option<NativeReferenceDocuments>) -> (&'static str, &'static str) {
+    match selection {
+        None => (PROFILE_SCHEMA, MANIFEST_SCHEMA),
+        Some(NativeReferenceDocuments::CallablesAndEventsV1) => {
+            (DOCUMENT_PROFILE_SCHEMA, DOCUMENT_MANIFEST_SCHEMA)
+        }
+        Some(NativeReferenceDocuments::SourceDeclarationsV1) => {
+            (DECLARATION_PROFILE_SCHEMA, DECLARATION_MANIFEST_SCHEMA)
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ReferenceSearchProfile {
@@ -41,16 +60,8 @@ impl ReferenceSearchProfile {
             digest: identity(
                 "",
                 &(
-                    if native_documents.is_some() {
-                        DOCUMENT_PROFILE_SCHEMA
-                    } else {
-                        PROFILE_SCHEMA
-                    },
-                    if native_documents.is_some() {
-                        DOCUMENT_MANIFEST_SCHEMA
-                    } else {
-                        MANIFEST_SCHEMA
-                    },
+                    profile_schemas(native_documents).0,
+                    profile_schemas(native_documents).1,
                     "canonical-name-namespace-source-signature/1",
                     "case-sensitive-identity/1",
                     FTS_CANDIDATE_PROFILE,
@@ -138,6 +149,8 @@ struct Document {
     type_authority: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     event: Option<EventDocument>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    declaration: Option<declarations::DeclarationDocument>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -250,10 +263,26 @@ pub fn prepare_reference_callable_shard(
     } else {
         None
     };
+    let declaration_partition =
+        if profile.native_documents == Some(NativeReferenceDocuments::SourceDeclarationsV1) {
+            Some(
+                native
+                    .view
+                    .partitions()
+                    .iter()
+                    .find(|part| part.id() == NATIVE_DECLARATION_PARTITION)
+                    .ok_or(SearchError::OwnerEvidenceInvalid)?,
+            )
+        } else {
+            None
+        };
     let count = partition
         .records()
         .len()
         .checked_add(event_partition.map_or(0, |part| part.records().len()))
+        .and_then(|count| {
+            count.checked_add(declaration_partition.map_or(0, |part| part.records().len()))
+        })
         .ok_or(SearchError::FileSetOverCapacity)?;
     if count == 0 || count > bounds.max_documents.get() as usize {
         return Err(SearchError::FileSetOverCapacity);
@@ -286,12 +315,7 @@ pub fn prepare_reference_callable_shard(
         }
     }
     let mut manifest = Manifest {
-        schema: if profile.native_documents.is_some() {
-            DOCUMENT_MANIFEST_SCHEMA
-        } else {
-            MANIFEST_SCHEMA
-        }
-        .into(),
+        schema: profile_schemas(profile.native_documents).1.into(),
         native_documents: profile.native_documents,
         profile_digest: profile.digest.clone(),
         binding,
@@ -403,6 +427,7 @@ pub fn prepare_reference_callable_shard(
             returns: fields(signature.returns())?,
             type_authority: "original_source_type_identities_unresolved".into(),
             event: None,
+            declaration: None,
         };
         charged = charged
             .checked_add(canonical_size(&document)? + u64::from(!manifest.documents.is_empty()))
@@ -474,6 +499,7 @@ pub fn prepare_reference_callable_shard(
                     definition_namespace: event.namespace().map(str::to_owned),
                     payload,
                 }),
+                declaration: None,
             };
             charged = charged
                 .checked_add(canonical_size(&document)? + u64::from(!manifest.documents.is_empty()))
@@ -483,10 +509,21 @@ pub fn prepare_reference_callable_shard(
             }
             manifest.documents.push(document);
         }
-        manifest
-            .documents
-            .sort_by(|a, b| a.entity_key.cmp(&b.entity_key));
     }
+    if let Some(partition) = declaration_partition {
+        declarations::capture(
+            native,
+            partition,
+            &origins,
+            &mut manifest,
+            bounds,
+            &mut charged,
+            stop,
+        )?;
+    }
+    manifest
+        .documents
+        .sort_by(|a, b| a.entity_key.cmp(&b.entity_key));
     let bytes =
         wow_core::canonical_json_bytes(&manifest).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
     if bytes.len() as u64 != charged {
@@ -553,12 +590,7 @@ pub fn open_reference_callable_shard(
         let bytes = physical.reader().owner_manifest_bytes();
         let manifest: Manifest =
             serde_json::from_slice(bytes).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
-        if manifest.schema
-            != if profile.native_documents.is_some() {
-                DOCUMENT_MANIFEST_SCHEMA
-            } else {
-                MANIFEST_SCHEMA
-            }
+        if manifest.schema != profile_schemas(profile.native_documents).1
             || manifest.native_documents != profile.native_documents
             || manifest.profile_digest != profile.digest
             || manifest.reference_generation != reference.generation_id()
@@ -600,8 +632,19 @@ pub fn open_reference_callable_shard(
                 return Err(SearchError::OwnerEvidenceInvalid);
             }
             records.extend(events.records());
-            records.sort_by_key(|record| record.key());
         }
+        if profile.native_documents == Some(NativeReferenceDocuments::SourceDeclarationsV1) {
+            let declarations = reference
+                .partitions()
+                .iter()
+                .find(|part| part.id() == NATIVE_DECLARATION_PARTITION)
+                .ok_or(SearchError::OwnerEvidenceInvalid)?;
+            if declarations.coverage() != CoverageStatus::Partial {
+                return Err(SearchError::OwnerEvidenceInvalid);
+            }
+            records.extend(declarations.records());
+        }
+        records.sort_by_key(|record| record.key());
         if records.len() != manifest.documents.len() {
             return Err(SearchError::OwnerEvidenceInvalid);
         }
@@ -628,7 +671,9 @@ pub fn open_reference_callable_shard(
         }
         for (doc, record) in manifest.documents.iter().zip(records) {
             check(stop)?;
-            let origin_id = if doc.event.is_some() {
+            let origin_id = if doc.declaration.is_some() {
+                wow_reference::native_view::declaration_origin_id
+            } else if doc.event.is_some() {
                 wow_reference::native_view::event_origin_id
             } else {
                 wow_reference::native_view::callable_origin_id
@@ -639,12 +684,15 @@ pub fn open_reference_callable_shard(
                 .ok_or(SearchError::OwnerEvidenceInvalid)?;
             if doc.entity_key != record.key()
                 || record.kind()
-                    != if doc.event.is_some() {
+                    != if let Some(declaration) = &doc.declaration {
+                        declaration.kind.record_kind()
+                    } else if doc.event.is_some() {
                         ReferenceRecordKind::Event
                     } else {
                         ReferenceRecordKind::Api
                     }
                 || (doc.event.is_some() && profile.native_documents.is_none())
+                || !declarations::valid_document(doc, profile.native_documents)
                 || doc.event.as_ref().is_some_and(|event| {
                     event.literal_name != doc.canonical_short_name
                         || !doc.arguments.is_empty()

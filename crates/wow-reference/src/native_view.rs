@@ -18,10 +18,17 @@ use crate::{
     ReferenceView, RestrictionFacet, RestrictionState,
 };
 
+mod declarations;
 mod events;
 mod signatures;
 mod type_resolution;
+pub use declarations::{
+    NativeDeclarationKind, NativeDeclarationScalar, NativeDeclarationSignature,
+    NativeDeclarationValue,
+};
 pub use events::NativeEventSignature;
+pub const NATIVE_DECLARATION_PARTITION: &str = "reference.native.apidoc.declaration";
+pub const NATIVE_DECLARATION_VIEW_PROFILE: &str = "wow-reference/native-source-declarations-view/1";
 pub use signatures::{NativeCallableField, NativeCallableSignature, NativeCallableSignatureData};
 pub const NATIVE_EVENT_PARTITION: &str = "reference.native.apidoc.event";
 pub const NATIVE_DOCUMENT_VIEW_PROFILE: &str = "wow-reference/native-callable-event-view/1";
@@ -29,6 +36,7 @@ pub const NATIVE_DOCUMENT_VIEW_PROFILE: &str = "wow-reference/native-callable-ev
 #[serde(rename_all = "snake_case")]
 pub enum NativeReferenceDocuments {
     CallablesAndEventsV1,
+    SourceDeclarationsV1,
 }
 pub use type_resolution::{
     CorrectionOutcome as NativeCallableCorrectionOutcome,
@@ -145,6 +153,10 @@ pub struct NativeViewProjection {
     signatures: signatures::SignatureCatalog,
     #[serde(skip)]
     events: events::EventCatalog,
+    #[serde(skip)]
+    declarations: declarations::DeclarationCatalog,
+    #[serde(skip)]
+    native_documents: Option<NativeReferenceDocuments>,
 }
 
 impl NativeViewProjection {
@@ -156,11 +168,14 @@ impl NativeViewProjection {
         self.events.read(record, stop)
     }
     pub const fn native_documents(&self) -> Option<NativeReferenceDocuments> {
-        if self.events.enabled() {
-            Some(NativeReferenceDocuments::CallablesAndEventsV1)
-        } else {
-            None
-        }
+        self.native_documents
+    }
+    pub fn declaration_signature(
+        &self,
+        record: &ReferenceRecord,
+        stop: &AtomicBool,
+    ) -> Result<NativeDeclarationSignature<'_>, NativeError> {
+        self.declarations.read(record, stop)
     }
     /// Read genuine source-normalized data for one exact original callable record.
     /// The result retains its immutable original view binding, even if a caller
@@ -211,7 +226,7 @@ pub fn project_callables(
         selection,
         corpus,
         TypeResolutionSelection::Original,
-        false,
+        None,
         stop,
     )
 }
@@ -232,7 +247,7 @@ pub fn project_callables_with_type_resolution(
         selection,
         corpus,
         TypeResolutionSelection::ExactNames(corrections),
-        false,
+        None,
         stop,
     )
 }
@@ -251,10 +266,37 @@ pub fn project_callable_event_documents(
     corrections: Option<&crate::native_corrections::ValidatedCorrections>,
     stop: &AtomicBool,
 ) -> Result<NativeViewProjection, NativeError> {
+    project_native_documents(
+        documents,
+        environment,
+        selection,
+        corpus,
+        corrections,
+        NativeReferenceDocuments::CallablesAndEventsV1,
+        stop,
+    )
+}
+pub fn project_native_documents(
+    documents: &[DocumentationDocument],
+    environment: &str,
+    selection: ReferenceGenerationId,
+    corpus: NativeCallableCorpus,
+    corrections: Option<&crate::native_corrections::ValidatedCorrections>,
+    native_documents: NativeReferenceDocuments,
+    stop: &AtomicBool,
+) -> Result<NativeViewProjection, NativeError> {
     let types = corrections.map_or(TypeResolutionSelection::Original, |pack| {
         TypeResolutionSelection::ExactNames(Some(pack))
     });
-    project_callables_inner(documents, environment, selection, corpus, types, true, stop)
+    project_callables_inner(
+        documents,
+        environment,
+        selection,
+        corpus,
+        types,
+        Some(native_documents),
+        stop,
+    )
 }
 
 fn project_callables_inner(
@@ -263,7 +305,7 @@ fn project_callables_inner(
     selection: ReferenceGenerationId,
     corpus: NativeCallableCorpus,
     type_resolution_selection: TypeResolutionSelection<'_>,
-    include_events: bool,
+    native_documents: Option<NativeReferenceDocuments>,
     stop: &AtomicBool,
 ) -> Result<NativeViewProjection, NativeError> {
     checkpoint(stop)?;
@@ -289,10 +331,13 @@ fn project_callables_inner(
         return Err(error(NativeErrorCode::Limit));
     }
     let revision = documents[0].revision();
-    let projection_profile = if include_events {
-        NATIVE_DOCUMENT_VIEW_PROFILE
-    } else {
-        corpus.profile()
+    let include_events = native_documents.is_some();
+    let include_declarations =
+        native_documents == Some(NativeReferenceDocuments::SourceDeclarationsV1);
+    let projection_profile = match native_documents {
+        Some(NativeReferenceDocuments::CallablesAndEventsV1) => NATIVE_DOCUMENT_VIEW_PROFILE,
+        Some(NativeReferenceDocuments::SourceDeclarationsV1) => NATIVE_DECLARATION_VIEW_PROFILE,
+        None => corpus.profile(),
     };
     let mut ordered = documents.iter().collect::<Vec<_>>();
     ordered.sort_by_key(|doc| doc.path());
@@ -355,6 +400,7 @@ fn project_callables_inner(
     let mut restriction_grouped: BTreeMap<String, Vec<ReferenceRecord>> = BTreeMap::new();
     let mut signatures: BTreeMap<String, Vec<signatures::SignatureRow>> = BTreeMap::new();
     let mut event_build = events::EventBuild::new(include_events);
+    let mut declaration_build = declarations::DeclarationBuild::new(include_declarations);
     let mut sources = Vec::new();
     let mut issues = Vec::new();
     let mut candidate_bytes = 0usize;
@@ -387,6 +433,15 @@ fn project_callables_inner(
                 .get(&(doc.path(), registration.ordinal))
                 .and_then(|index| corrected_corpus.as_ref()?.systems().get(*index))
                 .map(|(_, system)| system);
+            if include_declarations {
+                declaration_build.capture(
+                    doc,
+                    &system,
+                    projection_profile,
+                    &mut candidate_bytes,
+                    stop,
+                )?;
+            }
             let namespace = match system.owner {
                 SystemOwner::Global => None,
                 SystemOwner::Namespace(namespace) => Some(namespace),
@@ -528,6 +583,25 @@ fn project_callables_inner(
         );
     }
 
+    if include_declarations {
+        let (records, extra_candidates, extra_conflicts) = materialize(
+            NATIVE_DECLARATION_PARTITION,
+            std::mem::take(&mut declaration_build.grouped),
+            stop,
+        )?;
+        candidates.extend(extra_candidates);
+        conflicts.extend(extra_conflicts);
+        sources.append(&mut declaration_build.sources);
+        issues.append(&mut declaration_build.issues);
+        partitions.push(
+            ReferencePartition::new(
+                NATIVE_DECLARATION_PARTITION,
+                CoverageStatus::Partial,
+                records,
+            )
+            .map_err(|_| error(NativeErrorCode::InvalidIdentity))?,
+        );
+    }
     if corpus.carries_restriction_facts() {
         let (restriction_records, restriction_candidates, restriction_conflicts) =
             materialize(NATIVE_RESTRICTION_PARTITION, restriction_grouped, stop)?;
@@ -575,6 +649,7 @@ fn project_callables_inner(
     let type_resolution_profile = type_catalog.as_ref().map(|catalog| catalog.profile());
     let signatures = signatures::SignatureCatalog::finish(&view, signatures, stop)?;
     let events = event_build.finish(&view, stop)?;
+    let declarations = declaration_build.finish(&view, stop)?;
     checkpoint(stop)?;
     Ok(NativeViewProjection {
         schema: projection_profile,
@@ -586,6 +661,8 @@ fn project_callables_inner(
         type_resolution_profile,
         signatures,
         events,
+        declarations,
+        native_documents,
     })
 }
 
@@ -762,10 +839,25 @@ pub fn event_origin_id(
     sha256: &str,
     span: Span,
 ) -> Result<String, NativeError> {
-    if profile != NATIVE_DOCUMENT_VIEW_PROFILE {
+    if !matches!(
+        profile,
+        NATIVE_DOCUMENT_VIEW_PROFILE | NATIVE_DECLARATION_VIEW_PROFILE
+    ) {
         return Err(error(NativeErrorCode::InvalidIdentity));
     }
     checked_origin_id(profile, "event", revision, path, sha256, span)
+}
+pub fn declaration_origin_id(
+    profile: &str,
+    revision: &str,
+    path: &str,
+    sha256: &str,
+    span: Span,
+) -> Result<String, NativeError> {
+    if profile != NATIVE_DECLARATION_VIEW_PROFILE {
+        return Err(error(NativeErrorCode::InvalidIdentity));
+    }
+    checked_origin_id(profile, "declaration", revision, path, sha256, span)
 }
 fn checked_origin_id(
     profile: &str,
@@ -777,7 +869,10 @@ fn checked_origin_id(
 ) -> Result<String, NativeError> {
     if !matches!(
         profile,
-        NATIVE_VIEW_PROFILE | NATIVE_VIEW_AUTHORITY_PROFILE | NATIVE_DOCUMENT_VIEW_PROFILE
+        NATIVE_VIEW_PROFILE
+            | NATIVE_VIEW_AUTHORITY_PROFILE
+            | NATIVE_DOCUMENT_VIEW_PROFILE
+            | NATIVE_DECLARATION_VIEW_PROFILE
     ) || !matches!(revision.len(), 40 | 64)
         || !revision
             .bytes()
