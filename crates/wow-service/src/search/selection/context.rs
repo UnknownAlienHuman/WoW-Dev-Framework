@@ -9,6 +9,7 @@ use crate::context::{
 pub(in crate::search) mod build;
 pub(in crate::search) mod continuation;
 pub(in crate::search) mod platform;
+mod reference;
 pub use build::SearchContextBuildRequest;
 pub use continuation::SearchContextContinueRequest;
 pub use platform::SearchPlatformContextRequest;
@@ -59,6 +60,41 @@ struct ContextInput {
     receipt_id: String,
     project_store_id: String,
     level: Level,
+    #[serde(
+        default,
+        deserialize_with = "selected_reference_projection",
+        skip_serializing_if = "Option::is_none"
+    )]
+    reference_projection: Option<ReferenceProjection>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReferenceProjection {
+    project_store_generation_id: String,
+}
+
+fn selected_reference_projection<'de, D: serde::Deserializer<'de>>(
+    decoder: D,
+) -> Result<Option<ReferenceProjection>, D::Error> {
+    ReferenceProjection::deserialize(decoder).map(Some)
+}
+
+fn validate_reference_projection(
+    schema: &str,
+    old: &str,
+    new: &str,
+    selected: &Option<ReferenceProjection>,
+    level: &Level,
+) -> ServiceResult<()> {
+    match (schema, selected) {
+        (schema, None) if schema == old => Ok(()),
+        (schema, Some(projection)) if schema == new && matches!(level, Level::L1) => {
+            ContextMapPublication::store_generation(&projection.project_store_generation_id)?;
+            Ok(())
+        }
+        _ => Err(invalid()),
+    }
 }
 pub struct SearchContextRequest {
     operation_id: OperationId,
@@ -86,8 +122,14 @@ impl SearchContextRequest {
             return Err(invalid());
         }
         let input: ContextInput = serde_json::from_slice(input_json).map_err(|_| invalid())?;
-        if input.schema != "wow-service/search-context-input/1"
-            || input.selection_operation_id == operation_id.as_str()
+        validate_reference_projection(
+            &input.schema,
+            "wow-service/search-context-input/1",
+            "wow-service/search-context-input/2",
+            &input.reference_projection,
+            &input.level,
+        )?;
+        if input.selection_operation_id == operation_id.as_str()
             || input.project_store_id != host.registration_id()
         {
             return Err(invalid());
@@ -152,7 +194,11 @@ fn execute_plan(
             operation,
             &request.operation_id,
             &(
-                "wow-service/search-context-build-input/1",
+                if request.input.reference_projection.is_some() {
+                    "wow-service/search-context-build-input/2"
+                } else {
+                    "wow-service/search-context-build-input/1"
+                },
                 &request.input,
                 render,
                 &request.host_binding,
@@ -198,6 +244,9 @@ fn execute_plan(
             request.store_limits.max_object_bytes,
             stop,
         )?;
+        if request.input.reference_projection.is_some() {
+            return reference::execute(request, &receipt, &explained, action, &public_digest, stop);
+        }
         let owner = receipt.get("owner_entity").ok_or_else(mismatch)?;
         let search_status = field(&explained, "status")?;
         let unsupported = if field(owner, "kind")? != "project_graph_entity" {

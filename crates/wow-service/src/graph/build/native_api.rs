@@ -161,6 +161,62 @@ impl NativeApiProvenance {
         self.library.profile() == profile && &self.library.reference().view == reference
     }
 
+    /// Read the original producer association for one exact Reference record.
+    /// This is a project-local API projection, not a foreign GraphNode identity.
+    pub(crate) fn reference_root(
+        &self,
+        graph: &wow_graph::GraphPartitionRead<'_>,
+        record_key: &str,
+        record_digest: &str,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Option<wow_graph::GraphNodeId>> {
+        checkpoint(stop)?;
+        if graph.owner().source_context_id() != self.context.context_id() {
+            return Err(incompatible());
+        }
+        if self.endpoints.len() > NATIVE_JOIN_MAX_WORK {
+            return Err(ServiceError::new(
+                ServiceErrorCode::BudgetExceeded,
+                "native Reference association exceeds its inherited bound",
+            ));
+        }
+        let mut selected = None;
+        for endpoint in self.endpoints.values() {
+            checkpoint(stop)?;
+            if endpoint.identity.record_key.as_ref() != record_key
+                || endpoint.identity.record_digest.as_ref() != record_digest
+            {
+                continue;
+            }
+            let GraphAssertionRef::Producer {
+                partition_id,
+                batch_id,
+                assertion,
+            } = &endpoint.assertion
+            else {
+                return Err(incompatible());
+            };
+            let producer = graph
+                .owner()
+                .partition(partition_id)
+                .ok_or_else(incompatible)?;
+            if producer.batch().batch_id() != batch_id.as_ref()
+                || assertion.kind != GraphAssertionKind::Entity
+            {
+                return Err(incompatible());
+            }
+            let node = graph
+                .published_entity(partition_id, &assertion.proposal_id, stop)
+                .map_err(graph_error)?;
+            if node.kind() != wow_project::graph::NATIVE_API_CALLABLE_KIND || selected.is_some() {
+                return Err(incompatible());
+            }
+            selected = Some(node.node_id().clone());
+        }
+        checkpoint(stop)?;
+        Ok(selected)
+    }
+
     /// Only exact selected final API nodes receive their original inert origin
     /// input. The context owner independently qualifies the Reference facet.
     pub(crate) fn reference_origins<'a>(

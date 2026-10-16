@@ -19,6 +19,12 @@ Only the implemented subset is active; broader E4-C and projections/lanes
 remain unaccepted in #169/#125. See [pagination](../../../apps/wow/SEARCH_PAGINATION.md) and
 [native Search commands](../../../apps/wow/SEARCH_BUILD_QUERY.md).
 
+The explicit Reference Context input `/2` additionally hands one selected original
+Reference record to its genuine accepted native API projection in an explicitly
+chosen exact ProjectStore generation. Existing E3 ReferenceFacts L1 Inspect/Build
+and rendering consume the same checked native read; no key/name coercion or
+second owner acquisition is used. See [Reference handoff](../../../apps/wow/SEARCH_CONTEXT.md#exact-reference-document-to-native-api-projection).
+
 **Contract ID:** `wow-service/e4-c/search-lineage-impact-use-cases`
 
 ## Mission

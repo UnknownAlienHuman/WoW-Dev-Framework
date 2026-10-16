@@ -18,6 +18,18 @@
     "owner": "crates/wow-service/src/search.rs",
     "full_e4_c_acceptance": "not-accepted"
   },
+  "reference_context_projection": {
+    "canonical_issue": 169,
+    "inspect_input": "wow-service/search-context-input/2",
+    "build_input": "wow-service/search-context-build-input/2",
+    "selection_kind": "reference_document",
+    "target_selection": "explicit exact ProjectStore generation",
+    "owner_association": "original requalified native API producer assertion to Graph-owned accepted final address",
+    "context": "same checked E3 read and original ReferenceFacts L1 Inspect or metadata-only Build/render",
+    "missing_projection": "NotEvaluated",
+    "legacy_inputs_and_results": "unchanged",
+    "full_e4_c_acceptance": "not-accepted"
+  },
   "direct_framework_dependencies": [
     "wow-core",
     "wow-store",

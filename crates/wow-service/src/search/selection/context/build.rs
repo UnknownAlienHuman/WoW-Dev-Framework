@@ -32,6 +32,12 @@ struct BuildInput {
     render: Render,
     #[serde(default, deserialize_with = "selected_progressive")]
     progressive: Option<ProgressiveInput>,
+    #[serde(
+        default,
+        deserialize_with = "selected_reference_projection",
+        skip_serializing_if = "Option::is_none"
+    )]
+    reference_projection: Option<ReferenceProjection>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -68,7 +74,14 @@ impl SearchContextBuildRequest {
             return Err(invalid());
         }
         let input: BuildInput = serde_json::from_slice(input_json).map_err(|_| invalid())?;
-        if input.schema != "wow-service/search-context-build-input/1" {
+        validate_reference_projection(
+            &input.schema,
+            "wow-service/search-context-build-input/1",
+            "wow-service/search-context-build-input/2",
+            &input.reference_projection,
+            &input.level,
+        )?;
+        if input.reference_projection.is_some() && input.progressive.is_some() {
             return Err(invalid());
         }
         let progressive = input
@@ -104,13 +117,19 @@ impl SearchContextBuildRequest {
             })
             .transpose()?;
         let common = ContextInput {
-            schema: "wow-service/search-context-input/1".into(),
+            schema: if input.reference_projection.is_some() {
+                "wow-service/search-context-input/2"
+            } else {
+                "wow-service/search-context-input/1"
+            }
+            .into(),
             selection_operation_id: input.selection_operation_id,
             selection_request_digest: input.selection_request_digest,
             selection_result_id: input.selection_result_id,
             receipt_id: input.receipt_id,
             project_store_id: input.project_store_id,
             level: input.level,
+            reference_projection: input.reference_projection,
         };
         let base = SearchContextRequest::new(
             operation_id,

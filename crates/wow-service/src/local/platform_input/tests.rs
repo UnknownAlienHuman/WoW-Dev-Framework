@@ -9,6 +9,7 @@ mod function_fingerprints;
 mod library_witnesses;
 mod native_type_resolution;
 mod project_budgets;
+mod reference_context_handoff;
 mod signal_witnesses;
 mod w5_secure_hooks;
 mod xml_classification;
@@ -906,9 +907,22 @@ fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResu
     let request = GraphBuildRequest::new("fixture-platform-transport".into(), "current".into())?
         .with_input_profile(&input);
     // Own a fresh parent only after creation; ProjectStore::create needs an absent child.
-    let store_parent_path = root.0.with_extension("selected-native-api-store");
+    let reference_export = std::env::var_os("WOW_REFERENCE_CONTEXT_EXPORT");
+    let store_parent_path = reference_export
+        .clone()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.0.with_extension("selected-native-api-store"));
+    if !store_parent_path.is_absolute() || store_parent_path.as_os_str().len() > 32768 {
+        return Err("Reference Context export requires a finite absolute fresh directory".into());
+    }
     std::fs::create_dir(&store_parent_path)?;
     let store_parent = FixtureRoot(store_parent_path);
+    reference_context_handoff::prepare(
+        &root.0,
+        &config["native_reference"],
+        &store_parent.0,
+        &stop,
+    )?;
     let store_path = store_parent.0.join("store");
     publish_local_project(
         &root.0.join("native-project.json"),
@@ -1642,6 +1656,125 @@ fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResu
     assert_eq!(reference_built.failure_code(), None);
     let reference_built_json: Value = serde_json::from_slice(reference_built.canonical_bytes())?;
     assert_eq!(reference_built_json["resource_closure"], "closed");
+    // A Reference Search key is not a GraphNode. Resolve only the original
+    // native producer's exact accepted association on one checked E3 read.
+    {
+        use crate::context::reference_selection::{self, ReferenceContextAction};
+        let generation = inspected_json["payload"]["store_generation_id"]
+            .as_str()
+            .ok_or("native generation")?;
+        let api_id = expected_supports[0].1["node_id"]
+            .as_str()
+            .ok_or("accepted API root")?;
+        let (profile, reference_generation, view) = host.reference_identity();
+        let guard = ContextMapReferenceGuard::new(profile, reference_generation, view)?;
+        let native_inspect = ContextInspectRequest::primary(
+            CONTEXT_STORE_ID,
+            ContextMapPublication::store_generation(generation)?,
+            ContextInspectLevel::L1,
+            ContextMapRoot::graph_entity(api_id)?,
+            None,
+            Some(guard.clone()),
+        )?
+        .with_l1_profile(ContextL1Profile::ReferenceFactsV1)?;
+        let native_build = ContextBuildRequest::primary(
+            CONTEXT_STORE_ID,
+            ContextMapPublication::store_generation(generation)?,
+            ContextInspectLevel::L1,
+            ContextMapRoot::graph_entity(api_id)?,
+            ContextRenderSelection::Both,
+            None,
+            Some(guard),
+        )?
+        .with_l1_profile(ContextL1Profile::ReferenceFactsV1)?;
+        let direct_inspect = execute_context_inspect(&host, &native_inspect, &stop)?;
+        let direct_build = execute_context_build(&host, &native_build, &stop)?;
+        assert_eq!(direct_inspect.status(), ContextMapStatus::Partial);
+        assert_eq!(direct_build.status(), ContextMapStatus::Partial);
+        let selected_inspect = reference_selection::execute(
+            &host,
+            generation,
+            &expected_key,
+            &expected_record_digest,
+            ReferenceContextAction::Inspect,
+            &stop,
+        )?
+        .ok_or("genuine Reference-to-native API association")?;
+        let selected_build = reference_selection::execute(
+            &host,
+            generation,
+            &expected_key,
+            &expected_record_digest,
+            ReferenceContextAction::Build(ContextRenderSelection::Both),
+            &stop,
+        )?
+        .ok_or("genuine Reference Build association")?;
+        assert_eq!(
+            selected_inspect.canonical_bytes(),
+            direct_inspect.canonical_bytes()
+        );
+        assert_eq!(
+            selected_build.canonical_bytes(),
+            direct_build.canonical_bytes()
+        );
+        reference_context_handoff::verify(
+            &store_parent.0,
+            &host_json,
+            generation,
+            &expected_key,
+            direct_inspect.canonical_bytes(),
+            direct_build.canonical_bytes(),
+            &stop,
+        )?;
+        assert!(
+            reference_selection::execute(
+                &host,
+                generation,
+                "function:Unprojected",
+                &expected_record_digest,
+                ReferenceContextAction::Inspect,
+                &stop
+            )?
+            .is_none()
+        );
+        assert!(
+            reference_selection::execute(
+                &host,
+                generation,
+                &expected_key,
+                &format!("sha256:{}", "0".repeat(64)),
+                ReferenceContextAction::Inspect,
+                &stop
+            )?
+            .is_none()
+        );
+        assert_eq!(
+            reference_selection::execute(
+                &wrong_host,
+                generation,
+                &expected_key,
+                &expected_record_digest,
+                ReferenceContextAction::Inspect,
+                &stop
+            )
+            .err()
+            .map(|error| error.code()),
+            Some(ServiceErrorCode::IdentityMismatch)
+        );
+        assert_eq!(
+            reference_selection::execute(
+                &host,
+                generation,
+                &expected_key,
+                &expected_record_digest,
+                ReferenceContextAction::Inspect,
+                &AtomicBool::new(true)
+            )
+            .err()
+            .map(|error| error.code()),
+            Some(ServiceErrorCode::Cancelled)
+        );
+    }
     let reference_payload = &reference_built_json["payload"];
     let reference_pack = &reference_payload["semantic_pack"];
     assert_eq!(reference_pack["core"]["schema"], pack["core"]["schema"]);
@@ -1823,6 +1956,11 @@ fn selected_native_api_uses_survive_published_source_absent_reopen() -> TestResu
         "not_acquired",
     )?;
     assert!(!root.0.exists());
+    if reference_export.is_some() {
+        // Keep original closed owner instances for explicit CLI qualification.
+        // No SQLite file is copied into a new live identity.
+        std::mem::forget(store_parent);
+    }
     Ok(())
 }
 

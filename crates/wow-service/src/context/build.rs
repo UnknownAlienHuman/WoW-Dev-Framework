@@ -337,12 +337,7 @@ pub fn execute_context_build_with_source(
     }
     let l0_profile = super::l0_profile_from_id(request.l0_profile_id)?;
     let l1_profile = super::l1_profile_from_id(request.l1_profile_id)?;
-    let digest = wow_core::domain_separated_digest(request.schema, request)
-        .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
-    let id = format!(
-        "context-build-request:{}",
-        ContentDigest::<CanonicalResult>::from_bytes(digest)
-    );
+    let id = request_id(request)?;
     let selector = match &request.publication {
         ContextMapPublication::Current => ReadSelector::Current,
         ContextMapPublication::StoreGeneration(id) => ReadSelector::Exact(id.clone()),
@@ -380,6 +375,45 @@ pub fn execute_context_build_with_source(
             "context_build",
         ),
     }
+}
+
+fn request_id(request: &ContextBuildRequest) -> ServiceResult<String> {
+    let digest = wow_core::domain_separated_digest(request.schema, request)
+        .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
+    Ok(format!(
+        "context-build-request:{}",
+        ContentDigest::<CanonicalResult>::from_bytes(digest)
+    ))
+}
+
+/// Metadata-only construction on the caller's existing checked E3 read.
+pub(super) fn metadata_in_read(
+    read: &LiveProjectRead,
+    host: &ContextMapHostInput,
+    request: &ContextBuildRequest,
+    stop: &AtomicBool,
+) -> ServiceResult<(Vec<u8>, ContextMapStatus)> {
+    if request.source_excerpt.is_some() || request.continuation_retention_profile_id.is_some() {
+        return Err(failure(ServiceErrorCode::InvalidRequest));
+    }
+    build(
+        read,
+        host,
+        request,
+        &request_id(request)?,
+        BuildExecution {
+            profiles: (
+                super::l0_profile_from_id(request.l0_profile_id)?,
+                super::l1_profile_from_id(request.l1_profile_id)?,
+            ),
+            source_root: None,
+            continuation_id: None,
+            progressive_round_limit: None,
+            current_at_selection: None,
+            current_guard_checked: false,
+        },
+        stop,
+    )
 }
 
 // This private envelope borrows the exact sealed owner value. It does not

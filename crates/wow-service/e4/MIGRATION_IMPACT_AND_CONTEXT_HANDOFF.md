@@ -115,6 +115,17 @@ Hard stops:
 
 ## Context selection race
 
+The explicit Reference-document handoff uses Search Context input `/2` (and Build
+input `/2`) with an exact target ProjectStore generation. Original Reference
+key/digest and complete captured profile/generation/view bind the retained
+selection to that target's genuine native API producer association. Its original
+accepted assertion is resolved by the Graph owner; no key/name conversion or
+Search-derived GraphEntity authority is admitted. The original E3 ReferenceFacts
+L1 Inspect/Build engine runs on that same checked read. Missing projections stay
+NotEvaluated; ambiguous/mixed associations fail. See the
+[application contract](../../../apps/wow/SEARCH_CONTEXT.md#exact-reference-document-to-native-api-projection).
+Original `/1` consumers and native result bytes remain unchanged.
+
 The service validates that the selected entity still belongs to the exact retained owner generation and that the context acquisition uses the same exact publication bindings. If a symbolic-current request advanced after search, the existing exact result remains valid for its retained generation; using the newer current context requires a new search/request.
 
 ## Existing context continuation

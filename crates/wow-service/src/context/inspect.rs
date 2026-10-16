@@ -138,13 +138,7 @@ pub fn execute_context_inspect(
 ) -> ServiceResult<ContextMapResult> {
     let l0_profile = super::l0_profile_from_id(request.l0_profile_id)?;
     let l1_profile = super::l1_profile_from_id(request.l1_profile_id)?;
-    let digest =
-        wow_core::domain_separated_digest("wow-service/context-inspect-request/1", request)
-            .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
-    let id = format!(
-        "context-inspect-request:{}",
-        ContentDigest::<CanonicalResult>::from_bytes(digest)
-    );
+    let id = request_id(request)?;
     let selector = match &request.publication {
         ContextMapPublication::Current => ReadSelector::Current,
         ContextMapPublication::StoreGeneration(id) => ReadSelector::Exact(id.clone()),
@@ -168,6 +162,34 @@ pub fn execute_context_inspect(
             "context_inspect",
         ),
     }
+}
+
+fn request_id(request: &ContextInspectRequest) -> ServiceResult<String> {
+    let digest =
+        wow_core::domain_separated_digest("wow-service/context-inspect-request/1", request)
+            .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
+    Ok(format!(
+        "context-inspect-request:{}",
+        ContentDigest::<CanonicalResult>::from_bytes(digest)
+    ))
+}
+
+/// Same native engine on an already-held checked E3 acquisition.
+pub(super) fn metadata_in_read(
+    read: &LiveProjectRead,
+    host: &ContextMapHostInput,
+    request: &ContextInspectRequest,
+    stop: &AtomicBool,
+) -> ServiceResult<(Vec<u8>, ContextMapStatus)> {
+    build(
+        read,
+        host,
+        request,
+        &request_id(request)?,
+        super::l0_profile_from_id(request.l0_profile_id)?,
+        super::l1_profile_from_id(request.l1_profile_id)?,
+        stop,
+    )
 }
 
 #[derive(Serialize)]

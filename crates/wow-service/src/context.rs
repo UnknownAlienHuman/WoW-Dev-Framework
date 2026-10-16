@@ -8,6 +8,7 @@ mod inspect;
 mod operation;
 mod platform;
 mod platform_status;
+pub(crate) mod reference_selection;
 mod render;
 mod request;
 mod status;

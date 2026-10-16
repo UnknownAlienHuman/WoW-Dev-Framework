@@ -152,6 +152,49 @@ closure alone does not certify that its durable journal was unchanged. Continuat
 does not refresh Current, reset budgets, deserialize a native expansion step,
 read source or authorize edits. Broader owner mappings and acceptance remain open.
 
+## Exact Reference document to native API projection
+
+The same Inspect/Build commands accept the explicit Reference schemas
+`wow-service/search-context-input/2` and
+`wow-service/search-context-build-input/2`. They retain the original selection
+fields, require `level="l1"`, and add this required object:
+
+```json
+{
+  "reference_projection": {
+    "project_store_generation_id": "project-store-generation:sha256:<64 lowercase hex>"
+  }
+}
+```
+
+Build additionally requires its existing `render` selection. This is an exact
+operator-selected target generation; `current`, null/unknown fields, root
+overrides, progressive expansion and other levels are refused. Schema `/1`
+forbids this field and retains its original bytes and interpretation.
+
+The receipt must select an original `reference_document`, standalone or from the
+captured Reference federation component. Its original record key/digest and
+complete captured Reference profile/generation/view are checked against the
+approved host before acquisition. Search metadata never reconstructs a Reference
+record, parses a key into a GraphNode or chooses a node by callable name.
+
+One checked E3 read requalifies the target's original native Library/Reference and
+reads its existing native API producer association. The Graph owner supplies the
+exact accepted final address for that original assertion. This is a project-local
+API projection of the selected record, not a foreign Reference GraphEntity or a
+new cross-universe relation. Missing projection returns `NotEvaluated`; ambiguous
+or incompatible associations refuse. Non-callable Reference documents remain
+unavailable until a genuine owner mapping exists.
+
+The same held read feeds the original ReferenceFacts L1 Inspect or metadata-only
+Build/JSON/Markdown engine. Its canonical result is unchanged for the same native
+request, including original records, support, coverage, omissions and continuing
+construction Budget. Read and Store close before the private draft is delivered.
+The outer receipt/explanation stays unchanged, with
+`context_admission="exact_native_reference_projection"`. Exact durable replay
+returns historical bytes before reopening native owners. Source access,
+continuation, current refresh, edits and broader E4/runtime authority are absent.
+
 ## Qualified platform Map and Inspect
 
 ```text
