@@ -7,12 +7,13 @@ use std::{
     num::{NonZeroU32, NonZeroU64},
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
 };
 
 use wow_service::{
+    OperationId, ServiceErrorCode,
     search::{
         EntityContinueRequest, EntityExplainRequest, EntityResultReleaseRequest,
         EntityRetrievalRequest, FederationContinueRequest, FederationExplainRequest,
@@ -25,7 +26,6 @@ use wow_service::{
         SearchSourceHoldBinding, SearchStoreGcRequest, SearchStoreLimits,
         SourceObservationExplainRequest, SourceObservationRetrievalRequest,
     },
-    OperationId, ServiceErrorCode,
 };
 
 const HELP: &str = "wow search index build --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --operation-id <ID> --allow-local-metadata-only <finite bounds>\nwow search query --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --literal-query <UTF-8-LITERAL> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index retire --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --build-operation-id <BuildOperationId> --source-store-epoch-id <ExactEpochId> --source-generation-hold-id <ExactRetentionRootId> --source-generation-hold-digest <sha256:...> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index gc --search-store <SEARCH-STORE-FILE> --target-object-id <ExactObjectId> --operation-id <ID> --gc-now <epoch> --gc-max-deletes <positive-u32> <Store limits>\nwow search build-query --store-root <PROJECT-STORE> <existing one-shot route; it does not claim durable SearchStore persistence>\nAll durable commands require --max-output-bytes <positive-u64> and Store limits: --store-max-object-bytes <positive-u64> --store-max-batch-objects <positive-u32> --store-max-catalog-mutations <positive-u32> --store-max-manifest-records <positive-u32> --store-max-gc-deletes <positive-u32>.\nBuild/query/retire also require Search bounds: --max-documents <positive-u32> --max-document-id-bytes <positive-u32> --max-owner-metadata-label-bytes <positive-u32> --max-literal-query-bytes <positive-u32> --max-candidate-results <positive-u32> --max-owner-evidence-records <positive-u32> --max-owner-manifest-bytes <positive-u64> --max-database-bytes <positive-u64> --max-search-object-bytes <positive-u64>.\n";
@@ -595,6 +595,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
     if !matches!(
         command,
         "gc" | "continue"
+            | "select"
             | "federated"
             | "federated-continue"
             | "federated-explain"
@@ -1543,8 +1544,8 @@ mod tests {
 
     #[test]
     #[ignore = "requires the retained W20 fixture; set WOW_W20_RETAINED_STORE_ROOT and run with --ignored"]
-    fn retained_exact_generation_build_query_route_returns_exact_and_candidate_evidence(
-    ) -> Result<(), Box<dyn Error>> {
+    fn retained_exact_generation_build_query_route_returns_exact_and_candidate_evidence()
+    -> Result<(), Box<dyn Error>> {
         let store_root = std::env::var_os("WOW_W20_RETAINED_STORE_ROOT")
             .ok_or("set WOW_W20_RETAINED_STORE_ROOT to the retained registered-store directory")?;
         let mut stdout = Vec::new();

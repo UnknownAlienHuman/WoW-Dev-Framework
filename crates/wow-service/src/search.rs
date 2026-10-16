@@ -21,8 +21,10 @@ pub use reference::{
 mod retrieval;
 pub use retrieval::{SearchContinueRequest, SearchResultReleaseRequest, SearchRetrievalRequest};
 mod file_set;
+mod selection;
 mod source_observations;
 use documents::{Documents, Profile as DurableProfile, Selection as DurableSelection};
+pub use selection::SearchSelectionRequest;
 pub use source_observations::{
     ObservationComponent, SourceObservationExplainRequest, SourceObservationRetrievalRequest,
 };
@@ -467,6 +469,13 @@ pub struct SearchOperationService {
 }
 
 impl SearchOperationService {
+    pub fn select_candidate(
+        &self,
+        request: &SearchSelectionRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        selection::execute(request, stop)
+    }
     pub fn explain_federated_candidate(
         &self,
         request: &FederationExplainRequest,
