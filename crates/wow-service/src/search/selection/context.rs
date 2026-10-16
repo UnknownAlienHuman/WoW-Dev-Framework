@@ -316,7 +316,6 @@ fn execute_plan(
             search_status,
             generation,
             request.max_output_bytes.get(),
-            &mut native_effect,
             stop,
         )?;
         durable_response(
@@ -372,7 +371,6 @@ fn checked_native_result(
     search_status: &str,
     generation: &str,
     max_output: u64,
-    native_effect: &mut bool,
     stop: &AtomicBool,
 ) -> ServiceResult<(serde_json::Value, Box<str>)> {
     if context.canonical_bytes().len() > crate::context::CONTEXT_MAP_RESULT_MAX_BYTES {
@@ -387,11 +385,8 @@ fn checked_native_result(
         return Err(outcome_unknown());
     }
     if let Some(code) = context.failure_code() {
-        if code != ServiceErrorCode::StoreOutcomeUnknown {
-            // The native contract has closed a known failed issuance without
-            // publishing its continuation; uncertain native effects stay fenced.
-            *native_effect = false;
-        }
+        // A typed failure/checked close does not certify no durable native
+        // mutation. The caller retains its dispatch fence on every error.
         return Err(failure(code, "native selected Context inspection refused"));
     }
     if closure != Some("closed") {

@@ -141,7 +141,6 @@ pub(in crate::search) fn execute(
             field(explained, "status")?,
             generation,
             request.max_output_bytes.get(),
-            &mut native_effect,
             stop,
         )?;
         if context

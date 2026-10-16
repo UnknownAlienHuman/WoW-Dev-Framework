@@ -146,7 +146,9 @@ Exact outer replay returns recorded bytes before native acquisition. Once native
 issuance or continuation has dispatched, uncertain native closure or failure to
 finalize the outer response records `OutcomeUnknown`, never retryable no-effect.
 Blind repetition is blocked; the exact native journal remains the reconciliation
-owner. Known closed native refusals preserve their typed failure. Continuation
+owner. Pre-dispatch guards preserve their typed failure. Once issuance/continuation
+is dispatched, a typed native failure is also fenced as `OutcomeUnknown`: checked
+closure alone does not certify that its durable journal was unchanged. Continuation
 does not refresh Current, reset budgets, deserialize a native expansion step,
 read source or authorize edits. Broader owner mappings and acceptance remain open.
 
