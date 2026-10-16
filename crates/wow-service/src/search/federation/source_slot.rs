@@ -157,7 +157,7 @@ pub(super) fn from_input(
         p.source_generation_hold_id,
         p.source_generation_hold_digest,
     )?;
-    let query = SourceObservationRetrievalRequest::new_selected(
+    let query = SourceObservationRetrievalRequest::new_component(
         operation.clone(),
         store.to_path_buf(),
         &p.generation,
@@ -170,7 +170,7 @@ pub(super) fn from_input(
         max_bytes,
         expires,
         permission,
-        component.declarations(),
+        component,
         stop,
     )?;
     Ok(SourceRequest::Observations(BoundSourceRequest {

@@ -100,6 +100,12 @@ and `wow-search/exact-observed-source-platform-reference-query/1`. The existing
 explicit universe order, whole component/candidate/result budgets and
 excluded/required Blizzard choice apply.
 
+The same family also accepts `source_component: "source_inventory"` with the
+original exact inventory shard/profile and `wow-search/source-inventory-query/1`.
+Typed recorded global slots retain direct-vs-Possible alias grades; direct slot
+relations cap at band 4 and Possible alias associations at band 10. This does not
+provide an exact entity-alias lane or canonical global declarations.
+
 Each source slot retains the original exact source epoch/generation/build/hold,
 shard/object/profile/bounds and query fields. Add the required closed
 `source_component`: `source_observations` or `source_declarations`, matching its

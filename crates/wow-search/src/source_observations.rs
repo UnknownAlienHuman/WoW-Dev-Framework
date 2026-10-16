@@ -5,8 +5,10 @@ use wow_core::{SourceHandle, SourceSpan};
 
 mod federation;
 mod query;
+mod slots;
 pub use federation::BoundObservationQueryResult;
 pub use query::{ObservationQueryRequest, ObservationQueryResult};
+use slots::SlotKey;
 const PROFILE: &str = "wow-search/project-source-observation-profile/1";
 const MANIFEST: &str = "wow-search/project-source-observation-shard/1";
 
@@ -15,6 +17,7 @@ pub struct ObservationSearchProfile {
     bounds: SearchBounds,
     digest: Box<str>,
     declarations: bool,
+    globals: bool,
 }
 impl ObservationSearchProfile {
     pub fn new(bounds: SearchBounds) -> SearchResult<Self> {
@@ -22,6 +25,7 @@ impl ObservationSearchProfile {
         Ok(Self {
             bounds,
             declarations: false,
+            globals: false,
             digest: identity(
                 "",
                 &(
@@ -56,6 +60,23 @@ impl ObservationSearchProfile {
     pub fn includes_function_declarations(&self) -> bool {
         self.declarations
     }
+    pub fn inventory(bounds: SearchBounds) -> SearchResult<Self> {
+        let mut profile = Self::with_function_declarations(bounds)?;
+        profile.digest = identity(
+            "",
+            &(
+                "wow-search/project-source-inventory-profile/1",
+                &profile.digest,
+                "typed-native-global-slot-observations/1",
+                "direct-or-explicit-possible-alias-never-canonical-declaration",
+            ),
+        )?;
+        profile.globals = true;
+        Ok(profile)
+    }
+    pub fn includes_global_accesses(&self) -> bool {
+        self.globals
+    }
     pub fn bounds(&self) -> SearchBounds {
         self.bounds
     }
@@ -67,6 +88,24 @@ enum Kind {
     LocalBinding,
     MemberReference,
     FunctionDeclaration,
+    GlobalAccess,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SlotAccessKind {
+    Read,
+    Write,
+    UnsupportedAssignment,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GlobalSlot {
+    root: Box<str>,
+    keys: Vec<SlotKey>,
+    path_complete: bool,
+    access_kind: SlotAccessKind,
+    alias: bool,
+    alias_blocked: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -81,6 +120,8 @@ pub struct ObservationDocument {
     recorded_short_name: Option<Box<str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     recorded_receiver: Option<Box<str>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    global_slot: Option<GlobalSlot>,
     source_handle: SourceHandle,
     // Original serialized owner evidence, never deserialized into a native fact.
     owner_fact: serde_json::Value,
@@ -97,6 +138,7 @@ impl ObservationDocument {
             Kind::LocalBinding => "local_binding",
             Kind::MemberReference => "member_reference",
             Kind::FunctionDeclaration => "function_declaration",
+            Kind::GlobalAccess => "global_access",
         }
     }
 }
@@ -118,6 +160,8 @@ struct ObservationManifest {
     member_file_coverage: Vec<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     function_names: Option<FunctionNameCoverage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    global_accesses: Option<GlobalAccessCoverage>,
     documents: Vec<ObservationDocument>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +172,16 @@ struct FunctionNameCoverage {
     source_health_complete: bool,
     states: std::collections::BTreeMap<String, u32>,
     files: Vec<serde_json::Value>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GlobalAccessCoverage {
+    function_analysis_id: Box<str>,
+    source_health_complete: bool,
+    records: u64,
+    incomplete_paths: u64,
+    alias_records: u64,
+    blocked_aliases: u64,
 }
 pub struct PreparedObservationShard {
     manifest: ObservationManifest,
@@ -242,6 +296,13 @@ fn capture_manifest(
         .len()
         .checked_add(member.references().len())
         .and_then(|n| n.checked_add(named_count))
+        .and_then(|n| {
+            n.checked_add(if profile.globals {
+                report.map_or(0, |r| r.global_accesses().len())
+            } else {
+                0
+            })
+        })
         .ok_or(SearchError::FileSetOverCapacity)?;
     if count > profile.bounds.max_documents.get() as usize {
         return Err(SearchError::FileSetOverCapacity);
@@ -283,6 +344,26 @@ fn capture_manifest(
         local_file_coverage: Vec::new(),
         member_file_coverage: Vec::new(),
         function_names,
+        global_accesses: if profile.globals {
+            let report = report.ok_or(SearchError::OwnerEvidenceInvalid)?;
+            let mut coverage = GlobalAccessCoverage {
+                function_analysis_id: report.analysis_id().into(),
+                source_health_complete: report.source_health_complete(),
+                records: report.global_accesses().len() as u64,
+                incomplete_paths: 0,
+                alias_records: 0,
+                blocked_aliases: 0,
+            };
+            for fact in report.global_accesses() {
+                check(stop)?;
+                coverage.incomplete_paths += u64::from(!fact.path_complete());
+                coverage.alias_records += u64::from(fact.is_alias());
+                coverage.blocked_aliases += u64::from(fact.alias_blocker().is_some());
+            }
+            Some(coverage)
+        } else {
+            None
+        },
         documents: Vec::new(),
     };
     let evidence_count = manifest.owner.graph_partitions.iter().try_fold(
@@ -345,6 +426,7 @@ fn capture_manifest(
                        name: &str,
                        short_name: Option<&str>,
                        receiver: Option<&str>,
+                       global_slot: Option<GlobalSlot>,
                        span: SourceSpan,
                        fact: serde_json::Value|
      -> SearchResult<()> {
@@ -380,6 +462,7 @@ fn capture_manifest(
             recorded_name: name.into(),
             recorded_short_name: short_name.map(Into::into),
             recorded_receiver: receiver.map(Into::into),
+            global_slot,
             source_handle: project.source_handle(path, span, None)?,
             owner_fact: fact,
         };
@@ -400,6 +483,7 @@ fn capture_manifest(
             fact.name(),
             None,
             None,
+            None,
             fact.declaration_span(),
             value(fact)?,
         )?;
@@ -413,6 +497,7 @@ fn capture_manifest(
             fact.member(),
             None,
             Some(fact.receiver()),
+            None,
             fact.reference_span(),
             value(fact)?,
         )?;
@@ -437,10 +522,67 @@ fn capture_manifest(
                     name.qualified_name(),
                     Some(name.short_name()),
                     name.receiver(),
+                    None,
                     name.name_span(),
                     evidence,
                 )?;
             }
+        }
+    }
+    if profile.globals {
+        for fact in report
+            .ok_or(SearchError::OwnerEvidenceInvalid)?
+            .global_accesses()
+        {
+            check(stop)?;
+            let metadata = project
+                .global_access_metadata(fact.fact_id())?
+                .ok_or(SearchError::OwnerEvidenceInvalid)?;
+            let mut keys = Vec::with_capacity(fact.keys().len());
+            for key in fact.keys() {
+                check(stop)?;
+                keys.push(match key {
+                    wow_project::graph::ProjectGlobalAccessKey::String(s) => {
+                        SlotKey::String(s.clone())
+                    }
+                    wow_project::graph::ProjectGlobalAccessKey::Integer(i) => {
+                        SlotKey::Integer(i.to_string())
+                    }
+                    wow_project::graph::ProjectGlobalAccessKey::Boolean(b) => SlotKey::Boolean(*b),
+                });
+            }
+            let kind = match fact.kind() {
+                wow_project::graph::ProjectGlobalAccessKind::Read => SlotAccessKind::Read,
+                wow_project::graph::ProjectGlobalAccessKind::Write => SlotAccessKind::Write,
+                wow_project::graph::ProjectGlobalAccessKind::UnsupportedAssignment => {
+                    SlotAccessKind::UnsupportedAssignment
+                }
+            };
+            let name = fact
+                .aliases()
+                .last()
+                .map_or(fact.root_name(), |hop| hop.name.as_str());
+            let evidence = serde_json::json!({"access":fact,"enclosing_function_id":metadata.function().fact().fact_id(),
+                "function_analysis_id":metadata.function().function_analysis_id(),"enclosing_function_source_handle":metadata.function().source_handle(),"scope":metadata.function().scope()});
+            capture(
+                fact.fact_id(),
+                Kind::GlobalAccess,
+                fact.path(),
+                fact.content_digest(),
+                name,
+                None,
+                None,
+                Some(GlobalSlot {
+                    root: fact.root_name().into(),
+                    keys,
+                    path_complete: fact.path_complete(),
+                    access_kind: kind,
+                    alias: fact.is_alias(),
+                    alias_blocked: fact.alias_blocker().is_some(),
+                }),
+                fact.span(),
+                evidence,
+            )?;
         }
     }
     manifest.documents.sort_by(|a, b| a.fact_id.cmp(&b.fact_id));
@@ -467,6 +609,9 @@ pub struct ObservationSearchShard {
 impl ObservationSearchShard {
     pub fn includes_function_declarations(&self) -> bool {
         self.manifest.function_names.is_some()
+    }
+    pub fn includes_global_accesses(&self) -> bool {
+        self.manifest.global_accesses.is_some()
     }
     pub fn logical_id(&self) -> &str {
         self.physical.search_shard_id()
@@ -514,6 +659,7 @@ pub fn open_source_observation_shard(
         if manifest.schema.as_ref() != MANIFEST
             || manifest.profile_digest != profile.digest
             || manifest.function_names.is_some() != profile.declarations
+            || manifest.global_accesses.is_some() != profile.globals
             || manifest.owner.source.store_generation_id.as_ref() != generation.as_str()
             || wow_core::canonical_json_bytes(&manifest)
                 .map_err(|_| SearchError::OwnerEvidenceInvalid)?

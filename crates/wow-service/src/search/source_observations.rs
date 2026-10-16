@@ -8,13 +8,42 @@ use wow_store::ObjectId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(in crate::search) enum ObservationComponent {
+pub enum ObservationComponent {
     SourceObservations,
     SourceDeclarations,
+    SourceInventory,
 }
 impl ObservationComponent {
-    pub(in crate::search) const fn declarations(self) -> bool {
-        matches!(self, Self::SourceDeclarations)
+    pub(in crate::search) const fn from_flags(declarations: bool, globals: bool) -> Self {
+        if globals {
+            Self::SourceInventory
+        } else if declarations {
+            Self::SourceDeclarations
+        } else {
+            Self::SourceObservations
+        }
+    }
+    pub const fn declarations(self) -> bool {
+        matches!(self, Self::SourceDeclarations | Self::SourceInventory)
+    }
+    pub(in crate::search) fn profile(
+        self,
+        bounds: SearchBounds,
+    ) -> wow_search::SearchResult<ObservationSearchProfile> {
+        match self {
+            Self::SourceObservations => ObservationSearchProfile::new(bounds),
+            Self::SourceDeclarations => {
+                ObservationSearchProfile::with_function_declarations(bounds)
+            }
+            Self::SourceInventory => ObservationSearchProfile::inventory(bounds),
+        }
+    }
+    pub(in crate::search) const fn id(self) -> &'static str {
+        match self {
+            Self::SourceObservations => "project_source_observations_v1",
+            Self::SourceDeclarations => "project_source_declarations_v1",
+            Self::SourceInventory => "project_source_inventory_v1",
+        }
     }
 }
 pub(in crate::search) struct BoundSourceRequest {
@@ -33,13 +62,29 @@ pub(in crate::search) struct ObservationRetainedBinding {
 }
 
 impl SearchIndexBuildRequest {
+    pub fn with_source_inventory(mut self) -> ServiceResult<Self> {
+        if !matches!(
+            self.selection,
+            DurableSelection::SourceObservations(ObservationComponent::SourceObservations)
+        ) {
+            return Err(invalid());
+        }
+        ObservationSearchProfile::inventory(self.bounds).map_err(map_search_error)?;
+        self.selection =
+            DurableSelection::SourceObservations(ObservationComponent::SourceInventory);
+        Ok(self)
+    }
     pub fn with_function_declarations(mut self) -> ServiceResult<Self> {
-        if !matches!(self.selection, DurableSelection::SourceObservations(false)) {
+        if !matches!(
+            self.selection,
+            DurableSelection::SourceObservations(ObservationComponent::SourceObservations)
+        ) {
             return Err(invalid());
         }
         ObservationSearchProfile::with_function_declarations(self.bounds)
             .map_err(map_search_error)?;
-        self.selection = DurableSelection::SourceObservations(true);
+        self.selection =
+            DurableSelection::SourceObservations(ObservationComponent::SourceDeclarations);
         Ok(self)
     }
     #[allow(clippy::too_many_arguments)]
@@ -62,7 +107,9 @@ impl SearchIndexBuildRequest {
             project_store_root,
             search_store_path,
             store_generation_id: store_generation_id.into(),
-            selection: DurableSelection::SourceObservations(false),
+            selection: DurableSelection::SourceObservations(
+                ObservationComponent::SourceObservations,
+            ),
             bounds,
             store_limits,
             max_output_bytes,
@@ -71,13 +118,29 @@ impl SearchIndexBuildRequest {
     }
 }
 impl SearchShardRetireRequest {
+    pub fn with_source_inventory(mut self) -> ServiceResult<Self> {
+        if !matches!(
+            self.selection,
+            DurableSelection::SourceObservations(ObservationComponent::SourceObservations)
+        ) {
+            return Err(invalid());
+        }
+        ObservationSearchProfile::inventory(self.bounds).map_err(map_search_error)?;
+        self.selection =
+            DurableSelection::SourceObservations(ObservationComponent::SourceInventory);
+        Ok(self)
+    }
     pub fn with_function_declarations(mut self) -> ServiceResult<Self> {
-        if !matches!(self.selection, DurableSelection::SourceObservations(false)) {
+        if !matches!(
+            self.selection,
+            DurableSelection::SourceObservations(ObservationComponent::SourceObservations)
+        ) {
             return Err(invalid());
         }
         ObservationSearchProfile::with_function_declarations(self.bounds)
             .map_err(map_search_error)?;
-        self.selection = DurableSelection::SourceObservations(true);
+        self.selection =
+            DurableSelection::SourceObservations(ObservationComponent::SourceDeclarations);
         Ok(self)
     }
     #[allow(clippy::too_many_arguments)]
@@ -104,7 +167,9 @@ impl SearchShardRetireRequest {
             search_store_path,
             source_hold,
             store_generation_id: store_generation_id.into(),
-            selection: DurableSelection::SourceObservations(false),
+            selection: DurableSelection::SourceObservations(
+                ObservationComponent::SourceObservations,
+            ),
             logical_shard_id: logical_shard_id.into(),
             object_id: object_id.into(),
             profile_digest: profile_digest.into(),
@@ -180,16 +245,49 @@ impl SourceObservationRetrievalRequest {
         include_function_declarations: bool,
         stop: &AtomicBool,
     ) -> ServiceResult<Self> {
+        Self::new_component(
+            operation_id,
+            search_store_path,
+            generation,
+            logical_id,
+            object_id,
+            profile_digest,
+            query_json,
+            bounds,
+            store_limits,
+            max_output_bytes,
+            lease_expires_after,
+            permission,
+            if include_function_declarations {
+                ObservationComponent::SourceDeclarations
+            } else {
+                ObservationComponent::SourceObservations
+            },
+            stop,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_component(
+        operation_id: OperationId,
+        search_store_path: PathBuf,
+        generation: &str,
+        logical_id: &str,
+        object_id: &str,
+        profile_digest: &str,
+        query_json: &[u8],
+        bounds: SearchBounds,
+        store_limits: SearchStoreLimits,
+        max_output_bytes: NonZeroU64,
+        lease_expires_after: u64,
+        permission: LocalMetadataPermission,
+        component: ObservationComponent,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Self> {
         check_cancelled(stop)?;
         if !search_store_path.is_absolute() || lease_expires_after == 0 {
             return Err(invalid());
         }
-        let profile = if include_function_declarations {
-            ObservationSearchProfile::with_function_declarations(bounds)
-        } else {
-            ObservationSearchProfile::new(bounds)
-        }
-        .map_err(map_search_error)?;
+        let profile = component.profile(bounds).map_err(map_search_error)?;
         if profile.digest() != profile_digest {
             return Err(failure(
                 ServiceErrorCode::IdentityMismatch,
@@ -328,11 +426,10 @@ pub(in crate::search) fn retained_binding(
 ) -> ObservationRetainedBinding {
     let q = &request.query;
     ObservationRetainedBinding {
-        component: if q.profile.includes_function_declarations() {
-            ObservationComponent::SourceDeclarations
-        } else {
-            ObservationComponent::SourceObservations
-        },
+        component: ObservationComponent::from_flags(
+            q.profile.includes_function_declarations(),
+            q.profile.includes_global_accesses(),
+        ),
         generation: q.generation.clone(),
         logical_id: q.logical_id.clone(),
         object_id: q.object_id.clone(),
@@ -343,7 +440,7 @@ pub(in crate::search) fn retained_binding(
 pub(in crate::search) fn federation_input(request: &BoundSourceRequest) -> serde_json::Value {
     let q = &request.query;
     let h = &request.hold;
-    serde_json::json!({"component":if q.profile.includes_function_declarations(){"source_declarations"}else{"source_observations"},
+    serde_json::json!({"component":ObservationComponent::from_flags(q.profile.includes_function_declarations(),q.profile.includes_global_accesses()),
         "generation":q.generation,"logical_id":q.logical_id,"object_id":q.object_id,"profile_digest":q.profile.digest(),"query":q.query,
         "build_operation_id":h.build_operation_id.as_str(),"source_epoch":h.source_store_epoch_id,"hold_id":h.retention_root_id,"hold_digest":h.retention_root_digest})
 }
@@ -383,7 +480,10 @@ pub(in crate::search) fn acquire_bound(
         &binding.project_store_root,
     )?;
     let result = (|| {
-        let selected = q.profile.includes_function_declarations();
+        let selected = ObservationComponent::from_flags(
+            q.profile.includes_function_declarations(),
+            q.profile.includes_global_accesses(),
+        );
         let docs = Documents::SourceObservations(selected);
         let profile = DurableProfile::SourceObservations(q.profile.clone());
         let hold = validate_source_hold_binding(
@@ -450,12 +550,10 @@ pub(in crate::search) fn open_retained(
     permission: LocalMetadataPermission,
     stop: &AtomicBool,
 ) -> ServiceResult<wow_search::source_observations::ObservationSearchShard> {
-    let profile = if binding.component.declarations() {
-        ObservationSearchProfile::with_function_declarations(binding.bounds)
-    } else {
-        ObservationSearchProfile::new(binding.bounds)
-    }
-    .map_err(map_search_error)?;
+    let profile = binding
+        .component
+        .profile(binding.bounds)
+        .map_err(map_search_error)?;
     if profile.digest() != binding.profile_digest.as_ref() {
         return Err(failure(
             ServiceErrorCode::IdentityMismatch,

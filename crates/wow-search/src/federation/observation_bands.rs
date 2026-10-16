@@ -11,6 +11,12 @@ pub(super) fn authority_band(
         ("recorded_name_prefix_candidate", 2) => Ok((5, "recorded_source_prefix_candidate")),
         ("literal_recorded_name_candidate", 3) => Ok((7, "recorded_source_literal_candidate")),
         ("identifier_similarity_candidate", 4) => Ok((8, "recorded_source_similarity_candidate")),
+        ("exact_recorded_global_slot_observation", 1) => {
+            Ok((4, "recorded_source_slot_observation"))
+        }
+        ("possible_alias_global_slot_candidate", 2) => {
+            Ok((10, "possible_source_alias_not_exact_slot"))
+        }
         _ => Err(SearchError::OwnerEvidenceInvalid),
     }
 }

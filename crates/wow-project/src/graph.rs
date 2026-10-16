@@ -5,7 +5,10 @@ mod callable_metadata;
 pub use budget::{SourceGraphBudget, SourceGraphXmlCountBudget};
 pub use callable_metadata::{
     ProjectCallableFacetState, ProjectCallableMetadata, ProjectCallableScope,
-    ProjectFunctionBindingMetadata,
+    ProjectFunctionBindingMetadata, ProjectGlobalAccessMetadata,
+};
+pub use wow_emmy::global_access::{
+    GlobalAccessKey as ProjectGlobalAccessKey, GlobalAccessKind as ProjectGlobalAccessKind,
 };
 mod derivations;
 pub use axes::source_graph_axis_profile;

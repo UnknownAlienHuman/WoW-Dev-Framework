@@ -37,7 +37,9 @@ impl ObservationSearchShard {
         stop: &AtomicBool,
     ) -> SearchResult<BoundObservationQueryResult> {
         check(stop)?;
-        let profile = if self.includes_function_declarations() {
+        let profile = if self.includes_global_accesses() {
+            ObservationSearchProfile::inventory(self.bounds)?
+        } else if self.includes_function_declarations() {
             ObservationSearchProfile::with_function_declarations(self.bounds)?
         } else {
             ObservationSearchProfile::new(self.bounds)?
@@ -100,12 +102,13 @@ impl ObservationSearchShard {
             stop,
         )?;
         let declarations = self.includes_function_declarations();
-        let profile = query::profile(declarations);
+        let inventory = self.includes_global_accesses();
+        let profile = query::profile(declarations, inventory);
         let query_id = identity(
             "source-observation-query:",
             &(profile, self.logical_id(), &request),
         )?;
-        let expected = serde_json::json!({"schema":if declarations {"wow-search/source-observation-declaration-result-set/1"} else {"wow-search/source-observation-result-set/1"},
+        let expected = serde_json::json!({"schema":query::result_schema(declarations,inventory),
             "query_profile":profile,"query_id":query_id,"result_query_id":query_id,"universe_id":self.federation_universe_id()?,
             "shard_id":self.logical_id(),"profile_digest":self.profile_digest(),"request":request,
             "owner":self.manifest.owner,"project_kind":self.manifest.project_kind,
@@ -145,7 +148,21 @@ impl ObservationSearchShard {
         {
             return Err(SearchError::OwnerEvidenceInvalid);
         }
-        request.validate_capture_summary(summary, self.manifest.documents.len(), declarations)?;
+        let globals = self
+            .manifest
+            .global_accesses
+            .as_ref()
+            .map(value)
+            .transpose()?;
+        if summary.get("global_accesses") != globals.as_ref() {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
+        request.validate_capture_summary(
+            summary,
+            self.manifest.documents.len(),
+            declarations,
+            inventory,
+        )?;
         Ok(())
     }
     pub(crate) fn validate_federation_candidate(

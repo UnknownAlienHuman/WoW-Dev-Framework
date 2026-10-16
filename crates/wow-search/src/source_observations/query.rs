@@ -5,11 +5,60 @@ use std::collections::BTreeSet;
 const QUERY_PROFILE: &str = "wow-search/recorded-source-fact-name-member-prefix-text-similarity/1";
 const DECLARATION_QUERY_PROFILE: &str =
     "wow-search/recorded-source-declaration-name-member-prefix-text-similarity/1";
-pub(super) const fn profile(declarations: bool) -> &'static str {
-    if declarations {
+const INVENTORY_QUERY_PROFILE: &str = "wow-search/typed-source-inventory-name-slot-similarity/1";
+pub(super) const fn profile(declarations: bool, inventory: bool) -> &'static str {
+    if inventory {
+        INVENTORY_QUERY_PROFILE
+    } else if declarations {
         DECLARATION_QUERY_PROFILE
     } else {
         QUERY_PROFILE
+    }
+}
+pub(super) const fn schema(declarations: bool, inventory: bool) -> &'static str {
+    if inventory {
+        "wow-search/source-inventory-query/1"
+    } else if declarations {
+        "wow-search/source-observation-declaration-query/1"
+    } else {
+        "wow-search/source-observation-query/1"
+    }
+}
+pub(super) const fn result_schema(declarations: bool, inventory: bool) -> &'static str {
+    if inventory {
+        "wow-search/source-inventory-result-set/1"
+    } else if declarations {
+        "wow-search/source-observation-declaration-result-set/1"
+    } else {
+        "wow-search/source-observation-result-set/1"
+    }
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SlotAliasPolicy {
+    DirectOnly,
+    IncludePossible,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SlotAccessFilter {
+    Any,
+    Read,
+    Write,
+    UnsupportedAssignment,
+}
+impl SlotAccessFilter {
+    fn matches(self, kind: SlotAccessKind) -> bool {
+        matches!(self, Self::Any)
+            || matches!(
+                (self, kind),
+                (Self::Read, SlotAccessKind::Read)
+                    | (Self::Write, SlotAccessKind::Write)
+                    | (
+                        Self::UnsupportedAssignment,
+                        SlotAccessKind::UnsupportedAssignment
+                    )
+            )
     }
 }
 
@@ -25,6 +74,12 @@ enum Query {
     RecordedMember {
         receiver: String,
         member: String,
+    },
+    RecordedSlot {
+        root: String,
+        keys: Vec<SlotKey>,
+        alias_policy: SlotAliasPolicy,
+        access_kind: SlotAccessFilter,
     },
     Prefix {
         prefix: String,
@@ -56,6 +111,7 @@ impl ObservationQueryRequest {
         summary: &serde_json::Value,
         document_count: usize,
         declarations: bool,
+        inventory: bool,
     ) -> SearchResult<()> {
         let number = |key| {
             summary
@@ -65,7 +121,7 @@ impl ObservationQueryRequest {
         };
         let scanned = number("scanned_documents")?;
         let matched = number("matched_documents")?;
-        if (self.schema == "wow-search/source-observation-declaration-query/1") != declarations
+        if self.schema != schema(declarations, inventory)
             || scanned > u64::from(self.max_scanned_documents.get())
             || scanned > document_count as u64
             || matched > scanned
@@ -107,20 +163,39 @@ impl ObservationQueryRequest {
         }
         let request: Self =
             serde_json::from_slice(bytes).map_err(|_| SearchError::InvalidProfile)?;
-        let declarations = request.schema == "wow-search/source-observation-declaration-query/1";
+        let inventory = request.schema == "wow-search/source-inventory-query/1";
+        let declarations =
+            inventory || request.schema == "wow-search/source-observation-declaration-query/1";
         if (!declarations && request.schema != "wow-search/source-observation-query/1")
             || request.kinds.is_empty()
-            || request.kinds.len() > if declarations { 3 } else { 2 }
+            || request.kinds.len()
+                > if inventory {
+                    4
+                } else if declarations {
+                    3
+                } else {
+                    2
+                }
             || request
                 .kinds
                 .iter()
                 .enumerate()
                 .any(|(index, kind)| request.kinds[..index].contains(kind))
             || !declarations && request.kinds.contains(&Kind::FunctionDeclaration)
+            || !inventory && request.kinds.contains(&Kind::GlobalAccess)
         {
             return Err(SearchError::InvalidProfile);
         }
         match &request.query {
+            Query::RecordedSlot { root, keys, .. } => {
+                if !inventory || keys.len() > 128 || root.len() > 1024 {
+                    return Err(SearchError::InvalidProfile);
+                }
+                valid_text(root)?;
+                for key in keys {
+                    key.validate()?;
+                }
+            }
             Query::ExactFact { fact_id } => valid_text(fact_id)?,
             Query::RecordedName { name } => valid_text(name)?,
             Query::RecordedMember { receiver, member } => {
@@ -175,14 +250,11 @@ impl ObservationSearchShard {
     ) -> SearchResult<ObservationQueryResult> {
         check(stop)?;
         let declarations = self.manifest.function_names.is_some();
-        if (request.schema == "wow-search/source-observation-declaration-query/1") != declarations {
+        let inventory = self.manifest.global_accesses.is_some();
+        if request.schema != schema(declarations, inventory) {
             return Err(SearchError::InvalidProfile);
         }
-        let query_profile = if declarations {
-            DECLARATION_QUERY_PROFILE
-        } else {
-            QUERY_PROFILE
-        };
+        let query_profile = profile(declarations, inventory);
         if request.max_candidates > self.bounds.max_candidate_results {
             return Err(SearchError::InvalidProfile);
         }
@@ -244,6 +316,32 @@ impl ObservationSearchShard {
                     continue;
                 }
                 let (band, class, distance) = match &request.query {
+                    Query::RecordedSlot {
+                        root,
+                        keys,
+                        alias_policy,
+                        access_kind,
+                    } => {
+                        let Some(slot) = &document.global_slot else {
+                            continue;
+                        };
+                        if !slot.path_complete
+                            || slot.alias_blocked
+                            || slot.root.as_ref() != root
+                            || slot.keys != *keys
+                            || !access_kind.matches(slot.access_kind)
+                        {
+                            continue;
+                        }
+                        if slot.alias {
+                            if !matches!(alias_policy, SlotAliasPolicy::IncludePossible) {
+                                continue;
+                            }
+                            (2, "possible_alias_global_slot_candidate", None)
+                        } else {
+                            (1, "exact_recorded_global_slot_observation", None)
+                        }
+                    }
                     Query::ExactFact { fact_id } if fact_id.as_str() == document.fact_id() => {
                         (0, "exact_owner_fact_identity", None)
                     }
@@ -405,7 +503,7 @@ impl ObservationSearchShard {
             "candidate_only"
         };
         let value = serde_json::json!({
-            "schema":if declarations {"wow-search/source-observation-declaration-result-set/1"} else {"wow-search/source-observation-result-set/1"}, "query_profile":query_profile,
+            "schema":result_schema(declarations,inventory), "query_profile":query_profile,
             "query_id":query_id, "request":request, "shard_id":self.logical_id(), "profile_digest":self.profile_digest(),
             "owner":self.manifest.owner, "project_kind":self.manifest.project_kind,
             "platform_source_profile":self.manifest.platform_source_profile, "platform_package_binding":self.manifest.platform_package_binding,
@@ -420,6 +518,12 @@ impl ObservationSearchShard {
             "nonclaims":["canonical_name","alias","runtime_target","platform_availability","complete_source_fact_coverage"]
         });
         let mut value = value;
+        if let Some(coverage) = &self.manifest.global_accesses {
+            value
+                .as_object_mut()
+                .ok_or(SearchError::OwnerEvidenceInvalid)?
+                .insert("global_accesses".into(), super::value(coverage)?);
+        }
         if let Some(coverage) = &self.manifest.function_names {
             value
                 .as_object_mut()

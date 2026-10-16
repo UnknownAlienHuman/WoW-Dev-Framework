@@ -20,7 +20,7 @@ pub use retrieval::{SearchContinueRequest, SearchResultReleaseRequest, SearchRet
 mod file_set;
 mod source_observations;
 use documents::{Documents, Profile as DurableProfile, Selection as DurableSelection};
-pub use source_observations::SourceObservationRetrievalRequest;
+pub use source_observations::{ObservationComponent, SourceObservationRetrievalRequest};
 
 use std::{
     num::NonZeroU64,

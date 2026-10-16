@@ -212,6 +212,25 @@ pub struct ProjectFunctionBindingMetadata<'a> {
     source_handle: wow_core::SourceHandle,
     scope: ProjectCallableScope,
 }
+
+/// One original global-slot observation joined to this immutable source owner.
+/// Alias hops remain source provenance, never runtime alias or Graph authority.
+pub struct ProjectGlobalAccessMetadata<'a> {
+    fact: &'a wow_emmy::global_access::SourceGlobalAccess,
+    function: ProjectFunctionBindingMetadata<'a>,
+    source_handle: wow_core::SourceHandle,
+}
+impl<'a> ProjectGlobalAccessMetadata<'a> {
+    pub const fn fact(&self) -> &'a wow_emmy::global_access::SourceGlobalAccess {
+        self.fact
+    }
+    pub const fn function(&self) -> &ProjectFunctionBindingMetadata<'a> {
+        &self.function
+    }
+    pub const fn source_handle(&self) -> &wow_core::SourceHandle {
+        &self.source_handle
+    }
+}
 impl<'a> ProjectFunctionBindingMetadata<'a> {
     pub const fn fact(&self) -> &'a SourceFunctionFact {
         self.fact
@@ -233,6 +252,45 @@ impl<'a> ProjectFunctionBindingMetadata<'a> {
     }
 }
 impl crate::ProjectView {
+    /// Borrow exact Main access/file/function/source custody, for either graph layout.
+    pub fn global_access_metadata(
+        &self,
+        id: &str,
+    ) -> ProjectResult<Option<ProjectGlobalAccessMetadata<'_>>> {
+        let Some(report) = self.function_call_report() else {
+            return Ok(None);
+        };
+        let Ok(index) = report
+            .global_accesses()
+            .binary_search_by(|fact| fact.fact_id().cmp(id))
+        else {
+            return Ok(None);
+        };
+        let fact = &report.global_accesses()[index];
+        let bad_binding = || {
+            crate::ProjectError::new(
+                crate::ProjectErrorCode::AnalyzerSnapshotMismatch,
+                ProjectPhase::View,
+                "native global access does not bind this immutable Project source",
+            )
+        };
+        let function = self
+            .function_binding_metadata(fact.function_id())?
+            .ok_or_else(bad_binding)?;
+        let file = self.file_by_path(fact.path())?.ok_or_else(bad_binding)?;
+        if function.fact().path() != fact.path()
+            || function.fact().content_digest() != fact.content_digest()
+            || file.content_digest().to_string() != fact.content_digest()
+        {
+            return Err(bad_binding());
+        }
+        let source_handle = self.source_handle(fact.path(), fact.span(), None)?;
+        Ok(Some(ProjectGlobalAccessMetadata {
+            fact,
+            function,
+            source_handle,
+        }))
+    }
     /// Borrow one exact native function after joining the immutable source registry.
     pub fn function_binding_metadata(
         &self,

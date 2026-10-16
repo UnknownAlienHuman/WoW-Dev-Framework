@@ -104,6 +104,7 @@ impl FederationQueryRequest {
                 value,
                 "wow-search/source-observation-result-set/1"
                     | "wow-search/source-observation-declaration-result-set/1"
+                    | "wow-search/source-inventory-result-set/1"
             )
         } else {
             value == "wow-search/project-entity-result-set/1"

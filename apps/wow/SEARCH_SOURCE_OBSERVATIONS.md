@@ -106,3 +106,60 @@ serialized Search metadata cannot reconstruct native authority.
 Global variable declarations, explicit aliases and cross-generation relationships
 remain separate owner work. This selection does not claim complete Lua symbol
 inventory, current WoW correctness, runtime loading or platform availability.
+
+## Consolidated source inventory
+
+`--source-inventory` selects `project_source_inventory_v1` on build/retire and
+`search observations`. It includes the existing local/member/function corpus plus
+every captured native Main global-access fact. Use
+`wow-search/source-inventory-query/1` and the additional `global_access` kind.
+Existing modes, APIs, profile/manifest/query/result and retained-session bytes are
+preserved. Mixed mode flags or mismatched component/profile/schema fail.
+
+Global records retain the original report/fact/file/digest/access span, enclosing
+function and source handles, resolution, declaration origin, typed keys, incomplete
+path, original alias hops and blockers. The Project source port performs the real
+immutable report/file/function/source join for ordinary and Blizzard sources; it
+does not assert Graph membership. Counts preserve incomplete paths and blocked
+aliases. Nothing is inferred from Graph keys or source text and no parser is added.
+
+An explicit slot query is:
+
+```json
+{
+  "schema": "wow-search/source-inventory-query/1",
+  "query": {
+    "class": "recorded_slot",
+    "root": "InventoryTable",
+    "keys": [{"kind": "integer", "value": "-1"}],
+    "alias_policy": "direct_only",
+    "access_kind": "read"
+  },
+  "kinds": ["global_access"],
+  "max_scanned_documents": 128,
+  "max_candidates": 128,
+  "max_result_bytes": 4194304
+}
+```
+
+Key kinds are `string`, `integer` and `boolean`; numeric and string keys never
+coalesce. Integers use canonical decimal **strings** within the existing exact Lua
+range, including negatives; `+1`, `-0`, leading zeros, fractions, exponents and
+out-of-range values fail. There are at most 128 keys, with 1024 bytes per string
+key; an empty string key is valid. No path is flattened into an invented name.
+
+`access_kind` is `any`, `read`, `write` or `unsupported_assignment`. A slot match
+requires a complete path and no alias blocker. `direct_only` excludes alias hops.
+Explicit `include_possible` may return an unblocked syntactic hop as a separate
+Candidate signal, never an exact entity alias or runtime association. Reassigned
+and local-write blockers never match a target slot. Name queries can still return
+their original evidence; physical alias spelling comes from the original hop.
+Observed global writes are not canonical global declarations or WoW API truth.
+
+Inventory participates in the existing observed-source federation by setting
+`source_component` to `source_inventory`. Initial native binding, complete manifest
+comparison and original holds apply. Captured four/five-root continuation works
+with source inputs/stores offline. A direct recorded slot has outer band 4; a
+possible alias association has band 10. No source signal upgrades Reference or
+claims authoritative absence. Source-to-context/frontend and full corpus/runtime
+acceptance remain separate.

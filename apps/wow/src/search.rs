@@ -17,9 +17,9 @@ use wow_service::{
     search::{
         EntityContinueRequest, EntityResultReleaseRequest, EntityRetrievalRequest,
         FederationContinueRequest, FederationRequest, FederationResultReleaseRequest,
-        LocalMetadataPermission, ReferenceContinueRequest, ReferenceIndexBuildRequest,
-        ReferenceResultReleaseRequest, ReferenceShardRequest, SearchBounds,
-        SearchBuildQueryRequest, SearchContinueRequest, SearchIndexBuildRequest,
+        LocalMetadataPermission, ObservationComponent, ReferenceContinueRequest,
+        ReferenceIndexBuildRequest, ReferenceResultReleaseRequest, ReferenceShardRequest,
+        SearchBounds, SearchBuildQueryRequest, SearchContinueRequest, SearchIndexBuildRequest,
         SearchOperationService, SearchResultReleaseRequest, SearchRetrievalRequest,
         SearchShardQueryRequest, SearchShardRetireRequest, SearchSourceHoldBinding,
         SearchStoreGcRequest, SearchStoreLimits, SourceObservationRetrievalRequest,
@@ -41,6 +41,7 @@ const FILE_SET_HELP: &str = "For one-shot build-query, optional --file-ids <JSON
 const OBSERVATIONS_HELP: &str = "Source observation index build/retire use --source-observations instead of file/Graph selection. wow search observations --generation <EXACT> --search-shard-id <EXACT> --object-id <EXACT> --profile-digest <EXACT> --query-json <CLOSED-JSON> uses original Search/Store/output bounds, --search-store, --operation-id, --lease-expires-after and --allow-local-metadata-only. Recorded local names/direct member use sites retain source evidence; they confer no canonical name, alias, runtime target or absence authority.\n";
 const DECLARATIONS_HELP: &str = "Optional --source-declarations selects the named-function mode on source index build/retire and search observations, with its exact component/profile and wow-search/source-observation-declaration-query/1 schema. Qualified/short names and recorded dot/colon receiver paths come from native declaration tokens; assignments/aliases/anonymous closures are not inferred. See SEARCH_SOURCE_OBSERVATIONS.md.\n";
 const OBSERVED_FEDERATION_HELP: &str = "Observed source slots use wow-service/exact-observed-source-reference-input/1 or exact-observed-source-platform-reference-input/1, matching observed-source query schemas and explicit source_component=source_observations|source_declarations in each source slot. Same federated/page/continue/release commands and four/five retained roots; initial native source binding required. See SEARCH_FEDERATION.md.\n";
+const INVENTORY_HELP: &str = "--source-inventory selects native local/member/function/global-access observations with wow-search/source-inventory-query/1. recorded_slot accepts typed string/integer/boolean keys, explicit access_kind and direct_only|include_possible alias policy; blocked/incomplete paths cannot be exact slots. Federation source_component=source_inventory reuses captured pages. See SEARCH_SOURCE_OBSERVATIONS.md.\n";
 const MAX_ARGUMENT_BYTES: usize = 128 * 1024;
 const MAX_VALUE_BYTES: usize = 32 * 1024;
 
@@ -139,6 +140,7 @@ fn run_with_io<W: Write, E: Write>(
             .and_then(|()| stdout.write_all(ENTITY_PAGES_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(OBSERVATIONS_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(DECLARATIONS_HELP.as_bytes()))
+            .and_then(|()| stdout.write_all(INVENTORY_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(FEDERATION_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(OBSERVED_FEDERATION_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(BLIZZARD_FEDERATION_HELP.as_bytes()))
@@ -454,6 +456,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             "--graph-entities",
             "--source-observations",
             "--source-declarations",
+            "--source-inventory",
         ]),
         "query" => allowed.extend_from_slice(&[
             "--generation",
@@ -496,6 +499,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             "--query-json",
             "--lease-expires-after",
             "--source-declarations",
+            "--source-inventory",
         ]),
         "continue" => allowed.push("--continuation-json"),
         "release" => allowed.push("--session-object-id"),
@@ -507,6 +511,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             "--graph-entities",
             "--source-observations",
             "--source-declarations",
+            "--source-inventory",
             "--search-shard-id",
             "--object-id",
             "--profile-digest",
@@ -622,7 +627,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             .map_err(|_| "invalid exact ProjectEntity session release")?,
         ),
         "observations" => DurableCommand::Observations(
-            SourceObservationRetrievalRequest::new_selected(
+            SourceObservationRetrievalRequest::new_component(
                 OperationId::new(required_text(&options, "--operation-id")?)
                     .map_err(|_| "invalid --operation-id")?,
                 store_path,
@@ -636,7 +641,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
                 max_output_bytes,
                 positive_u64(&options, "--lease-expires-after")?.get(),
                 LocalMetadataPermission::authorize_local_metadata_only(),
-                options.contains_key("--source-declarations"),
+                source_query_component(&options)?,
                 &AtomicBool::new(false),
             )
             .map_err(|_| "invalid exact source observation Search request")?,
@@ -871,7 +876,11 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
                 }
             }
             .map_err(|_| "invalid exact search build request")?;
-            let request = if options.contains_key("--source-declarations") {
+            let request = if options.contains_key("--source-inventory") {
+                request
+                    .with_source_inventory()
+                    .map_err(|_| "invalid source inventory selection")?
+            } else if options.contains_key("--source-declarations") {
                 request
                     .with_function_declarations()
                     .map_err(|_| "invalid named declaration selection")?
@@ -993,7 +1002,11 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
                 }
             }
             .map_err(|_| "invalid exact search retirement request")?;
-            let request = if options.contains_key("--source-declarations") {
+            let request = if options.contains_key("--source-inventory") {
+                request
+                    .with_source_inventory()
+                    .map_err(|_| "invalid source inventory retirement selection")?
+            } else if options.contains_key("--source-declarations") {
                 request
                     .with_function_declarations()
                     .map_err(|_| "invalid named declaration retirement selection")?
@@ -1037,8 +1050,11 @@ fn parse_durable_options(
             || option == "--graph-entities"
             || option == "--source-observations"
             || option == "--source-declarations"
+            || option == "--source-inventory"
         {
-            let key = if option == "--source-declarations" {
+            let key = if option == "--source-inventory" {
+                "--source-inventory"
+            } else if option == "--source-declarations" {
                 "--source-declarations"
             } else if option == "--source-observations" {
                 "--source-observations"
@@ -1106,11 +1122,16 @@ fn durable_file_ids(
 fn source_observation_selection(
     options: &BTreeMap<&'static str, OsString>,
 ) -> Result<bool, &'static str> {
-    let selected = options.contains_key("--source-observations")
-        || options.contains_key("--source-declarations");
-    if options.contains_key("--source-observations")
-        && options.contains_key("--source-declarations")
-    {
+    let count = [
+        "--source-observations",
+        "--source-declarations",
+        "--source-inventory",
+    ]
+    .iter()
+    .filter(|flag| options.contains_key(**flag))
+    .count();
+    let selected = count > 0;
+    if count > 1 {
         return Err("select one source observation mode");
     }
     if selected
@@ -1121,6 +1142,20 @@ fn source_observation_selection(
         return Err("--source-observations conflicts with other document selections");
     }
     Ok(selected)
+}
+fn source_query_component(
+    options: &BTreeMap<&'static str, OsString>,
+) -> Result<ObservationComponent, &'static str> {
+    if options.contains_key("--source-declarations") && options.contains_key("--source-inventory") {
+        return Err("select one source query component");
+    }
+    Ok(if options.contains_key("--source-inventory") {
+        ObservationComponent::SourceInventory
+    } else if options.contains_key("--source-declarations") {
+        ObservationComponent::SourceDeclarations
+    } else {
+        ObservationComponent::SourceObservations
+    })
 }
 
 fn graph_entity_selection(
