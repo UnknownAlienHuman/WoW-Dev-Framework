@@ -626,7 +626,7 @@ impl ObservationSearchShard {
         &self.manifest.profile_digest
     }
     pub fn release(self, store: &mut Store) -> SearchResult<()> {
-        self.physical.release(store).map_err(SearchError::from)
+        release_physical(self.physical, store)
     }
 }
 #[allow(clippy::too_many_arguments)]

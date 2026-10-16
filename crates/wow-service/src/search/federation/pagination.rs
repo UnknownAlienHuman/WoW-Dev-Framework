@@ -1,6 +1,9 @@
 //! Four-root captured federation sessions, authenticated by prior completion.
 use super::source_slot::SourceRetainedBinding;
 use super::*;
+mod explanation;
+pub use explanation::FederationExplainRequest;
+pub(in crate::search) use explanation::explain_result;
 use wow_search::federation::{
     FederationPage, FederationPageCursor, FederationQueryResult, page_retained_source_federation,
 };
@@ -495,17 +498,17 @@ fn unavailable() -> ServiceError {
         "exact captured federation result/shards/ReferenceView unavailable",
     )
 }
-fn preserve_closure_errors(
-    result: ServiceResult<FederationPage>,
+fn preserve_closure_errors<T>(
+    result: ServiceResult<T>,
     closed: ServiceResult<()>,
-) -> ServiceResult<FederationPage> {
+) -> ServiceResult<T> {
     preserve_named_closure_errors(result, closed, "primary")
 }
-fn preserve_named_closure_errors(
-    result: ServiceResult<FederationPage>,
+fn preserve_named_closure_errors<T>(
+    result: ServiceResult<T>,
     closed: ServiceResult<()>,
     owner: &str,
-) -> ServiceResult<FederationPage> {
+) -> ServiceResult<T> {
     match (result, closed) {
         (Ok(page), Ok(())) => Ok(page),
         (Err(error), Ok(())) | (Ok(_), Err(error)) => Err(error),
@@ -538,7 +541,7 @@ mod tests {
     use super::*;
     #[test]
     fn dual_close_failure_keeps_both_reconciliation_identities() -> ServiceResult<()> {
-        let result = preserve_closure_errors(
+        let result: ServiceResult<FederationPage> = preserve_closure_errors(
             Err(failure(
                 ServiceErrorCode::StoreOutcomeUnknown,
                 "reference lease=reference-123 object=reference-456",

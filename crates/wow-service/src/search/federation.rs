@@ -8,7 +8,9 @@ use wow_search::federation::{
 mod source_slot;
 use source_slot::SourceRequest;
 pub(in crate::search) mod pagination;
-pub use pagination::{FederationContinueRequest, FederationResultReleaseRequest};
+pub use pagination::{
+    FederationContinueRequest, FederationExplainRequest, FederationResultReleaseRequest,
+};
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Input {

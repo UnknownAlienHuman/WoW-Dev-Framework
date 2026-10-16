@@ -1,6 +1,8 @@
 //! Whole-candidate pages of an immutable Search capture, never native Graph truth.
 use super::*;
+mod explanation;
 use crate::page_budget::{PageBudget, PageLimits};
+pub use explanation::{FederationCandidateExplanation, explain_retained_source_federation};
 const POLICY_SCHEMA: &str = "wow-search/federated-page-policy/1";
 const PAGE_SCHEMA: &str = "wow-search/federated-result-page/1";
 const PAGE_PROFILE: &str = "wow-search/federated-captured-whole-candidate/1";
@@ -303,16 +305,14 @@ pub fn page_retained_source_federation(
     )
 }
 #[allow(clippy::too_many_arguments)]
-fn page_retained_impl(
+fn validate_retained_impl(
     primary: RetainedSourceShard<'_>,
     blizzard: Option<RetainedSourceShard<'_>>,
     reference: &crate::reference::ReferenceSearchShard,
     bytes: &[u8],
     request: &FederationQueryRequest,
-    policy: &FederationPagePolicy,
-    cursor: Option<&FederationPageCursor>,
     stop: &AtomicBool,
-) -> SearchResult<FederationPage> {
+) -> SearchResult<serde_json::Value> {
     check(stop)?;
     request.validate()?;
     if request.requires_blizzard() != blizzard.is_some()
@@ -628,6 +628,20 @@ fn page_retained_impl(
         }
         previous = Some(order);
     }
+    Ok(envelope)
+}
+#[allow(clippy::too_many_arguments)]
+fn page_retained_impl(
+    primary: RetainedSourceShard<'_>,
+    blizzard: Option<RetainedSourceShard<'_>>,
+    reference: &crate::reference::ReferenceSearchShard,
+    bytes: &[u8],
+    request: &FederationQueryRequest,
+    policy: &FederationPagePolicy,
+    cursor: Option<&FederationPageCursor>,
+    stop: &AtomicBool,
+) -> SearchResult<FederationPage> {
+    validate_retained_impl(primary, blizzard, reference, bytes, request, stop)?;
     render(bytes, policy, cursor, stop)
 }
 fn number(value: &serde_json::Value, key: &str) -> SearchResult<u64> {

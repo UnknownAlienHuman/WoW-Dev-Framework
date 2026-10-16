@@ -10,7 +10,8 @@ pub use entity::{
     EntityContinueRequest, EntityExplainRequest, EntityResultReleaseRequest, EntityRetrievalRequest,
 };
 pub use federation::{
-    FederationContinueRequest, FederationRequest, FederationResultReleaseRequest,
+    FederationContinueRequest, FederationExplainRequest, FederationRequest,
+    FederationResultReleaseRequest,
 };
 mod reference;
 pub use reference::{
@@ -464,6 +465,13 @@ pub struct SearchOperationService {
 }
 
 impl SearchOperationService {
+    pub fn explain_federated_candidate(
+        &self,
+        request: &FederationExplainRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        federation::pagination::explain_result(request, stop)
+    }
     pub fn explain_reference_candidate(
         &self,
         request: &ReferenceExplainRequest,

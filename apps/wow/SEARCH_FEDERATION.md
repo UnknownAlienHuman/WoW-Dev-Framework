@@ -1,5 +1,46 @@
 # Exact primary-project and Reference federation
 
+## Exact explanation from a retained fused result
+
+```text
+wow search federated explain --explain-json <CLOSED-JSON>
+  --search-store <EXISTING-STORE> --operation-id <ID>
+  --lease-expires-after <EPOCH> --allow-local-metadata-only
+  <ORIGINAL-STORE-BOUNDS> --max-output-bytes <LIMIT>
+```
+
+```json
+{
+  "schema": "wow-service/federated-explain-input/1",
+  "session_object_id": "<EXACT-FEDERATION-SESSION-OBJECT-ID>",
+  "result_set_id": "<EXACT-FUSED-RESULT-SET-ID>",
+  "candidate_id": "<EXACT-FUSED-CANDIDATE-ID>"
+}
+```
+
+The explicit fused candidate is read from an active original session. Search
+shares its complete frozen capture validator with pages, including source kinds,
+component request/profile/document guards, original ranks/caps/IDs and ordering.
+It returns the unchanged fused candidate (including `original_candidate`) and
+whole fused query context/status. Component captures deliberately retain only
+selected original rows; they are never reconstructed as full component result
+sets or passed through standalone full-result explain validators.
+
+Existing Entity and observed Source slots, excluded/required Blizzard and the
+original Reference shard/view are opened exactly. No native query, Graph, source
+acquisition, Current, rank recomputation or selection is performed. Original
+partial/truncated/conflicted/unavailable state remains visible. This separately
+bounded read does not advance/reset page cursors or change persisted formats.
+
+One Service operation checks and fences all four/five original roots and closes
+every acquired resource in reverse order even after a later failure. A new read
+requires active retention; missing/released/mismatched/absent candidates fail,
+with no rank/name/first-candidate fallback. The Store must exist. Identical
+completed replay returns historical bytes before reopening owners, including
+after explicit release and GC. Original Store bounds are preserved; output
+ceiling and temporary lease belong to this operation. CLI uses one Service call
+and the original status/exit framing, with no query/page/source selector override.
+
 `wow search federated` queries compatible exact ProjectEntity and native
 Reference shards in one physical SearchStore and returns one ranked result:
 

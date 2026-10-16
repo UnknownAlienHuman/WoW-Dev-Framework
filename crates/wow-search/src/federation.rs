@@ -6,7 +6,8 @@ use std::collections::BTreeSet;
 mod observation_bands;
 mod pagination;
 pub use pagination::{
-    FederationPage, FederationPageCursor, FederationPagePolicy, page_retained_federation,
+    FederationCandidateExplanation, FederationPage, FederationPageCursor, FederationPagePolicy,
+    explain_retained_source_federation, page_retained_federation,
     page_retained_federation_with_blizzard, page_retained_source_federation,
 };
 
