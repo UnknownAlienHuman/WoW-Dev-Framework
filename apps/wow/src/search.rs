@@ -7,13 +7,12 @@ use std::{
     num::{NonZeroU32, NonZeroU64},
     path::PathBuf,
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
+        Arc,
     },
 };
 
 use wow_service::{
-    OperationId, ServiceErrorCode,
     search::{
         EntityContinueRequest, EntityExplainRequest, EntityResultReleaseRequest,
         EntityRetrievalRequest, FederationContinueRequest, FederationExplainRequest,
@@ -22,10 +21,11 @@ use wow_service::{
         ReferenceIndexBuildRequest, ReferenceResultReleaseRequest, ReferenceShardRequest,
         SearchBounds, SearchBuildQueryRequest, SearchContinueRequest, SearchIndexBuildRequest,
         SearchOperationService, SearchResultReleaseRequest, SearchRetrievalRequest,
-        SearchShardQueryRequest, SearchShardRetireRequest, SearchSourceHoldBinding,
-        SearchStoreGcRequest, SearchStoreLimits, SourceObservationExplainRequest,
-        SourceObservationRetrievalRequest,
+        SearchSelectionRequest, SearchShardQueryRequest, SearchShardRetireRequest,
+        SearchSourceHoldBinding, SearchStoreGcRequest, SearchStoreLimits,
+        SourceObservationExplainRequest, SourceObservationRetrievalRequest,
     },
+    OperationId, ServiceErrorCode,
 };
 
 const HELP: &str = "wow search index build --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --operation-id <ID> --allow-local-metadata-only <finite bounds>\nwow search query --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --literal-query <UTF-8-LITERAL> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index retire --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --build-operation-id <BuildOperationId> --source-store-epoch-id <ExactEpochId> --source-generation-hold-id <ExactRetentionRootId> --source-generation-hold-digest <sha256:...> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index gc --search-store <SEARCH-STORE-FILE> --target-object-id <ExactObjectId> --operation-id <ID> --gc-now <epoch> --gc-max-deletes <positive-u32> <Store limits>\nwow search build-query --store-root <PROJECT-STORE> <existing one-shot route; it does not claim durable SearchStore persistence>\nAll durable commands require --max-output-bytes <positive-u64> and Store limits: --store-max-object-bytes <positive-u64> --store-max-batch-objects <positive-u32> --store-max-catalog-mutations <positive-u32> --store-max-manifest-records <positive-u32> --store-max-gc-deletes <positive-u32>.\nBuild/query/retire also require Search bounds: --max-documents <positive-u32> --max-document-id-bytes <positive-u32> --max-owner-metadata-label-bytes <positive-u32> --max-literal-query-bytes <positive-u32> --max-candidate-results <positive-u32> --max-owner-evidence-records <positive-u32> --max-owner-manifest-bytes <positive-u64> --max-database-bytes <positive-u64> --max-search-object-bytes <positive-u64>.\n";
@@ -36,6 +36,7 @@ const REFERENCE_EXPLAIN_HELP: &str = "wow search reference explain --explain-jso
 const ENTITY_EXPLAIN_HELP: &str = "wow search entities explain --explain-json <wow-service/project-entity-explain-input/1 JSON> --search-store <EXISTING-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output limits>. Exact session_object_id/result_set_id/candidate_id only; returns original captured explanation without query/Graph/source rerun or inferred selection.\n";
 const REFERENCE_INSPECTION_HELP: &str = "wow search reference status|validate --handle-json <EXACT-HANDLE> --search-store <EXISTING-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output limits>. Checks the exact native retained shard without a search, source access or repair. Valid covers native owner/physical open only; full E4 validation stays not_evaluated. Invalid exits1, unavailable/not_evaluated exits2. Replay returns the original observation; use a new operation ID for a fresh observation.\n";
 const BLIZZARD_FEDERATION_HELP: &str = "Required Blizzard UI uses request schema wow-service/exact-platform-search-federation-input/1 with an exact blizzard source-hold/shard/query record, and query schema wow-search/exact-primary-platform-reference-query/1 with blizzard_ui=required and all3universe priorities. Native ProjectKind/source/package binding required; source grade stays explicit. Captured pages retain5roots; choose original Store catalog-mutation capacity>=9. Excluded2universe schemas/bytes remain exact.\n";
+const SELECT_HELP: &str = "wow search select --selection-json <wow-service/search-selection-input/1 JSON> --search-store <EXISTING-STORE> --operation-id <ID> --allow-local-metadata-only <Store/output limits>. Consumes exact completed owner-validated journal output; emits inert explicit selection receipt. No query/source rerun, no context execution, no native owner lease.\n";
 const FEDERATION_HELP: &str = "wow search federated --request-json <wow-service/exact-search-federation-input/1 JSON> --search-store <SAME-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output limits>. Optional --page-json <wow-search/federated-page-policy/1 JSON> retains captured result, primary shard, Reference shard and ReferenceView. wow search federated continue --continuation-json <EXACT> and wow search federated results release --session-object-id <EXACT> use the same Store/output limits. Requires compatible exact native owners; no Current, implicit build or cross-profile fallback.\n";
 const ENTITY_PAGES_HELP: &str = "ProjectEntity query accepts optional --page-json <wow-search/project-entity-page-policy/1 JSON>. wow search entities continue --continuation-json <EXACT-TOKEN> and wow search entities results release --session-object-id <EXACT> use the same --search-store and original Store/output limits, --operation-id and --allow-local-metadata-only. Pages retain the original Search capture and shard; continuation does not recompute native Graph owners.\n";
 const ENTITIES_HELP: &str = "ProjectEntity index build/retire use --graph-entities instead of --file-id/--file-ids. wow search entities --store-root <ORIGINAL-PROJECT-STORE> --generation <EXACT> --search-store <SEARCH-STORE> --search-shard-id <ID> --object-id <ID> --profile-digest <DIGEST> --build-operation-id <ORIGINAL> --source-store-epoch-id <EXACT> --source-generation-hold-id <EXACT> --source-generation-hold-digest <EXACT> --query-json <CLOSED-ENTITY-QUERY> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Search/Store/output bounds>. Actual graph seed expansion uses native Graph owners; opaque owner keys are metadata, not canonical names.\n";
@@ -90,6 +91,7 @@ struct ParsedDurableSearch {
 enum DurableCommand {
     Observations(SourceObservationRetrievalRequest),
     ObservationExplain(SourceObservationExplainRequest),
+    Select(SearchSelectionRequest),
     FederatedContinue(FederationContinueRequest),
     FederatedExplain(FederationExplainRequest),
     FederatedRelease(FederationResultReleaseRequest),
@@ -162,6 +164,7 @@ fn run_with_io<W: Write, E: Write>(
             .and_then(|()| stdout.write_all(FEDERATED_EXPLAIN_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(OBSERVED_FEDERATION_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(BLIZZARD_FEDERATION_HELP.as_bytes()))
+            .and_then(|()| stdout.write_all(SELECT_HELP.as_bytes()))
             .and_then(|()| stdout.flush())
         {
             Ok(()) => 0,
@@ -261,6 +264,7 @@ fn run_durable<W: Write, E: Write>(
         DurableCommand::ObservationExplain(request) => {
             service.explain_source_observation_candidate(&request, stop)
         }
+        DurableCommand::Select(request) => service.select_candidate(&request, stop),
         DurableCommand::ReferenceContinue(request) => {
             service.continue_reference_results(&request, stop)
         }
@@ -389,6 +393,10 @@ fn is_help(arguments: &[OsString]) -> bool {
             && arguments[0] == "search"
             && arguments[1] == "reference"
             && arguments.iter().any(|v| v == "--help" || v == "-h"))
+        || (arguments.len() >= 3
+            && arguments[0] == "search"
+            && arguments[1] == "select"
+            && arguments.iter().any(|v| v == "--help" || v == "-h"))
 }
 
 fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, &'static str> {
@@ -434,6 +442,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
         },
         "query" => ("query", 2),
         "retrieve" => ("retrieve", 2),
+        "select" => ("select", 2),
         "continue" => ("continue", 2),
         "results" if arguments.get(2).is_some_and(|value| value == "release") => ("release", 3),
         "index" => match arguments.get(2).and_then(|value| value.to_str()) {
@@ -479,6 +488,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
         "federated-explain" => {
             allowed.extend_from_slice(&["--explain-json", "--lease-expires-after"])
         }
+        "select" => allowed.push("--selection-json"),
         "federated-release" => allowed.push("--session-object-id"),
         "reference-build" => allowed.extend_from_slice(&[
             "--config",
@@ -627,6 +637,19 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
                 &AtomicBool::new(false),
             )
             .map_err(|_| "invalid exact Source explanation guard")?,
+        ),
+        "select" => DurableCommand::Select(
+            SearchSelectionRequest::new(
+                OperationId::new(required_text(&options, "--operation-id")?)
+                    .map_err(|_| "invalid --operation-id")?,
+                store_path,
+                required_text(&options, "--selection-json")?.as_bytes(),
+                store_limits,
+                max_output_bytes,
+                LocalMetadataPermission::authorize_local_metadata_only(),
+                &AtomicBool::new(false),
+            )
+            .map_err(|_| "invalid exact selection request")?,
         ),
         "federated-explain" => DurableCommand::FederatedExplain(
             FederationExplainRequest::new(
@@ -1520,8 +1543,8 @@ mod tests {
 
     #[test]
     #[ignore = "requires the retained W20 fixture; set WOW_W20_RETAINED_STORE_ROOT and run with --ignored"]
-    fn retained_exact_generation_build_query_route_returns_exact_and_candidate_evidence()
-    -> Result<(), Box<dyn Error>> {
+    fn retained_exact_generation_build_query_route_returns_exact_and_candidate_evidence(
+    ) -> Result<(), Box<dyn Error>> {
         let store_root = std::env::var_os("WOW_W20_RETAINED_STORE_ROOT")
             .ok_or("set WOW_W20_RETAINED_STORE_ROOT to the retained registered-store directory")?;
         let mut stdout = Vec::new();
