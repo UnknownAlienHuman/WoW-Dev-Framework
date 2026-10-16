@@ -87,6 +87,8 @@ fn native_lineage_snapshot_survives_reopen_replay_and_exact_retirement()
         4
     );
     assert!(!String::from_utf8_lossy(&comparison).contains(text));
+    let saved_query =
+        super::query_tests::native_queries(&source_root, &store_path, &result, &comparison, &stop)?;
     let consumer = Store::open_existing(&store_path, configuration(request.store_limits)?)?;
     let saved = consumer
         .object(&result.snapshot.object_id)?
@@ -125,6 +127,7 @@ fn native_lineage_snapshot_survives_reopen_replay_and_exact_retirement()
         "native-lineage-retire",
         &stop,
     )?;
+    super::query_tests::after_retire(&source_root, &store_path, &saved_query, &stop)?;
     assert_eq!(
         retire_lineage_snapshot(
             &source_root,
@@ -218,6 +221,7 @@ fn native_lineage_snapshot_survives_reopen_replay_and_exact_retirement()
     let source = LiveProjectStore::open_retained_owner_store(&source_root)?;
     assert!(source.retention_roots(&stop)?.is_empty());
     source.close()?;
+    super::query_tests::native_view_leases(&source_root, &store_path, &request, &stop)?;
     std::fs::remove_dir_all(root)?;
     Ok(())
 }

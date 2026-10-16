@@ -1,10 +1,14 @@
 //! Exact native Project -> retained Candidate lineage orchestration.
 //! Every durable effect uses the existing typed Store/retention owners.
+mod query;
+#[cfg(test)]
+mod query_tests;
 mod source_holds;
 #[cfg(test)]
 mod tests;
 mod workflow;
 use crate::{OperationId, ServiceError, ServiceErrorCode, ServiceResult};
+pub use query::*;
 use serde::{Deserialize, Serialize};
 use source_holds::SourceHoldPlan;
 use std::{
@@ -202,6 +206,18 @@ fn prepare(
     source: &crate::live_project::LiveProjectStore,
     stop: &AtomicBool,
 ) -> ServiceResult<PreparedLineageSnapshot> {
+    with_prepared_pair(request, source, stop, |expected, _, _| Ok(expected))
+}
+fn with_prepared_pair<T>(
+    request: &LineageBuildRequest,
+    source: &crate::live_project::LiveProjectStore,
+    stop: &AtomicBool,
+    run: impl FnOnce(
+        PreparedLineageSnapshot,
+        &crate::live_project::LiveProjectRead,
+        &crate::live_project::LiveProjectRead,
+    ) -> ServiceResult<T>,
+) -> ServiceResult<T> {
     let pair_request = crate::live_project::ProjectGenerationPairRequest::new(
         &request.before_generation,
         &request.after_generation,
@@ -243,7 +259,8 @@ fn prepare(
             {
                 return Err(failure(ServiceErrorCode::IdentityMismatch));
             }
-            PreparedLineageSnapshot::build(input, stop).map_err(graph_error)
+            let expected = PreparedLineageSnapshot::build(input, stop).map_err(graph_error)?;
+            run(expected, before, after)
         },
     )
 }
@@ -253,6 +270,15 @@ fn qualify(
     receipt: &BuildReceipt,
     stop: &AtomicBool,
 ) -> ServiceResult<PreparedLineageSnapshot> {
+    verify_source_binding(source, store, receipt, stop)?;
+    prepare(&receipt.request, source, stop)
+}
+fn verify_source_binding(
+    source: &crate::live_project::LiveProjectStore,
+    store: &Store,
+    receipt: &BuildReceipt,
+    stop: &AtomicBool,
+) -> ServiceResult<()> {
     receipt.request.validate()?;
     receipt.source_holds.verify(
         source.retained_owner(),
@@ -268,7 +294,7 @@ fn qualify(
     {
         return Err(failure(ServiceErrorCode::IdentityMismatch));
     }
-    prepare(&receipt.request, source, stop)
+    Ok(())
 }
 fn resources<T>(
     source_root: &Path,
@@ -357,6 +383,7 @@ fn graph_error(error: wow_graph::GraphError) -> ServiceError {
     failure(match error.code() {
         wow_graph::GraphErrorCode::Cancelled => ServiceErrorCode::Cancelled,
         wow_graph::GraphErrorCode::BudgetExceeded => ServiceErrorCode::BudgetExceeded,
+        wow_graph::GraphErrorCode::LineageReadCloseFailed => ServiceErrorCode::StoreOutcomeUnknown,
         _ => ServiceErrorCode::IdentityMismatch,
     })
 }

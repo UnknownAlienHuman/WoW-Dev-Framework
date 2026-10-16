@@ -5,6 +5,10 @@ mod candidates;
 pub use candidates::*;
 mod snapshot;
 pub use snapshot::*;
+mod query;
+pub use query::*;
+mod read_view;
+pub use read_view::*;
 
 use crate::{GraphError, GraphErrorCode, GraphResult};
 use serde::Serialize;

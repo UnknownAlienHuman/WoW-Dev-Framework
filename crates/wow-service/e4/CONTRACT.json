@@ -32,7 +32,9 @@
   },
   "lineage_candidate_subset": {
     "issue": 178,
-    "operations": ["build_lineage_snapshot", "compare_lineage_snapshot", "retire_lineage_snapshot", "abandon_lineage_snapshot"],
+    "operations": ["build_lineage_snapshot", "compare_lineage_snapshot", "retire_lineage_snapshot", "abandon_lineage_snapshot", "query_lineage_snapshot"],
+    "native_read_profile": "wow-service/lineage-query/1",
+    "native_read_scope": "exact status, selected validation, entity comparison and whole proposal/component explanation with checked leases and retained observation replay",
     "owner": "crates/wow-service/src/lineage.rs",
     "contract": "apps/wow/LINEAGE_CANDIDATES.md",
     "proof_ceiling": "Candidate",

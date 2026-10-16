@@ -12,7 +12,9 @@
     "profile": "wow-graph/lineage/ordinary-project-source-span-candidates/1",
     "store_profile": "wow-graph.lineage-project-span-store.v1",
     "owner": "crates/wow-graph/src/lineage.rs",
-    "scope": "bounded native ordinary Project source-span Candidate proposals/components and immutable inactive/readback/sealed snapshots",
+    "scope": "bounded native ordinary Project source-span Candidate proposals/components, immutable inactive/readback/sealed snapshots and exact leased read/query views",
+    "read_operations": ["open_lineage_graph_view", "status", "selected_candidate_validate", "compare_entity_generations", "proposal_component_explain"],
+    "read_result_schema": "wow-graph/lineage-candidate-query-result/1",
     "accepted_assertion_count": 0,
     "promotion": "not_evaluated",
     "full_e4_b_acceptance": "not-accepted"

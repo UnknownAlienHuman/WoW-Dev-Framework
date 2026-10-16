@@ -215,3 +215,16 @@ At minimum:
 ## No repair
 
 Validation failure produces `Invalid` or typed failure/quarantine. It does not choose a candidate, modify review, weaken a relation schema, fill coverage, rewrite IDs, apply a recipe, or update a snapshot in place.
+
+## Selected native Candidate reader
+
+The ordinary Project source-span profile now has a real `LineageGraphView` with
+checked Store leases for the exact snapshot and validation objects. Its closed
+status/validate/entity-compare/proposal-or-component-explain queries preserve full
+Candidate ambiguity and native source/evidence closure; the native Project reads
+remain held through the operation. Selected consumers and exact request/result
+scope are documented in [`../../../apps/wow/LINEAGE_CANDIDATES.md`](../../../apps/wow/LINEAGE_CANDIDATES.md).
+This does not implement the remaining accepted assertion/review/change/migration/
+impact query inventory or full E4-B validation. Unknown IDs and incomplete closure
+are failures, not clean absence. Source and original snapshot wire bytes remain
+unchanged.

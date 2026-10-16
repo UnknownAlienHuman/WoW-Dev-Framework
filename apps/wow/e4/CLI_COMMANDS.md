@@ -253,3 +253,16 @@ The parser treats both components as IDs and does not split names/paths heuristi
 ## One-call rule
 
 After successful CLI/config/input parsing, exactly one `wow-service` operation is invoked. Validation, explain and continue commands are not composed from multiple public service calls inside the app.
+
+## Selected ordinary Project Candidate read profile
+
+The executable `wow-service/lineage-query/1` profile is specified in
+[`../LINEAGE_CANDIDATES.md`](../LINEAGE_CANDIDATES.md). It transports exact original
+build/digest/snapshot guards, role-bound entity IDs or a proposal/component ID,
+finite read limits and an explicit logical read-lease expiry through one
+`--request-json` input. Status/validate/explain and typed entity compare invoke
+one Service query operation. Legacy compare read/1 remains whole-snapshot
+inspection. No symbolic selector, assertion/review/change target or automatic
+candidate acceptance is implemented by this selected profile. Full E4-C remains
+pending; this additive strict JSON route does not activate the final generic
+selector inventory above.

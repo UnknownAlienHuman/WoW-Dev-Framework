@@ -68,3 +68,67 @@ rename/move/copy/split/merge conclusions, removal/introduction, migration or imp
 Full E4-B/E4-C, corpus, platform fault/durability, current Ketho/client/runtime and
 launch acceptance remain separate under #125, #118 and the existing qualification
 Issues. This path does not change Current or generation-local graph bytes.
+
+## Exact native read/query profile (#179)
+
+`wow lineage status`, `validate` and `explain` consume one strict
+`wow-service/lineage-query/1` request through the same explicit `--store-root`,
+`--lineage-store` and `--request-json <ABSOLUTE-FILE|->` options. `compare` also
+accepts this query schema for exact entity comparison. Its original read/1 input
+continues to return the exact whole saved Candidate snapshot as inspection.
+The CLI verb must match the closed `query.operation`; a status request under
+compare, display name or rank is refused before a service call.
+
+The query request fields are:
+
+```text
+schema = wow-service/lineage-query/1
+operation_id = new exact query operation ID
+build_operation_id + build_request_digest = original build receipt guards
+snapshot_id = exact original saved snapshot
+store_limits = original physical Store configuration
+query = one closed operation below
+limits = finite max_work, max_metadata_bytes, max_output_bytes,
+         max_components, max_entities, max_proposals
+lease_expires_after = explicit positive Store logical epoch, at most i64::MAX
+```
+
+Closed operations:
+
+```json
+{"operation":"status"}
+{"operation":"validate"}
+{"operation":"compare","before":{"role":"before","node_id":"<exact saved node ID>"},"after":{"role":"after","node_id":"<exact saved node ID>"}}
+{"operation":"explain","target":{"kind":"proposal","id":"<exact saved proposal ID>"}}
+{"operation":"explain","target":{"kind":"component","id":"<exact saved component ID>"}}
+```
+
+The original build guard fixes the before/after generations and profiles; a
+query cannot refresh or override them. Compare requires both exact role-bound
+entities. It returns their whole relevant components and every alternative,
+including the case where the requested pair was not proposed. Unknown entities
+or wrong roles fail. Explain returns the whole exact component closure, original
+native entity/ownership receipts and parent SourceFile node, joined typed source
+handles and evidence, original producer partitions, coverage, conflicts and
+before/after deferred metadata. No prefix of a component is called a complete
+explanation: insufficient item/work/byte bounds fail.
+
+Each fresh observation registers its exact operation/digest, holds both genuine
+native owner reads, and acquires real Store leases for the snapshot and validation
+objects. Graph checks reverse lease release on every success or error. Service
+persists the captured result only after the read view and native pair close, then
+checks both outer Store closures before delivery. The read budget is explicit and
+separate from the original native producer/requalification budget. Semantic result
+identity excludes observation counters; the Store result object binds full bytes.
+
+Retry with the same operation and request returns the original recorded native
+observation, including after snapshot retirement; it is not a fresh validity
+claim. Use a new operation ID for a fresh read. Changed requests conflict. A fresh
+read after retirement fails. Query execution changes no snapshot, source hold,
+Current pointer, review or accepted assertion. Logical lease expiry is not a
+wall-clock or power-loss durability claim.
+
+Successful query delivery exits 2: results remain CandidateOnly or Truncated.
+`selected_validation` covers only the actual ordinary Project source-span
+Candidate contract; `full_e4_b_validation` remains `not_evaluated`. Queries do not
+create future assertion/review/change/migration/impact results as empty successes.

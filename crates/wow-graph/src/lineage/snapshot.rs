@@ -17,18 +17,18 @@ const VALIDATION: &str = "lineage.validation";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct SnapshotRecord {
-    schema: Box<str>,
-    profile_id: Box<str>,
-    registry_id: Box<str>,
-    snapshot_id: Box<str>,
-    input_partition_id: Box<str>,
-    limits: LineageLimits,
-    input: ProjectFingerprintPartition,
-    candidates: LineageCandidateSet,
-    accepted_assertion_count: usize,
-    promotion: Box<str>,
-    negative_authority: bool,
+pub(super) struct SnapshotRecord {
+    pub(super) schema: Box<str>,
+    pub(super) profile_id: Box<str>,
+    pub(super) registry_id: Box<str>,
+    pub(super) snapshot_id: Box<str>,
+    pub(super) input_partition_id: Box<str>,
+    pub(super) limits: LineageLimits,
+    pub(super) input: ProjectFingerprintPartition,
+    pub(super) candidates: LineageCandidateSet,
+    pub(super) accepted_assertion_count: usize,
+    pub(super) promotion: Box<str>,
+    pub(super) negative_authority: bool,
 }
 #[derive(Serialize)]
 struct Identity<'a> {
@@ -80,7 +80,7 @@ impl SnapshotRecord {
 /// Only native membership-qualified inputs can construct this prepared overlay.
 /// It is not a sealed publication or a retained source-owner view.
 pub struct PreparedLineageSnapshot {
-    record: SnapshotRecord,
+    pub(super) record: SnapshotRecord,
     usage: LineageUsage,
 }
 impl PreparedLineageSnapshot {
@@ -155,7 +155,7 @@ pub struct SealedLineageHandle {
 }
 
 pub struct PersistentLineageStore<'a> {
-    store: &'a mut Store,
+    pub(super) store: &'a mut Store,
 }
 impl<'a> PersistentLineageStore<'a> {
     pub fn new(store: &'a mut Store) -> GraphResult<Self> {
@@ -311,6 +311,14 @@ impl<'a> PersistentLineageStore<'a> {
         expected: &PreparedLineageSnapshot,
         stop: &AtomicBool,
     ) -> GraphResult<()> {
+        self.validated_record(handle, expected, stop).map(|_| ())
+    }
+    pub(super) fn validated_record(
+        &self,
+        handle: &SealedLineageHandle,
+        expected: &PreparedLineageSnapshot,
+        stop: &AtomicBool,
+    ) -> GraphResult<SnapshotRecord> {
         checkpoint(stop)?;
         if handle.schema.as_ref() != "wow-graph/lineage-candidate-handle/1"
             || handle.snapshot_id.as_ref() != expected.snapshot_id()
@@ -357,7 +365,7 @@ impl<'a> PersistentLineageStore<'a> {
         if expected_report.object_id() != &handle.validation_object_id {
             return Err(invalid());
         }
-        Ok(())
+        Ok(record)
     }
     pub fn require_roots(&self, handle: &SealedLineageHandle) -> GraphResult<()> {
         let p = path(&handle.publication_id)?;

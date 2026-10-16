@@ -21,7 +21,8 @@
   ],
   "lineage_candidate_subset": {
     "issue": 178,
-    "commands": ["lineage build", "lineage compare", "lineage retire", "lineage abandon"],
+    "commands": ["lineage build", "lineage compare", "lineage retire", "lineage abandon", "lineage status", "lineage validate", "lineage explain"],
+    "native_read_profile": "wow-service/lineage-query/1",
     "owner": "apps/wow/src/lineage.rs",
     "contract": "apps/wow/LINEAGE_CANDIDATES.md",
     "proof_ceiling": "Candidate",

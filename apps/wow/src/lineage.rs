@@ -7,11 +7,12 @@ use std::{
 };
 use wow_service::ServiceErrorCode;
 use wow_service::lineage::{
-    LineageBuildRequest, LineageReadRequest, abandon_lineage_snapshot, build_lineage_snapshot,
-    compare_lineage_snapshot, retire_lineage_snapshot,
+    LineageBuildRequest, LineageCandidateQuery, LineageQueryRequest, LineageReadRequest,
+    abandon_lineage_snapshot, build_lineage_snapshot, compare_lineage_snapshot,
+    query_lineage_snapshot, retire_lineage_snapshot,
 };
 
-const HELP: &str = "wow lineage build|compare|retire|abandon --store-root <EXISTING-ORDINARY-PROJECT-STORE> --lineage-store <ABSOLUTE-STORE-FILE> --request-json <ABSOLUTE-JSON-FILE|-> [--operation-id <RETIRE-OR-ABANDON-ID>] [--max-output-bytes <ABANDON-BOUND>]\nBuild/abandon: wow-service/lineage-build/1. Compare/retire: wow-service/lineage-read/1, exact original build operation/digest/snapshot and Store limits. Candidate-only source-span discovery; no accepted lineage, absence, change, migration or runtime conclusion. Build/compare exit2. Retire releases exact snapshot/source roots; retained journal bytes remain. Abandon fences an unfinished original build, removes any inactive target, then releases its source holds. Abandon requires its own --max-output-bytes independent of the failed build bound.\n";
+const HELP: &str = "wow lineage build|compare|retire|abandon|status|validate|explain --store-root <EXISTING-ORDINARY-PROJECT-STORE> --lineage-store <ABSOLUTE-STORE-FILE> --request-json <ABSOLUTE-JSON-FILE|-> [--operation-id <RETIRE-OR-ABANDON-ID>] [--max-output-bytes <ABANDON-BOUND>]\nBuild/abandon: wow-service/lineage-build/1. Compare/retire: wow-service/lineage-read/1, exact original build operation/digest/snapshot and Store limits. Status/validate/explain and exact entity compare: wow-service/lineage-query/1, original build/digest/snapshot guards, exact proposal/component or role-bound node IDs, finite read limits and logical lease expiry. Same query operation replays its original capture; use a new operation ID for a fresh read. Candidate-only source-span discovery; no accepted lineage, absence, change, migration or runtime conclusion. Build/compare/status/validate/explain exit2. Retire releases exact snapshot/source roots; retained journal bytes remain. Abandon fences an unfinished original build, removes any inactive target, then releases its source holds. Abandon requires its own --max-output-bytes independent of the failed build bound.\n";
 pub(super) fn run(values: Vec<OsString>) -> u8 {
     if values.len() == 2 && values[1] == "--help" {
         return if io::stdout().lock().write_all(HELP.as_bytes()).is_ok() {
@@ -45,6 +46,9 @@ pub(super) fn run(values: Vec<OsString>) -> u8 {
             limit,
             &stop,
         ),
+        Request::Query(request) => {
+            query_lineage_snapshot(&command.source, &command.store, &request, &stop)
+        }
     };
     match result {
         Ok(bytes) => {
@@ -78,6 +82,13 @@ enum Request {
     Compare(LineageReadRequest),
     Retire(LineageReadRequest, String),
     Abandon(LineageBuildRequest, String, usize),
+    Query(LineageQueryRequest),
+}
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum CompareInput {
+    Legacy(LineageReadRequest),
+    Query(LineageQueryRequest),
 }
 struct Command {
     source: PathBuf,
@@ -96,7 +107,10 @@ fn parse(values: Vec<OsString>) -> Result<Command, ()> {
         return Err(());
     }
     let verb = values[1].to_str().ok_or(())?.to_owned();
-    if !matches!(verb.as_str(), "build" | "compare" | "retire" | "abandon") {
+    if !matches!(
+        verb.as_str(),
+        "build" | "compare" | "retire" | "abandon" | "status" | "validate" | "explain"
+    ) {
         return Err(());
     }
     let mut fields = BTreeMap::new();
@@ -135,6 +149,17 @@ fn parse(values: Vec<OsString>) -> Result<Command, ()> {
         if !path.is_absolute() {
             return Err(());
         }
+        let metadata = std::fs::symlink_metadata(&path).map_err(|_| ())?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return Err(());
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            if metadata.file_attributes() & 0x400 != 0 {
+                return Err(());
+            }
+        }
         std::fs::File::open(path)
             .map_err(|_| ())?
             .take(65537)
@@ -153,7 +178,13 @@ fn parse(values: Vec<OsString>) -> Result<Command, ()> {
     }
     let request = match verb.as_str() {
         "build" => Request::Build(serde_json::from_slice(&bytes).map_err(|_| ())?),
-        "compare" => Request::Compare(serde_json::from_slice(&bytes).map_err(|_| ())?),
+        "compare" => match serde_json::from_slice::<CompareInput>(&bytes).map_err(|_| ())? {
+            CompareInput::Legacy(request) => Request::Compare(request),
+            CompareInput::Query(request) => {
+                validate_verb_matches_query(&verb, &request.query)?;
+                Request::Query(request)
+            }
+        },
         "retire" => Request::Retire(
             serde_json::from_slice(&bytes).map_err(|_| ())?,
             field("--operation-id")?.to_str().ok_or(())?.to_owned(),
@@ -167,6 +198,12 @@ fn parse(values: Vec<OsString>) -> Result<Command, ()> {
                 .parse()
                 .map_err(|_| ())?,
         ),
+        "status" | "validate" | "explain" => {
+            let query_request: LineageQueryRequest =
+                serde_json::from_slice(&bytes).map_err(|_| ())?;
+            validate_verb_matches_query(&verb, &query_request.query)?;
+            Request::Query(query_request)
+        }
         _ => return Err(()),
     };
     Ok(Command {
@@ -175,4 +212,17 @@ fn parse(values: Vec<OsString>) -> Result<Command, ()> {
         request,
         retire,
     })
+}
+fn validate_verb_matches_query(verb: &str, query: &LineageCandidateQuery) -> Result<(), ()> {
+    if matches!(
+        (verb, query),
+        ("status", LineageCandidateQuery::Status {})
+            | ("validate", LineageCandidateQuery::Validate {})
+            | ("explain", LineageCandidateQuery::Explain { .. })
+            | ("compare", LineageCandidateQuery::Compare { .. })
+    ) {
+        Ok(())
+    } else {
+        Err(())
+    }
 }
