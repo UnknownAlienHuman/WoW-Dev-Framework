@@ -1,9 +1,32 @@
 //! Exact selection-to-native Context inspection composition.
 use super::*;
 use crate::context::{
-    ContextInspectLevel, ContextInspectRequest, ContextMapHostInput, ContextMapPublication,
-    ContextMapRoot, ContextMapStatus, execute_context_inspect,
+    ContextBuildRequest, ContextInspectLevel, ContextInspectRequest, ContextMapHostInput,
+    ContextMapPublication, ContextMapRoot, ContextMapStatus, ContextRenderSelection,
+    execute_context_build, execute_context_inspect,
 };
+
+pub(in crate::search) mod build;
+pub use build::SearchContextBuildRequest;
+
+enum ContextAction {
+    Inspect,
+    Build(ContextRenderSelection),
+}
+impl ContextAction {
+    fn operation(&self) -> &'static str {
+        match self {
+            Self::Inspect => "search_context",
+            Self::Build(_) => "search_context_build",
+        }
+    }
+    fn admission(&self) -> &'static str {
+        match self {
+            Self::Inspect => "exact_native_inspection",
+            Self::Build(_) => "exact_native_build",
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -97,18 +120,43 @@ pub(in crate::search) fn execute(
     request: &SearchContextRequest,
     stop: &AtomicBool,
 ) -> ServiceResult<Box<[u8]>> {
+    execute_plan(request, ContextAction::Inspect, stop)
+}
+
+fn execute_plan(
+    request: &SearchContextRequest,
+    action: ContextAction,
+    stop: &AtomicBool,
+) -> ServiceResult<Box<[u8]>> {
     check_cancelled(stop)?;
-    let (id, digest, public_digest) = durable_identity(
-        "search_context",
-        &request.operation_id,
-        &(
-            &request.input,
-            &request.host_binding,
-            request.store_limits,
-            request.max_output_bytes,
-            "local_metadata_only",
+    let operation = action.operation();
+    let admission = action.admission();
+    let (id, digest, public_digest) = match &action {
+        ContextAction::Inspect => durable_identity(
+            "search_context",
+            &request.operation_id,
+            &(
+                &request.input,
+                &request.host_binding,
+                request.store_limits,
+                request.max_output_bytes,
+                "local_metadata_only",
+            ),
         ),
-    )?;
+        ContextAction::Build(render) => durable_identity(
+            operation,
+            &request.operation_id,
+            &(
+                "wow-service/search-context-build-input/1",
+                &request.input,
+                render,
+                &request.host_binding,
+                request.store_limits,
+                request.max_output_bytes,
+                "local_metadata_only",
+            ),
+        ),
+    }?;
     let configuration = StoreConfiguration::new_with_instance_identity(
         DURABLE_SEARCH_STORE_PROFILE_ID,
         request.store_limits,
@@ -145,7 +193,7 @@ pub(in crate::search) fn execute(
         };
         if let Some(reason) = unsupported {
             return durable_response(
-                "search_context",
+                operation,
                 &request.operation_id,
                 &public_digest,
                 &serde_json::json!({
@@ -193,18 +241,36 @@ pub(in crate::search) fn execute(
             expected_view,
         )?;
         let generation = field(source, "store_generation_id")?;
-        let inspect = ContextInspectRequest::primary(
-            &request.input.project_store_id,
-            ContextMapPublication::store_generation(generation)?,
-            request.input.level.native(),
-            ContextMapRoot::graph_entity(field(owner, "id")?)?,
-            None,
-            Some(reference),
-        )?;
+        let publication = ContextMapPublication::store_generation(generation)?;
+        let root = ContextMapRoot::graph_entity(field(owner, "id")?)?;
         check_cancelled(stop)?;
-        // The existing E3 runner alone owns native acquisition, membership,
-        // Reference validation, skeleton generation and checked reverse closure.
-        let context = execute_context_inspect(&request.host, &inspect, stop)?;
+        // Both concrete E3 operations own native custody, semantic artifacts,
+        // renderer validation and checked close. No source capability supplied.
+        let context = match action {
+            ContextAction::Inspect => {
+                let inspect = ContextInspectRequest::primary(
+                    &request.input.project_store_id,
+                    publication,
+                    request.input.level.native(),
+                    root,
+                    None,
+                    Some(reference),
+                )?;
+                execute_context_inspect(&request.host, &inspect, stop)?
+            }
+            ContextAction::Build(render) => {
+                let build = ContextBuildRequest::primary(
+                    &request.input.project_store_id,
+                    publication,
+                    request.input.level.native(),
+                    root,
+                    render,
+                    None,
+                    Some(reference),
+                )?;
+                execute_context_build(&request.host, &build, stop)?
+            }
+        };
         if context.canonical_bytes().len() > crate::context::CONTEXT_MAP_RESULT_MAX_BYTES {
             return Err(outcome_unknown());
         }
@@ -251,11 +317,11 @@ pub(in crate::search) fn execute(
         }
         check_cancelled(stop)?;
         durable_response(
-            "search_context",
+            operation,
             &request.operation_id,
             &public_digest,
             &serde_json::json!({
-                "status":status,"resource_closure":"closed","context_admission":"exact_native_inspection",
+                "status":status,"resource_closure":"closed","context_admission":admission,
                 "selection_receipt":receipt,"search_explanation":explained,"context":context_value,
                 "context_host_binding":request.host_binding
             }),

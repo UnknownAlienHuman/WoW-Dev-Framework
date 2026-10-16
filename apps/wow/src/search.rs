@@ -21,11 +21,12 @@ use wow_service::{
         FederationRequest, FederationResultReleaseRequest, LocalMetadataPermission,
         ObservationComponent, ReferenceContinueRequest, ReferenceExplainRequest,
         ReferenceIndexBuildRequest, ReferenceResultReleaseRequest, ReferenceShardRequest,
-        SearchBounds, SearchBuildQueryRequest, SearchContextRequest, SearchContinueRequest,
-        SearchIndexBuildRequest, SearchOperationService, SearchResultReleaseRequest,
-        SearchRetrievalRequest, SearchSelectionRequest, SearchShardQueryRequest,
-        SearchShardRetireRequest, SearchSourceHoldBinding, SearchStoreGcRequest, SearchStoreLimits,
-        SourceObservationExplainRequest, SourceObservationRetrievalRequest,
+        SearchBounds, SearchBuildQueryRequest, SearchContextBuildRequest, SearchContextRequest,
+        SearchContinueRequest, SearchIndexBuildRequest, SearchOperationService,
+        SearchResultReleaseRequest, SearchRetrievalRequest, SearchSelectionRequest,
+        SearchShardQueryRequest, SearchShardRetireRequest, SearchSourceHoldBinding,
+        SearchStoreGcRequest, SearchStoreLimits, SourceObservationExplainRequest,
+        SourceObservationRetrievalRequest,
     },
 };
 
@@ -91,6 +92,7 @@ struct ParsedDurableSearch {
 }
 
 enum DurableCommand {
+    ContextBuild(Box<SearchContextBuildRequest>),
     Observations(SourceObservationRetrievalRequest),
     ObservationExplain(SourceObservationExplainRequest),
     Select(SearchSelectionRequest),
@@ -169,6 +171,7 @@ fn run_with_io<W: Write, E: Write>(
             .and_then(|()| stdout.write_all(BLIZZARD_FEDERATION_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(SELECT_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(CONTEXT_HELP.as_bytes()))
+            .and_then(|()| stdout.write_all(b"wow search context build --build-json <wow-service/search-context-build-input/1 JSON> --context-host <ABSOLUTE-FILE|-> --search-store <EXISTING> --operation-id <ID> --allow-local-metadata-only <Store/output limits>. Explicit level l0/l1/both and render none/json/markdown/both; native semantic pack and required renderers, no source excerpt or fallback.\n"))
             .and_then(|()| stdout.flush())
         {
             Ok(()) => 0,
@@ -274,6 +277,9 @@ fn run_durable<W: Write, E: Write>(
         }
         DurableCommand::Select(request) => service.select_candidate(&request, stop),
         DurableCommand::Context(request) => service.context_for_selection(&request, stop),
+        DurableCommand::ContextBuild(request) => {
+            service.build_context_for_selection(&request, stop)
+        }
         DurableCommand::ReferenceContinue(request) => {
             service.continue_reference_results(&request, stop)
         }
@@ -460,7 +466,10 @@ fn parse_durable(
         "query" => ("query", 2),
         "retrieve" => ("retrieve", 2),
         "select" => ("select", 2),
-        "context" => ("context", 2),
+        "context" => match arguments.get(2).and_then(|value| value.to_str()) {
+            Some("build") => ("context-build", 3),
+            _ => ("context", 2),
+        },
         "continue" => ("continue", 2),
         "results" if arguments.get(2).is_some_and(|value| value == "release") => ("release", 3),
         "index" => match arguments.get(2).and_then(|value| value.to_str()) {
@@ -508,6 +517,7 @@ fn parse_durable(
         }
         "select" => allowed.push("--selection-json"),
         "context" => allowed.extend_from_slice(&["--context-json", "--context-host"]),
+        "context-build" => allowed.extend_from_slice(&["--build-json", "--context-host"]),
         "federated-release" => allowed.push("--session-object-id"),
         "reference-build" => allowed.extend_from_slice(&[
             "--config",
@@ -616,6 +626,7 @@ fn parse_durable(
         "gc" | "continue"
             | "select"
             | "context"
+            | "context-build"
             | "federated"
             | "federated-continue"
             | "federated-explain"
@@ -672,6 +683,23 @@ fn parse_durable(
             )
             .map_err(|_| "invalid exact selection request")?,
         ),
+        "context-build" => DurableCommand::ContextBuild(Box::new(
+            SearchContextBuildRequest::new(
+                OperationId::new(required_text(&options, "--operation-id")?)
+                    .map_err(|_| "invalid --operation-id")?,
+                store_path,
+                required_text(&options, "--build-json")?.as_bytes(),
+                read_context_host(
+                    std::path::Path::new(required(&options, "--context-host")?),
+                    stop,
+                )?,
+                store_limits,
+                max_output_bytes,
+                LocalMetadataPermission::authorize_local_metadata_only(),
+                stop,
+            )
+            .map_err(|_| "invalid exact selected Context Build request")?,
+        )),
         "context" => DurableCommand::Context(Box::new(
             SearchContextRequest::new(
                 OperationId::new(required_text(&options, "--operation-id")?)

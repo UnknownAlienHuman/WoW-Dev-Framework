@@ -1,4 +1,4 @@
-# Exact selected native Context inspection
+# Exact selected native Context inspection and Build
 
 ```text
 wow search context --context-json <JSON> --context-host <ABSOLUTE-FILE|->
@@ -51,8 +51,48 @@ original recorded response.
 Ordinary Entity inspection retains E3's original Reference generation/profile
 caller-association ceiling; it is not a new Reference publication attestation.
 Federation additionally checks its originally captured exact ReferenceView digest.
-Default structural inspection supports L0/L1/Both. Build/render, excerpts,
-continuation and broader Context profiles remain separate operations.
+Default structural inspection supports L0/L1/Both. The explicit Build operation
+below uses the same exact selection and native admission. Excerpts, continuation
+and broader Context profiles remain separate operations.
+
+## Selected semantic pack and rendering
+
+```text
+wow search context build --build-json <JSON> --context-host <ABSOLUTE-FILE|->
+  --search-store <EXISTING-SEARCH-STORE> --operation-id <ID>
+  --allow-local-metadata-only <Store/output limits>
+```
+
+The strict Build input has all the selection/registration fields shown above,
+`schema="wow-service/search-context-build-input/1"`, explicit `level` and required
+`render`: `none`, `json`, `markdown` or `both`. Omitted, null, unknown and duplicate
+fields refuse. Inspection and Build inputs/options cannot be mixed. Root,
+generation, Current, profile, frontier, source and continuation overrides refuse.
+
+The CLI invokes one `SearchOperationService::build_context_for_selection`
+operation. The shared selection plan invokes the existing
+`ContextBuildRequest::primary` / `execute_context_build` with the original exact
+generation and GraphEntity, default structural pack and selected native renderers.
+It supplies no source-excerpt capability. The unchanged native result remains
+`payload.context`; `context_admission="exact_native_build"` identifies this route.
+The outer durable operation is `search_context_build`, with a separate request
+identity binding explicit render selection. Existing inspection request/result
+identities and bytes remain unchanged.
+
+The existing [`wow-context/primary-structural-pack/1`](CONTEXT_BUILD.md) builds
+L0/L1/Both with native level/root admission and the continuing construction
+Budget. `none` returns a validated semantic pack and no rendering. `json` and
+`markdown` select the existing `wow-context/primary-pack-json/1` and
+`wow-context/primary-pack-markdown/1`; `both` uses JSON then Markdown. Renderer
+selection preserves semantic pack bytes/identity. Native rendered content,
+artifact IDs, traces, omissions and budgets remain unchanged. A requested
+renderer failure suppresses delivery; there is no implicit pack-only fallback.
+
+Build preserves the inspection route's Reference association ceiling, explicit
+federation View guard, metadata-only privacy, original generation and native
+Current observation. Replaying a completed Build returns its recorded bytes
+before acquiring native owners. Changing render under the same operation ID
+refuses. Broader native continuation and owner mappings remain open.
 
 Reference document keys, Source fact IDs and unqualified platform roots are not
 converted into GraphEntities. Unsupported mappings return `not_evaluated` with
