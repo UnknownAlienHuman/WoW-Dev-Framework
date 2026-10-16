@@ -1,5 +1,5 @@
 //! Candidate-required, metadata/handles-only Skeleton read under one live lease.
-use super::{LiveProjectStore, PlatformProjectSelection, fail, publication_checkpoint};
+use super::{PlatformProjectSelection, fail, publication_checkpoint};
 use crate::{ServiceErrorCode, ServiceResult};
 use serde::{Deserialize, Serialize};
 use std::{io::Write, path::Path, sync::atomic::AtomicBool};
@@ -61,52 +61,64 @@ pub fn execute_live_skeleton_read(
     }
     request.input.validate().map_err(super::project_error)?;
     let selector = super::operations::read_selector(generation)?;
-    let store = LiveProjectStore::open_in_namespace(root, selection.owner())?;
-    let read = store.read_in_namespace(selection.owner(), &selector, stop)?;
-    // No read primitive invocation before the genuine rebuilt candidate exists.
-    let candidate = read
-        .candidate()
-        .ok_or_else(|| fail(ServiceErrorCode::IdentityMismatch))?;
-    if request.candidate_id.as_ref() != candidate.manifest().candidate_id()
-        || request.candidate_digest.as_ref() != candidate.manifest().candidate_digest()
-    {
-        return Err(fail(ServiceErrorCode::IdentityMismatch));
-    }
-    let limit = request.input.limits().max_output_bytes;
-    let view = open_skeleton_input_view(candidate.native(), candidate.graph(), request.input, stop)
-        .map_err(super::project_error)?;
-    let page = view.read(stop).map_err(super::project_error)?;
-    let state = page.state();
-    // Preserve the exact candidate identity and requested selector separately
-    // from the source/project/final-graph binding already retained by the page.
-    #[derive(Serialize)]
-    struct Body<'a, 'page, S: Serialize> {
-        schema: &'static str,
-        selection: &'a S,
-        requested_store_generation: &'a str,
-        publication_set_id: &'a str,
-        store_generation_id: &'a str,
-        candidate_id: &'a str,
-        candidate_digest: &'a str,
-        page: &'a SkeletonInputPage<'page>,
-    }
-    let body = Body {
-        schema: LIVE_SKELETON_RESULT_SCHEMA,
-        selection: selection.intent(),
-        requested_store_generation: generation,
-        publication_set_id: read.publication_set_id(),
-        store_generation_id: read.store_generation_id().as_str(),
-        candidate_id: candidate.manifest().candidate_id(),
-        candidate_digest: candidate.manifest().candidate_digest(),
-        page: &page,
-    };
-    let bytes = encode(
-        &body,
-        usize::try_from(limit).map_err(|_| fail(ServiceErrorCode::BudgetExceeded))?,
+    super::selected_read_scope::with_checked_selected_read(
+        root,
+        selection.owner(),
+        &selector,
         stop,
-    )?;
-    publication_checkpoint(stop)?;
-    Ok(LiveSkeletonReadResult { bytes, state })
+        |read| {
+            // No read primitive invocation before the genuine rebuilt candidate exists.
+            let candidate = read
+                .candidate()
+                .ok_or_else(|| fail(ServiceErrorCode::IdentityMismatch))?;
+            if request.candidate_id.as_ref() != candidate.manifest().candidate_id()
+                || request.candidate_digest.as_ref() != candidate.manifest().candidate_digest()
+            {
+                return Err(fail(ServiceErrorCode::IdentityMismatch));
+            }
+            let limit = request.input.limits().max_output_bytes;
+            let view = open_skeleton_input_view(
+                candidate.native(),
+                candidate.graph(),
+                request.input,
+                stop,
+            )
+            .map_err(super::project_error)?;
+            let page = view.read(stop).map_err(super::project_error)?;
+            let state = page.state();
+            // Preserve the exact candidate identity and requested selector separately
+            // from the source/project/final-graph binding already retained by the page.
+            #[derive(Serialize)]
+            struct Body<'a, 'page, S: Serialize> {
+                schema: &'static str,
+                selection: &'a S,
+                requested_store_generation: &'a str,
+                publication_set_id: &'a str,
+                store_generation_id: &'a str,
+                candidate_id: &'a str,
+                candidate_digest: &'a str,
+                page: &'a SkeletonInputPage<'page>,
+            }
+            let body = Body {
+                schema: LIVE_SKELETON_RESULT_SCHEMA,
+                selection: selection.intent(),
+                requested_store_generation: generation,
+                publication_set_id: read.publication_set_id(),
+                store_generation_id: read.store_generation_id().as_str(),
+                candidate_id: candidate.manifest().candidate_id(),
+                candidate_digest: candidate.manifest().candidate_digest(),
+                page: &page,
+            };
+            let bytes = encode(
+                &body,
+                usize::try_from(limit).map_err(|_| fail(ServiceErrorCode::BudgetExceeded))?,
+                stop,
+            )?;
+            publication_checkpoint(stop)?;
+            Ok(LiveSkeletonReadResult { bytes, state })
+        },
+    )
+    .0
 }
 
 /// Count the whole selected result before canonical allocation. The same bound

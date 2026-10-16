@@ -35,6 +35,13 @@ Selected publication may supply `--function-fingerprints <query.json>` and
 `--xml-fingerprints <query.json>`. Selected read returns candidate id/digest and
 an inert `skeleton_binding`; decoded receipts cannot construct a native owner.
 
+Selected read and Skeleton keep encoded results private until the original
+read and Store close successfully in reverse order. The same checked scope is
+shared with platform Context; it does not acquire or reconstruct a second view.
+Mandatory close failure supersedes draft success, an earlier semantic refusal
+and late cancellation. Success bytes/identities and one-time Current/Exact
+selection remain unchanged.
+
 ```text
 wow project skeleton --selection <selection.json> --store-root <directory> --store-generation current|<generation-id> --request <skeleton.json> [--format json|text]
 ```

@@ -25,6 +25,7 @@ mod namespaces;
 #[path = "quarantine_tests.rs"]
 mod quarantine;
 mod retention;
+mod selected_read_scope;
 
 fn input_bundle(source: &str) -> TestResult<ProjectInputBundle> {
     input_bundle_with_plan(vec![ProjectInputFile::new("main.lua", source)?], None)

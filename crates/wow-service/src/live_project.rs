@@ -16,6 +16,7 @@ pub use migration::{
 mod namespace;
 pub use namespace::PlatformStoreSelection;
 mod operations;
+pub(crate) mod selected_read_scope;
 mod selection;
 pub(crate) use selection::SelectionDocument;
 mod skeleton;

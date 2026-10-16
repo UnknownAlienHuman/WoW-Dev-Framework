@@ -1,9 +1,8 @@
 //! Finite transport intent for existing native namespace/catalog consumers.
 //! Decoding selection data never constructs a native source or candidate.
 use super::{
-    LiveProjectPublishRequest, LiveProjectResult, LiveProjectStore, LiveProjectUpdateRequest,
-    PlatformStoreSelection, fail, publication_checkpoint, publish_input_in_namespace,
-    update_input_in_namespace,
+    LiveProjectPublishRequest, LiveProjectResult, LiveProjectUpdateRequest, PlatformStoreSelection,
+    fail, publication_checkpoint, publish_input_in_namespace, update_input_in_namespace,
 };
 use crate::{LocalProjectInput, ServiceErrorCode, ServiceResult, graph::GraphBuildRequest};
 use serde::{Deserialize, Serialize};
@@ -198,38 +197,45 @@ pub fn read_selected_live_project(
 ) -> ServiceResult<SelectedLiveProjectReadResult> {
     publication_checkpoint(stop)?;
     let selector = super::operations::read_selector(generation)?;
-    let store = LiveProjectStore::open_in_namespace(root, selection.owner())?;
-    let read = store.read_in_namespace(selection.owner(), &selector, stop)?;
-    let candidate = read
-        .candidate()
-        .map(|candidate| {
-            Ok::<_, crate::ServiceError>(CandidateReadIdentity {
-                candidate_id: candidate.manifest().candidate_id(),
-                candidate_digest: candidate.manifest().candidate_digest(),
-                skeleton_binding: SkeletonInputBinding::from_native(
-                    candidate.native(),
-                    candidate.graph(),
-                )
-                .map_err(super::project_error)?,
-            })
-        })
-        .transpose()?;
-    // Selected candidate catalog may never yield an ordinary pair response.
-    if selection.document.catalogs.composed_candidate && candidate.is_none() {
-        return Err(fail(ServiceErrorCode::IdentityMismatch));
-    }
-    let body = SelectedReadBody {
-        schema: "wow-service/selected-live-project-read/1",
-        selection: &selection.document,
-        requested_store_generation: generation,
-        publication_set_id: read.publication_set_id(),
-        store_generation_id: read.store_generation_id().as_str(),
-        project_snapshot_id: read.project().snapshot_id(),
-        graph_snapshot_id: read.graph().snapshot().snapshot_id().as_str(),
-        candidate,
-        state: "partial",
-    };
-    let bytes = super::skeleton::encode(&body, 128 * 1024, stop)?;
-    publication_checkpoint(stop)?;
-    Ok(SelectedLiveProjectReadResult { bytes })
+    super::selected_read_scope::with_checked_selected_read(
+        root,
+        selection.owner(),
+        &selector,
+        stop,
+        |read| {
+            let candidate = read
+                .candidate()
+                .map(|candidate| {
+                    Ok::<_, crate::ServiceError>(CandidateReadIdentity {
+                        candidate_id: candidate.manifest().candidate_id(),
+                        candidate_digest: candidate.manifest().candidate_digest(),
+                        skeleton_binding: SkeletonInputBinding::from_native(
+                            candidate.native(),
+                            candidate.graph(),
+                        )
+                        .map_err(super::project_error)?,
+                    })
+                })
+                .transpose()?;
+            // Selected candidate catalog may never yield an ordinary pair response.
+            if selection.document.catalogs.composed_candidate && candidate.is_none() {
+                return Err(fail(ServiceErrorCode::IdentityMismatch));
+            }
+            let body = SelectedReadBody {
+                schema: "wow-service/selected-live-project-read/1",
+                selection: &selection.document,
+                requested_store_generation: generation,
+                publication_set_id: read.publication_set_id(),
+                store_generation_id: read.store_generation_id().as_str(),
+                project_snapshot_id: read.project().snapshot_id(),
+                graph_snapshot_id: read.graph().snapshot().snapshot_id().as_str(),
+                candidate,
+                state: "partial",
+            };
+            let bytes = super::skeleton::encode(&body, 128 * 1024, stop)?;
+            publication_checkpoint(stop)?;
+            Ok(SelectedLiveProjectReadResult { bytes })
+        },
+    )
+    .0
 }

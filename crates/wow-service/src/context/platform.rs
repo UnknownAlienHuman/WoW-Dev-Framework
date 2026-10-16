@@ -1,6 +1,6 @@
 //! Explicit candidate-qualified platform Map/Inspect; Primary transport is unchanged.
 use serde::{Deserialize, Serialize};
-use std::{cell::Cell, path::PathBuf, sync::atomic::AtomicBool};
+use std::{path::PathBuf, sync::atomic::AtomicBool};
 use wow_core::{CanonicalResult, ContentDigest, ProfileIdentity};
 use wow_graph::GraphQueryState;
 use wow_project::skeleton_input::{
@@ -21,10 +21,7 @@ use super::{
 };
 use crate::{
     ServiceErrorCode, ServiceResult,
-    live_project::{
-        LiveProjectRead, LiveProjectStore, PlatformProjectSelection, ReadFailureClosure,
-        SelectionDocument,
-    },
+    live_project::{LiveProjectRead, PlatformProjectSelection, SelectionDocument},
 };
 
 pub const CONTEXT_PLATFORM_HOST_SCHEMA: &str = "wow-service/context-platform-native-host/1";
@@ -409,55 +406,13 @@ pub(super) fn with_checked_platform_generation<T>(
     stop: &AtomicBool,
     build: impl FnOnce(&LiveProjectRead) -> ServiceResult<T>,
 ) -> (ServiceResult<T>, &'static str) {
-    let closure = Cell::new("not_acquired");
-    let outcome = (|| {
-        checkpoint(stop)?;
-        let store = match LiveProjectStore::open_in_namespace_checked(
-            &host.project_store_root,
-            host.selection.owner(),
-        ) {
-            Ok(store) => store,
-            Err(error) => {
-                closure.set(closure_name(error.closure));
-                return Err(error.error);
-            }
-        };
-        closure.set("pending");
-        let selector = ReadSelector::Exact(generation.clone());
-        let draft = match store.read_in_namespace_checked(host.selection.owner(), &selector, stop) {
-            Ok(read) => {
-                let draft = build(&read);
-                match read.close() {
-                    Ok(()) => draft,
-                    Err(_) => {
-                        closure.set("failed");
-                        Err(failure(ServiceErrorCode::InternalContractViolation))
-                    }
-                }
-            }
-            Err(error) => {
-                closure.set(closure_name(error.closure));
-                Err(error.error)
-            }
-        };
-        if store.close().is_err() {
-            closure.set("failed");
-            return Err(failure(ServiceErrorCode::InternalContractViolation));
-        }
-        if closure.get() == "pending" {
-            closure.set("closed");
-        }
-        checkpoint(stop)?;
-        draft
-    })();
-    (outcome, closure.get())
-}
-fn closure_name(closure: ReadFailureClosure) -> &'static str {
-    match closure {
-        ReadFailureClosure::Closed => "closed",
-        ReadFailureClosure::Failed => "failed",
-        ReadFailureClosure::NotEvaluated => "not_evaluated",
-    }
+    crate::live_project::selected_read_scope::with_checked_selected_read(
+        &host.project_store_root,
+        host.selection.owner(),
+        &ReadSelector::Exact(generation.clone()),
+        stop,
+        build,
+    )
 }
 fn narrow_evidence_limits(
     host: &ContextPlatformHostInput,
