@@ -27,6 +27,28 @@ Single/FileSet profiles, hold identities and response bytes remain unchanged
 when this component is absent. Native Store owns SQLite/FTS, validation, leases
 and GC; no second graph, traversal, search backend or persistence layout exists.
 
+## Native candidate-qualified Source catalogs
+
+The same explicit `--graph-entities` route also consumes an exact registered
+native platform candidate catalog. Service uses its existing compiled companion
+reader to reconstruct and validate the native source, accepted final graph and
+candidate under the original retained read. That same sealed Project/Graph pair
+enters the existing complete node projection; query holds those owners through
+original graph retrieval. Ordinary catalogs retain their existing reader.
+
+`AcquiredProjectPair::is_bound_to_read` binds this handoff to the actual immutable
+epoch and generation, including compatible fresh leases for identical owner
+identities. A pair from another generation cannot be combined with caller-supplied
+Store metadata. This proof is in memory; it adds no serialized version, profile,
+manifest field, physical Store or source input. Profile, document fields, shard
+identity, source holds, captured pages and default output bytes remain unchanged.
+
+Source files are not needed for an exact retained query. Context over a selected
+native Source GraphEntity uses the explicit
+[platform handoff](SEARCH_CONTEXT.md#qualified-platform-map-and-inspect), whose
+existing E3 owner requalifies the actual candidate and original root. Source
+observations and Reference keys remain distinct owner entities.
+
 ## Exact retained query
 
 ### Query-wide original entity-kind scope

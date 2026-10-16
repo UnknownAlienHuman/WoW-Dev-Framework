@@ -336,8 +336,14 @@ pub(super) fn acquire_result_as(
             .read(&ReadSelector::Exact(request.generation.clone()), stop)
             .map_err(map_store_error)?;
         let result = (|| {
-            let pair = wow_project::replay::publication::AcquiredProjectPair::read(&read, stop)
-                .map_err(map_project_error)?;
+            // Qualified candidate catalogs require their original compiled
+            // companion owner; ordinary catalogs keep the same pair reader.
+            let (pair, _candidate) = crate::live_project::candidate::read_owners(&read, stop)?;
+            let _native_api = if _candidate.is_some() {
+                crate::graph::validate_native_api_reopen(&pair, stop)?
+            } else {
+                None
+            };
             let lease = SearchStoreLeaseRequest::new(
                 lease_id_for(purpose, public_digest)?,
                 "wow-service-search",

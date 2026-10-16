@@ -23,10 +23,11 @@ use wow_service::{
         ReferenceIndexBuildRequest, ReferenceResultReleaseRequest, ReferenceShardRequest,
         SearchBounds, SearchBuildQueryRequest, SearchContextBuildRequest,
         SearchContextContinueRequest, SearchContextRequest, SearchContinueRequest,
-        SearchIndexBuildRequest, SearchOperationService, SearchResultReleaseRequest,
-        SearchRetrievalRequest, SearchSelectionRequest, SearchShardQueryRequest,
-        SearchShardRetireRequest, SearchSourceHoldBinding, SearchStoreGcRequest, SearchStoreLimits,
-        SourceObservationExplainRequest, SourceObservationRetrievalRequest,
+        SearchIndexBuildRequest, SearchOperationService, SearchPlatformContextRequest,
+        SearchResultReleaseRequest, SearchRetrievalRequest, SearchSelectionRequest,
+        SearchShardQueryRequest, SearchShardRetireRequest, SearchSourceHoldBinding,
+        SearchStoreGcRequest, SearchStoreLimits, SourceObservationExplainRequest,
+        SourceObservationRetrievalRequest,
     },
 };
 
@@ -92,6 +93,7 @@ struct ParsedDurableSearch {
 }
 
 enum DurableCommand {
+    PlatformContext(Box<SearchPlatformContextRequest>),
     ContextContinue(Box<SearchContextContinueRequest>),
     ContextBuild(Box<SearchContextBuildRequest>),
     Observations(SourceObservationRetrievalRequest),
@@ -174,6 +176,7 @@ fn run_with_io<W: Write, E: Write>(
             .and_then(|()| stdout.write_all(CONTEXT_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(b"wow search context build --build-json <wow-service/search-context-build-input/1 JSON> --context-host <ABSOLUTE-FILE|-> --search-store <EXISTING> --operation-id <ID> --allow-local-metadata-only <Store/output limits>. Explicit level l0/l1/both and render none/json/markdown/both; native semantic pack and required renderers, no source excerpt or fallback.\n"))
             .and_then(|()| stdout.write_all(b"wow search context continue --continue-json <wow-service/search-context-continue-input/1 JSON> --context-host <ABSOLUTE-FILE|-> --search-store <EXISTING> --operation-id <ID> --allow-local-metadata-only <Store/output limits>. Exact prior progressive Build/Continue operation, digest, result and native token; no frontier/profile/render/native-budget overrides.\n"))
+            .and_then(|()| stdout.write_all(b"wow search context platform --platform-context-json <wow-service/search-platform-context-input/1 JSON> --context-host <ABSOLUTE-FILE|-> --search-store <EXISTING> --operation-id <ID> --allow-local-metadata-only <Store/output limits>. Exact selected native Source GraphEntity plus matching existing candidate-qualified E3 Map/Inspect request; no root inference or source excerpt.\n"))
             .and_then(|()| stdout.flush())
         {
             Ok(()) => 0,
@@ -284,6 +287,9 @@ fn run_durable<W: Write, E: Write>(
         }
         DurableCommand::ContextContinue(request) => {
             service.continue_context_for_selection(&request, stop)
+        }
+        DurableCommand::PlatformContext(request) => {
+            service.platform_context_for_selection(&request, stop)
         }
         DurableCommand::ReferenceContinue(request) => {
             service.continue_reference_results(&request, stop)
@@ -474,6 +480,7 @@ fn parse_durable(
         "context" => match arguments.get(2).and_then(|value| value.to_str()) {
             Some("build") => ("context-build", 3),
             Some("continue") => ("context-continue", 3),
+            Some("platform") => ("platform-context", 3),
             _ => ("context", 2),
         },
         "continue" => ("continue", 2),
@@ -525,6 +532,9 @@ fn parse_durable(
         "context" => allowed.extend_from_slice(&["--context-json", "--context-host"]),
         "context-build" => allowed.extend_from_slice(&["--build-json", "--context-host"]),
         "context-continue" => allowed.extend_from_slice(&["--continue-json", "--context-host"]),
+        "platform-context" => {
+            allowed.extend_from_slice(&["--platform-context-json", "--context-host"])
+        }
         "federated-release" => allowed.push("--session-object-id"),
         "reference-build" => allowed.extend_from_slice(&[
             "--config",
@@ -635,6 +645,7 @@ fn parse_durable(
             | "context"
             | "context-build"
             | "context-continue"
+            | "platform-context"
             | "federated"
             | "federated-continue"
             | "federated-explain"
@@ -691,6 +702,27 @@ fn parse_durable(
             )
             .map_err(|_| "invalid exact selection request")?,
         ),
+        "platform-context" => DurableCommand::PlatformContext(Box::new(
+            SearchPlatformContextRequest::new(
+                OperationId::new(required_text(&options, "--operation-id")?)
+                    .map_err(|_| "invalid --operation-id")?,
+                store_path,
+                required_text(&options, "--platform-context-json")?.as_bytes(),
+                wow_service::context::ContextPlatformHostInput::from_json_slice(
+                    &read_context_host_bytes(
+                        std::path::Path::new(required(&options, "--context-host")?),
+                        stop,
+                    )?,
+                    stop,
+                )
+                .map_err(|_| "invalid native platform context host registration")?,
+                store_limits,
+                max_output_bytes,
+                LocalMetadataPermission::authorize_local_metadata_only(),
+                stop,
+            )
+            .map_err(|_| "invalid exact selected platform Context request")?,
+        )),
         "context-continue" => DurableCommand::ContextContinue(Box::new(
             SearchContextContinueRequest::new(
                 OperationId::new(required_text(&options, "--operation-id")?)

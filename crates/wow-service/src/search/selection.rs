@@ -4,7 +4,10 @@ use super::*;
 use serde::Deserialize;
 
 pub(super) mod context;
-pub use context::{SearchContextBuildRequest, SearchContextContinueRequest, SearchContextRequest};
+pub use context::{
+    SearchContextBuildRequest, SearchContextContinueRequest, SearchContextRequest,
+    SearchPlatformContextRequest,
+};
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

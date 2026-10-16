@@ -152,8 +152,53 @@ closure alone does not certify that its durable journal was unchanged. Continuat
 does not refresh Current, reset budgets, deserialize a native expansion step,
 read source or authorize edits. Broader owner mappings and acceptance remain open.
 
-Reference document keys, Source fact IDs and unqualified platform roots are not
-converted into GraphEntities. Unsupported mappings return `not_evaluated` with
+## Qualified platform Map and Inspect
+
+```text
+wow search context platform --platform-context-json <JSON>
+  --context-host <ABSOLUTE-FILE|-> --search-store <EXISTING-SEARCH-STORE>
+  --operation-id <ID> --allow-local-metadata-only <Store/output limits>
+```
+
+The strict `wow-service/search-platform-context-input/1` document requires the
+same four exact selection references (`selection_operation_id`,
+`selection_request_digest`, `selection_result_id`, `receipt_id`) and one required
+`context_request`. That nested value is the existing strict
+`wow-service/context-platform-request/1` for `map` or `inspect`: explicit registered
+Store, exact generation/publication/candidate ID/digest, existing
+`wow-context/platform-native-one-hop/1` and original `OpenSkeletonInputRequest`.
+It is decoded directly, preserving unknown/null/duplicate-field refusals. The
+whole semantic input is at most 8192 bytes. No root or selector is inferred.
+
+The host uses existing `wow-service/context-platform-native-host/1`, with genuine
+Source selection/candidate catalog intent and full Reference profile/view. The
+existing bounded file/stdin reader performs pure transport admission. One
+`SearchOperationService::platform_context_for_selection` call validates the
+original immutable selection/explanation, selected GraphNode/universe/generation
+and the nested request's original root, Store generation/publication and matching
+Project/Graph binding. Host Reference profile/generation must match the original
+owner; federation additionally requires its captured exact ReferenceView digest.
+Standalone Entity preserves the documented configured-association ceiling.
+
+Service invokes `execute_context_platform` once. E3 reopens that exact selected
+namespace and genuine candidate, compares its original native Skeleton binding,
+validates actual root membership, builds native Map/Inspect and checks reverse
+closure. Decoded request/binding data never creates native custody. Native
+Context bytes remain unchanged under `payload.context`; outer operation is
+`search_platform_context`, with admission `exact_native_platform_map` or
+`exact_native_platform_inspection`. Original selection/Search provenance stays
+outer data. Partial/truncated/support/coverage/omission state stays native.
+
+Completed retry returns historical bytes before native acquisition, including
+after source/Store loss. Changed host intent/Reference/budgets, request operation
+or root changes the request digest or fails exact guards. Host routing paths stay
+outside semantic identity. Uncertain closure takes precedence over output caps;
+there is no successful empty artifact or Primary fallback. Unsupported non-Graph
+or non-platform federated selections remain NotEvaluated. Platform Build/render,
+source excerpts, further axes/continuation and broader owner mappings are separate.
+
+The Primary route does not convert Reference document keys, Source fact IDs or
+unqualified platform roots into GraphEntities. Unsupported mappings return `not_evaluated` with
 no native Context success or empty fake artifact. Unknown schema/universe values
 remain strict identity/schema refusals.
 

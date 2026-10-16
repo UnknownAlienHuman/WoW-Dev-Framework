@@ -2,7 +2,7 @@
 use super::*;
 use wow_search::entities::{
     EntitySearchProfile, EntitySearchShard, PreparedEntityShard, open_project_entity_shard,
-    prepare_project_entity_shard,
+    prepare_project_entity_shard, prepare_project_entity_shard_from_pair,
 };
 use wow_search::source_observations::{
     ObservationSearchProfile, ObservationSearchShard, PreparedObservationShard,
@@ -310,6 +310,23 @@ impl Profile {
                 ))
             }
             (Self::GraphEntities(profile), Documents::GraphEntities) => {
+                if crate::live_project::candidate::is_selected(read.epoch().catalog())? {
+                    let (pair, _candidate) =
+                        crate::live_project::candidate::read_owners(read, stop)?;
+                    let _native_api = crate::graph::validate_native_api_reopen(&pair, stop)?;
+                    return Ok(Prepared::GraphEntities(
+                        prepare_project_entity_shard_from_pair(
+                            read,
+                            &pair,
+                            generation,
+                            profile,
+                            permission,
+                            object_limits,
+                            stop,
+                        )
+                        .map_err(map_search_error)?,
+                    ));
+                }
                 Ok(Prepared::GraphEntities(
                     prepare_project_entity_shard(
                         read,

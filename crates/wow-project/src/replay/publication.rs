@@ -11,7 +11,9 @@ use crate::{ProjectPhase, ProjectPublisher, ProjectResult, ProjectView};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::atomic::AtomicBool};
 use wow_graph::{GraphPartitionSnapshot, ValidatedGraphPartitionSnapshot};
-use wow_store::project::{PartitionRecord, ProjectStoreNamespace, ReadSnapshot};
+use wow_store::project::{
+    EpochId, PartitionRecord, ProjectStoreNamespace, ReadSnapshot, StoreGenerationId,
+};
 
 pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v1",
@@ -464,6 +466,8 @@ impl ProjectPublicationBundle {
 /// Executable immutable owners reconstructed under one held read snapshot.
 /// This is distinct from serialized storage records and public result DTOs.
 pub struct AcquiredProjectPair {
+    read_epoch_id: EpochId,
+    read_generation_id: StoreGenerationId,
     project: ProjectView,
     publisher: ProjectPublisher,
     supports_physical_update: bool,
@@ -472,6 +476,12 @@ pub struct AcquiredProjectPair {
     publication_set_id: String,
 }
 impl AcquiredProjectPair {
+    /// Match the original exact retained owner read without reconstructing its
+    /// proof from a serialized publication or caller-supplied identity.
+    pub fn is_bound_to_read(&self, read: &ReadSnapshot) -> bool {
+        &self.read_epoch_id == read.epoch().epoch_id()
+            && self.read_generation_id == read.manifest().generation_id
+    }
     pub fn project(&self) -> &ProjectView {
         &self.project
     }
@@ -651,6 +661,8 @@ impl AcquiredProjectPair {
         crate::analyzer::checkpoint(stop)?;
         Ok((
             Self {
+                read_epoch_id: read.epoch().epoch_id().clone(),
+                read_generation_id: read.manifest().generation_id.clone(),
                 project,
                 publisher,
                 supports_physical_update: replay.supports_physical_update(),

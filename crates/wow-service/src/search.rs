@@ -26,7 +26,7 @@ mod source_observations;
 use documents::{Documents, Profile as DurableProfile, Selection as DurableSelection};
 pub use selection::{
     SearchContextBuildRequest, SearchContextContinueRequest, SearchContextRequest,
-    SearchSelectionRequest,
+    SearchPlatformContextRequest, SearchSelectionRequest,
 };
 pub use source_observations::{
     ObservationComponent, SourceObservationExplainRequest, SourceObservationRetrievalRequest,
@@ -472,6 +472,13 @@ pub struct SearchOperationService {
 }
 
 impl SearchOperationService {
+    pub fn platform_context_for_selection(
+        &self,
+        request: &SearchPlatformContextRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Box<[u8]>> {
+        selection::context::platform::execute(request, stop)
+    }
     pub fn continue_context_for_selection(
         &self,
         request: &SearchContextContinueRequest,

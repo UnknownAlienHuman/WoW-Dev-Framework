@@ -58,6 +58,21 @@ pub struct ContextPlatformHostInput {
     pub(super) selection: PlatformProjectSelection,
 }
 impl ContextPlatformHostInput {
+    /// Semantic configuration for a durable consumer; filesystem routing is
+    /// excluded and remains an explicit host transport location.
+    pub(crate) fn semantic_binding_digest(&self) -> ServiceResult<Box<str>> {
+        crate::identity::canonical_digest(
+            "wow-service/platform-context-host-binding/1:",
+            &(
+                &self.schema,
+                &self.project_store_id,
+                self.selection.intent(),
+                &self.reference_profile,
+                &self.reference,
+                &self.limits,
+            ),
+        )
+    }
     pub fn from_json_slice(bytes: &[u8], stop: &AtomicBool) -> ServiceResult<Self> {
         let document: HostDocument = crate::graph::input::decode(
             bytes,
@@ -137,6 +152,64 @@ pub struct ContextPlatformRequest {
     pub(super) document: RequestDocument,
 }
 impl ContextPlatformRequest {
+    /// Strict nested transport for an already byte-bounded Service request.
+    /// Deserialize the document directly so duplicate fields cannot disappear
+    /// through an intermediate JSON Value. No native owner is acquired here.
+    pub(crate) fn deserialize_nested<'de, D: serde::Deserializer<'de>>(
+        decoder: D,
+    ) -> Result<Self, D::Error> {
+        let document = RequestDocument::deserialize(decoder)?;
+        Self::from_document(document, &AtomicBool::new(false)).map_err(serde::de::Error::custom)
+    }
+    /// Compare inert request/host metadata with an immutable Search selection.
+    /// E3 still acquires and validates the genuine candidate/Skeleton owners.
+    pub(crate) fn guard_search_selection(
+        &self,
+        host: &ContextPlatformHostInput,
+        source: &serde_json::Value,
+        root: &str,
+        expected_view: Option<&str>,
+    ) -> ServiceResult<()> {
+        let field = |name: &str| {
+            source
+                .get(name)
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| failure(ServiceErrorCode::IdentityMismatch))
+        };
+        let document = &self.document;
+        if document.project_store_id != host.project_store_id
+            || document.store_generation_id.as_str() != field("store_generation_id")?
+            || document.publication_set_id.as_ref() != field("publication_set_id")?
+            || document.input.neighborhood().query().node_id().as_str() != root
+            || document.input.neighborhood().snapshot_id().as_str() != field("graph_snapshot_id")?
+            || host.selection.owner().namespace().owner_project_id() != field("project_id")?
+            || host.reference.generation_id() != field("reference_generation_id")?
+            || source.get("project_profile")
+                != Some(
+                    &serde_json::to_value(&host.reference_profile)
+                        .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?,
+                )
+            || expected_view.is_some_and(|expected| host.reference.self_digest() != expected)
+        {
+            return Err(failure(ServiceErrorCode::IdentityMismatch));
+        }
+        // This is mechanical validation of a strict typed request, not native
+        // owner reconstruction. The actual binding is derived again inside E3.
+        let binding = serde_json::to_value(document.input.binding())
+            .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
+        for (input, selected) in [
+            ("project_snapshot_id", "project_snapshot_id"),
+            ("project_generation", "project_generation_id"),
+            ("analyzer_snapshot_id", "analyzer_snapshot_id"),
+            ("graph_snapshot_id", "graph_snapshot_id"),
+            ("graph_generation", "graph_generation_id"),
+        ] {
+            if binding.get(input).and_then(serde_json::Value::as_str) != Some(field(selected)?) {
+                return Err(failure(ServiceErrorCode::IdentityMismatch));
+            }
+        }
+        Ok(())
+    }
     pub fn from_json_slice(bytes: &[u8], stop: &AtomicBool) -> ServiceResult<Self> {
         let document: RequestDocument = crate::graph::input::decode(
             bytes,

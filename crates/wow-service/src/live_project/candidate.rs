@@ -68,7 +68,7 @@ pub(super) fn catalog(project_schemas: &[&'static str]) -> ServiceResult<RecordC
 }
 
 /// Epoch selection is exact. No optional receipt fallback and no old widening.
-pub(super) fn is_selected(actual: &RecordCatalog) -> ServiceResult<bool> {
+pub(crate) fn is_selected(actual: &RecordCatalog) -> ServiceResult<bool> {
     for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
         if actual == &catalog(schemas)? {
             return Ok(true);
@@ -80,7 +80,7 @@ pub(super) fn is_selected(actual: &RecordCatalog) -> ServiceResult<bool> {
     Err(fail(ServiceErrorCode::IdentityMismatch))
 }
 
-pub(super) fn read_owners(
+pub(crate) fn read_owners(
     read: &ReadSnapshot,
     stop: &AtomicBool,
 ) -> ServiceResult<(AcquiredProjectPair, Option<BlizzardUiIndexCandidate>)> {

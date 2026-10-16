@@ -300,6 +300,9 @@ impl EntitySearchShard {
         stop: &AtomicBool,
     ) -> SearchResult<EntityQueryResult> {
         check(stop)?;
+        if !pair.is_bound_to_read(read) {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
         let owner = owner_manifest_evidence(read, pair, self.bounds, stop)?;
         let graph = pair.graph().snapshot();
         if owner.source != self.manifest.owner.source

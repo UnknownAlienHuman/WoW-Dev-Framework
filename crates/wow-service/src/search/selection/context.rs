@@ -8,8 +8,10 @@ use crate::context::{
 
 pub(in crate::search) mod build;
 pub(in crate::search) mod continuation;
+pub(in crate::search) mod platform;
 pub use build::SearchContextBuildRequest;
 pub use continuation::SearchContextContinueRequest;
+pub use platform::SearchPlatformContextRequest;
 
 enum ContextAction {
     Inspect,
@@ -456,23 +458,40 @@ fn load_selection(
     max_read_bytes: u64,
     stop: &AtomicBool,
 ) -> ServiceResult<(serde_json::Value, serde_json::Value)> {
+    load_selection_by_ids(
+        store,
+        &input.selection_operation_id,
+        &input.selection_request_digest,
+        &input.selection_result_id,
+        &input.receipt_id,
+        max_read_bytes,
+        stop,
+    )
+}
+
+fn load_selection_by_ids(
+    store: &Store,
+    operation_id: &str,
+    request_digest: &str,
+    result_id: &str,
+    receipt_id: &str,
+    max_read_bytes: u64,
+    stop: &AtomicBool,
+) -> ServiceResult<(serde_json::Value, serde_json::Value)> {
     check_cancelled(stop)?;
     let record = store
-        .operation(
-            &StoreOperationId::new(input.selection_operation_id.clone())
-                .map_err(map_store_error)?,
-        )
+        .operation(&StoreOperationId::new(operation_id.to_owned()).map_err(map_store_error)?)
         .map_err(map_store_error)?
         .ok_or_else(unavailable)?;
     if record.state() != StoreOperationState::Completed
-        || record.request_digest().as_str() != input.selection_request_digest
+        || record.request_digest().as_str() != request_digest
     {
         return Err(mismatch());
     }
     let bytes = read_completed_response(store, &record, max_read_bytes)?;
     let original: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| mismatch())?;
     if field(&original, "operation")? != "search_select"
-        || field(&original, "result_id")? != input.selection_result_id
+        || field(&original, "result_id")? != result_id
     {
         return Err(mismatch());
     }
@@ -482,7 +501,7 @@ fn load_selection(
     }
     let receipt = payload.get("selection_receipt").ok_or_else(mismatch)?;
     if field(receipt, "schema")? != "wow-service/search-selection-receipt/1"
-        || field(receipt, "receipt_id")? != input.receipt_id
+        || field(receipt, "receipt_id")? != receipt_id
     {
         return Err(mismatch());
     }

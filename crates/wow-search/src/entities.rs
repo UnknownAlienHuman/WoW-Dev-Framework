@@ -109,12 +109,42 @@ pub fn prepare_project_entity_shard(
         return Err(SearchError::OwnerEvidenceInvalid);
     }
     let pair = AcquiredProjectPair::read(read, stop)?;
+    prepare_project_entity_shard_from_pair(
+        read,
+        &pair,
+        generation,
+        profile,
+        permission,
+        object_limits,
+        stop,
+    )
+}
+
+/// Consume the same sealed Project/Graph pair a compiled companion owner has
+/// already qualified. The original read epoch/generation must still match.
+/// Native companion authority cannot be supplied as decoded manifest metadata.
+pub fn prepare_project_entity_shard_from_pair(
+    read: &ReadSnapshot,
+    pair: &AcquiredProjectPair,
+    generation: &StoreGenerationId,
+    profile: &EntitySearchProfile,
+    permission: LocalMetadataPermission,
+    object_limits: wow_store::StoreLimits,
+    stop: &AtomicBool,
+) -> SearchResult<PreparedEntityShard> {
+    check(stop)?;
+    if !permission.authorized {
+        return Err(SearchError::LocalMetadataPermissionRequired);
+    }
+    if &read.manifest().generation_id != generation || !pair.is_bound_to_read(read) {
+        return Err(SearchError::OwnerEvidenceInvalid);
+    }
     let graph = pair.graph().snapshot();
     if graph.nodes().is_empty() || graph.nodes().len() > profile.bounds.max_documents.get() as usize
     {
         return Err(SearchError::FileSetOverCapacity);
     }
-    let owner = owner_manifest_evidence(read, &pair, profile.bounds, stop)?;
+    let owner = owner_manifest_evidence(read, pair, profile.bounds, stop)?;
     let mut manifest = Manifest {
         schema: MANIFEST_SCHEMA.into(),
         profile_digest: profile.digest.clone(),

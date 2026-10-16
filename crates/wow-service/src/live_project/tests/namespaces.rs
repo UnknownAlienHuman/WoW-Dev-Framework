@@ -1275,6 +1275,9 @@ fn platform_namespace_advances_current_with_exact_readers_and_root_independent_i
     assert_eq!(twin_read.graph(), held.graph());
     assert_eq!(twin_read.publication_set_id(), first_set);
     assert_eq!(twin_read.read.manifest().members, first_members);
+    // Pair binding follows immutable owner identity, not the host path.
+    assert!(held.pair().is_bound_to_read(&held.read));
+    assert!(held.pair().is_bound_to_read(&twin_read.read));
     drop(twin_read);
     drop(twin);
 
@@ -1391,6 +1394,25 @@ fn platform_namespace_advances_current_with_exact_readers_and_root_independent_i
         &ReadSelector::Publication(first_current.record_id),
         &stop,
     )?;
+    assert!(!old.pair().is_bound_to_read(&latest.read));
+    let search_bounds: wow_search::SearchBounds = serde_json::from_value(serde_json::json!({
+        "max_documents":128,"max_document_id_bytes":256,"max_owner_metadata_label_bytes":4096,
+        "max_literal_query_bytes":64,"max_candidate_results":128,"max_owner_evidence_records":4096,
+        "max_owner_manifest_bytes":4194304,"max_database_bytes":4194304,"max_store_object_bytes":8388608
+    }))?;
+    let mixed = wow_search::entities::prepare_project_entity_shard_from_pair(
+        &latest.read,
+        old.pair(),
+        latest.store_generation_id(),
+        &wow_search::entities::EntitySearchProfile::new(search_bounds)?,
+        wow_search::LocalMetadataPermission::authorize_local_metadata_only(),
+        wow_store::StoreLimits::new(16777216, 8, 16, 512, 8)?,
+        &stop,
+    );
+    assert!(matches!(
+        mixed,
+        Err(wow_search::SearchError::OwnerEvidenceInvalid)
+    ));
     assert_eq!(old.project().snapshot_id(), first_view.snapshot_id());
     assert_eq!(old.graph(), &first_graph);
     assert_eq!(old.publication_set_id(), first_set);
