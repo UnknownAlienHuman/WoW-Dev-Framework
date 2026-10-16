@@ -149,6 +149,98 @@ struct Explanation {
 }
 
 impl EntitySearchShard {
+    pub(crate) fn validate_federation_summary(
+        &self,
+        summary: &serde_json::Value,
+        stop: &AtomicBool,
+    ) -> SearchResult<()> {
+        check(stop)?;
+        let request_value = summary
+            .get("request")
+            .ok_or(SearchError::OwnerEvidenceInvalid)?;
+        let request = EntityQueryRequest::from_json_slice(
+            &wow_core::canonical_json_bytes(request_value)
+                .map_err(|_| SearchError::OwnerEvidenceInvalid)?,
+            stop,
+        )?;
+        let expected_query = digest(
+            "entity-search-query:",
+            &(QUERY_PROFILE, self.logical_id(), &request),
+        )?;
+        let expected_universe = digest(
+            "entity-search-universe:",
+            &(
+                &self.manifest.owner.source,
+                &self.manifest.graph_registry_digest,
+            ),
+        )?;
+        if summary.get("schema").and_then(serde_json::Value::as_str)
+            != Some("wow-search/project-entity-result-set/1")
+            || summary
+                .get("query_profile")
+                .and_then(serde_json::Value::as_str)
+                != Some(QUERY_PROFILE)
+            || summary
+                .get("result_query_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(expected_query.as_ref())
+            || summary
+                .get("universe_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(expected_universe.as_ref())
+            || summary.get("shard_id").and_then(serde_json::Value::as_str)
+                != Some(self.logical_id())
+            || summary
+                .get("graph_registry_digest")
+                .and_then(serde_json::Value::as_str)
+                != Some(self.manifest.graph_registry_digest.as_ref())
+            || summary.get("owner")
+                != Some(
+                    &serde_json::to_value(&self.manifest.owner)
+                        .map_err(|_| SearchError::OwnerEvidenceInvalid)?,
+                )
+            || request_value
+                != &serde_json::to_value(request).map_err(|_| SearchError::OwnerEvidenceInvalid)?
+        {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
+        Ok(())
+    }
+    /// Validate recorded Search data after its component summary has been bound.
+    pub(crate) fn validate_federation_candidate(
+        &self,
+        query_id: &str,
+        candidate: &serde_json::Value,
+        stop: &AtomicBool,
+    ) -> SearchResult<()> {
+        check(stop)?;
+        let id = candidate
+            .get("stable_tie_key")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(SearchError::OwnerEvidenceInvalid)?;
+        let index = self
+            .manifest
+            .documents
+            .binary_search_by(|document| document.entity_id().as_str().cmp(id))
+            .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+        let document = &self.manifest.documents[index];
+        if candidate.get("document")
+            != Some(&serde_json::to_value(document).map_err(|_| SearchError::OwnerEvidenceInvalid)?)
+            || candidate
+                .get("candidate_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(
+                    digest(
+                        "project-entity-candidate:",
+                        &(query_id, document.entity_id()),
+                    )?
+                    .as_ref(),
+                )
+        {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
+        Ok(())
+    }
     pub fn retrieve(
         &self,
         read: &ReadSnapshot,

@@ -388,3 +388,56 @@ pub(super) fn fence_result(
         ))
         .map_err(map_store_error)
 }
+
+#[derive(Clone, Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct EntityRetainedBinding {
+    pub(super) generation: StoreGenerationId,
+    pub(super) logical_id: Box<str>,
+    pub(super) object_id: ObjectId,
+    pub(super) bounds: SearchBounds,
+    pub(super) profile_digest: Box<str>,
+}
+pub(super) fn retained_binding(request: &EntityRetrievalRequest) -> EntityRetainedBinding {
+    EntityRetainedBinding {
+        generation: request.generation.clone(),
+        logical_id: request.logical_id.clone(),
+        object_id: request.object_id.clone(),
+        bounds: request.profile.bounds(),
+        profile_digest: request.profile.digest().into(),
+    }
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) fn open_retained_shard(
+    binding: &EntityRetainedBinding,
+    store: &mut Store,
+    digest: &str,
+    lease_expires_after: u64,
+    permission: LocalMetadataPermission,
+    stop: &AtomicBool,
+) -> ServiceResult<wow_search::entities::EntitySearchShard> {
+    let profile = EntitySearchProfile::new(binding.bounds).map_err(map_search_error)?;
+    if profile.digest() != binding.profile_digest.as_ref() {
+        return Err(failure(
+            ServiceErrorCode::IdentityMismatch,
+            "retained primary Search profile differs",
+        ));
+    }
+    let lease = SearchStoreLeaseRequest::new(
+        lease_id_for("federated-page-primary", digest)?,
+        "wow-service-search",
+        LogicalEpoch::new(lease_expires_after),
+    )
+    .map_err(map_store_error)?;
+    open_project_entity_shard(
+        store,
+        &binding.logical_id,
+        &binding.object_id,
+        &binding.generation,
+        &profile,
+        permission,
+        lease,
+        stop,
+    )
+    .map_err(map_search_error)
+}

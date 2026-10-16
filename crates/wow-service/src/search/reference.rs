@@ -57,7 +57,7 @@ impl ReferenceIndexBuildRequest {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Handle {
+pub(super) struct Handle {
     schema: String,
     logical_shard_id: String,
     object_id: ObjectId,
@@ -583,4 +583,50 @@ pub(super) fn fence_result(
             .map_err(map_store_error)?;
     }
     Ok(())
+}
+pub(super) fn retained_handle(request: &ReferenceShardRequest) -> Handle {
+    request.handle.clone()
+}
+pub(super) fn retained_objects(handle: &Handle) -> (ObjectId, ObjectId) {
+    (
+        handle.object_id.clone(),
+        handle.reference_view_object_id.clone(),
+    )
+}
+pub(super) fn open_retained_shard(
+    handle: &Handle,
+    store: &mut Store,
+    digest: &str,
+    lease_expires_after: u64,
+    permission: LocalMetadataPermission,
+    stop: &AtomicBool,
+) -> ServiceResult<wow_search::reference::ReferenceSearchShard> {
+    let profile = handle_profile(handle)?;
+    let owner = PersistentReferenceStore::new(store)
+        .read_exact(&handle.reference_view_object_id)
+        .map_err(reference_error)?
+        .ok_or_else(unavailable)?;
+    if owner.generation_id() != handle.reference_generation
+        || owner.self_digest() != handle.reference_view_digest
+    {
+        return Err(mismatch());
+    }
+    let lease = SearchStoreLeaseRequest::new(
+        lease_id_for("federated-page-reference", digest)?,
+        "wow-service-search",
+        LogicalEpoch::new(lease_expires_after),
+    )
+    .map_err(map_store_error)?;
+    open_reference_callable_shard(
+        store,
+        &handle.logical_shard_id,
+        &handle.object_id,
+        &profile,
+        &handle.reference_view_object_id,
+        &owner,
+        permission,
+        lease,
+        stop,
+    )
+    .map_err(map_search_error)
 }

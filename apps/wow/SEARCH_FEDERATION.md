@@ -82,7 +82,9 @@ primary shard, Reference shard and ReferenceView. A concurrent retirement cannot
 be undone by completion. Exact completed replay returns its original response
 after retirement/GC; a new request requires the original live roots and holds.
 
-This operation returns an inline immutable result without a continuation token.
-Federated continuation, additional source universes, full E4 corpus/fault/platform
+Without `--page-json`, this operation returns its original inline immutable result.
+Optional [captured federation pages](SEARCH_FEDERATED_PAGINATION.md) retain both
+shards, result and ReferenceView for exact continuation/release without Graph
+recomputation. Additional source universes, full E4 corpus/fault/platform
 qualification and launch acceptance remain open in #169. Existing standalone
 queries/pages/profiles and physical Store schemas are unchanged.

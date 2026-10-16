@@ -3,6 +3,10 @@
 use super::*;
 use crate::{entities::EntityQueryResult, reference::ReferenceQueryResult};
 use std::collections::BTreeSet;
+mod pagination;
+pub use pagination::{
+    FederationPage, FederationPageCursor, FederationPagePolicy, page_retained_federation,
+};
 
 const REQUEST_SCHEMA: &str = "wow-search/exact-primary-reference-query/1";
 const PROFILE: &str = "wow-search/exact-primary-reference-federation/1";

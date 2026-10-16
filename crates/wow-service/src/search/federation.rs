@@ -1,7 +1,9 @@
 //! One exact Store, two genuinely validated Search owners, one durable operation.
 use super::*;
 use serde::Deserialize;
-use wow_search::federation::{FederationQueryRequest, federate};
+use wow_search::federation::{FederationPagePolicy, FederationQueryRequest, federate};
+pub(in crate::search) mod pagination;
+pub use pagination::{FederationContinueRequest, FederationResultReleaseRequest};
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Input {
@@ -40,6 +42,7 @@ pub struct FederationRequest {
     store_limits: SearchStoreLimits,
     max_output_bytes: NonZeroU64,
     lease_expires_after: u64,
+    page_policy: Option<FederationPagePolicy>,
 }
 impl FederationRequest {
     #[allow(clippy::too_many_arguments)]
@@ -107,7 +110,13 @@ impl FederationRequest {
             store_limits,
             max_output_bytes,
             lease_expires_after,
+            page_policy: None,
         })
+    }
+    pub fn with_page_policy(mut self, bytes: &[u8], stop: &AtomicBool) -> ServiceResult<Self> {
+        self.page_policy =
+            Some(FederationPagePolicy::from_json_slice(bytes, stop).map_err(map_search_error)?);
+        Ok(self)
     }
 }
 fn encode(value: &serde_json::Value) -> ServiceResult<Vec<u8>> {
@@ -115,19 +124,28 @@ fn encode(value: &serde_json::Value) -> ServiceResult<Vec<u8>> {
 }
 pub(super) fn execute(request: &FederationRequest, stop: &AtomicBool) -> ServiceResult<Box<[u8]>> {
     check_cancelled(stop)?;
-    let (operation_id, digest, public_digest) = durable_identity(
-        "wow-service/exact-search-federation-request/1",
-        &request.operation_id,
-        &(
-            entity::federation_input(&request.primary),
-            reference::federation_input(&request.reference),
-            &request.query,
-            request.store_limits,
-            request.max_output_bytes,
-            request.lease_expires_after,
-            "local_metadata_only",
-        ),
-    )?;
+    let identity = (
+        entity::federation_input(&request.primary),
+        reference::federation_input(&request.reference),
+        &request.query,
+        request.store_limits,
+        request.max_output_bytes,
+        request.lease_expires_after,
+        "local_metadata_only",
+    );
+    let (operation_id, digest, public_digest) = if let Some(policy) = &request.page_policy {
+        durable_identity(
+            "wow-service/exact-search-federation-page-request/1",
+            &request.operation_id,
+            &(&identity, policy),
+        )?
+    } else {
+        durable_identity(
+            "wow-service/exact-search-federation-request/1",
+            &request.operation_id,
+            &identity,
+        )?
+    };
     let mut store = open_durable_search_store(&request.search_store, request.store_limits)?;
     match start_durable_operation(
         &mut store,
@@ -148,6 +166,17 @@ pub(super) fn execute(request: &FederationRequest, stop: &AtomicBool) -> Service
             federate(&primary, &reference, &request.query, stop).map_err(map_search_error)?;
         entity::fence_result(&request.primary, &mut batch)?;
         reference::fence_result(&request.reference, &mut batch)?;
+        if let Some(policy) = &request.page_policy {
+            return pagination::start(
+                request,
+                policy,
+                &result,
+                &public_digest,
+                &mut store,
+                &mut batch,
+                stop,
+            );
+        }
         let value: serde_json::Value =
             serde_json::from_slice(result.canonical_bytes()).map_err(|_| invalid())?;
         durable_response(
@@ -158,6 +187,28 @@ pub(super) fn execute(request: &FederationRequest, stop: &AtomicBool) -> Service
             request.max_output_bytes.get(),
         )
     })();
+    finish(
+        &mut store,
+        &operation_id,
+        &digest,
+        &request.operation_id,
+        outcome,
+        batch,
+        request.max_output_bytes.get(),
+        stop,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn finish(
+    store: &mut Store,
+    operation_id: &StoreOperationId,
+    digest: &RequestDigest,
+    public_id: &OperationId,
+    outcome: ServiceResult<Box<[u8]>>,
+    batch: WriteBatch,
+    max_bytes: u64,
+    stop: &AtomicBool,
+) -> ServiceResult<Box<[u8]>> {
     let bytes = match outcome.and_then(|bytes| {
         check_cancelled(stop)?;
         Ok(bytes)
@@ -165,23 +216,16 @@ pub(super) fn execute(request: &FederationRequest, stop: &AtomicBool) -> Service
         Ok(bytes) => bytes,
         Err(error) => {
             let error = if error.code() == ServiceErrorCode::StoreOutcomeUnknown {
-                let _ = store.mark_outcome_unknown(&operation_id, &digest);
+                let _ = store.mark_outcome_unknown(operation_id, digest);
                 error
             } else {
-                record_no_effect(&mut store, &operation_id, &digest, error)
+                record_no_effect(store, operation_id, digest, error)
             };
-            return Err(operation_failure(error, &request.operation_id));
+            return Err(operation_failure(error, public_id));
         }
     };
-    complete_durable_operation(
-        &mut store,
-        &operation_id,
-        &digest,
-        batch,
-        &bytes,
-        request.max_output_bytes.get(),
-    )
-    .map_err(|error| operation_failure(error, &request.operation_id))
+    complete_durable_operation(store, operation_id, digest, batch, &bytes, max_bytes)
+        .map_err(|error| operation_failure(error, public_id))
 }
 fn invalid() -> ServiceError {
     failure(

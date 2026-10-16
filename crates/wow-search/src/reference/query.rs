@@ -316,25 +316,7 @@ impl ReferenceSearchShard {
                 &self.manifest.reference_view_digest,
             ),
         )?;
-        let query_profile = if self.manifest.native_documents
-            == Some(NativeReferenceDocuments::SourceDeclarationsV1)
-        {
-            if request.selectors.identifier_similarity.is_some() {
-                DECLARATION_SIM_QUERY_PROFILE
-            } else {
-                DECLARATION_QUERY_PROFILE
-            }
-        } else if self.manifest.native_documents.is_some() {
-            if request.selectors.identifier_similarity.is_some() {
-                DOCUMENT_SIM_QUERY_PROFILE
-            } else {
-                DOCUMENT_QUERY_PROFILE
-            }
-        } else if request.selectors.identifier_similarity.is_some() {
-            SIM_QUERY_PROFILE
-        } else {
-            QUERY_PROFILE
-        };
+        let query_profile = capture_query_profile(self.manifest.native_documents, request);
         let ranking_profile = if request.selectors.identifier_similarity.is_some() {
             SIM_RANK_PROFILE
         } else {
@@ -956,6 +938,124 @@ fn name_origin(document: &Document, qualified: bool) -> &'static str {
         "NativeCallableSignature.namespace()+name()"
     } else {
         "NativeCallableSignature.name()"
+    }
+}
+
+fn capture_query_profile(
+    selection: Option<NativeReferenceDocuments>,
+    request: &ReferenceQueryRequest,
+) -> &'static str {
+    let similar = request.selectors.identifier_similarity.is_some();
+    match (selection, similar) {
+        (Some(NativeReferenceDocuments::SourceDeclarationsV1), true) => {
+            DECLARATION_SIM_QUERY_PROFILE
+        }
+        (Some(NativeReferenceDocuments::SourceDeclarationsV1), false) => DECLARATION_QUERY_PROFILE,
+        (Some(NativeReferenceDocuments::CallablesAndEventsV1), true) => DOCUMENT_SIM_QUERY_PROFILE,
+        (Some(NativeReferenceDocuments::CallablesAndEventsV1), false) => DOCUMENT_QUERY_PROFILE,
+        (None, true) => SIM_QUERY_PROFILE,
+        (None, false) => QUERY_PROFILE,
+    }
+}
+impl ReferenceSearchShard {
+    pub(crate) fn validate_federation_summary(
+        &self,
+        summary: &serde_json::Value,
+        stop: &AtomicBool,
+    ) -> SearchResult<()> {
+        check(stop)?;
+        let request_value = summary
+            .get("request")
+            .ok_or(SearchError::OwnerEvidenceInvalid)?;
+        let request = ReferenceQueryRequest::from_json_slice(
+            &wow_core::canonical_json_bytes(request_value)
+                .map_err(|_| SearchError::OwnerEvidenceInvalid)?,
+            stop,
+        )?;
+        let profile = capture_query_profile(self.manifest.native_documents, &request);
+        let query = identity(
+            "reference-search-query:",
+            &(profile, self.physical.search_shard_id(), &request),
+        )?;
+        let universe = identity(
+            "reference-search-universe:",
+            &(
+                &self.manifest.binding,
+                &self.manifest.reference_generation,
+                &self.manifest.reference_view_digest,
+            ),
+        )?;
+        let mut owner = serde_json::json!({"schema":self.manifest.schema,"profile_digest":self.manifest.profile_digest,"binding":self.manifest.binding,
+            "reference_generation":self.manifest.reference_generation,"reference_view_digest":self.manifest.reference_view_digest,
+            "native_projection_profile":self.manifest.native_projection_profile,"source_origins":self.manifest.source_origins,
+            "partitions":self.manifest.partitions,"conflicts":self.manifest.conflicts,"issues":self.manifest.issues,"owner_negative_authority":self.manifest.owner_negative_authority,
+            "projected_document_count":self.manifest.documents.len(),"privacy_scope":self.manifest.privacy_scope,"license_state":self.manifest.license_state});
+        if let Some(selection) = self.manifest.native_documents {
+            owner["native_documents"] =
+                serde_json::to_value(selection).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+        }
+        if let Some(profile) = &self.manifest.available_type_resolution_profile {
+            owner["available_type_resolution_profile"] = serde_json::json!(profile);
+        }
+        if summary.get("schema").and_then(serde_json::Value::as_str)
+            != Some("wow-search/native-reference-result-set/1")
+            || summary
+                .get("query_profile")
+                .and_then(serde_json::Value::as_str)
+                != Some(profile)
+            || summary
+                .get("normalized_query_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(query.as_ref())
+            || summary
+                .get("universe_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(universe.as_ref())
+            || summary.get("shard_id").and_then(serde_json::Value::as_str)
+                != Some(self.physical.search_shard_id())
+            || summary.get("owner") != Some(&owner)
+            || request_value
+                != &serde_json::to_value(request).map_err(|_| SearchError::OwnerEvidenceInvalid)?
+        {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
+        Ok(())
+    }
+    /// Validate recorded Search fields, never reconstruct native signatures.
+    pub(crate) fn validate_federation_candidate(
+        &self,
+        query_id: &str,
+        universe_id: &str,
+        candidate: &serde_json::Value,
+        stop: &AtomicBool,
+    ) -> SearchResult<()> {
+        check(stop)?;
+        let key = candidate
+            .get("stable_tie_key")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(SearchError::OwnerEvidenceInvalid)?;
+        let index = self
+            .manifest
+            .documents
+            .binary_search_by(|document| document.entity_key.as_str().cmp(key))
+            .map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+        let document = &self.manifest.documents[index];
+        if candidate.get("document")
+            != Some(&serde_json::to_value(document).map_err(|_| SearchError::OwnerEvidenceInvalid)?)
+            || candidate
+                .get("candidate_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(
+                    identity(
+                        "reference-search-candidate:",
+                        &(universe_id, query_id, &document.entity_key),
+                    )?
+                    .as_ref(),
+                )
+        {
+            return Err(SearchError::OwnerEvidenceInvalid);
+        }
+        Ok(())
     }
 }
 
