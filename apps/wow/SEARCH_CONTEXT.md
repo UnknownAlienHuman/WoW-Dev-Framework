@@ -92,7 +92,63 @@ Build preserves the inspection route's Reference association ceiling, explicit
 federation View guard, metadata-only privacy, original generation and native
 Current observation. Replaying a completed Build returns its recorded bytes
 before acquiring native owners. Changing render under the same operation ID
-refuses. Broader native continuation and owner mappings remain open.
+refuses.
+
+## Explicit progressive Build and continuation
+
+Build may include one non-null `progressive` object:
+
+```json
+{
+  "context_profile_id": "wow-context/primary-progressive-pack/1",
+  "expansion_profile_id": "wow-context/primary-native-progressive/1",
+  "continuation_retention_profile_id": "wow-service/context-continuation-retention/1",
+  "frontier_rounds": [["graph-node:sha256:..."], ["graph-node:sha256:..."]]
+}
+```
+
+This explicit selection requires L1, two to four caller-ordered batches of one
+to 32 exact GraphEntity IDs and the existing continuation-capable native host
+`wow-service/context-map-native-host/2`. The input remains bounded to 8192 bytes.
+E3 validates distinct roots, original retained membership and every later batch;
+Search supplies no inferred frontier. The existing progressive pack/render family
+and retention profile execute the first batch and return the native continuation
+ID under `payload.context.payload.continuation_id`. Omission of `progressive`
+preserves default Build request identity and native bytes. Explicit null, unknown
+profiles, invalid levels/batches or missing native continuation configuration
+refuse.
+
+```text
+wow search context continue --continue-json <JSON>
+  --context-host <ABSOLUTE-FILE|-> --search-store <EXISTING-SEARCH-STORE>
+  --operation-id <ID> --allow-local-metadata-only <Store/output limits>
+```
+
+The strict `wow-service/search-context-continue-input/1` document requires
+`prior_context_operation_id`, `prior_context_request_digest`,
+`prior_context_result_id` and `continuation_id`. It references the exact completed
+outer progressive Build or Continue response whose native payload issued that
+token. It accepts no root, selector, frontier, render, profile or native budget
+override. Host semantic binding must equal that prior response. The original
+selection receipt and Search explanation are carried unchanged through each
+outer response; they never become native Context authority.
+
+One `SearchOperationService::continue_context_for_selection` call invokes
+`ContextContinueRequest` / `execute_context_continue` with the exact token and
+guards for its original native request and latest native pack. E3 verifies the
+completed issuer, actual owner binding and retained original generation, replays
+the issued prefix with its cumulative private Budget, and atomically records the
+next result/receipt before releasing a terminal generation hold. Native output
+remains unchanged; the outer operation is `search_context_continue` with admission
+`exact_native_continuation`. The next token is absent after the final batch.
+
+Exact outer replay returns recorded bytes before native acquisition. Once native
+issuance or continuation has dispatched, uncertain native closure or failure to
+finalize the outer response records `OutcomeUnknown`, never retryable no-effect.
+Blind repetition is blocked; the exact native journal remains the reconciliation
+owner. Known closed native refusals preserve their typed failure. Continuation
+does not refresh Current, reset budgets, deserialize a native expansion step,
+read source or authorize edits. Broader owner mappings and acceptance remain open.
 
 Reference document keys, Source fact IDs and unqualified platform roots are not
 converted into GraphEntities. Unsupported mappings return `not_evaluated` with

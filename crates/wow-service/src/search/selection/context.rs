@@ -7,23 +7,26 @@ use crate::context::{
 };
 
 pub(in crate::search) mod build;
+pub(in crate::search) mod continuation;
 pub use build::SearchContextBuildRequest;
+pub use continuation::SearchContextContinueRequest;
 
 enum ContextAction {
     Inspect,
     Build(ContextRenderSelection),
+    ProgressiveBuild(ContextRenderSelection, Vec<Vec<ContextMapRoot>>),
 }
 impl ContextAction {
     fn operation(&self) -> &'static str {
         match self {
             Self::Inspect => "search_context",
-            Self::Build(_) => "search_context_build",
+            Self::Build(_) | Self::ProgressiveBuild(..) => "search_context_build",
         }
     }
     fn admission(&self) -> &'static str {
         match self {
             Self::Inspect => "exact_native_inspection",
-            Self::Build(_) => "exact_native_build",
+            Self::Build(_) | Self::ProgressiveBuild(..) => "exact_native_build",
         }
     }
 }
@@ -156,6 +159,23 @@ fn execute_plan(
                 "local_metadata_only",
             ),
         ),
+        ContextAction::ProgressiveBuild(render, rounds) => durable_identity(
+            operation,
+            &request.operation_id,
+            &(
+                "wow-service/search-context-build-input/1",
+                &request.input,
+                render,
+                rounds,
+                crate::context::PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID,
+                "wow-context/primary-native-progressive/1",
+                crate::context::CONTEXT_CONTINUATION_RETENTION_PROFILE_ID,
+                &request.host_binding,
+                request.store_limits,
+                request.max_output_bytes,
+                "local_metadata_only",
+            ),
+        ),
     }?;
     let configuration = StoreConfiguration::new_with_instance_identity(
         DURABLE_SEARCH_STORE_PROFILE_ID,
@@ -168,6 +188,7 @@ fn execute_plan(
         DurableOperationStart::Replay(bytes) => return Ok(bytes),
         DurableOperationStart::Started => {}
     }
+    let mut native_effect = false;
     let outcome = (|| {
         let (receipt, explained) = load_selection(
             &store,
@@ -270,52 +291,34 @@ fn execute_plan(
                 )?;
                 execute_context_build(&request.host, &build, stop)?
             }
-        };
-        if context.canonical_bytes().len() > crate::context::CONTEXT_MAP_RESULT_MAX_BYTES {
-            return Err(outcome_unknown());
-        }
-        let context_value: serde_json::Value =
-            serde_json::from_slice(context.canonical_bytes()).map_err(|_| outcome_unknown())?;
-        let closure = context_value
-            .get("resource_closure")
-            .and_then(serde_json::Value::as_str);
-        if !matches!(closure, Some("closed" | "not_acquired")) {
-            return Err(outcome_unknown());
-        }
-        if let Some(code) = context.failure_code() {
-            return Err(failure(code, "native selected Context inspection refused"));
-        }
-        if closure != Some("closed") {
-            return Err(outcome_unknown());
-        }
-        // Native closure/failure takes precedence over a delivery cap. The
-        // caller's smaller output limit must never hide uncertain cleanup.
-        check_output_bound(context.canonical_bytes(), request.max_output_bytes.get())?;
-        let status = match context.status() {
-            ContextMapStatus::Cancelled => {
-                return Err(failure(
-                    ServiceErrorCode::Cancelled,
-                    "selected Context inspection cancelled",
-                ));
+            ContextAction::ProgressiveBuild(render, rounds) => {
+                let build = ContextBuildRequest::primary(
+                    &request.input.project_store_id,
+                    publication,
+                    request.input.level.native(),
+                    root,
+                    render,
+                    None,
+                    Some(reference),
+                )?
+                .with_progressive_expansion(rounds)?
+                .with_continuation_retention_profile(
+                    crate::context::CONTEXT_CONTINUATION_RETENTION_PROFILE_ID,
+                )?;
+                // E3 now owns a durable issuance/retention effect. A later
+                // outer failure cannot be recorded as retryable no-effect.
+                native_effect = true;
+                execute_context_build(&request.host, &build, stop)?
             }
-            ContextMapStatus::Failed => {
-                return Err(failure(
-                    ServiceErrorCode::InternalContractViolation,
-                    "native Context failed without a typed cause",
-                ));
-            }
-            ContextMapStatus::Partial => fold_status(search_status, "partial"),
-            ContextMapStatus::Truncated => fold_status(search_status, "truncated"),
-            ContextMapStatus::Complete => fold_status(search_status, "exact_found"),
         };
-        if context_value
-            .pointer("/payload/store_generation_id")
-            .and_then(serde_json::Value::as_str)
-            != Some(generation)
-        {
-            return Err(mismatch());
-        }
-        check_cancelled(stop)?;
+        let (context_value, status) = checked_native_result(
+            &context,
+            search_status,
+            generation,
+            request.max_output_bytes.get(),
+            &mut native_effect,
+            stop,
+        )?;
         durable_response(
             operation,
             &request.operation_id,
@@ -334,15 +337,25 @@ fn execute_plan(
     }) {
         Ok(bytes) => bytes,
         Err(error) => {
-            let error = if error.code() == ServiceErrorCode::StoreOutcomeUnknown {
+            let error = if native_effect || error.code() == ServiceErrorCode::StoreOutcomeUnknown {
                 let _ = store.mark_outcome_unknown(&id, &digest);
-                error
+                outcome_unknown()
             } else {
                 record_no_effect(&mut store, &id, &digest, error)
             };
             return Err(operation_failure(error, &request.operation_id));
         }
     };
+    if native_effect {
+        return complete_native_effect(
+            &mut store,
+            &id,
+            &digest,
+            &bytes,
+            request.max_output_bytes.get(),
+        )
+        .map_err(|error| operation_failure(error, &request.operation_id));
+    }
     complete_durable_operation(
         &mut store,
         &id,
@@ -352,6 +365,94 @@ fn execute_plan(
         request.max_output_bytes.get(),
     )
     .map_err(|error| operation_failure(error, &request.operation_id))
+}
+
+fn checked_native_result(
+    context: &crate::context::ContextMapResult,
+    search_status: &str,
+    generation: &str,
+    max_output: u64,
+    native_effect: &mut bool,
+    stop: &AtomicBool,
+) -> ServiceResult<(serde_json::Value, Box<str>)> {
+    if context.canonical_bytes().len() > crate::context::CONTEXT_MAP_RESULT_MAX_BYTES {
+        return Err(outcome_unknown());
+    }
+    let value: serde_json::Value =
+        serde_json::from_slice(context.canonical_bytes()).map_err(|_| outcome_unknown())?;
+    let closure = value
+        .get("resource_closure")
+        .and_then(serde_json::Value::as_str);
+    if !matches!(closure, Some("closed" | "not_acquired")) {
+        return Err(outcome_unknown());
+    }
+    if let Some(code) = context.failure_code() {
+        if code != ServiceErrorCode::StoreOutcomeUnknown {
+            // The native contract has closed a known failed issuance without
+            // publishing its continuation; uncertain native effects stay fenced.
+            *native_effect = false;
+        }
+        return Err(failure(code, "native selected Context inspection refused"));
+    }
+    if closure != Some("closed") {
+        return Err(outcome_unknown());
+    }
+    check_output_bound(context.canonical_bytes(), max_output)?;
+    let status = match context.status() {
+        ContextMapStatus::Cancelled => {
+            return Err(failure(
+                ServiceErrorCode::Cancelled,
+                "selected Context inspection cancelled",
+            ));
+        }
+        ContextMapStatus::Failed => {
+            return Err(failure(
+                ServiceErrorCode::InternalContractViolation,
+                "native Context failed without a typed cause",
+            ));
+        }
+        ContextMapStatus::Partial => fold_status(search_status, "partial"),
+        ContextMapStatus::Truncated => fold_status(search_status, "truncated"),
+        ContextMapStatus::Complete => fold_status(search_status, "exact_found"),
+    };
+    if value
+        .pointer("/payload/store_generation_id")
+        .and_then(serde_json::Value::as_str)
+        != Some(generation)
+    {
+        return Err(mismatch());
+    }
+    check_cancelled(stop)?;
+    Ok((value, status.into()))
+}
+
+// Unlike the read-only journal helper, this completion must never record
+// no-effect after E3 has durably issued/consumed a continuation.
+fn complete_native_effect(
+    store: &mut Store,
+    id: &StoreOperationId,
+    digest: &RequestDigest,
+    bytes: &[u8],
+    max_output: u64,
+) -> ServiceResult<Box<[u8]>> {
+    let result = (|| {
+        check_output_bound(bytes, max_output)?;
+        let response = response_object(store, bytes)?;
+        let object_id = response.object_id().clone();
+        let mut batch = WriteBatch::new();
+        batch.add_object(response).map_err(map_store_error)?;
+        match store.commit_operation(batch, id, digest, &object_id) {
+            Ok(record) if record.result_object_id() == Some(&object_id) => {
+                read_completed_response(store, &record, max_output)
+            }
+            _ => reconcile_durable_operation(store, id, digest, max_output),
+        }
+    })();
+    if result.is_err() {
+        let _ = store.mark_outcome_unknown(id, digest);
+        return Err(outcome_unknown());
+    }
+    result
 }
 
 fn load_selection(
@@ -521,6 +622,43 @@ mod tests {
             .ok_or("cancelled Context succeeded")?;
         assert_eq!(failure.code(), ServiceErrorCode::Cancelled);
         assert!(!search.exists() && !root.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn failed_outer_delivery_after_native_effect_is_unknown()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let root = std::env::temp_dir().join(format!(
+            "wow-context-effect-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root)?;
+        let path = root.join("search.sqlite");
+        let limits = SearchStoreLimits::new(65536, 8, 16, 128, 8)?;
+        let mut store = Store::open(
+            &path,
+            StoreConfiguration::new_with_instance_identity(
+                DURABLE_SEARCH_STORE_PROFILE_ID,
+                limits,
+            )?,
+        )?;
+        let id = StoreOperationId::new("native-effect-delivery")?;
+        let digest = RequestDigest::new(format!("sha256:{}", "7".repeat(64)))?;
+        store.begin_operation(id.clone(), digest.clone())?;
+        let error = complete_native_effect(&mut store, &id, &digest, b"{}", 1)
+            .err()
+            .ok_or("small outer delivery succeeded")?;
+        assert_eq!(error.code(), ServiceErrorCode::StoreOutcomeUnknown);
+        assert_eq!(
+            store.operation(&id)?.ok_or("missing operation")?.state(),
+            StoreOperationState::OutcomeUnknown
+        );
+        drop(store);
+        std::fs::remove_file(&path)?;
+        std::fs::remove_dir(&root)?;
         Ok(())
     }
 }

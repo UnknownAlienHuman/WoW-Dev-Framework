@@ -30,10 +30,26 @@ struct BuildInput {
     project_store_id: String,
     level: Level,
     render: Render,
+    #[serde(default, deserialize_with = "selected_progressive")]
+    progressive: Option<ProgressiveInput>,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProgressiveInput {
+    context_profile_id: String,
+    expansion_profile_id: String,
+    continuation_retention_profile_id: String,
+    frontier_rounds: Vec<Vec<String>>,
+}
+fn selected_progressive<'de, D: serde::Deserializer<'de>>(
+    decoder: D,
+) -> Result<Option<ProgressiveInput>, D::Error> {
+    ProgressiveInput::deserialize(decoder).map(Some)
 }
 pub struct SearchContextBuildRequest {
     base: SearchContextRequest,
     render: Render,
+    progressive: Option<Vec<Vec<ContextMapRoot>>>,
 }
 impl SearchContextBuildRequest {
     #[allow(clippy::too_many_arguments)]
@@ -55,6 +71,38 @@ impl SearchContextBuildRequest {
         if input.schema != "wow-service/search-context-build-input/1" {
             return Err(invalid());
         }
+        let progressive = input
+            .progressive
+            .map(|selected| {
+                if !matches!(input.level, Level::L1)
+                    || selected.context_profile_id
+                        != crate::context::PRIMARY_PROGRESSIVE_CONTEXT_PACK_PROFILE_ID
+                    || selected.expansion_profile_id != "wow-context/primary-native-progressive/1"
+                    || selected.continuation_retention_profile_id
+                        != crate::context::CONTEXT_CONTINUATION_RETENTION_PROFILE_ID
+                    || !(2..=4).contains(&selected.frontier_rounds.len())
+                    || selected
+                        .frontier_rounds
+                        .iter()
+                        .any(|batch| batch.is_empty() || batch.len() > 32)
+                {
+                    return Err(invalid());
+                }
+                let rounds = selected
+                    .frontier_rounds
+                    .into_iter()
+                    .map(|batch| {
+                        batch
+                            .into_iter()
+                            .map(|id| ContextMapRoot::graph_entity(&id))
+                            .collect::<ServiceResult<Vec<_>>>()
+                    })
+                    .collect::<ServiceResult<Vec<_>>>()?;
+                // E3 validates semantic ordering/membership against the actual
+                // receipt-selected root in execute_plan, never a transport root.
+                Ok(rounds)
+            })
+            .transpose()?;
         let common = ContextInput {
             schema: "wow-service/search-context-input/1".into(),
             selection_operation_id: input.selection_operation_id,
@@ -77,6 +125,7 @@ impl SearchContextBuildRequest {
         Ok(Self {
             base,
             render: input.render,
+            progressive,
         })
     }
 }
@@ -86,7 +135,12 @@ pub(in crate::search) fn execute(
 ) -> ServiceResult<Box<[u8]>> {
     execute_plan(
         &request.base,
-        ContextAction::Build(request.render.native()),
+        match &request.progressive {
+            Some(rounds) => {
+                ContextAction::ProgressiveBuild(request.render.native(), rounds.clone())
+            }
+            None => ContextAction::Build(request.render.native()),
+        },
         stop,
     )
 }
