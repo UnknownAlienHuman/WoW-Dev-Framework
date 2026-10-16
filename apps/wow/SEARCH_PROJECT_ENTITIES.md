@@ -148,6 +148,47 @@ capture and shard, then continue without recomputing native Graph owners.
 Metadata indexing is local with explicit permission;
 license/current/runtime acceptance is not implied.
 
+## Exact explanation from a retained result
+
+```text
+wow search entities explain --explain-json <CLOSED-JSON>
+  --search-store <EXISTING-SEARCH-STORE> --operation-id <ID>
+  --lease-expires-after <EPOCH> --allow-local-metadata-only
+  <ORIGINAL-STORE-BOUNDS> --max-output-bytes <LIMIT>
+```
+
+The closed input uses the exact capture and explicit candidate to inspect:
+
+```json
+{
+  "schema": "wow-service/project-entity-explain-input/1",
+  "session_object_id": "<EXACT-SESSION-OBJECT-ID>",
+  "result_set_id": "<EXACT-RESULT-SET-ID>",
+  "candidate_id": "<EXACT-CANDIDATE-ID>"
+}
+```
+
+Use the `session_object_id` from a retained Entity page response, its
+`page.result_set_id`, and the candidate's exact ID. Rank, name, Current, source
+paths and query/page overrides are not selectors. Missing, released, mismatched
+or absent candidates fail; the command never chooses another candidate.
+
+One Service operation validates the active result/shard roots and delegates to
+Search's shared complete capture validator. It returns the original candidate,
+original matching entity/path-edge explanation entries and original query
+context/status, including rank, coverage, truncation and nonclaims. It does not
+rerun the query or Graph, read the original SourceStore/files, infer user intent
+or issue a selection receipt. Partial original support remains Partial.
+
+This is a separately bounded read; it does not advance or reset a page cursor.
+Store limits match the original session, while the explicit output bound and
+lease epoch belong to this operation. Resources close and the exact active
+roots are fenced before success. A repeated completed operation returns its
+historical bytes before reopening the capture, including after explicit release
+and GC. A new operation requires active retention. A missing Store is not created.
+This native Entity route does not expose other capture kinds or the full E4
+selection/context/frontend contract.
+
 ## Retire and remaining acceptance
 
 Use ordinary exact `search index retire` receipt/bounds with `--graph-entities`

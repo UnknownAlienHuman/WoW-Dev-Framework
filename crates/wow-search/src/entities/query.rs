@@ -2,7 +2,7 @@
 use super::*;
 mod filters;
 mod pagination;
-pub use pagination::{EntityPage, EntityPageCursor, EntityPagePolicy};
+pub use pagination::{EntityCandidateExplanation, EntityPage, EntityPageCursor, EntityPagePolicy};
 use std::collections::BTreeMap;
 use wow_graph::{
     GraphDirection, GraphExplainLimits, GraphExplainQuery, GraphExplainSubject, GraphQueryState,

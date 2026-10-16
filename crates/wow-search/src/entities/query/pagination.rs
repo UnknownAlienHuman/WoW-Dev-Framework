@@ -1,6 +1,8 @@
 //! Whole-candidate pages of an immutable Search capture, never native Graph truth.
 use super::*;
 use crate::page_budget::{PageBudget, PageLimits};
+mod explanation;
+pub use explanation::EntityCandidateExplanation;
 const POLICY_SCHEMA: &str = "wow-search/project-entity-page-policy/1";
 const PAGE_SCHEMA: &str = "wow-search/project-entity-result-page/1";
 const PAGE_PROFILE: &str = "wow-search/project-entity-captured-whole-candidate/1";
@@ -248,17 +250,13 @@ impl EntityQueryResult {
     }
 }
 impl EntitySearchShard {
-    /// Page Search's recorded result after the caller proves the exact retained
-    /// session and preceding receipt. This returns a page of captured data only,
-    /// never a reconstructed EntityQueryResult or native Graph owner handle.
-    pub fn page_retained_result(
+    /// Validate the complete immutable Search representation for either consumer.
+    fn validate_retained_result(
         &self,
         bytes: &[u8],
         request: &EntityQueryRequest,
-        policy: &EntityPagePolicy,
-        cursor: Option<&EntityPageCursor>,
         stop: &AtomicBool,
-    ) -> SearchResult<EntityPage> {
+    ) -> SearchResult<serde_json::Value> {
         check(stop)?;
         if bytes.len() as u64 > request.max_result_bytes.get() {
             return Err(SearchError::FileSetBudgetExceeded);
@@ -349,6 +347,20 @@ impl EntitySearchShard {
             }
             previous = Some((rank, id));
         }
+        Ok(envelope)
+    }
+
+    /// Page Search's recorded result after exact retained session admission.
+    /// It never reconstructs or reruns the original query or Graph owner.
+    pub fn page_retained_result(
+        &self,
+        bytes: &[u8],
+        request: &EntityQueryRequest,
+        policy: &EntityPagePolicy,
+        cursor: Option<&EntityPageCursor>,
+        stop: &AtomicBool,
+    ) -> SearchResult<EntityPage> {
+        self.validate_retained_result(bytes, request, stop)?;
         render(bytes, self.profile_digest(), policy, cursor, stop)
     }
 }

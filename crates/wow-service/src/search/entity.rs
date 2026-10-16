@@ -5,7 +5,7 @@ use wow_search::entities::{
 };
 use wow_store::ObjectId;
 pub(in crate::search) mod pagination;
-pub use pagination::{EntityContinueRequest, EntityResultReleaseRequest};
+pub use pagination::{EntityContinueRequest, EntityExplainRequest, EntityResultReleaseRequest};
 
 impl SearchIndexBuildRequest {
     #[allow(clippy::too_many_arguments)]

@@ -15,19 +15,21 @@ use std::{
 use wow_service::{
     OperationId, ServiceErrorCode,
     search::{
-        EntityContinueRequest, EntityResultReleaseRequest, EntityRetrievalRequest,
-        FederationContinueRequest, FederationRequest, FederationResultReleaseRequest,
-        LocalMetadataPermission, ObservationComponent, ReferenceContinueRequest,
-        ReferenceIndexBuildRequest, ReferenceResultReleaseRequest, ReferenceShardRequest,
-        SearchBounds, SearchBuildQueryRequest, SearchContinueRequest, SearchIndexBuildRequest,
-        SearchOperationService, SearchResultReleaseRequest, SearchRetrievalRequest,
-        SearchShardQueryRequest, SearchShardRetireRequest, SearchSourceHoldBinding,
-        SearchStoreGcRequest, SearchStoreLimits, SourceObservationRetrievalRequest,
+        EntityContinueRequest, EntityExplainRequest, EntityResultReleaseRequest,
+        EntityRetrievalRequest, FederationContinueRequest, FederationRequest,
+        FederationResultReleaseRequest, LocalMetadataPermission, ObservationComponent,
+        ReferenceContinueRequest, ReferenceIndexBuildRequest, ReferenceResultReleaseRequest,
+        ReferenceShardRequest, SearchBounds, SearchBuildQueryRequest, SearchContinueRequest,
+        SearchIndexBuildRequest, SearchOperationService, SearchResultReleaseRequest,
+        SearchRetrievalRequest, SearchShardQueryRequest, SearchShardRetireRequest,
+        SearchSourceHoldBinding, SearchStoreGcRequest, SearchStoreLimits,
+        SourceObservationRetrievalRequest,
     },
 };
 
 const HELP: &str = "wow search index build --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --operation-id <ID> --allow-local-metadata-only <finite bounds>\nwow search query --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --literal-query <UTF-8-LITERAL> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index retire --store-root <PROJECT-STORE> --search-store <SEARCH-STORE-FILE> --generation <ExactStoreGenerationId> --file-id <ProjectFileId> --search-shard-id <ExactSearchShardId> --object-id <ExactObjectId> --profile-digest <sha256:...> --build-operation-id <BuildOperationId> --source-store-epoch-id <ExactEpochId> --source-generation-hold-id <ExactRetentionRootId> --source-generation-hold-digest <sha256:...> --operation-id <ID> --lease-expires-after <epoch> --allow-local-metadata-only <finite bounds>\nwow search index gc --search-store <SEARCH-STORE-FILE> --target-object-id <ExactObjectId> --operation-id <ID> --gc-now <epoch> --gc-max-deletes <positive-u32> <Store limits>\nwow search build-query --store-root <PROJECT-STORE> <existing one-shot route; it does not claim durable SearchStore persistence>\nAll durable commands require --max-output-bytes <positive-u64> and Store limits: --store-max-object-bytes <positive-u64> --store-max-batch-objects <positive-u32> --store-max-catalog-mutations <positive-u32> --store-max-manifest-records <positive-u32> --store-max-gc-deletes <positive-u32>.\nBuild/query/retire also require Search bounds: --max-documents <positive-u32> --max-document-id-bytes <positive-u32> --max-owner-metadata-label-bytes <positive-u32> --max-literal-query-bytes <positive-u32> --max-candidate-results <positive-u32> --max-owner-evidence-records <positive-u32> --max-owner-manifest-bytes <positive-u64> --max-database-bytes <positive-u64> --max-search-object-bytes <positive-u64>.\n";
 const MAX_ARGUMENTS: usize = 64;
+const ENTITY_EXPLAIN_HELP: &str = "wow search entities explain --explain-json <wow-service/project-entity-explain-input/1 JSON> --search-store <EXISTING-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output limits>. Exact session_object_id/result_set_id/candidate_id only; returns original captured explanation without query/Graph/source rerun or inferred selection.\n";
 const REFERENCE_INSPECTION_HELP: &str = "wow search reference status|validate --handle-json <EXACT-HANDLE> --search-store <EXISTING-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output limits>. Checks the exact native retained shard without a search, source access or repair. Valid covers native owner/physical open only; full E4 validation stays not_evaluated. Invalid exits1, unavailable/not_evaluated exits2. Replay returns the original observation; use a new operation ID for a fresh observation.\n";
 const BLIZZARD_FEDERATION_HELP: &str = "Required Blizzard UI uses request schema wow-service/exact-platform-search-federation-input/1 with an exact blizzard source-hold/shard/query record, and query schema wow-search/exact-primary-platform-reference-query/1 with blizzard_ui=required and all3universe priorities. Native ProjectKind/source/package binding required; source grade stays explicit. Captured pages retain5roots; choose original Store catalog-mutation capacity>=9. Excluded2universe schemas/bytes remain exact.\n";
 const FEDERATION_HELP: &str = "wow search federated --request-json <wow-service/exact-search-federation-input/1 JSON> --search-store <SAME-STORE> --operation-id <ID> --lease-expires-after <EPOCH> --allow-local-metadata-only <Store/output limits>. Optional --page-json <wow-search/federated-page-policy/1 JSON> retains captured result, primary shard, Reference shard and ReferenceView. wow search federated continue --continuation-json <EXACT> and wow search federated results release --session-object-id <EXACT> use the same Store/output limits. Requires compatible exact native owners; no Current, implicit build or cross-profile fallback.\n";
@@ -87,6 +89,7 @@ enum DurableCommand {
     FederatedRelease(FederationResultReleaseRequest),
     Federated(Box<FederationRequest>),
     EntityContinue(EntityContinueRequest),
+    EntityExplain(EntityExplainRequest),
     EntityRelease(EntityResultReleaseRequest),
     Entities(EntityRetrievalRequest),
     ReferenceContinue(ReferenceContinueRequest),
@@ -142,6 +145,7 @@ fn run_with_io<W: Write, E: Write>(
             .and_then(|()| stdout.write_all(REFERENCE_PAGES_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(ENTITIES_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(ENTITY_PAGES_HELP.as_bytes()))
+            .and_then(|()| stdout.write_all(ENTITY_EXPLAIN_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(OBSERVATIONS_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(DECLARATIONS_HELP.as_bytes()))
             .and_then(|()| stdout.write_all(INVENTORY_HELP.as_bytes()))
@@ -235,6 +239,7 @@ fn run_durable<W: Write, E: Write>(
         }
         DurableCommand::Federated(request) => service.federate_search(&request, stop),
         DurableCommand::EntityContinue(request) => service.continue_entity_results(&request, stop),
+        DurableCommand::EntityExplain(request) => service.explain_entity_candidate(&request, stop),
         DurableCommand::EntityRelease(request) => service.release_entity_results(&request, stop),
         DurableCommand::Entities(request) => service.retrieve_entities(&request, stop),
         DurableCommand::Observations(request) => {
@@ -383,6 +388,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             _ => ("federated", 2),
         },
         "entities" => match arguments.get(2).and_then(|v| v.to_str()) {
+            Some("explain") => ("entity-explain", 3),
             Some("continue") => ("entity-continue", 3),
             Some("results") if arguments.get(3).is_some_and(|v| v == "release") => {
                 ("entity-release", 4)
@@ -465,6 +471,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
         "reference-continue" => allowed.push("--continuation-json"),
         "reference-release" => allowed.push("--session-object-id"),
         "entity-continue" => allowed.push("--continuation-json"),
+        "entity-explain" => allowed.extend_from_slice(&["--explain-json", "--lease-expires-after"]),
         "entity-release" => allowed.push("--session-object-id"),
         "build" => allowed.extend_from_slice(&[
             "--store-root",
@@ -549,6 +556,7 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             | "federated-continue"
             | "federated-release"
             | "entity-continue"
+            | "entity-explain"
             | "entity-release"
             | "release"
             | "reference-query"
@@ -621,6 +629,20 @@ fn parse_durable(arguments: &[OsString]) -> Result<Option<ParsedDurableSearch>, 
             }
             DurableCommand::Federated(Box::new(request))
         }
+        "entity-explain" => DurableCommand::EntityExplain(
+            EntityExplainRequest::new(
+                OperationId::new(required_text(&options, "--operation-id")?)
+                    .map_err(|_| "invalid --operation-id")?,
+                store_path,
+                required_text(&options, "--explain-json")?.as_bytes(),
+                store_limits,
+                max_output_bytes,
+                positive_u64(&options, "--lease-expires-after")?.get(),
+                LocalMetadataPermission::authorize_local_metadata_only(),
+                &AtomicBool::new(false),
+            )
+            .map_err(|_| "invalid exact Entity explanation guard")?,
+        ),
         "entity-continue" => DurableCommand::EntityContinue(
             EntityContinueRequest::new(
                 OperationId::new(required_text(&options, "--operation-id")?)

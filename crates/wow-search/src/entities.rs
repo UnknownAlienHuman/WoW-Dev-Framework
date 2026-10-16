@@ -5,7 +5,8 @@ use wow_graph::{GraphLimits, GraphNode, GraphNodeId};
 mod discovery;
 mod query;
 pub use query::{
-    EntityPage, EntityPageCursor, EntityPagePolicy, EntityQueryRequest, EntityQueryResult,
+    EntityCandidateExplanation, EntityPage, EntityPageCursor, EntityPagePolicy, EntityQueryRequest,
+    EntityQueryResult,
 };
 const PROFILE_SCHEMA: &str = "wow-search/project-graph-entity-profile/1";
 const MANIFEST_SCHEMA: &str = "wow-search/project-graph-entity-shard/1";
@@ -188,7 +189,7 @@ impl EntitySearchShard {
         &self.manifest.documents
     }
     pub fn release(self, store: &mut Store) -> SearchResult<()> {
-        self.physical.release(store).map_err(SearchError::from)
+        release_physical(self.physical, store)
     }
 }
 #[allow(clippy::too_many_arguments)]

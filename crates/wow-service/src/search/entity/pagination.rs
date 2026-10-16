@@ -2,6 +2,9 @@
 use super::*;
 use serde::Deserialize;
 use wow_search::entities::{EntityPage, EntityPageCursor, EntityQueryResult};
+mod explanation;
+pub use explanation::EntityExplainRequest;
+pub(in crate::search) use explanation::explain_result;
 const SESSION_SCHEMA: &str = "wow-service/project-entity-search-session/1";
 const SESSION_KIND: &str = "wow.search.entity-result-session";
 const ROOT_CATALOG: &str = "wow-search.entity-result-sessions";
