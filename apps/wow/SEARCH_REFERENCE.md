@@ -278,6 +278,81 @@ Partial even when the native API callable partition is Complete. Derived facet
 records have no documentation field; their subject's documentation remains on
 its own API record. Older profiles, handles, queries and result bytes are retained.
 
+## Configured compatibility aliases
+
+The native source-reference configuration accepts one optional pinned input:
+
+```json
+{
+  "compatibility_aliases": {
+    "path": "aliases.json",
+    "content_digest": "sha256:<actual-raw-file-digest>",
+    "byte_length": 1234
+  }
+}
+```
+
+Use actual digest/length and `native_documents: "source_declarations_v1"`.
+The resource is a strict `wow-reference/configured-compatibility-alias-input/1`:
+
+```json
+{
+  "schema": "wow-reference/configured-compatibility-alias-input/1",
+  "profile_id": "<exact-base-profile-id>",
+  "profile_digest": "sha256:<canonical-validated-ProfileIdentity-digest>",
+  "base_generation": "<exact-base-reference-generation>",
+  "base_view_digest": "sha256:<exact-base-view-digest>",
+  "declarations": [{
+    "value": "C_Example.LegacyRead",
+    "target": {
+      "partition_id": "reference.native.apidoc.api",
+      "record_key": "function:C_Example.Read",
+      "record_digest": "sha256:<actual-owner-record-digest>"
+    }
+  }]
+}
+```
+
+Acquire the base without the optional resource. Use its actual source report and
+owner/Search read results for profile/view/generation/record identities; key text
+or a display name cannot supply a record digest. The profile digest is SHA-256
+over the Core canonical validated `ProfileIdentity`. Input is limited to 64 KiB,
+128 declarations and 4096-byte bounded identifier/value fields; the complete
+encoded owner header must also fit the existing 64-KiB record payload limit.
+Oversize input refuses; it is never truncated. Unknown/duplicate/null fields and
+caller-selected kinds/policies/confidence are not accepted.
+
+`--reference-inventory` automatically selects an alias-capable inventory when the
+native owner has this resource. The original manifested restriction requirement
+still applies. `--include-documentation` supports the same alias resource without
+requiring the restriction capability. The returned exact handle uses
+`wow-service/native-reference-compatibility-search-handle/1`; preserve it whole.
+Omitted resource keeps the original profile/handle/query bytes and unavailable
+alias lane. A default noninventory build does not implicitly select this lane.
+
+Query an alias-capable handle using `wow-search/native-reference-alias-query/1`
+with `selectors: {"explicit_alias":"C_Example.LegacyRead"}`, enabled/required lane
+`exact_explicit_alias` and the normal finite request envelope. Other native name,
+documentation, similarity and shape selectors remain explicit independent lanes;
+restriction shape requires its actual shard capability. Old query schemas reject
+the new selector, including explicit null.
+
+Resolved aliases retrieve the original exact target document once, with band-3
+`exact_configured_owner_compatibility_alias` evidence. Distinct alias record/source
+evidence survives alongside name/identity signals. Alias evidence identifies the
+owner record/digest, literal value, original source IDs/indices, exact target and
+configured-declaration authority class. Same strings do not merge universes.
+
+Missing targets, changed digests, target conflicts and multiple exclusive mappings
+remain visible without exact target signals. Alias chains/target partitions are
+refused. Matching is case-sensitive, with no inferred deprecation/replacement,
+runtime behavior, platform fact or caller intent. Alias coverage remains Partial;
+an exact miss is not global alias absence. The original resource is retained by
+Reference; Search never parses an opaque owner payload or hydrates native AST
+caches from its projection. Existing native Reference/federated pages, offline
+reopen, roots, retire/GC and historical response replay remain the route. See
+[the owner seam](../../docs/EXPLICIT_COMPATIBILITY_ALIAS_SEAM.md).
+
 ## Retire
 
 ```text

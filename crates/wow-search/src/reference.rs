@@ -9,6 +9,7 @@ use wow_reference::{
 };
 use wow_store::StoreLimits;
 
+mod compatibility_aliases;
 mod declarations;
 mod documentation;
 mod query;
@@ -30,6 +31,8 @@ const DOCUMENTATION_MANIFEST_SCHEMA: &str =
     "wow-search/native-reference-documentation-inventory-shard/1";
 const INVENTORY_PROFILE_SCHEMA: &str = "wow-search/native-reference-inventory-profile/1";
 const INVENTORY_MANIFEST_SCHEMA: &str = "wow-search/native-reference-inventory-shard/1";
+const ALIAS_PROFILE_SCHEMA: &str = "wow-search/native-reference-compatibility-inventory-profile/1";
+const ALIAS_MANIFEST_SCHEMA: &str = "wow-search/native-reference-compatibility-inventory-shard/1";
 use wow_reference::native_view::{
     NATIVE_DECLARATION_PARTITION, NATIVE_EVENT_PARTITION, NativeDeclarationKind,
     NativeDeclarationScalar, NativeReferenceDocuments,
@@ -54,6 +57,7 @@ pub struct ReferenceSearchProfile {
     native_documents: Option<NativeReferenceDocuments>,
     include_documentation: bool,
     include_restrictions: bool,
+    include_compatibility_aliases: bool,
 }
 impl ReferenceSearchProfile {
     pub fn new(bounds: SearchBounds) -> SearchResult<Self> {
@@ -69,6 +73,7 @@ impl ReferenceSearchProfile {
             native_documents,
             include_documentation: false,
             include_restrictions: false,
+            include_compatibility_aliases: false,
             digest: identity(
                 "",
                 &(
@@ -116,8 +121,31 @@ impl ReferenceSearchProfile {
         profile.include_restrictions = true;
         Ok(profile)
     }
+    pub fn with_compatibility_aliases(
+        bounds: SearchBounds,
+        include_restrictions: bool,
+    ) -> SearchResult<Self> {
+        let mut profile = if include_restrictions {
+            Self::inventory(bounds)?
+        } else {
+            Self::documentation_inventory(bounds)?
+        };
+        profile.digest = identity(
+            "",
+            &(
+                ALIAS_PROFILE_SCHEMA,
+                ALIAS_MANIFEST_SCHEMA,
+                &profile.digest,
+                "resolved-configured-owner-compatibility-alias/1",
+            ),
+        )?;
+        profile.include_compatibility_aliases = true;
+        Ok(profile)
+    }
     fn manifest_schema(&self) -> &'static str {
-        if self.include_restrictions {
+        if self.include_compatibility_aliases {
+            ALIAS_MANIFEST_SCHEMA
+        } else if self.include_restrictions {
             INVENTORY_MANIFEST_SCHEMA
         } else if self.include_documentation {
             DOCUMENTATION_MANIFEST_SCHEMA
@@ -234,6 +262,8 @@ struct ProjectionIssue {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Manifest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    compatibility_aliases: Option<compatibility_aliases::AliasInventory>,
     schema: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     native_documents: Option<NativeReferenceDocuments>,
@@ -387,7 +417,19 @@ pub fn prepare_reference_callable_shard(
             return Err(SearchError::OwnerEvidenceInvalid);
         }
     }
+    let aliases = if profile.include_compatibility_aliases {
+        let catalog =
+            wow_reference::compatibility_aliases::read(&native.view, &binding.profile, stop)
+                .map_err(native_error)?
+                .ok_or(SearchError::OwnerEvidenceInvalid)?;
+        Some(compatibility_aliases::AliasInventory::capture(
+            &catalog, bounds, stop,
+        )?)
+    } else {
+        None
+    };
     let mut manifest = Manifest {
+        compatibility_aliases: aliases,
         schema: profile.manifest_schema().into(),
         native_documents: profile.native_documents,
         include_documentation: profile.include_documentation.then_some(true),
@@ -702,6 +744,7 @@ pub fn open_reference_callable_shard(
         let manifest: Manifest =
             serde_json::from_slice(bytes).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
         if manifest.schema != profile.manifest_schema()
+            || manifest.compatibility_aliases.is_some() != profile.include_compatibility_aliases
             || manifest.native_documents != profile.native_documents
             || manifest.include_documentation != profile.include_documentation.then_some(true)
             || manifest.include_restrictions != profile.include_restrictions.then_some(true)
@@ -728,6 +771,24 @@ pub fn open_reference_callable_shard(
                 .all(|p| p[0].source_id < p[1].source_id)
         {
             return Err(SearchError::OwnerEvidenceInvalid);
+        }
+        if profile.include_compatibility_aliases {
+            let catalog = wow_reference::compatibility_aliases::read(
+                reference,
+                &manifest.binding.profile,
+                stop,
+            )
+            .map_err(native_error)?
+            .ok_or(SearchError::OwnerEvidenceInvalid)?;
+            if manifest.compatibility_aliases.as_ref()
+                != Some(&compatibility_aliases::AliasInventory::capture(
+                    &catalog,
+                    profile.bounds,
+                    stop,
+                )?)
+            {
+                return Err(SearchError::OwnerEvidenceInvalid);
+            }
         }
         let partition = reference
             .partitions()

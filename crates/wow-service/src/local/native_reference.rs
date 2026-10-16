@@ -29,6 +29,8 @@ struct SourceReferenceInput {
     native_source: NativeSourceInput,
     #[serde(default, deserialize_with = "super::native_resources::present")]
     native_documents: Option<wow_reference::native_view::NativeReferenceDocuments>,
+    #[serde(default, deserialize_with = "super::native_resources::present")]
+    compatibility_aliases: Option<wow_project::disk::ProjectDiskFile>,
 }
 
 /// Exact selected callable projection; no project, annotation or runtime claim.
@@ -47,9 +49,14 @@ pub struct SourceReferenceResult {
     source_files: Vec<NativeFileIdentity>,
     input_failures: Vec<InputFailure>,
     reference: NativeViewProjection,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    compatibility_aliases: Option<wow_reference::compatibility_aliases::AliasReceipt>,
 }
 
 impl SourceReferenceResult {
+    pub fn has_compatibility_aliases(&self) -> bool {
+        self.compatibility_aliases.is_some()
+    }
     pub fn native_documents(&self) -> Option<wow_reference::native_view::NativeReferenceDocuments> {
         self.reference.native_documents()
     }
@@ -78,7 +85,9 @@ impl SourceReferenceResult {
         &self.reference
     }
     pub fn is_partial(&self) -> bool {
-        !self.input_failures.is_empty() || !self.reference.negative_authority
+        !self.input_failures.is_empty()
+            || !self.reference.negative_authority
+            || self.compatibility_aliases.is_some()
     }
     pub fn canonical_bytes(&self, stop: &AtomicBool) -> ServiceResult<Vec<u8>> {
         super::native_input::report_bytes_with_limit(self, 64 * 1024 * 1024, stop)
@@ -122,7 +131,7 @@ pub fn read_local_source_reference(
         input.profile.interface,
         stop,
     )?;
-    let built = build_native_reference(
+    let mut built = build_native_reference(
         &input.profile,
         &captured,
         source_manifest.as_ref(),
@@ -131,6 +140,28 @@ pub fn read_local_source_reference(
         input.native_documents,
         stop,
     )?;
+    let compatibility_aliases = if let Some(selected) = &input.compatibility_aliases {
+        let bytes = directory
+            .read_json_artifact_with_limit(
+                selected,
+                wow_reference::compatibility_aliases::MAX_INPUT_BYTES,
+                stop,
+            )
+            .map_err(super::disk_input::acquisition_error)?;
+        built.reference = built
+            .reference
+            .with_compatibility_aliases(&built.profile, selected.path(), &bytes, stop)
+            .map_err(native_error)?;
+        Some(
+            wow_reference::compatibility_aliases::read(&built.reference.view, &built.profile, stop)
+                .map_err(native_error)?
+                .ok_or_else(|| invalid("configured alias owner is unavailable"))?
+                .receipt()
+                .clone(),
+        )
+    } else {
+        None
+    };
     let reference_generation = built
         .reference
         .view
@@ -139,7 +170,11 @@ pub fn read_local_source_reference(
         .map_err(|_| invalid("native reference owner returned an invalid generation"))?;
     cancelled(stop)?;
     Ok(SourceReferenceResult {
-        schema: "wow-service/source-reference-result/1",
+        schema: if compatibility_aliases.is_some() {
+            "wow-service/source-reference-compatibility-result/1"
+        } else {
+            "wow-service/source-reference-result/1"
+        },
         configuration_content_digest: ContentDigest::from_bytes(Sha256::digest(bytes).into()),
         profile: built.profile,
         reference_generation,
@@ -151,6 +186,7 @@ pub fn read_local_source_reference(
         source_files: built.source_files,
         input_failures: built.failures,
         reference: built.reference,
+        compatibility_aliases,
     })
 }
 

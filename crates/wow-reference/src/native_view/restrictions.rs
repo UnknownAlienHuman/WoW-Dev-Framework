@@ -117,6 +117,28 @@ pub(super) struct RestrictionCatalog {
     rows: BTreeMap<String, RestrictionRow>,
 }
 impl RestrictionCatalog {
+    pub(super) fn rebind(
+        &mut self,
+        base: &ReferenceView,
+        next: &ReferenceView,
+        stop: &AtomicBool,
+    ) -> Result<(), NativeError> {
+        checkpoint(stop)?;
+        validate_rebind(
+            &self.generation,
+            &self.view_digest,
+            base,
+            next,
+            NATIVE_RESTRICTION_PARTITION,
+        )?;
+        for row in self.rows.values_mut() {
+            checkpoint(stop)?;
+            row.entity_id = restriction_entity_id(next.generation_id(), &row.key)?;
+        }
+        self.generation = next.generation_id().into();
+        self.view_digest = next.self_digest().into();
+        Ok(())
+    }
     pub(super) fn finish(
         view: &ReferenceView,
         mut pending: BTreeMap<String, Vec<RestrictionRow>>,

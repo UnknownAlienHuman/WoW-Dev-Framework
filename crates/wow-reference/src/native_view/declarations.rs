@@ -397,6 +397,24 @@ pub(super) struct DeclarationCatalog {
     rows: BTreeMap<String, DeclarationRow>,
 }
 impl DeclarationCatalog {
+    pub(super) fn rebind(
+        &mut self,
+        base: &ReferenceView,
+        next: &ReferenceView,
+        stop: &AtomicBool,
+    ) -> Result<(), NativeError> {
+        checkpoint(stop)?;
+        validate_rebind(
+            &self.generation,
+            &self.view_digest,
+            base,
+            next,
+            NATIVE_DECLARATION_PARTITION,
+        )?;
+        self.generation = next.generation_id().into();
+        self.view_digest = next.self_digest().into();
+        Ok(())
+    }
     pub fn read<'a>(
         &'a self,
         record: &ReferenceRecord,

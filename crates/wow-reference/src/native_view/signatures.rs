@@ -199,6 +199,24 @@ impl SignatureRow {
 }
 
 impl SignatureCatalog {
+    pub(super) fn rebind(
+        &mut self,
+        base: &ReferenceView,
+        next: &ReferenceView,
+        stop: &AtomicBool,
+    ) -> Result<(), NativeError> {
+        checkpoint(stop)?;
+        validate_rebind(
+            &self.generation,
+            &self.view_digest,
+            base,
+            next,
+            NATIVE_API_PARTITION,
+        )?;
+        self.generation = next.generation_id().into();
+        self.view_digest = next.self_digest().into();
+        Ok(())
+    }
     pub(super) fn finish(
         view: &ReferenceView,
         mut pending: BTreeMap<String, Vec<SignatureRow>>,

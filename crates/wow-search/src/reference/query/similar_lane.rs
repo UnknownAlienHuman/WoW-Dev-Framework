@@ -230,6 +230,7 @@ pub(super) fn run<'a>(
             signals,
             omitted,
             Some(hit.proof),
+            None,
         )? {
             state = "truncated";
         }

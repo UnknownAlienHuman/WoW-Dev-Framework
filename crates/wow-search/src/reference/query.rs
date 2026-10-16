@@ -1,6 +1,7 @@
 //! Closed name/member/signature lanes over genuine captured callable fields.
 use super::*;
 use crate::SearchRetrievalLane as Lane;
+mod alias_lane;
 mod declaration_shape;
 mod field_shape;
 mod pagination;
@@ -16,6 +17,9 @@ const DOCUMENTATION_QUERY_PROFILE: &str = "wow-search/native-reference-documenta
 const INVENTORY_REQUEST_SCHEMA: &str = "wow-search/native-reference-inventory-query/1";
 const INVENTORY_QUERY_PROFILE: &str = "wow-search/native-reference-inventory-retrieval/1";
 const INVENTORY_RANK_PROFILE: &str = "wow-search/reference-inventory-authority-ordinal-fusion/1";
+const ALIAS_REQUEST_SCHEMA: &str = "wow-search/native-reference-alias-query/1";
+const ALIAS_QUERY_PROFILE: &str = "wow-search/native-reference-compatibility-alias-retrieval/1";
+const ALIAS_RANK_PROFILE: &str = "wow-search/reference-compatibility-alias-ordinal-fusion/1";
 const QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape/1";
 const RANK_PROFILE: &str = "wow-search/reference-authority-ordinal-fusion/1";
 const SIM_QUERY_PROFILE: &str = "wow-search/native-callable-name-member-shape-similarity/1";
@@ -81,6 +85,8 @@ struct Shape {
 #[serde(deny_unknown_fields)]
 struct Selectors {
     #[serde(skip_serializing_if = "Option::is_none")]
+    explicit_alias: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     identifier_similarity: Option<SimilaritySelector>,
     #[serde(skip_serializing_if = "Option::is_none")]
     entity_key: Option<String>,
@@ -125,6 +131,7 @@ impl ReferenceQueryRequest {
                 | FIELD_SHAPE_REQUEST_SCHEMA
                 | DOCUMENTATION_REQUEST_SCHEMA
                 | INVENTORY_REQUEST_SCHEMA
+                | ALIAS_REQUEST_SCHEMA
         ) || request.enabled_lanes.is_empty()
             || request.enabled_lanes.len() > 9
             || request.required_lanes.len() > 9
@@ -140,7 +147,7 @@ impl ReferenceQueryRequest {
         if request.schema == REQUEST_SCHEMA {
             validate_legacy_shape(bytes)?;
         }
-        if request.schema != INVENTORY_REQUEST_SCHEMA {
+        if request.schema != INVENTORY_REQUEST_SCHEMA && request.schema != ALIAS_REQUEST_SCHEMA {
             let value: serde_json::Value =
                 serde_json::from_slice(bytes).map_err(|_| SearchError::InvalidProfile)?;
             if value
@@ -152,11 +159,23 @@ impl ReferenceQueryRequest {
             }
         }
         let s = &request.selectors;
+        if request.schema != ALIAS_REQUEST_SCHEMA {
+            let value: serde_json::Value =
+                serde_json::from_slice(bytes).map_err(|_| SearchError::InvalidProfile)?;
+            if value
+                .get("selectors")
+                .and_then(serde_json::Value::as_object)
+                .is_some_and(|selectors| selectors.contains_key("explicit_alias"))
+            {
+                return Err(SearchError::InvalidProfile);
+            }
+        }
         if let Some(key) = &s.entity_key {
             wow_reference::ReferenceRecord::validate_key(key)
                 .map_err(|_| SearchError::InvalidProfile)?;
         }
         let present = [
+            (s.explicit_alias.is_some(), Lane::ExactExplicitAlias),
             (s.entity_key.is_some(), Lane::ExactIdentity),
             (
                 s.qualified_name.is_some() || s.short_name.is_some(),
@@ -179,6 +198,7 @@ impl ReferenceQueryRequest {
             return Err(SearchError::InvalidProfile);
         }
         for value in [
+            &s.explicit_alias,
             &s.entity_key,
             &s.qualified_name,
             &s.short_name,
@@ -324,6 +344,8 @@ struct Origin {
 #[derive(Serialize)]
 struct Signal {
     #[serde(skip_serializing_if = "Option::is_none")]
+    explicit_alias: Option<compatibility_aliases::AliasEvidence>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     identifier_similarity: Option<similar_lane::SimilarityEvidence>,
     lane: Lane,
     match_class: &'static str,
@@ -386,7 +408,9 @@ impl ReferenceSearchShard {
             ),
         )?;
         let query_profile = capture_query_profile(self.manifest.native_documents, request);
-        let ranking_profile = if self.manifest.include_restrictions.is_some() {
+        let ranking_profile = if self.manifest.compatibility_aliases.is_some() {
+            ALIAS_RANK_PROFILE
+        } else if self.manifest.include_restrictions.is_some() {
             INVENTORY_RANK_PROFILE
         } else if request.selectors.identifier_similarity.is_some() {
             SIM_RANK_PROFILE
@@ -405,6 +429,7 @@ impl ReferenceSearchShard {
         let mut truncated = false;
         let mut missing = false;
         let mut similarity_work = None;
+        let mut alias_match = None;
         for lane in [
             Lane::ExactIdentity,
             Lane::ExactCanonicalName,
@@ -431,9 +456,17 @@ impl ReferenceSearchShard {
                     Lane::LiteralText => s.literal_text.is_some(),
                     Lane::StructuredShape => s.shape.is_some(),
                     Lane::IdentifierSimilarity => s.identifier_similarity.is_some(),
+                    Lane::ExactExplicitAlias => s.explicit_alias.is_some(),
                     _ => false,
                 };
-                state = if matches!(lane, Lane::ExactExplicitAlias | Lane::SeededGraph)
+                state = if lane == Lane::SeededGraph
+                    || (lane == Lane::ExactExplicitAlias
+                        && self.manifest.compatibility_aliases.is_none())
+                    || (lane == Lane::StructuredShape
+                        && self.manifest.include_restrictions.is_none()
+                        && s.shape
+                            .as_ref()
+                            .is_some_and(|shape| shape.restriction.is_some()))
                     || (lane == Lane::IdentifierSimilarity && s.identifier_similarity.is_none())
                     || (lane == Lane::StructuredShape
                         && self.manifest.native_documents.is_none()
@@ -453,7 +486,21 @@ impl ReferenceSearchShard {
                 } else {
                     "complete"
                 };
-                if state == "complete" && lane == Lane::IdentifierSimilarity {
+                if state == "complete" && lane == Lane::ExactExplicitAlias {
+                    let (lane_state, report) = alias_lane::run(
+                        &self.manifest,
+                        request,
+                        &universe,
+                        &query_id,
+                        &mut candidates,
+                        &mut scanned,
+                        &mut signals,
+                        &mut omitted,
+                        stop,
+                    )?;
+                    state = lane_state;
+                    alias_match = Some(report);
+                } else if state == "complete" && lane == Lane::IdentifierSimilarity {
                     let (lane_state, work) = similar_lane::run(
                         &self.manifest.documents,
                         request,
@@ -671,6 +718,7 @@ impl ReferenceSearchShard {
                                     &mut signals,
                                     &mut omitted,
                                     None,
+                                    None,
                                 )? {
                                     state = "truncated";
                                 }
@@ -700,6 +748,7 @@ impl ReferenceSearchShard {
             .filter(|l| l.state != "excluded_by_request")
             .all(|l| l.state == "complete");
         let exact = request.selectors.entity_key.is_some()
+            || request.selectors.explicit_alias.is_some()
             || request.selectors.qualified_name.is_some()
             || request.selectors.short_name.is_some()
             || request.selectors.namespace_member.is_some();
@@ -729,6 +778,18 @@ impl ReferenceSearchShard {
             "lane_unavailable"
         } else if truncated {
             "truncated"
+        } else if request.required_lanes.contains(&Lane::ExactExplicitAlias)
+            && alias_match
+                .as_ref()
+                .is_some_and(|report| report.conflicted > 0)
+        {
+            "conflict_blocked"
+        } else if request.required_lanes.contains(&Lane::ExactExplicitAlias)
+            && alias_match
+                .as_ref()
+                .is_some_and(|report| report.unresolved > 0)
+        {
+            "exact_not_found_partial"
         } else if candidates.iter().any(|c| c.rank_tuple[0] <= 4) {
             "exact_found"
         } else if conflict {
@@ -744,6 +805,8 @@ impl ReferenceSearchShard {
         };
         #[derive(Serialize)]
         struct OwnerSummary<'a> {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            compatibility_aliases: Option<compatibility_aliases::AliasSummary<'a>>,
             #[serde(skip_serializing_if = "Option::is_none")]
             include_restrictions: Option<bool>,
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -770,6 +833,9 @@ impl ReferenceSearchShard {
             license_state: &'a str,
         }
         let summary = OwnerSummary {
+            compatibility_aliases: compatibility_aliases::summary(
+                self.manifest.compatibility_aliases.as_ref(),
+            ),
             include_restrictions: self.manifest.include_restrictions,
             include_documentation: self.manifest.include_documentation,
             documentation_coverage: documentation::coverage(&self.manifest),
@@ -795,6 +861,8 @@ impl ReferenceSearchShard {
         };
         #[derive(Serialize)]
         struct Payload<'a> {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            alias_match: Option<alias_lane::AliasMatch>,
             schema: &'static str,
             query_profile: &'static str,
             ranking_profile: &'static str,
@@ -817,6 +885,7 @@ impl ReferenceSearchShard {
         // Owner summary excludes the full document list; each selected candidate
         // carries its whole document. Nonmatching source fields are not delivered.
         let payload = Payload {
+            alias_match,
             schema: "wow-search/native-reference-result-set/1",
             query_profile,
             ranking_profile,
@@ -870,6 +939,7 @@ fn include_signal<'a>(
     signals: &mut u32,
     omitted: &mut u32,
     similarity: Option<similar_lane::SimilarityEvidence>,
+    explicit_alias: Option<compatibility_aliases::AliasEvidence>,
 ) -> SearchResult<bool> {
     if *signals >= request.max_signals.get() {
         return Ok(false);
@@ -925,7 +995,23 @@ fn include_signal<'a>(
         },
         |proof| proof.normalization_profile,
     );
+    let (origin_digest, origin_source) = if let Some(alias) = &explicit_alias {
+        (
+            alias.record_digest.clone(),
+            alias
+                .source_ids
+                .first()
+                .ok_or(SearchError::OwnerEvidenceInvalid)?
+                .clone(),
+        )
+    } else {
+        (
+            document.owner_record_digest.clone(),
+            document.source.source_id.clone(),
+        )
+    };
     candidate.signals.push(Signal {
+        explicit_alias: explicit_alias.clone(),
         lane,
         match_class: class,
         authority_band: band,
@@ -933,8 +1019,8 @@ fn include_signal<'a>(
         reciprocal_rank_contribution: rr,
         origin: Origin {
             owner_field: field,
-            owner_record_digest: document.owner_record_digest.clone(),
-            source_id: document.source.source_id.clone(),
+            owner_record_digest: origin_digest,
+            source_id: origin_source,
             original_value_digest: original,
             normalized_value_digest: normalized,
             normalization,
@@ -1051,6 +1137,9 @@ fn capture_query_profile(
     selection: Option<NativeReferenceDocuments>,
     request: &ReferenceQueryRequest,
 ) -> &'static str {
+    if request.schema == ALIAS_REQUEST_SCHEMA {
+        return ALIAS_QUERY_PROFILE;
+    }
     if request.schema == INVENTORY_REQUEST_SCHEMA {
         return INVENTORY_QUERY_PROFILE;
     }
@@ -1074,7 +1163,13 @@ fn capture_query_profile(
 }
 impl ReferenceSearchShard {
     fn validate_query_component(&self, request: &ReferenceQueryRequest) -> SearchResult<()> {
-        if self.manifest.include_restrictions.is_some() {
+        if self.manifest.compatibility_aliases.is_some() {
+            if request.schema != ALIAS_REQUEST_SCHEMA {
+                return Err(SearchError::InvalidProfile);
+            }
+        } else if request.schema == ALIAS_REQUEST_SCHEMA {
+            return Err(SearchError::InvalidProfile);
+        } else if self.manifest.include_restrictions.is_some() {
             if request.schema != INVENTORY_REQUEST_SCHEMA {
                 return Err(SearchError::InvalidProfile);
             }
@@ -1128,6 +1223,12 @@ impl ReferenceSearchShard {
         if let Some(include) = self.manifest.include_restrictions {
             owner["include_restrictions"] = serde_json::json!(include);
         }
+        if let Some(summary) =
+            compatibility_aliases::summary(self.manifest.compatibility_aliases.as_ref())
+        {
+            owner["compatibility_aliases"] =
+                serde_json::to_value(summary).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
+        }
         if let Some(selection) = self.manifest.native_documents {
             owner["native_documents"] =
                 serde_json::to_value(selection).map_err(|_| SearchError::OwnerEvidenceInvalid)?;
@@ -1157,6 +1258,7 @@ impl ReferenceSearchShard {
         {
             return Err(SearchError::OwnerEvidenceInvalid);
         }
+
         Ok(())
     }
     /// Validate recorded Search fields, never reconstruct native signatures.
@@ -1192,6 +1294,61 @@ impl ReferenceSearchShard {
                 )
         {
             return Err(SearchError::OwnerEvidenceInvalid);
+        }
+        if let Some(signals) = candidate
+            .get("signals")
+            .and_then(serde_json::Value::as_array)
+        {
+            for signal in signals {
+                check(stop)?;
+                let Some(evidence) = signal.get("explicit_alias") else {
+                    continue;
+                };
+                let record_key = evidence
+                    .get("record_key")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or(SearchError::OwnerEvidenceInvalid)?;
+                let row = self
+                    .manifest
+                    .compatibility_aliases
+                    .as_ref()
+                    .and_then(|data| data.records.iter().find(|row| row.record_key == record_key))
+                    .ok_or(SearchError::OwnerEvidenceInvalid)?;
+                let value_digest = identity("", &row.value)?;
+                if !row.target_matches(document)
+                    || evidence
+                        != &serde_json::to_value(row.evidence())
+                            .map_err(|_| SearchError::OwnerEvidenceInvalid)?
+                    || signal.get("lane").and_then(serde_json::Value::as_str)
+                        != Some("exact_explicit_alias")
+                    || signal
+                        .get("match_class")
+                        .and_then(serde_json::Value::as_str)
+                        != Some("exact_configured_owner_compatibility_alias")
+                    || signal
+                        .get("authority_band")
+                        .and_then(serde_json::Value::as_u64)
+                        != Some(3)
+                    || signal
+                        .pointer("/origin/owner_record_digest")
+                        .and_then(serde_json::Value::as_str)
+                        != Some(row.record_digest.as_str())
+                    || signal
+                        .pointer("/origin/source_id")
+                        .and_then(serde_json::Value::as_str)
+                        != row.source_ids.first().map(String::as_str)
+                    || signal
+                        .pointer("/origin/original_value_digest")
+                        .and_then(serde_json::Value::as_str)
+                        != Some(value_digest.as_ref())
+                    || signal
+                        .pointer("/origin/normalized_value_digest")
+                        .and_then(serde_json::Value::as_str)
+                        != Some(value_digest.as_ref())
+                {
+                    return Err(SearchError::OwnerEvidenceInvalid);
+                }
+            }
         }
         Ok(())
     }

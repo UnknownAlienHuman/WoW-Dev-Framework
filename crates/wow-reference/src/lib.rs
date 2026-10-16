@@ -14,6 +14,7 @@ pub mod generated_api;
 pub mod ui_topology;
 pub mod wire_json;
 
+pub mod compatibility_aliases;
 pub mod native;
 pub mod native_constants;
 pub mod native_model;

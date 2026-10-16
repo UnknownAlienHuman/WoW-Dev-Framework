@@ -8,6 +8,291 @@ use wow_reference::native_model::{SystemOwner, TableFact, array, normalize_docum
 const REV: &str = "1111111111111111111111111111111111111111";
 
 #[test]
+fn configured_alias_owner_revalidates_resource_targets_and_native_cache_bindings() {
+    use wow_core::{
+        ContentDigest, ProfileIdentityBuilder, ProfileKind, ReferenceGenerationId,
+        SchemaVersionEntry, SourceKind,
+    };
+    use wow_reference::compatibility_aliases::{self, AliasState};
+    use wow_reference::native_view::{self, NativeCallableCorpus, NativeReferenceDocuments};
+    let profile = ProfileIdentityBuilder::new(
+        "profile:fixture:alias-owner".parse().unwrap(),
+        ProfileKind::Fixture,
+        "retail",
+        1,
+        SourceKind::SyntheticFixture,
+        REV,
+        ContentDigest::from_bytes([9; 32]),
+    )
+    .fixture_scope("native configured alias owner test")
+    .schema_versions(vec![SchemaVersionEntry::new(
+        "schema:wow:alias-fixture".parse().unwrap(),
+        "1.0.0".parse().unwrap(),
+    )])
+    .build()
+    .unwrap();
+    let source = r#"APIDocumentation:AddDocumentationTable({Name="Alias",Type="System",Namespace="C_Alias",Environment="All",Functions={
+{Name="Read",Type="Function",SecretReturns=true,Returns={{Name="value",Type="number"}}},
+{Name="Other",Type="Function"}},Events={{Name="Changed",LiteralName="ALIAS_CHANGED"}},Tables={{Name="Shape",Type="Structure",Fields={}}}})"#;
+    let stop = AtomicBool::new(false);
+    let base = native_view::project_native_documents(
+        &[read(source)],
+        "Mainline",
+        ReferenceGenerationId::derive(&"alias-owner-base").unwrap(),
+        NativeCallableCorpus::manifest_toc(1, 1, true),
+        None,
+        NativeReferenceDocuments::SourceDeclarationsV1,
+        &stop,
+    )
+    .unwrap();
+    let target = |key: &str| {
+        base.view
+            .partitions()
+            .iter()
+            .flat_map(|part| part.records())
+            .find(|record| {
+                record.key() == key && record.kind() == wow_reference::ReferenceRecordKind::Api
+            })
+            .unwrap()
+    };
+    let address = |record: &wow_reference::ReferenceRecord| serde_json::json!({"partition_id":native_view::NATIVE_API_PARTITION,"record_key":record.key(),"record_digest":record.digest().unwrap()});
+    let read_address = address(target("function:C_Alias.Read"));
+    let other_address = address(target("function:C_Alias.Other"));
+    let mut missing = read_address.clone();
+    missing["record_key"] = serde_json::json!("function:C_Alias.Absent");
+    let mut stale = read_address.clone();
+    stale["record_digest"] = serde_json::json!(format!("sha256:{}", "0".repeat(64)));
+    let input = serde_json::json!({"schema":"wow-reference/configured-compatibility-alias-input/1","profile_id":profile.profile_id(),
+        "profile_digest":compatibility_aliases::profile_digest(&profile).unwrap(),"base_generation":base.view.generation_id(),
+        "base_view_digest":base.view.self_digest(),"declarations":[
+            {"value":"Legacy","target":read_address},{"value":"Legacy","target":read_address},
+            {"value":"Another","target":read_address},{"value":"Ambiguous","target":read_address},{"value":"Ambiguous","target":other_address},
+            {"value":"Missing","target":missing},{"value":"Stale","target":stale}]});
+    let bytes = serde_json::to_vec(&input).unwrap();
+    let before = serde_json::to_value(&base).unwrap();
+    let bound = base
+        .clone()
+        .with_compatibility_aliases(&profile, "aliases.json", &bytes, &stop)
+        .unwrap();
+    assert_ne!(bound.view.generation_id(), base.view.generation_id());
+    for partition in base.view.partitions() {
+        assert!(bound.view.partitions().contains(partition));
+    }
+    assert_eq!(serde_json::to_value(&base).unwrap(), before);
+    let aliases = compatibility_aliases::read(&bound.view, &profile, &stop)
+        .unwrap()
+        .unwrap();
+    assert_eq!(aliases.records().len(), 6);
+    let legacy = aliases
+        .records()
+        .iter()
+        .find(|record| record.value() == "Legacy")
+        .unwrap();
+    assert_eq!(legacy.state(), AliasState::Resolved);
+    assert_eq!(legacy.source_ids().len(), 2);
+    assert_eq!(legacy.declaration_indices(), [0, 1]);
+    assert_eq!(
+        aliases
+            .records()
+            .iter()
+            .filter(|record| record.state() == AliasState::AliasConflict)
+            .count(),
+        2
+    );
+    assert!(
+        aliases
+            .records()
+            .iter()
+            .any(|record| record.state() == AliasState::TargetMissing)
+    );
+    assert!(
+        aliases
+            .records()
+            .iter()
+            .any(|record| record.state() == AliasState::TargetDigestMismatch)
+    );
+    let stored: wow_reference::ReferenceView =
+        serde_json::from_slice(&bound.view.canonical_bytes().unwrap()).unwrap();
+    assert_eq!(
+        compatibility_aliases::read(&stored, &profile, &stop)
+            .unwrap()
+            .unwrap()
+            .receipt(),
+        aliases.receipt()
+    );
+    let signature = bound
+        .callable_signature(target("function:C_Alias.Read"), &stop)
+        .unwrap();
+    assert_eq!(signature.reference_generation(), bound.view.generation_id());
+    let facet = bound
+        .view
+        .partitions()
+        .iter()
+        .find(|part| part.id() == native_view::NATIVE_RESTRICTION_PARTITION)
+        .unwrap()
+        .records()
+        .first()
+        .unwrap();
+    assert_eq!(
+        bound
+            .restriction_signature(facet, &stop)
+            .unwrap()
+            .entity_id(),
+        native_view::restriction_entity_id(bound.view.generation_id(), facet.key()).unwrap()
+    );
+    let event = bound
+        .view
+        .partitions()
+        .iter()
+        .find(|part| part.id() == native_view::NATIVE_EVENT_PARTITION)
+        .unwrap()
+        .records()
+        .first()
+        .unwrap();
+    assert_eq!(
+        bound
+            .event_signature(event, &stop)
+            .unwrap()
+            .reference_generation(),
+        bound.view.generation_id()
+    );
+    let declaration = bound
+        .view
+        .partitions()
+        .iter()
+        .find(|part| part.id() == native_view::NATIVE_DECLARATION_PARTITION)
+        .unwrap()
+        .records()
+        .first()
+        .unwrap();
+    assert_eq!(
+        bound
+            .declaration_signature(declaration, &stop)
+            .unwrap()
+            .reference_generation(),
+        bound.view.generation_id()
+    );
+    assert!(
+        compatibility_aliases::read(&base.view, &profile, &stop)
+            .unwrap()
+            .is_none()
+    );
+    // Valid generic ReferenceView JSON cannot rebind the private native caches.
+    let mut foreign = base.clone();
+    foreign.view = wow_reference::ReferenceView::new(
+        "foreign-base",
+        base.view.partitions().to_vec(),
+        base.view.conflicts().to_vec(),
+    )
+    .unwrap();
+    let mut matching_foreign = input.clone();
+    matching_foreign["base_generation"] = serde_json::json!(foreign.view.generation_id());
+    matching_foreign["base_view_digest"] = serde_json::json!(foreign.view.self_digest());
+    assert!(
+        foreign
+            .with_compatibility_aliases(
+                &profile,
+                "aliases.json",
+                &serde_json::to_vec(&matching_foreign).unwrap(),
+                &stop
+            )
+            .is_err()
+    );
+    // Recomputed generic view digests cannot turn a conflicted declaration into
+    // a resolved owner fact while its original resource remains unchanged.
+    let conflicted = aliases
+        .records()
+        .iter()
+        .find(|record| record.state() == AliasState::AliasConflict)
+        .unwrap();
+    let parts = bound
+        .view
+        .partitions()
+        .iter()
+        .map(|part| {
+            if part.id() != compatibility_aliases::PARTITION {
+                return part.clone();
+            }
+            let records = part
+                .records()
+                .iter()
+                .map(|record| {
+                    if record.key() != conflicted.record_key() {
+                        return record.clone();
+                    }
+                    let mut payload: serde_json::Value =
+                        serde_json::from_str(record.payload()).unwrap();
+                    payload["state"] = serde_json::json!("resolved");
+                    wow_reference::ReferenceRecord::new(
+                        record.key(),
+                        record.kind(),
+                        serde_json::to_string(&payload).unwrap(),
+                        record
+                            .source_ids()
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect(),
+                        record.restrictions().to_vec(),
+                    )
+                    .unwrap()
+                })
+                .collect();
+            wow_reference::ReferencePartition::new(part.id(), part.coverage(), records).unwrap()
+        })
+        .collect();
+    let tampered = wow_reference::ReferenceView::new(
+        bound.view.generation_id(),
+        parts,
+        bound.view.conflicts().to_vec(),
+    )
+    .unwrap();
+    assert!(compatibility_aliases::read(&tampered, &profile, &stop).is_err());
+    for field in ["profile_digest", "base_generation", "base_view_digest"] {
+        let mut bad = input.clone();
+        bad[field] = serde_json::json!("wrong");
+        assert!(
+            base.clone()
+                .with_compatibility_aliases(
+                    &profile,
+                    "aliases.json",
+                    &serde_json::to_vec(&bad).unwrap(),
+                    &stop
+                )
+                .is_err()
+        );
+    }
+    let mut looped = input.clone();
+    looped["declarations"][0]["target"]["partition_id"] =
+        serde_json::json!(compatibility_aliases::PARTITION);
+    assert!(
+        base.clone()
+            .with_compatibility_aliases(
+                &profile,
+                "aliases.json",
+                &serde_json::to_vec(&looped).unwrap(),
+                &stop
+            )
+            .is_err()
+    );
+    let mut unknown = input;
+    unknown["confidence"] = serde_json::json!(10000);
+    assert!(
+        base.clone()
+            .with_compatibility_aliases(
+                &profile,
+                "aliases.json",
+                &serde_json::to_vec(&unknown).unwrap(),
+                &stop
+            )
+            .is_err()
+    );
+    assert!(
+        base.with_compatibility_aliases(&profile, "aliases.json", &bytes, &AtomicBool::new(true))
+            .is_err()
+    );
+}
+
+#[test]
 fn native_restriction_port_keeps_partition_identity_and_unresolved_subjects() {
     use wow_core::ReferenceGenerationId;
     use wow_reference::native_view::{

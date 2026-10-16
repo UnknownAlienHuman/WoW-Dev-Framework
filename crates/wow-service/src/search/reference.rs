@@ -18,6 +18,7 @@ const DOCUMENT_HANDLE_SCHEMA: &str = "wow-service/native-reference-document-sear
 const DOCUMENTATION_HANDLE_SCHEMA: &str =
     "wow-service/native-reference-documentation-search-handle/1";
 const INVENTORY_HANDLE_SCHEMA: &str = "wow-service/native-reference-inventory-search-handle/1";
+const ALIAS_HANDLE_SCHEMA: &str = "wow-service/native-reference-compatibility-search-handle/1";
 
 pub struct ReferenceIndexBuildRequest {
     operation_id: OperationId,
@@ -96,6 +97,12 @@ pub(super) struct Handle {
         deserialize_with = "present_documentation_flag"
     )]
     include_restrictions: Option<bool>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present_documentation_flag"
+    )]
+    include_compatibility_aliases: Option<bool>,
 }
 fn present_documentation_flag<'de, D: serde::Deserializer<'de>>(
     input: D,
@@ -105,12 +112,17 @@ fn present_documentation_flag<'de, D: serde::Deserializer<'de>>(
 fn handle_profile(handle: &Handle) -> ServiceResult<ReferenceSearchProfile> {
     if handle.include_documentation == Some(false)
         || handle.include_restrictions == Some(false)
+        || handle.include_compatibility_aliases == Some(false)
+        || (handle.include_compatibility_aliases.is_some()
+            && handle.include_documentation != Some(true))
         || (handle.include_restrictions.is_some() && handle.include_documentation != Some(true))
     {
         return Err(mismatch());
     }
     if handle.schema
-        != if handle.include_restrictions == Some(true) {
+        != if handle.include_compatibility_aliases == Some(true) {
+            ALIAS_HANDLE_SCHEMA
+        } else if handle.include_restrictions == Some(true) {
             INVENTORY_HANDLE_SCHEMA
         } else if handle.include_documentation == Some(true) {
             DOCUMENTATION_HANDLE_SCHEMA
@@ -128,7 +140,12 @@ fn handle_profile(handle: &Handle) -> ServiceResult<ReferenceSearchProfile> {
         {
             return Err(mismatch());
         }
-        if handle.include_restrictions == Some(true) {
+        if handle.include_compatibility_aliases == Some(true) {
+            ReferenceSearchProfile::with_compatibility_aliases(
+                handle.bounds,
+                handle.include_restrictions == Some(true),
+            )
+        } else if handle.include_restrictions == Some(true) {
             ReferenceSearchProfile::inventory(handle.bounds)
         } else {
             ReferenceSearchProfile::documentation_inventory(handle.bounds)
@@ -306,7 +323,13 @@ pub(super) fn build(
             failures,
         )
         .map_err(map_search_error)?;
-        let profile = if request.include_restrictions {
+        let include_aliases = request.include_documentation && source.has_compatibility_aliases();
+        let profile = if include_aliases {
+            ReferenceSearchProfile::with_compatibility_aliases(
+                request.bounds,
+                request.include_restrictions,
+            )
+        } else if request.include_restrictions {
             ReferenceSearchProfile::inventory(request.bounds)
         } else if request.include_documentation {
             ReferenceSearchProfile::documentation_inventory(request.bounds)
@@ -324,7 +347,9 @@ pub(super) fn build(
         )
         .map_err(map_search_error)?;
         let handle = Handle {
-            schema: if request.include_restrictions {
+            schema: if include_aliases {
+                ALIAS_HANDLE_SCHEMA
+            } else if request.include_restrictions {
                 INVENTORY_HANDLE_SCHEMA
             } else if request.include_documentation {
                 DOCUMENTATION_HANDLE_SCHEMA
@@ -344,6 +369,7 @@ pub(super) fn build(
             native_documents: source.native_documents(),
             include_documentation: request.include_documentation.then_some(true),
             include_restrictions: request.include_restrictions.then_some(true),
+            include_compatibility_aliases: include_aliases.then_some(true),
         };
         let count = shard.document_count();
         add_root(
@@ -369,7 +395,7 @@ pub(super) fn build(
             &request.operation_id,
             &public_digest,
             &serde_json::json!({"status":"retained","resource_closure":"closed","handle":handle,
-                "document_count":count,"projection":if request.include_restrictions {"native_reference_inventory"} else if request.include_documentation { "native_reference_documentation_inventory" } else { match source.native_documents() {
+                "document_count":count,"projection":if include_aliases {"native_reference_compatibility_inventory"} else if request.include_restrictions {"native_reference_inventory"} else if request.include_documentation { "native_reference_documentation_inventory" } else { match source.native_documents() {
                     Some(wow_reference::native_view::NativeReferenceDocuments::SourceDeclarationsV1) => "native_source_declarations",
                     Some(wow_reference::native_view::NativeReferenceDocuments::CallablesAndEventsV1) => "native_callables_and_events",
                     None => "native_global_and_namespace_callables",

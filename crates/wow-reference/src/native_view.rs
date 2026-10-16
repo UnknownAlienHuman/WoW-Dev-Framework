@@ -187,6 +187,30 @@ pub struct NativeViewProjection {
 }
 
 impl NativeViewProjection {
+    /// Append a configured metadata resource while preserving every native source fact.
+    pub fn with_compatibility_aliases(
+        mut self,
+        profile: &wow_core::ProfileIdentity,
+        path: &str,
+        bytes: &[u8],
+        stop: &AtomicBool,
+    ) -> Result<Self, NativeError> {
+        checkpoint(stop)?;
+        if self.native_documents != Some(NativeReferenceDocuments::SourceDeclarationsV1)
+            || self.type_resolution_profile.is_some()
+        {
+            return Err(error(NativeErrorCode::InvalidIdentity));
+        }
+        let admitted = crate::compatibility_aliases::admit(profile, &self.view, path, bytes, stop)?;
+        let view = crate::compatibility_aliases::compose(&self.view, &admitted)?;
+        self.signatures.rebind(&self.view, &view, stop)?;
+        self.events.rebind(&self.view, &view, stop)?;
+        self.declarations.rebind(&self.view, &view, stop)?;
+        self.restrictions.rebind(&self.view, &view, stop)?;
+        self.sources.extend(admitted.sources);
+        self.view = view;
+        Ok(self)
+    }
     pub fn restriction_signature(
         &self,
         record: &ReferenceRecord,
@@ -227,6 +251,24 @@ impl NativeViewProjection {
     pub const fn type_resolution_profile(&self) -> Option<&'static str> {
         self.type_resolution_profile
     }
+}
+
+fn validate_rebind(
+    generation: &str,
+    digest: &str,
+    base: &ReferenceView,
+    next: &ReferenceView,
+    partition: &str,
+) -> Result<(), NativeError> {
+    if generation != base.generation_id()
+        || digest != base.self_digest()
+        || base.partitions().iter().find(|part| part.id() == partition)
+            != next.partitions().iter().find(|part| part.id() == partition)
+        || base.conflicts() != next.conflicts()
+    {
+        return Err(error(NativeErrorCode::InvalidIdentity));
+    }
+    Ok(())
 }
 
 fn error(code: NativeErrorCode) -> NativeError {
