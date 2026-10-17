@@ -4,7 +4,7 @@
 
 > **Planned architecture:** complete through E7-B.
 >
-> **Implementation frontier:** 18 active workspace members, including the public CLI, internal Reference Pack builder and real analyzer, project, rules, service, storage, graph, recognizer, context and search slices. Full package acceptance remains incomplete. Current priority: the [reviewed refactoring plan](docs/AUDIT_2026-10-17.md) and [work map](docs/PROJECT_WORK_MAP.md).
+> **Implementation frontier:** 18 active workspace members, including the public CLI, internal Reference Pack builder and real analyzer, project, rules, service, storage, graph, recognizer, context and search slices. Full package acceptance remains incomplete. Current work: the [refactoring queue](docs/REFACTOR_QUEUE.md) and [canonical Issues](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues).
 >
 > **First runnable gate:** E0-A through E0-F (`wow status` and `wow check`).
 >
@@ -162,8 +162,9 @@ fixture/checksum and launch acceptance remains open; a passing build does not
 establish real-addon or release readiness.
 
 Start with [the current completion matrix](docs/PROJECT_COMPLETION_MATRIX.md),
-[the reviewed architectural audit](docs/AUDIT_2026-10-17.md) and
-[the implementation/update ledger](docs/IMPLEMENTATION_STATUS.md).
+[the refactoring queue](docs/REFACTOR_QUEUE.md) and
+[the implementation/update ledger](docs/IMPLEMENTATION_STATUS.md). The
+[2026-10-17 audit](docs/AUDIT_2026-10-17.md) records the review and rationale.
 Owner contracts define requirements; older owner status prose is not a code census.
 
 ## Launch path
@@ -178,8 +179,8 @@ V1  selected scope plus complete E7-A/E7-B Windows release evidence
 
 ## Next implementation step
 
-Select one bounded repair from [Issue #191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191)
-and the [reviewed plan](docs/AUDIT_2026-10-17.md#4-bounded-implementation-order).
+Select one bounded repair from the [refactoring queue](docs/REFACTOR_QUEUE.md)
+and its linked canonical Issue.
 The existing [I0–I7 plan](docs/IMPLEMENTATION_HANDOFF.md) defines package scope;
 it is not an instruction to rebuild already implemented owners. Keep E0 and
 later acceptance debt in its named issues while fixing the selected code path.

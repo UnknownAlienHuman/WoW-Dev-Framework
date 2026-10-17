@@ -6,16 +6,23 @@ Implement deterministic Project Map, L0/L1 skeleton, context expansion, budgetin
 
 Do not parse source, query storage directly, implement search, infer lineage, run models, generate fixes, mutate projects, or call external tools/services.
 
-## Before coding
+## Start with the selected work
 
-1. Read all repository and crate instructions.
-2. Read `MILESTONE_RENUMBERING.md` before any inherited E3 context document.
-3. Read the E3-A `wow-project` Blizzard UI source-index contract and its exact `SkeletonInputView` seam.
-4. Read E2 graph/store/project and E1 reference contracts used by the active read views.
-5. Read the current external KB router when a task touches patch-sensitive WoW semantics; do not copy current patch facts into context algorithms.
-6. Verify every prerequisite implementation commit, schema/profile ID, fixture, and SHA-256 bundle.
-7. Freeze exact input-view, map, skeleton, intent, expansion, budget, tokenizer, renderer, privacy, boundary, and canonicalization profiles.
-8. Freeze machine fixtures and expected bytes before the first Rust implementation commit.
+Follow repository instructions and the selected Issue's reading list. Read only
+the owner/caller contracts and exact profiles, schema IDs, and rule or input IDs
+touched by that bounded change. Follow `MILESTONE_RENUMBERING.md` when the
+selected contract depends on inherited E3 naming. Read the E3-A source-index,
+graph/store/project, or reference contracts only when the selected read view
+uses them. Consult the current external KB router only for patch-sensitive WoW
+semantics.
+
+Keep existing schema, admission, authority, coverage, and retained-data
+invariants. A refactor of existing code does not require a new fixture campaign
+before the replacement path works. Exact profile and expected-byte freezes
+remain required at the selected acceptance milestone; record historical missed
+freezes under #120 and do not fabricate retroactive evidence. Do not broaden a
+task into freezing unrelated input-view, map, skeleton, intent, expansion,
+budget, tokenizer, renderer, privacy, boundary, or canonicalization profiles.
 
 ## Input discipline
 

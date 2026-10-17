@@ -1,16 +1,16 @@
 # Project completion matrix
 
-**Audited:** 2026-09-19 America/New_York. Execution inventory refreshed 2026-10-15
-through selected native source/graph/candidate, context and search service/CLI paths.
-Current W17 work and evidence are routed through
-[Issue #106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106);
-active context implementation and its bounded verification are tracked by
+**Audited:** 2026-09-19 America/New_York. Inventory refreshed 2026-10-15 for the
+selected native source/graph/candidate, context, and search service/CLI paths.
+W17 evidence is tracked in [Issue #106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106);
+context implementation and bounded verification in
 [Issue #122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
-This matrix is the package census, not the work queue.
-
-This is the current execution ledger. [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md)
-remains the normative I0–I7 plan; do not restart its historical bootstrap steps.
-The [audit](AUDIT_2026-09-19.md) records evidence, defects and bounded next tasks.
+This is a capability and acceptance census, not a task queue. Choose active work
+from [`REFACTOR_QUEUE.md`](REFACTOR_QUEUE.md) and the selected Issue; read only
+the owner contract and evidence relevant to that slice. The
+[I0–I7 handoff](IMPLEMENTATION_HANDOFF.md) and [historical audit](AUDIT_2026-09-19.md)
+retain plan and evidence; they are not a read-all startup sequence. Do not
+restart historical bootstrap steps.
 
 ## State vocabulary
 
@@ -39,7 +39,7 @@ The root [Cargo.toml](../Cargo.toml) activates **18 members**, including the int
 | `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
 | `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices, plus bounded emitted callable type-token/input-atom capture and selected projected alias dependency handoff and used native declaration/name links | Full composite/alias/type inventory, E1-C contract/corpus parity, and Tier A/X and consumer-semantic acceptance; this selected capture is not universal semantic certification |
 | `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, exact native Producer proposal/accepted-receipt lookup, bounded queries, exact retained derivation/conflict records, evidence resolution and v1/v2 persistence | Complete producer-chain coverage and automatic conflict assessment, normative fixtures and coherent E2-D publication |
-| `wow-context` | Selected Primary direct/project-root maps and L0/L1; original XML handler, syntax/signature, TOC state and accepted Reference record/source-signature metadata; sealed JSON/Markdown packs and explicit frontier/progressive batches; candidate-qualified platform map/inspect. Combined native map, default L0/L1, explicit StateRoot L0, StateDetail/ReferenceFacts L1, StateRoot L0+StateDetail L1 and typed accepted Reference-root L0+ReferenceFacts L1 inspection/build; each valid default/explicit Primary recipe independently selects platform-root callable, `xml_handler_metadata`, `xml_declaration_metadata` or `xml_reference_metadata` Inspect/Build. Original declaration identity/span, handler/script-source, reference resolution/targets/cycles and scoped inheritance producer proposals survive in consuming service/CLI packs and JSON/Markdown under one semantic-pack identity and continuing construction Budget. XML-reference metadata retains original `package_load_coverage` and plan `external_files_complete`; Partial/Truncated observations do not establish complete load closure, absence or runtime inheritance. One Primary `EntityV1` L1 source-excerpt Build route is functionally qualified on the selected native input and Windows CLI: one selected root entity, exact admitted physical ByteRange/source handle, one verified file, precharged continuing budget, close-before-adoption; optional JSON/Markdown IDs are distinct and omitted-selection behavior stays unchanged. `local-project-source` is only the operator materialization label and local-use permission, not a license/external-transmission attestation or secret detection. Selected corrected callable type overlays feed the existing annotation-emission capture; Context byte-checks its type-token and optional-marker observations against the exact Project Library file, matches them to the Reference signature, and carries them through the existing ReferenceFacts Service/CLI route. Selected callable alias dependencies retain independent external resource provenance and exact verified generated-file/type-token bytes through the same route. Used callable and alias atoms additionally carry exact emitted Structure/Callback/ScriptObject/Enum declaration links verified against held Library files. The bounded external default Primary L0 `StructuralOnly` semantic-pack validator now admits complete local assertion/derivation chains and declaration joins with original-to-published graph-ID rebinding; conflicts, missing/incomplete/cyclic or cross-partition chains remain NotEvaluated, and owner-generation, producer/catalog, source and runtime authority remain NotEvaluated. This selected route does not accept full E3. | Broader facets and automatic expansion, full composite/alias/type inventory and Reference type closure, broader combined recipes/links, broader excerpt selection/privacy/exact tokens/continuation, complete fixtures and full E3, Tier A/X, named-client runtime and launch acceptance remain open in [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122); see the [selected contract router](../crates/wow-context/README.md) |
+| `wow-context` | Partial executable routes include Primary/combined maps and L0/L1, explicit progressive batches, candidate-qualified platform map/inspect, and Service/CLI Inspect/Build for selected callable, XML handler/declaration/reference metadata and typed Reference roots. XML/reference resolution and scoped producer proposals survive packing; coverage remains Partial/Truncated where applicable, with no complete-load, absence, inheritance, negative, or runtime authority. One Primary `EntityV1` L1 exact-source excerpt Build is functionally qualified on selected native input and Windows CLI. `local-project-source` grants local-use permission only; it is not a license/external-transmission attestation or secret detection. Selected corrected callable overlays, alias dependencies, declaration links, and default Primary L0 `StructuralOnly` validation have bounded local routes. StructuralOnly requires complete local chains/declaration joins; missing, conflicting, incomplete, cyclic, or cross-partition proof remains NotEvaluated. Owner-generation, producer/catalog, source/runtime authority remain NotEvaluated. This does not accept full E3. | Broader facets/automatic expansion, composite/alias/type closure, combined recipes/links, excerpt selection/privacy/tokens/continuation, full fixtures, Tier A/X, runtime, and launch acceptance remain open in [Issue #122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122); see [selected contracts](../crates/wow-context/README.md), [Primary/combined routes](../crates/wow-context/e3/NATIVE_COMBINED_MAP.md), [source excerpts](../crates/wow-context/e3/SOURCE_EXCERPTS_AND_PROMPT_BOUNDARIES.md), [Reference facts](../crates/wow-context/e3/NATIVE_PRIMARY_REFERENCE_FACTS.md), and [pack validation](../crates/wow-context/e3/README.md) |
 | `wow-recognizers` | Structured facts, pack parser/compiler, bounded matcher and selected E2-B rule families through Service partitions; 26 declared core capability identities include the deferred embed capability, while 25 rules remain in the executable shared pack. An opt-in AceAddon local-result recipe provides a separate structural embed adapter | Default core embed remains NotEvaluated; full rule-specific fixtures/checksum freeze, public CLI/real-addon graph-build acceptance and E5 governance remain separate in #103/#120 |
 | `wow-search` | Immutable exact ProjectFile metadata shard, exact ID/owner-label lookups and Candidate-only literal FTS through native Service/CLI; selected durable build/query/retire/GC with instance-bound source-generation holds and native GC receipt replay | Additional documents/lanes, ranking, misses, continuation, full durability/fault qualification and E4 acceptance remain in [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169) |
 | `wow-render-contract`, `wow-ketho-literals`, `modules/ketho-literals` | Typed literal wire contract, native renderer and Wasm guest | Scoped algorithm implementation, not public application/release acceptance |
@@ -85,36 +85,24 @@ The selected alias handoff does not qualify complete composite/alias type invent
 | E2-A–E2-B | Partial executable, with declared capabilities distinct from runtime availability | Selected W11, TOC, XML and state families are Service-published; the named AceAddon local-result adapter is separate from the default core embed capability, which remains NotEvaluated. Close public CLI/full-pipeline fixtures and package acceptance in #103/#120 without inferring them from the capability census |
 | E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
 | E3-A | Partial exact raw/package admission and native Main/package graph; selected XML classification, native function/XML shape and fixed comparison components; exact candidate/Skeleton publication, query/update/removal and source-absent replay through service/CLI (#116–#118) | Broader XML/value/signature semantics and mutation freeze (#118), complete candidate/Skeleton authority (#116), source update/removal closure and full composed corpus/capacity/persistence qualification (#113) remain open |
-| E3-B–E3-C | Partial executable: selected Primary maps/L0/L1, native XML/signature/state/Reference metadata, JSON/Markdown packs and ordered explicit progressive batches; candidate-qualified platform map/inspect and combined map/default L0/L1, explicit StateRoot L0, StateDetail/ReferenceFacts L1 and StateRoot L0+StateDetail L1 inspection, independently composed Primary recipes and platform-root callable/XML inline-handler/XML declaration/XML reference metadata in Inspect/Build and qualified packs/JSON/Markdown through service/CLI. XML references retain partial native load coverage, original resolution and scoped producer proposals; no complete-closure, negative or runtime authority. One Primary EntityV1 L1 exact-source-excerpt Build route is functionally qualified on the selected native input and Windows CLI. Primary, exact-candidate platform and composed metadata status are reachable through Service/CLI with Partial/NotEvaluated outcomes and checked closure | Broader facets, automatic expansion, broader correction/type resolution, broader combined recipes/links, broader excerpt selection/privacy/exact tokens/continuation and full fixtures/Tier A/X remain open in [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122); [selected contracts](../crates/wow-context/README.md) |
+| E3-B–E3-C | Partial executable: selected Primary/combined map, L0/L1, progressive, platform, XML/reference metadata and typed Reference-root Service/CLI routes; XML resolution/proposals remain scoped and load coverage Partial. One Primary EntityV1 L1 exact-source-excerpt Build is functionally qualified on selected native input and Windows CLI. Selected callable/alias declaration handoffs and StructuralOnly pack validation are bounded routes; authority and full E3 remain unaccepted. | Broader facets/automatic expansion, correction/type closure, combined links, excerpt privacy/selection/continuation, fixtures and Tier A/X remain open in [Issue #122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122); see [selected contracts](../crates/wow-context/README.md) |
 | E4-A–E4-C | Partial selected exact ProjectFile/entity, native Reference and Source Search with durable lifecycle and explicit selection. Reference-document selection reaches its original accepted native API projection and existing ReferenceFacts L1 Inspect/Build/render. Selected E4-B ordinary Project exact-source-span Candidate producer/buckets/components and retained inactive/readback/sealed snapshots reach `wow lineage build/compare/retire/abandon` (#178) and exact leased status/selected validation/entity compare/whole proposal-component explain with captured replay (#179), using the genuine borrowed native pair (#177), independent source holds and exact durable replay; selected genuine two-revision Blizzard UI Source pair/producer and separately retained Source Candidate build/query/replay/lifecycle use explicit Source schemas/profile (#180); accepted assertions remain zero | Complete SearchStore/lane/ranking/miss/continuation, other genuine owner mappings and durability/fault qualification in #169; other lineage producers, authorized review/accepted assertions, migration/static impact and full E4-B remain separate |
 | E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
 | E6-A–E6-B | Not started; optional/disabled | External candidates never block the local lane or gain exact/negative authority |
 | E7-A | Partial selected Service registry/session owner and MCP 2025-11-25 stdio frontend: frozen status-only profile (#170) and opt-in registered native `wow.context_inspect` with exact generation/root, unchanged E3 metadata and checked close (#176); exact profile resources | Broader frontend operations, workspace/documents, wire cancellation, daemon/LSP, protocol conformance and E7-A acceptance remain open in #125 |
 | E7-B | Not started | Build/sign/bundle/install/update/rollback/support |
 
-## Immediate execution order
+## Execution routing
 
-The operator's 2026-09-23 priority is functional code before expanded tests.
-Existing acceptance requirements remain separate and must not be reported passed.
-
-1. **I0-F/W10/W11 functional path:** `apps/wow` routes explicit materialized inputs through
-   actual project/analyzer/reference/rule owners. Managed source snapshots and W09 load
-   closure feed W10 XML semantics. All 26 W11 rules are service-published after the
-   semantic-repair checkpoint, TOC, XML and state slices; continue with public CLI and
-   mutation acceptance without inventing receiver, runtime or negative authority.
-2. **E0 acceptance:** retain existing fixtures/checksums; close their remaining
-   evidence after functional implementation, not as an endless prerequisite for it.
-3. **I1:** the builder/service/materialization code path is active. Close remaining
-   store/reference/annotation and Reference Pack evidence gates, then execute the
-   deferred process-loss, Windows and real-input acceptance without recreating owners.
-4. **I2 then I3:** finish graph/recognizers, full project indexing and coherent
-   persistence before context. Run one exact real-addon/profile evaluation for A0.
-5. **I4–I7:** follow the existing handoff; do not front-load optional providers,
-   transports or release scaffolding ahead of the runnable local product.
-
-[The audit task table](AUDIT_2026-09-19.md#bounded-follow-up-tasks) supplies file
-boundaries and acceptance criteria. Work sequentially in `main`, without task
-branches/worktrees or force pushes. Read back each published checkpoint.
+This matrix reports capability and acceptance state; it does not prescribe task
+order. Select the next slice from [`REFACTOR_QUEUE.md`](REFACTOR_QUEUE.md) and its
+canonical Issue, following [`AGENTS.md`](../AGENTS.md) and
+[`EXECUTION_MODEL.md`](EXECUTION_MODEL.md). The historical
+[audit task table](AUDIT_2026-09-19.md#bounded-follow-up-tasks) and
+[I0–I7 handoff](IMPLEMENTATION_HANDOFF.md) retain evidence and original scope;
+consult only when the selected Issue requires them. Keep functional delivery
+separate from package/launch acceptance and do not infer acceptance from this
+census.
 
 ## Launch gates
 

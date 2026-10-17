@@ -2,32 +2,29 @@
 
 These instructions apply to every future implementation change under `crates/wow-reference/`.
 
-## Required reading
+## Start with the selected work
 
-Read in order:
+Follow the repository [contributor protocol](../../AGENTS.md) and
+[execution model](../../docs/EXECUTION_MODEL.md). Read the selected Issue or
+[`docs/REFACTOR_QUEUE.md`](../../docs/REFACTOR_QUEUE.md) task's exact reading
+list, then the relevant Reference contract, decision, data-model, and lookup or
+operation sections. Read the full [`TEST_MATRIX.md`](TEST_MATRIX.md) and
+implementation plan when the selected task changes their scope or reaches the
+named acceptance milestone, not as mandatory pre-reading for every slice.
 
-1. [`../../AGENTS.md`](../../AGENTS.md)
-2. [`../AGENTS.md`](../AGENTS.md)
-3. [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md)
-4. [`../WORKSTREAMS.md`](../WORKSTREAMS.md)
-5. [`../wow-core/CONSUMER_GUIDE.md`](../wow-core/CONSUMER_GUIDE.md)
-6. [`README.md`](README.md)
-7. [`DECISIONS.md`](DECISIONS.md)
-8. [`DATA_MODEL.md`](DATA_MODEL.md)
-9. [`OPERATIONS.md`](OPERATIONS.md)
-10. [`LOOKUP_AND_COVERAGE.md`](LOOKUP_AND_COVERAGE.md)
-11. [`FIXTURE_PROFILE.md`](FIXTURE_PROFILE.md)
-12. [`ERROR_MODEL.md`](ERROR_MODEL.md)
-13. [`TEST_MATRIX.md`](TEST_MATRIX.md)
-14. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
-15. [`CONTRACT.json`](CONTRACT.json)
-16. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
-
-For a real release profile, revalidate the selected Blizzard build/source rather than copying E0 fixture assumptions.
+Consult the pinned dependency API relevant to the selected change. For a real
+release-profile or current-source task, revalidate that exact selected
+Blizzard build/source; fixture-only refactors do not require a rolling source
+or release campaign.
 
 ## Scope discipline
 
-E0-B owns only the closed fixture-backed exact `ReferenceView` seam.
+The following is the **historical E0-B baseline only**: E0-B owned the closed
+fixture-backed exact `ReferenceView` seam and did not authorize the later
+capabilities listed below. It does not prohibit existing later-owner code such
+as `src/persistent.rs` or work admitted by a current selected Issue and actual
+owner contract. For current work, use those to establish scope; do not infer
+blanket permission for new functionality from this historical note.
 
 Do not add during E0-B:
 
@@ -42,7 +39,9 @@ Do not add during E0-B:
 - project/addon indexing;
 - empty APIs for later milestones.
 
-Directory documentation for E1 behavior is a future contract, not permission to implement it now.
+Directory documentation was future specification relative to E0-B. It is not a
+current implementation blocker and does not itself authorize unselected E1
+work; later behavior must follow its selected Issue and current owner contract.
 
 ## `wow-core` boundary
 
@@ -141,36 +140,17 @@ Declared TOC/registration order is semantic input and must be retained where the
 
 ## Tests
 
-Every implementation change must execute relevant IDs from [`TEST_MATRIX.md`](TEST_MATRIX.md).
-
-At minimum include:
-
-- valid exact hit;
-- authoritative complete miss;
-- partial non-authoritative miss;
-- explicit conflict;
-- Secret facet retrieval;
-- unknown-field preservation;
-- arbitrary-call rejection;
-- profile mismatch;
-- randomized determinism;
-- fixture checksum verification.
-
-A test must prove its target code path executed and must fail when the behavior is deliberately broken.
+For a bounded implementation slice, use the repository Tier S chain and one
+existing targeted reproduction after the changed path works. Select relevant
+IDs from [`TEST_MATRIX.md`](TEST_MATRIX.md); the full fixture/acceptance set is
+required at the corresponding package milestone. Preserve exact-hit, coverage,
+conflict, unknown-field, profile-isolation, determinism, and fixture-integrity
+requirements when changing those behaviors. A test must prove its target path
+executed and fail when the behavior is deliberately broken.
 
 ## Completion report
 
-Report:
-
-```text
-work package and crate
-fixture/profile identity
-files and operations implemented
-wow-core operations consumed
-input constructs supported/rejected
-coverage partitions emitted
-fixtures/tests and exact results
-commands: pass | fail | skipped
-known NotEvaluated capabilities
-no-Rust/documentation state or executable state
-```
+Report the selected operation and fixture/profile identity, relevant
+`wow-core` boundary, behavior changed, checks run or skipped, and known
+NotEvaluated capabilities. Use the full contract inventory at its acceptance
+milestone, not for every bounded slice.

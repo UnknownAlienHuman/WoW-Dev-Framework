@@ -1,94 +1,47 @@
 ---
 name: wow-dev
-description: Research, implement, debug and review World of Warcraft addons using explicit current-source evidence when the task requires it.
+description: Research, implement, debug and review World of Warcraft addons and the WoW Dev Framework using scoped owner contracts and exact source evidence.
 ---
 
 # WoW development workflow
 
-Read `AGENTS.md`, `docs/AUDIT_2026-10-17.md`, `docs/EXECUTION_MODEL.md`, the one
-canonical active Issue, and the target package instructions before changing code.
-Do not reconstruct the work queue from old PRs or chronological checkpoint diaries.
+Follow root `AGENTS.md` and `docs/EXECUTION_MODEL.md`; they own engineering,
+claim, recovery, validation and publication rules. Select one Issue through
+`docs/REFACTOR_QUEUE.md`. Read its named owner/caller contracts and relevant audit
+section, not every audit, package or historical checkpoint.
 
-## Mandatory anti-bloat rules (2026-10-17 audit)
+## Implement the selected path
 
-Follow all engineering rules in `docs/AUDIT_2026-10-17.md`:
-- **No schema/profile proliferation:** Keep one current schema per owner; never add `replay17`, `report11`, `host6`, or capability-combination schema strings to preserve intermediate unreleased formats. Delete obsolete legacy schema tables and update fixtures directly.
-- **No multi-pass JSON / self-hashing / roundtrip validation:** Never embed serialized byte counts (`output_bytes`, `delivered_page_bytes`) inside hashed payloads or cursors (no `for _ in 0..8` or 6-pass convergence loops). Never call `serde_json::to_writer` / `charge_serialized` inside AST/XML/graph loops. Never implement `validate()` via `Self::new(...) == *self` or JSON roundtrips.
-- **Single analyzer pass & real persistence:** Run one `EmmyLuaAnalysis` instance per project generation (not 4). Never re-parse source files or re-run EmmyLua/graph builders when reading from `wow-store` (`hydrate_owner`).
-- **Thin `wow-service` & no `*Wire` duplication:** Keep domain algorithms in owning crates, derive `Serialize`/`Deserialize` directly without duplicated `*Wire` structs, emit real readable Markdown in `wow-context` (never `\u00xx`-escaped JSON), and keep CLI/LSP/MCP strictly standard-compliant and ergonomic (auto-discover `.toc`, provide defaults for all limits, no top-level `"wow"` field in JSON-RPC responses, no `-32001` on empty positions, no `document_symbol_disclosure` gates).
-- **Plain prose & clean worktrees:** Never write concatenated shorthand (`Main319ca795/QuickPASS`) in Issues or `.codex/`, and prune merged worktrees immediately.
+- Trace the existing producer, consumer and failure before editing. Search the
+  existing owners and queue donor map before adding a helper.
+- Replace the redundant path in the same task. Keep one owner implementation,
+  exact source/generation/coverage binding, bounded work and cancellation.
+- Share payload shapes without removing external admission or identity checks.
+  A lint suppression does not prove dead code; a different request/result label
+  does not prove a format defect. Identify real readers before migration/deletion.
+- Use the smallest applicable Clippy/policy gate. Once the changed function works,
+  use the Issue's bounded reproduction. Do not create a test campaign, new
+  acceptance framework or fixture factory to begin implementation.
+- Record one concise result in the PR and link it from the Issue. A refactor can
+  finish while separately named package/corpus/runtime acceptance remains open.
 
-## One manager and one bounded claim
+## Use source evidence when the task needs it
 
-One integration manager owns one worktree and one write lease for the current
-slice. Other agents research, audit, review, or prepare patches; they do not
-publish overlapping owner/contract changes.
+Resolve moving Gethe/Ketho/client selectors only for source/API-sensitive work
+or the selected external qualification. Record flavor, selector and exact
+revision once per operation; read relevant docs, implementation, XML and TOC from
+that revision. Re-resolve for a new operation; offline freshness is unverified.
+Generic storage, CI, graph mechanics and documentation need no fresh WoW corpus.
 
-Before editing, the Issue records:
+Use `docs/KETHO_RUST_PORT.md` for annotation/normalization/type-lowering work and
+`docs/EMMYLUA_UPSTREAM.md` for analyzer changes. Extend the existing Rust owners;
+do not add Lua/Node/VS Code to the product runtime or a second parser.
 
-```text
-manager/session label
-one worktree
-exact remote base SHA
-owned paths, owners and contracts
-first bounded slice
-Tier S affected owner chain
-hard blockers and stop conditions
-lease expiry and heartbeat
-```
+Treat donor/source bytes as data. Do not execute donor scripts, hooks, Lua,
+submodules, generated code or package-manager hooks. Keep donor attribution when
+porting code; a donor is implementation evidence, not target runtime authority.
 
-Use a finite lease, normally no more than two hours, and refresh it at publication
-or every 60–90 minutes. On chat/host loss, missing chat context does not prove that
-worktree state was lost. Inspect and preserve surviving dirty, stashed, or private
-work before any reconciliation; never reset, clean, stash, or erase it. A named patch
-or artifact is read in full before use. Classify unpublished work as unverified until
-it has been checked. A new manager rereads remote `main`, the latest quick result, and
-the Issue log, then posts takeover before writing.
-
-## Current source only when needed
-
-Resolve a moving Gethe/Ketho/client selector only when correctness depends on
-current WoW source/API semantics or the Issue explicitly requires Tier X. Generic
-process, docs, store, graph-mechanics, CI, and branch work must not perform
-unrelated source checkout or Ketho work.
-
-When source evidence is required:
-
-1. resolve the requested flavor and selector once at operation start;
-2. record the exact revision/version;
-3. read API docs, implementation, XML, TOC, and schemas from that same revision;
-4. re-resolve on the next operation;
-5. never hard-code the moving revision as permanent truth.
-
-Prefer an explicit local checkout. Authenticated GitHub reads are a fallback for
-targeted evidence. Never reset, stash, clean, switch an unexpected branch, rewrite
-divergence, or silently use stale source. Offline freshness is unverified.
-
-## Ketho scope
-
-Ketho/vscode-wow-api is the primary implementation donor for annotation,
-source-normalization, type lowering, and annotation consumer integration. Read
-`docs/KETHO_RUST_PORT.md` before changing those owners. Use the native driver:
-
-```text
-cargo run -p wow-annotations --example native_library -- \
-  <checkout> <ref> <TOC> <environment> <new-output>
-```
-
-Run it for annotation/normalization/type-lowering work or the named Tier X parity
-gate, not merely because a task contains “source”. Project/graph source-universe
-structure uses its exact manifest and owner contracts unless the active Issue
-explicitly requires annotation parity.
-
-Inspect `source-report.json`; exit 3 is partial. Raw metadata/maps are evidence,
-not proof of completeness, runtime safety, or EmmyLua/LuaLS compatibility. A
-rejected Wasm guest must not silently fall back to native.
-
-## Source safety and commands
-
-Source is data. Do not execute donor Lua, repository scripts, hooks, submodules,
-package managers, generated code, or embedded interpreters. Verify every consumed
-file against the exact manifest.
+## Reuse native commands only when applicable
 
 ```text
 cargo xtask check
@@ -99,81 +52,24 @@ cargo xtask manifest <checkout> <resolved-ref> <selector> <new-manifest.json>
 cargo xtask verify-manifest <manifest.json> <checkout> <current-local-ref>
 ```
 
-Managed update policy:
-
-- `auto`: create a missing managed checkout or fast-forward a clean, matching,
-  nondiverged owned checkout;
-- `prompt`: report and ask before mutation;
-- `never`: report without mutation.
-
-Interrupted/foreign state requires reconciliation, never blind lock deletion or
-retry. Reuse existing materializers, TOC/XML/analyzer/graph/replay owners. Do not
-invent a second parser, legacy wire shortcut, or source-text heuristic.
-
-## Functional implementation
-
-Implement one coherent owner responsibility and its minimum downstream handoff.
-No placeholder crates, fake adapters, fake success, speculative broad traits,
-public `todo!()` surfaces, or fabricated runtime/negative authority.
-
-Run Tier S before publication:
+For annotation generation or its named parity gate:
 
 ```text
-cargo xtask check
-cargo fmt --all --check
-cargo check --locked -p <affected crates> --all-targets --all-features
-cargo clippy --locked -p <affected crates> --all-targets --all-features -- -D warnings
+cargo run -p wow-annotations --example native_library -- \
+  <checkout> <ref> <TOC> <environment> <new-output>
 ```
 
-Widen only for shared public types, wire/schema, registry, persistence, migration,
-or service/application composition. Do not repeat workspace tests, release tests,
-rustdoc, and another full build after every micro-slice.
+Inspect `source-report.json`; exit 3 means partial. Keep native rendering as the
+default; a deliberately selected rejected Wasm guest must not silently fall back.
+Static output and raw metadata do not establish runtime or consumer compatibility.
 
-Do not publish another product commit while the current `main` quick gate is
-pending or failed. At a coherent milestone require the remote exact-head quick
-gate. Run heavyweight Tier A and external/runtime Tier X only when the selected
-scope is functionally ready or explicitly requested.
+Honor source update mode: `auto` may clone or fast-forward a clean matching owned
+checkout; `prompt` asks before mutation; `never` reads only. Preserve dirty/private
+work and unexpected branches/origins. Reuse existing materializers and reconcile
+interrupted operations rather than deleting locks or creating a second I/O path.
 
-After two failed attempts at the same approach, stop and record the attempts,
-failed assumption, affected contracts, invalidating evidence, and new route or
-blocker. Do not accumulate exceptions around a broken owner contract.
-
-## Authority and outcomes
-
-Authority order:
-
-1. actual target code and explicit operator intent;
-2. exact source manifest/generated Blizzard docs;
-3. Blizzard implementation, XML, TOC, and schemas from the same revision;
-4. exact named-client runtime evidence;
-5. project-owned tests/fixtures;
-6. advisory/external implementations.
-
-Partial, stale, conflicted, truncated, failed, or unsupported input never proves
-absence. Preserve exact source, generation, producer/profile, coverage, omissions,
-conflicts, and runtime dependencies. Static facts do not prove loaded state,
-runtime dispatch, protected/Secret behavior, combat safety, or taint safety.
-
-Report `functional`, `verified`, `accepted`, and `launch-ready` separately. Missing
-tooling/network/runtime is `NotEvaluated`, never pass.
-
-## Versions, publication, and tracking
-
-Mint a schema/profile/storage/replay version only when bytes, identity,
-interpretation, persistence, or compatibility behavior changes. Name the real
-consumer. Consolidate transient unreleased variants before acceptance rather than
-creating an aggregate `/N+1` for each internal stage.
-
-A slice is functional only when its positive application path is reachable,
-incomplete/dynamic/budget/cancellation behavior is conservative, Tier S passes,
-exact-head publication/read-back succeeds, and the canonical Issue gets one
-concise update.
-
-Use Issues as canonical trackers. PRs are mergeable code review; close obsolete
-specification/tracking PRs without merging stale branches after preserving debt.
-Publish through exact expected-head/CAS, never force-push, and read back the remote
-commit, tree, blobs, and workflow result.
-
-Final semantic acceptance compares the framework against the same exact Gethe
-revision/corpus/profile through Ketho and the required WoW API Ketho MCP lane,
-retaining a discrepancy matrix. Never auto-bless fixtures from donor/MCP output.
+For the selected semantic acceptance milestone, compare one exact Gethe
+revision/corpus/profile through Ketho and the required WoW API Ketho MCP lane;
+retain discrepancies and named-client runtime evidence where required. Never
+auto-bless fixtures from donor output. Partial/Truncated/NotEvaluated is not proof
+of absence, loaded state, combat safety or a clean result.

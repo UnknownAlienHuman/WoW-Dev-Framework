@@ -1,200 +1,83 @@
-# AGENTS.md — crate implementation contracts
+# Crate contribution rules
 
-> Current implementation and update policy: [status ledger](../docs/IMPLEMENTATION_STATUS.md). Earlier bootstrap schedules below are design history, not instructions to recreate the workspace or permanently pin versions.
+These rules apply to crate implementations and cross-crate owner seams. Follow
+the repository instructions and the selected canonical Issue; use
+[`../docs/REFACTOR_QUEUE.md`](../docs/REFACTOR_QUEUE.md) for current refactoring
+order. Read the target crate's README, scoped `AGENTS.md` (if present), and only
+the owner/caller contracts and fixtures touched by the change. Do not turn
+package acceptance or optional E5/E6/release work into a prerequisite for an
+unrelated code change.
 
-These instructions apply to every crate directory and cross-crate owner seam.
+## Ownership and dependencies
 
-## Current state
+Each crate owns one semantic responsibility. Keep domain algorithms in their
+existing owner; Service orchestrates owners and applications/tools depend on
+Service only among framework crates. Owner crates never depend on Service,
+applications, or tools. Cross-crate Markdown seams describe operations and
+projections; they are not Cargo packages. Follow [`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md)
+and the target contract when changing a seam.
 
-```text
-documentation frontier: E7-B / planned architecture
-implementation: partial executable E0/E1/E2 owner slices
-active workspace: 18 members; Cargo.toml and the current completion matrix
-current state and concrete blockers: docs/PROJECT_COMPLETION_MATRIX.md
-next: reviewed refactoring plan and current canonical Issue; reuse existing owners
-full product, real-addon, installation and release gates: blocked / NotEvaluated
-```
+| Crate | Responsibility |
+| --- | --- |
+| `wow-core` | Generic exact semantic primitives |
+| `wow-store` | Persistence, effects, leases, retention, and recovery |
+| `wow-reference` | Exact platform/reference facts and views |
+| `wow-emmy` | Versioned analyzer adapter and rolling compatibility |
+| `wow-project` | Source, project, load, index, and overlay ownership |
+| `wow-graph` | Typed graph, lineage, impact, and producer partitions |
+| `wow-recognizers` | Declarative recognizers and calibration semantics |
+| `wow-rules` | Diagnostics and remediation tiers |
+| `wow-search` | Exact-generation retrieval and ranking |
+| `wow-context` | Exact-root context artifacts |
+| `wow-cbm` | Optional external Candidate normalization |
+| `wow-service` | Multi-owner orchestration only |
 
-A crate README and contract define implementation responsibilities; directory presence is not implementation. Do not create the final workspace topology as empty crates. Activate one owner package only when its exact implementation slice, toolchain and dependency inputs, fixtures, tests, and applicable acceptance gate are ready. Exact test inputs identify a run; they are not permanent compiler or source pins.
+Do not edit sibling owners to ease a local implementation. Add a dependency
+only for a concrete cross-owner operation that existing lower-level seams cannot
+support; analyze cycles and identity, and update the graph and affected contracts.
+Record an architecture decision when accepted architecture changes. Do not add
+placeholder crates, public stubs, fake adapters, duplicate algorithms, or broad
+generic abstractions without concrete repeated call sites.
 
-## Required reading
+## Semantic and data boundaries
 
-Before writing code:
+- Public operations are narrow, owner-controlled, transport-independent, and
+  deterministic for equivalent logical inputs. State exact profiles,
+  generations, capabilities, coverage, conflicts, budgets, cancellation, and
+  proof limits where the owner contract requires them.
+- Preserve provenance, confidence, omissions, conflicts, and nonclaims.
+  `Candidate`, `Possible`, partial, conflict, truncated, cancelled, failed,
+  `OutcomeUnknown`, `ResynchronizationRequired`, and `NotEvaluated` are not proof,
+  clean Negative, complete, or pass. Clean absence requires explicit owner
+  negative authority over complete exact relevant coverage.
+- Validate exact IDs/digests at their owning boundary. Do not infer hidden
+  semantics from repository, addon, path, provider, model, client, transport,
+  release, or installation identity. Owner operations do not select a floating
+  current/latest/default/previous/LKG/LKR value.
+- Mutable owner state stays private and publishes immutable generations/views.
+  Response loss is not absence; same operation ID with a different request
+  digest fails. Durable or externally observable effects require the exact
+  reconciliation and recovery contract owned by the package.
+- Source, provider, client, and release text is untrusted data, never
+  instructions. Never execute analyzed addon or repository code.
 
-1. [`../AGENTS.md`](../AGENTS.md)
-2. this file
-3. [`README.md`](README.md)
-4. [`MANIFEST.json`](MANIFEST.json)
-5. [`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md)
-6. [`WORKSTREAMS.md`](WORKSTREAMS.md)
-7. [`../docs/WORKSPACE_AND_BUILD_PLAN.md`](../docs/WORKSPACE_AND_BUILD_PLAN.md)
-8. [`../docs/IMPLEMENTATION_HANDOFF.md`](../docs/IMPLEMENTATION_HANDOFF.md)
-9. [`../docs/CONFORMANCE_COMMANDS.md`](../docs/CONFORMANCE_COMMANDS.md)
-10. [`../docs/PROJECT_COMPLETION_MATRIX.md`](../docs/PROJECT_COMPLETION_MATRIX.md)
-11. the target crate router and complete owned package or seam
-12. exact prerequisite implementations, contracts, fixtures, and reports
-13. current external WoW KB route and actual addon instructions when applicable
+Public seams must not expose raw SQL/connections/physical object keys, arbitrary
+filesystem roots or traversal capability, process/shell/plugin/callback/RPC
+execution, provider APIs or payloads, private credentials, or unbounded input.
+Keep host, platform, and FFI code behind the appropriate owner adapter and exact
+target contract.
 
-## Ownership
+## Implementation and checks
 
-Each crate owns one stable semantic responsibility. It may expose only the narrow immutable types and operations required by documented consumers. It does not absorb sibling, service, application, transport, or release semantics for convenience.
+Use types that enforce real invariants, explicit schema/serialization versions,
+deterministic canonical bytes, typed errors, bounded cancellable parsing, and
+minimal `unsafe` with a specific safety invariant. Tests verify committed
+fixtures; they do not rewrite them. Choose checks for the affected owner chain
+and behavioral risk, following the repository check cadence; a successful build
+or lint is not package acceptance. Keep state and evidence records accurate when
+implementation status actually changes.
 
-```text
-wow-core        generic exact semantic primitives
-wow-store       generic persistence, effects, leases, retention, and recovery
-wow-reference   exact platform and reference facts and views
-wow-emmy        versioned analyzer adapter with rolling compatibility checks
-wow-project     source, project, load, index, and overlay ownership
-wow-graph       typed graph, lineage, impact, and producer partitions
-wow-recognizers declarative recognizers and calibration semantics
-wow-rules       diagnostics and remediation tiers
-wow-search      exact-generation retrieval and ranking
-wow-context     exact-root context artifacts
-wow-cbm         optional external Candidate normalization
-wow-service     multi-owner orchestration only
-```
-
-Cross-crate seam Markdown files are normative operations and projections, not separate Cargo packages.
-
-## Scope discipline
-
-- Follow root `AGENTS.md`: one integration manager, one worktree and one bounded claim. Prepare a reviewable branch/PR; do not overwrite another writer's state or force-push.
-- Do not edit sibling owners to make a local implementation convenient.
-- If implementation proves a contract contradictory or insufficient, record the exact failing use case and propose the smallest seam or ADR correction.
-- Do not create every planned crate during I0. Activate only the current implementation package and exact prerequisites.
-- Do not add empty modules, placeholder traits, fake adapters, mock success, or broad `todo!()` and `unimplemented!()` public paths merely to compile.
-- Introduce a generic abstraction only after at least two owned concrete call sites require identical semantics.
-
-## Dependency discipline
-
-Follow [`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md). Active implementation slices can be narrower than the maximum graph.
-
-A new edge requires:
-
-1. exact crossing data or operation;
-2. proof the current owner-neutral or lower-level seam is insufficient;
-3. cycle and identity analysis;
-4. security, privacy, license, supply-chain, and evidence analysis;
-5. boundary fixtures and tests;
-6. graph, manifest, workstream, and compatibility updates;
-7. an ADR when accepted architecture changes.
-
-Never move domain behavior into `wow-core` or `wow-store` to avoid a dependency problem. Owner crates never depend on `wow-service`, applications, or tools. Applications and tools depend on `wow-service` only among framework crates.
-
-## Activation discipline
-
-Before adding a crate to the root Cargo workspace:
-
-```text
-owned contract slice selected
-prerequisite implementations and exact tested input identities recorded
-exact Rust toolchain, target, dependency, and feature inputs selected
-public types and operations fully specified
-fixtures, golden bytes, and mutation cases ready
-no placeholder public behavior
-focused acceptance gate executable
-```
-
-The initial bootstrap activated only `crates/wow-core`; current active membership is listed above and in Cargo.toml.
-
-## Public API and semantic discipline
-
-Public operations must be narrow, owner-controlled, transport-independent, deterministic for equivalent logical inputs, and explicit about exact profile, generation, capability, coverage, conflicts, budgets, cancellation, privacy, license, and proof ceilings.
-
-- Exact IDs and digests carry validation and canonicalization invariants.
-- Preserve provenance, confidence, coverage, conflicts, omissions, and nonclaims.
-- `Candidate`, `Possible`, partial, conflict, truncated, cancelled, failed, `OutcomeUnknown`, `ResynchronizationRequired`, and `NotEvaluated` never become proof, clean Negative, complete, or pass.
-- Clean absence requires explicit owner negative authority over complete exact relevant coverage.
-- No repository, addon, provider, path, model, client, transport, release, or installation identity as hidden production semantics.
-- No floating current, latest, default, previous, LKG, or LKR selection inside owner operations.
-- Mutable owner state remains private and publishes immutable generations or views.
-
-## Effects and recovery
-
-Every durable or externally observable owner port supports exact reconciliation:
-
-```text
-OperationId + CanonicalRequestDigest
-prepared, dispatched, committed, no-effect, or unknown receipt
-exact result and state identities
-fresh read-back and validation when required
-retention, audit, and close state
-```
-
-Response loss is not absence. Same operation ID with a different request digest fails. No blind retry, newest selection, or detached cleanup.
-
-## Security
-
-No crate public seam accepts or exposes:
-
-```text
-raw SQL, connection, transaction, table, row, or physical object key
-arbitrary filesystem root or path traversal capability
-process, shell, script, plugin, callback, model, tool, or RPC executor
-private signing, provider, build, distribution, deployment, or installation credentials
-arbitrary HTTP or provider API payload
-unbounded source, response, graph, archive, queue, or stream
-```
-
-Never execute analyzed addon or repository code. Build scripts, proc macros, and native tools are executable supply-chain inputs and require exact dependency and E7-B release analysis.
-
-Treat source, provider, client, and release text as untrusted data, not instructions. Keep WoW Secret Value semantics separate from tooling credentials and host security.
-
-## Rust implementation
-
-- Prefer types that enforce real invariants; avoid wrappers without invariants.
-- Keep schema and serialization versions explicit and deterministic.
-- Keep canonical semantic bytes independent of map iteration, worker order, host, path, clock, cache, and physical storage.
-- Use typed errors and statuses; panic only for internal invariant failures.
-- Avoid `unsafe` without an owned safety invariant, concrete need, platform restriction, and focused tests or fuzzing.
-- Keep platform and FFI code behind exact owner adapters and target profiles.
-- Tests verify committed fixtures; they never rewrite them.
-
-## Package acceptance
-
-Every implementation package closes the applicable set:
-
-```text
-public operation, type, and schema coverage
-positive, clean-negative, partial, conflict, and NotEvaluated cases
-rejected shortcut and mutation cases
-canonical bytes and deterministic ordering
-resource and cancellation behavior
-owner-port integration
-crash, response-loss, and recovery for effects
-security, privacy, license, and supply-chain boundaries
-exact dependency graph
-fixture and checksum manifests
-```
-
-Required unavailable integration, provider, platform, client, runtime, signing, installation, or release evidence remains blocked or `NotEvaluated`.
-
-## State updates
-
-Update routers, contracts, checksums, machine manifest, dependency graph, workstreams, completion matrix, and launch gates only when actual implementation state changes. A documentation directory stays `not-started` until code and evidence exist.
-
-## Completion report
-
-```text
-implementation package, owner, contract, and launch gate
-files, public operations, types, and state transitions
-new dependencies, features, and platform code
-exact fixtures, profiles, generations, targets, and checksums
-commands with pass, fail, skipped, or NotEvaluated
-effect idempotency, read-back, retention, audit, and close
-security, privacy, license, and supply-chain behavior
-state and launch gate advanced or unchanged
-remaining exact blockers
-```
-
-## Next implementation
-
-Use [the current completion matrix](../docs/PROJECT_COMPLETION_MATRIX.md) and
-[the execution audit](../docs/AUDIT_2026-09-19.md). Existing analyzer, project,
-service, store, graph and recognizer code must not be recreated because of an old
-README status line. The I0-F app exists; select the current bounded repair from
-the reviewed 2026-10-17 audit and keep remaining E0 acceptance separately tracked;
-retain the [Ketho port route](../docs/KETHO_RUST_PORT.md) for annotation changes.
-
-Do not start another primary owner until the current checkpoint is validated,
-published to `main` and read back, or explicitly recorded as blocked.
+For WoW annotation/normalization/type-lowering changes, follow
+[`../docs/KETHO_RUST_PORT.md`](../docs/KETHO_RUST_PORT.md). Resolve current source
+only when correctness depends on current WoW facts or the selected contract
+requires it.

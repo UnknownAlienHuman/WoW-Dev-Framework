@@ -4,13 +4,19 @@
 
 Implement only the declarative core-pack schema, typed fact input, bounded matcher, proposed graph output, coverage/ambiguity reporting, and evaluation/mutation machinery defined by this package.
 
-## Before coding
+## Start with the selected work
 
-1. Read repository and crate instructions.
-2. Verify the exact implemented/frozen `wow-core`, `wow-emmy`, and `wow-graph` contracts.
-3. Freeze the E2 core pack, fact schema profile, graph registry profile, fixtures, expected outputs, and checksums.
-4. State the exact rule IDs and input partitions being changed.
-5. State whether behavior is core-universal or deferred calibration evidence.
+Follow repository instructions and the selected Issue's reading list. Read the
+exact `wow-core`, `wow-emmy`, `wow-graph`, and caller contracts plus the pack,
+fact-schema, graph-registry profile IDs and rule/input partition IDs touched by
+the bounded change. State whether the behavior is core-universal or deferred
+calibration evidence.
+
+Keep typed-fact admission, declared graph outputs, authority, coverage, and
+partition replacement semantics intact. An existing-code refactor does not
+require a new fixture campaign before the replacement path works. Freeze the
+pack/profile and expected outputs at the selected acceptance milestone; record
+historical missed freezes under #120 and do not fabricate retroactive evidence.
 
 ## Dependency discipline
 
@@ -46,7 +52,7 @@ Implement only the declarative core-pack schema, typed fact input, bounded match
 
 ## Evaluation discipline
 
-Every active rule needs:
+At the selected rule evaluation/acceptance milestone, every active rule needs:
 
 - positive fixture;
 - structurally similar negative fixture;
