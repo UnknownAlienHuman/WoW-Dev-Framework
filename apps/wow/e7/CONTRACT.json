@@ -54,6 +54,18 @@
     "unsupported": ["wire-progress", "wire-cancellation", "workspace-document-mutation", "daemon", "reconnect"],
     "full_e7_a_conformance": "not-accepted"
   },
+  "owned_lsp_subset": {
+    "activation_issue": 187,
+    "transport_profile": "lsp-3.18-stdio-owned-v1",
+    "implementation_state": "partial-executable",
+    "semantic_writer": "one scoped joined Service worker; App owns the sole pipe I/O controller",
+    "cancelable_operations": ["frontend_document_diagnostics", "frontend_document_definition", "frontend_document_references"],
+    "ticket_policy": "exact session/registry/request/dispatch-overlay binding; intent is not owner acknowledgement",
+    "native_io_policy": "private four-call Windows metadata boundary; checked original-mode restoration; Unix nonblocking flags restored",
+    "legacy_compatibility": "five classic LSP host policies and both MCP profiles retain exact wire bytes",
+    "not_evaluated": ["other-platform runtime", "named-editor qualification", "native preemption", "hard owner runtime deadlines", "durable replay", "daemon", "reconnect"],
+    "full_e7_a_conformance": "not-accepted"
+  },
   "framework_dependencies": [
     "wow-service"
   ],

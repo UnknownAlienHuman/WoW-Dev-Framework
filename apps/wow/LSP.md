@@ -1,4 +1,4 @@
-# Selected private Lua syntax LSP profile
+# Private Lua LSP execution profiles
 
 ```text
 wow lsp --transport stdio --profile lsp-3.18-stdio-v1 --host host.json
@@ -169,7 +169,7 @@ owned until close. Shutdown, abnormal EOF, framing/output failure and a caught
 panic synchronously close the session. Default logs and errors exclude source
 bodies and absolute workspace roots.
 
-## Bounds and limitations
+## Legacy execution bounds and limitations
 
 There is one active synchronous request and no semantic queue. Headers are at
 most 8 KiB; input/output bodies are at most 4 MiB; JSON nesting is at most 32.
@@ -180,16 +180,77 @@ bounded at 2048 and retained report bytes at 2 MiB. Project limits still apply;
 host document bytes may not exceed 2 MiB. These are charged bounds, not measured
 total process/analyzer heap guarantees.
 
-An already running synchronous operation cannot consume a wire cancellation.
-The cancel operation reports only an exactly observed completed ticket or no
-cancellation claim. Process stop reaches the existing owner checkpoints; an
-upstream synchronous call completes before observing it. Progress, asynchronous
-wire cancellation, reconnect, transport deadlines and durable response journals
-are not implemented. No hover, cross-file/global/member definition, completion, workspace diagnostics,
-push diagnostics, commands, edits, daemon or network listener is advertised.
+An already running synchronous operation cannot consume a wire cancellation
+(lsp-3.18-stdio-v1). The cancel operation reports only an exactly observed
+completed ticket or no cancellation claim. Process stop reaches the existing
+owner checkpoints; an upstream synchronous call completes before observing it.
+Progress, asynchronous wire cancellation, reconnect, transport deadlines and
+durable response journals are not implemented. No hover,
+cross-file/global/member definition, completion, workspace diagnostics, push
+diagnostics, commands, edits, daemon or network listener is advertised.
 
 Stdout contains framed messages only. Graceful shutdown/exit is 0; abnormal
 exit/EOF or framing failure is nonzero; mandatory-close/output/internal failure
 is 4; observed process cancellation is 130. Unadvertised requests return
 MethodNotFound, resynchronization returns ContentModified, and notification
 refusals emit bounded redacted `window/logMessage` notifications.
+
+## lsp-3.18-stdio-owned-v1
+
+```text
+wow lsp --transport stdio --profile lsp-3.18-stdio-owned-v1 --host host.json
+```
+
+This profile extends the v1 framing with a foreground-owned execution model.
+One App I/O main owns the process and one joined Service writer executes all
+operations. The same explicit host schema and privacy policies apply; see the
+host section above. The provider identifier remains `wow.private-syntax`.
+
+### Owned execution model
+
+Typed Service-owned tickets cover diagnostics, definition and references.
+Each binds its session, profile/registry, exact request and dispatch-time document
+version/snapshot/digest. Its canonical state digest is separate from the native
+result digest and from the wire ID. Cancellation starts as intent; acknowledgement
+requires the actual operation to return `Cancelled`. Queued cancellation never
+invokes the native operation. A successful operation can win a completion race.
+Process stop and connection loss have separate reasons. Outstanding duplicate
+wire IDs terminate the connection; a sent ID can be reused with a new ticket.
+Work-done begin/end is optional, bounded and nonauthoritative. Dropped progress
+has a ticket counter and cannot consume final-result capacity. See
+[`LSP_IO_SAFETY.md`](LSP_IO_SAFETY.md) for the native I/O safety invariant.
+
+### Framing and bounds
+
+Headers are at most 8 KiB; individual input/output bodies are at most 4 MiB.
+One read is active and eight can queue. Typed read requests are at most 64 KiB
+each and 512 KiB in aggregate; the metadata journal holds at most 16 entries.
+The App message queue separately permits eight messages and 8 MiB of charged
+wire bodies. Final output has an 8 MiB aggregate budget. Progress has its own
+16-event/32 KiB budget. Partial-result chunk streaming is unsupported.
+
+A partial frame has a 5-second idle and 30-second absolute deadline. Output
+uses the same deadlines. A read request has 30-second idle/absolute deadlines
+which request cooperative cancellation; they do not preempt the native analyzer
+or guarantee its response time. An otherwise idle session is not timed out.
+These are explicit operational byte/event bounds, not measured process-heap
+or OS-driver latency guarantees.
+
+EOF or connection loss abandons pure reads under the selected session policy;
+it does not fabricate wire cancellation. Unsaved documents are not recoverable
+in another session. Shutdown drains earlier final responses before closing the
+real Project session. Parent/worker panic boundaries retire held tickets, record
+partial-delivery uncertainty, join the worker and attempt checked session/stdio
+closure. Restoration or required-close failure cannot report graceful success.
+`Sent` means OS-accepted bytes, never client acknowledgement or durable replay.
+
+### Platform qualification
+
+Selected Windows x86_64 native/process evidence is retained in Issue #187.
+Linux/other-platform runtime and named-editor qualification remain open under
+the parent acceptance trackers; compilation alone does not qualify them.
+
+The five existing host policies under `lsp-3.18-stdio-v1` retain their wire bytes.
+The two MCP profiles remain independent. The owned execution profile does not
+advertise daemon, reconnect, durable result replay, global/member/cross-file
+analysis or full E7/launch acceptance.

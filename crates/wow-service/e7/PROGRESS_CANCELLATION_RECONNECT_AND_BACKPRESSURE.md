@@ -121,3 +121,23 @@ Per-session and global quotas prevent one client from starving others. Schedulin
 ## Shutdown
 
 Graceful shutdown stops new sessions/requests, requests cancellation as defined, awaits/reconciles mandatory effects within bounded time, persists response journals/retention/audit, closes resources/endpoints, and exits. Forced termination triggers startup recovery; it is never reported as graceful.
+
+### Foreground-owned LSP reads
+
+The `lsp-3.18-stdio-owned-v1` profile reserves typed diagnostics, definition, and
+references tickets only after its exact Service session opens. App protocol
+readiness remains App-owned: an accepted queued ticket that reaches a worker
+before initialization or after protocol shutdown is consumed through a typed
+refusal and receives a final Service result without owner dispatch. Work-done
+progress carries only an owned bounded string/integer token and remains
+nonauthoritative.
+
+The profile allows one active read, eight queued reads, and sixteen bounded
+metadata-journal entries. Each read binds its exact session, registry, typed
+request, and live overlay snapshot at dispatch. Cancellation intent becomes
+`OwnerAcknowledged` only when the native owner returns `Cancelled`; a successful
+owner result wins a completion race. Connection loss abandons a pure read under
+its own stop reason, separately from wire cancellation and process stop. The
+synchronous native call is cooperative at its existing checkpoints; it has no
+preemption or hard-runtime-deadline claim. Only result digests and ticket
+metadata are retained, never full source or result bodies.

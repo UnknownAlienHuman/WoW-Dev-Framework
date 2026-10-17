@@ -11,6 +11,15 @@ Official protocol reference: <https://microsoft.github.io/language-server-protoc
 
 The initial LSP profile uses stdio with standard LSP message framing. `stdout` contains protocol messages only; bounded redacted logs use `stderr`.
 
+An explicitly selected `lsp-3.18-stdio-owned-v1` Service profile provides typed
+foreground tickets for diagnostics, definition, and references. Its profile and
+registry identities are separate from the existing host profiles. The App owns
+protocol readiness, framing, progress writes, and worker joins; Service owns
+ticket reservation, live-overlay binding, native owner invocation, cancellation
+state, and bounded result metadata. It permits one active read and eight queued
+reads, with a sixteen-entry metadata journal. Existing host profile identities
+and serialized descriptors remain unchanged.
+
 Supported lifecycle messages:
 
 ```text

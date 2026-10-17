@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 use wow_project::{
     disk::{ProjectDiskFile, ProjectInputDirectory},
@@ -14,12 +17,23 @@ use wow_project::{
 
 mod definition;
 mod diagnostics;
+mod foreground;
 mod references;
 mod registry;
 pub use definition::{LspDefinitionLocation, LspDefinitionRequest, LspDefinitionResult};
 pub use diagnostics::{LspDiagnostic, LspDiagnosticReport, LspOverlayBinding};
+pub use foreground::{
+    LSP_FOREGROUND_EXECUTION, LSP_FOREGROUND_MAX_METADATA, LSP_FOREGROUND_MAX_QUEUE_BYTES,
+    LSP_FOREGROUND_MAX_QUEUED, LSP_FOREGROUND_MAX_REQUEST_BYTES, LSP_OWNED_PROFILE_ID,
+    LspDispatchedRead, LspForegroundCancelOrigin, LspForegroundCancellationObservation,
+    LspForegroundCancellationState, LspForegroundControl, LspForegroundDeliveryState,
+    LspForegroundExecutionProfile, LspForegroundOperation, LspForegroundOverlayBinding,
+    LspForegroundResult, LspForegroundStopReason, LspForegroundTicket, LspForegroundTicketState,
+    LspPreparedRead, LspProgressToken, LspReadDispatch, LspReadRefusal, LspReadRequest,
+    LspReadResult,
+};
 pub use references::{LspReferencesLocation, LspReferencesRequest, LspReferencesResult};
-pub use registry::{LspOperationDescriptor, LspRegistry, LspTransportProfile};
+pub use registry::{LspOperationDescriptor, LspRegistry, LspTransportProfile, LspWireProjection};
 pub use wow_project::overlay::OverlayPosition as LspPosition;
 pub use wow_project::overlay::{OverlayEdit as LspContentChange, OverlayRange as LspRange};
 
@@ -253,6 +267,7 @@ pub struct LspFrontend {
     registry: LspRegistry,
     session: Option<Session>,
     opened: bool,
+    foreground: Option<Arc<Mutex<foreground::LspForegroundState>>>,
 }
 impl LspFrontend {
     pub fn new(host: LspHost) -> ServiceResult<Self> {
@@ -268,7 +283,22 @@ impl LspFrontend {
             registry: LspRegistry::build(local_definition, uri_policy, local_references)?,
             session: None,
             opened: false,
+            foreground: None,
         })
+    }
+    pub fn new_foreground(host: LspHost) -> ServiceResult<(Self, LspForegroundControl)> {
+        let mut frontend = Self::new(host)?;
+        let definition = frontend.definition_enabled();
+        let references = frontend.references_enabled();
+        let uri_policy = frontend
+            .host
+            .input
+            .document_uri_profile
+            .unwrap_or(OverlayUriPolicy::StrictCanonical);
+        frontend.registry = LspRegistry::build_owned(definition, uri_policy, references)?;
+        let core = Arc::new(Mutex::new(foreground::LspForegroundState::new()));
+        frontend.foreground = Some(core.clone());
+        Ok((frontend, LspForegroundControl { core }))
     }
     pub fn registry(&self) -> &LspRegistry {
         &self.registry
@@ -346,8 +376,11 @@ impl LspFrontend {
                 return Err(owner(error));
             }
         }
+        let owned_foreground = self.foreground.is_some();
         let descriptor = LspSessionDescriptor {
-            schema: if self.references_enabled() {
+            schema: if owned_foreground {
+                "wow-service/lsp-private-foreground-session/1"
+            } else if self.references_enabled() {
                 "wow-service/lsp-private-session/3"
             } else if uri_policy == OverlayUriPolicy::StrictCanonical {
                 "wow-service/lsp-private-session/1"
@@ -355,7 +388,11 @@ impl LspFrontend {
                 "wow-service/lsp-private-session/2"
             },
             session_id: format!("lsp-session:{}", workspace.descriptor().session_scope).into(),
-            profile_id: LSP_PROFILE_ID,
+            profile_id: if owned_foreground {
+                LSP_OWNED_PROFILE_ID
+            } else {
+                LSP_PROFILE_ID
+            },
             registry_digest: self.registry.digest.clone(),
             profile_digest: self.registry.profile_digest.clone(),
             local_definition_enabled: self.definition_enabled(),
@@ -373,18 +410,44 @@ impl LspFrontend {
             } else {
                 "overlay_local_selected_syntax_no_published_base"
             },
-            cancellation: "synchronous_process_stop_owner_checkpoints",
-            not_evaluated: &[
-                "published_dependencies",
-                "reference",
-                "graph",
-                "rules",
-                "wire_inflight_cancellation",
-                "progress",
-                "reconnect",
-                "runtime",
-            ],
+            cancellation: if owned_foreground {
+                "per_ticket_cooperative_owner_checkpoints"
+            } else {
+                "synchronous_process_stop_owner_checkpoints"
+            },
+            not_evaluated: if owned_foreground {
+                &[
+                    "published_dependencies",
+                    "reference",
+                    "graph",
+                    "rules",
+                    "reconnect",
+                    "runtime",
+                    "hard_owner_runtime_deadlines",
+                    "durable_result_replay",
+                ]
+            } else {
+                &[
+                    "published_dependencies",
+                    "reference",
+                    "graph",
+                    "rules",
+                    "wire_inflight_cancellation",
+                    "progress",
+                    "reconnect",
+                    "runtime",
+                ]
+            },
         };
+        if let Some(core) = &self.foreground {
+            match foreground::lock(core) {
+                Ok(mut state) => state.bind_session(&descriptor),
+                Err(error) => {
+                    workspace.close(&scope).map_err(owner)?;
+                    return Err(error);
+                }
+            }
+        }
         self.session = Some(Session {
             scope,
             workspace,
@@ -599,10 +662,25 @@ impl LspFrontend {
     }
     pub fn frontend_session_close(&mut self) -> ServiceResult<()> {
         self.registry.require("shutdown")?;
+        let ticket_close = self
+            .foreground
+            .as_ref()
+            .map_or(Ok(()), |core| foreground::ensure_session_can_close(core));
+        if let Err(error) = &ticket_close
+            && error.code() != ServiceErrorCode::InternalContractViolation
+        {
+            return ticket_close;
+        }
         if let Some(session) = self.session.as_mut() {
             session.workspace.close(&session.scope).map_err(owner)?;
         }
         self.session.take();
+        // Poisoned metadata never permits success, but it must not skip the
+        // owning Project workspace's real, checked close after unwinding.
+        ticket_close?;
+        if let Some(core) = &self.foreground {
+            foreground::close_session(core)?;
+        }
         Ok(())
     }
     pub fn frontend_operation_cancel(

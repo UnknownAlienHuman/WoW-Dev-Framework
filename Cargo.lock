@@ -2540,8 +2540,11 @@ dependencies = [
  "cap-fs-ext",
  "cap-std",
  "ctrlc",
+ "rustix",
  "serde",
  "serde_json",
+ "windows-sys 0.61.2",
+ "winx",
  "wow-service",
 ]
 

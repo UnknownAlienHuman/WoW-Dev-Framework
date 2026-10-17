@@ -1,6 +1,6 @@
 //! Standard locations from one exact Service-owned local-reference operation.
 use super::*;
-use wow_service::frontend::lsp::{LspPosition, LspReferencesRequest};
+use wow_service::frontend::lsp::{LspPosition, LspReferencesRequest, LspReferencesResult};
 impl Server {
     pub(super) fn references<W: Write>(
         &mut self,
@@ -20,54 +20,7 @@ impl Server {
                 "method is not supported by the selected profile",
             );
         }
-        let request = (|| {
-            only(
-                params,
-                &[
-                    "textDocument",
-                    "position",
-                    "context",
-                    "workDoneToken",
-                    "partialResultToken",
-                ],
-            )?;
-            for name in ["workDoneToken", "partialResultToken"] {
-                if let Some(token) = params.get(name) {
-                    let valid = match token {
-                        Value::String(text) => {
-                            text.len() <= 128 && !text.chars().any(char::is_control)
-                        }
-                        Value::Number(number) => number
-                            .as_i64()
-                            .is_some_and(|value| i32::try_from(value).is_ok()),
-                        _ => false,
-                    };
-                    if !valid {
-                        return Err(());
-                    }
-                }
-            }
-            let document = params
-                .get("textDocument")
-                .and_then(Value::as_object)
-                .ok_or(())?;
-            only(document, &["uri"])?;
-            let uri = string(document, "uri", 65536)?;
-            let position: LspPosition =
-                serde_json::from_value(params.get("position").cloned().ok_or(())?)
-                    .map_err(|_| ())?;
-            let context = params.get("context").and_then(Value::as_object).ok_or(())?;
-            only(context, &["includeDeclaration"])?;
-            let include_declaration = context
-                .get("includeDeclaration")
-                .and_then(Value::as_bool)
-                .ok_or(())?;
-            Ok::<_, ()>(LspReferencesRequest {
-                uri,
-                position,
-                include_declaration,
-            })
-        })();
+        let request = parse_request(params);
         let request = match request {
             Ok(request) => request,
             Err(()) => {
@@ -76,23 +29,79 @@ impl Server {
         };
         match self.service.frontend_document_references(request, stop) {
             Ok(result) => {
-                if result.locations.is_empty() {
-                    send(
-                        output,
-                        json!({"jsonrpc":"2.0","id":id,"error":{"code":-32001,
-                        "message":"no local reference locations observed under the selected scope","data":result}}),
-                    )?;
-                } else {
-                    let mut locations = result.locations.iter().map(|location| json!({
-                        "uri":location.uri,"range":location.range,"wow_binding":result.binding.id,
-                    })).collect::<Vec<_>>();
-                    // Carry the exact bounded result once, rather than once per location.
-                    locations[0]["wow"] = serde_json::to_value(&result).map_err(|_| ())?;
-                    send(output, json!({"jsonrpc":"2.0","id":id,"result":locations}))?;
-                }
+                send(output, result_response(&id, &result)?)?;
                 Ok(Control::Continue)
             }
             Err(error) => domain_error(output, Some(id), error),
         }
     }
+}
+
+pub(super) fn result_response(
+    id: &LspRequestId,
+    result: &LspReferencesResult,
+) -> Result<Value, ()> {
+    if result.locations.is_empty() {
+        Ok(json!({"jsonrpc":"2.0","id":id,"error":{"code":-32001,
+            "message":"no local reference locations observed under the selected scope","data":result}}))
+    } else {
+        let mut locations = result
+            .locations
+            .iter()
+            .map(|location| {
+                json!({
+                    "uri":location.uri,"range":location.range,"wow_binding":result.binding.id,
+                })
+            })
+            .collect::<Vec<_>>();
+        // The owner result appears once even when many locations are projected.
+        locations[0]["wow"] = serde_json::to_value(result).map_err(|_| ())?;
+        Ok(json!({"jsonrpc":"2.0","id":id,"result":locations}))
+    }
+}
+
+pub(super) fn parse_request(params: &Map<String, Value>) -> Result<LspReferencesRequest, ()> {
+    only(
+        params,
+        &[
+            "textDocument",
+            "position",
+            "context",
+            "workDoneToken",
+            "partialResultToken",
+        ],
+    )?;
+    for name in ["workDoneToken", "partialResultToken"] {
+        if let Some(token) = params.get(name) {
+            let valid = match token {
+                Value::String(text) => text.len() <= 128 && !text.chars().any(char::is_control),
+                Value::Number(number) => number
+                    .as_i64()
+                    .is_some_and(|value| i32::try_from(value).is_ok()),
+                _ => false,
+            };
+            if !valid {
+                return Err(());
+            }
+        }
+    }
+    let document = params
+        .get("textDocument")
+        .and_then(Value::as_object)
+        .ok_or(())?;
+    only(document, &["uri"])?;
+    let uri = string(document, "uri", 65536)?;
+    let position: LspPosition =
+        serde_json::from_value(params.get("position").cloned().ok_or(())?).map_err(|_| ())?;
+    let context = params.get("context").and_then(Value::as_object).ok_or(())?;
+    only(context, &["includeDeclaration"])?;
+    let include_declaration = context
+        .get("includeDeclaration")
+        .and_then(Value::as_bool)
+        .ok_or(())?;
+    Ok::<_, ()>(LspReferencesRequest {
+        uri,
+        position,
+        include_declaration,
+    })
 }

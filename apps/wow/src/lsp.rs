@@ -10,18 +10,20 @@ use std::{
 use wow_service::{
     ServiceError, ServiceErrorCode,
     frontend::lsp::{
-        LSP_MAX_FRAME_BYTES, LSP_MAX_HEADER_BYTES, LSP_MAX_OUTPUT_BYTES, LSP_PROFILE_ID,
-        LspContentChange, LspDocumentChange, LspDocumentChangeRequest, LspDocumentOpenRequest,
-        LspDocumentSaveRequest, LspFrontend, LspHost, LspRequestId, LspSessionOpenRequest,
-        LspSynchronizationRefusal,
+        LSP_MAX_FRAME_BYTES, LSP_MAX_HEADER_BYTES, LSP_MAX_OUTPUT_BYTES, LSP_OWNED_PROFILE_ID,
+        LSP_PROFILE_ID, LspContentChange, LspDocumentChange, LspDocumentChangeRequest,
+        LspDocumentOpenRequest, LspDocumentSaveRequest, LspFrontend, LspHost, LspRequestId,
+        LspSessionOpenRequest, LspSynchronizationRefusal,
     },
 };
 mod definition;
 mod framing;
+mod io;
+mod owned;
 mod references;
 use framing::{Limits, read_frame, write_frame};
 
-const HELP: &str = "wow lsp --transport stdio --profile lsp-3.18-stdio-v1 --host <explicit.json>\nSynchronous private Lua syntax diagnostics over an explicit workspace. Published dependencies, Reference, Graph, Rules and runtime are not evaluated. See apps/wow/LSP.md.\n";
+const HELP: &str = "wow lsp --transport stdio --profile <lsp-3.18-stdio-v1|lsp-3.18-stdio-owned-v1> --host <explicit.json>\nPrivate Lua diagnostics and explicitly selected local navigation over one registered workspace. Owned mode adds foreground tickets, cooperative request cancellation and bounded delivery. Published dependencies, Reference, Graph, Rules and runtime are not evaluated. See apps/wow/LSP.md.\n";
 pub(super) fn run(args: Vec<OsString>) -> u8 {
     if args.len() == 2 && args[1] == "--help" {
         return if std::io::stdout().lock().write_all(HELP.as_bytes()).is_ok() {
@@ -30,14 +32,30 @@ pub(super) fn run(args: Vec<OsString>) -> u8 {
             4
         };
     }
-    let host = match arguments(&args) {
+    let (host, owned_execution) = match arguments(&args) {
         Ok(path) => path,
         Err(()) => return super::usage("invalid LSP command; use wow lsp --help"),
     };
     let Some(stop) = super::cancellation_flag() else {
         return 64;
     };
-    let host = match LspHost::load(&host, &stop).and_then(LspFrontend::new) {
+    let host = match LspHost::load(&host, &stop) {
+        Ok(host) => host,
+        Err(_) => {
+            super::diagnostic("wow: LSP host/profile acquisition refused");
+            return 64;
+        }
+    };
+    if owned_execution {
+        return match LspFrontend::new_foreground(host) {
+            Ok((service, control)) => owned::run(service, control, stop),
+            Err(_) => {
+                super::diagnostic("wow: owned LSP profile refused");
+                64
+            }
+        };
+    }
+    let host = match LspFrontend::new(host) {
         Ok(host) => host,
         Err(_) => {
             super::diagnostic("wow: LSP host/profile acquisition refused");
@@ -75,20 +93,20 @@ pub(super) fn run(args: Vec<OsString>) -> u8 {
         }
     }
 }
-fn arguments(args: &[OsString]) -> Result<PathBuf, ()> {
+fn arguments(args: &[OsString]) -> Result<(PathBuf, bool), ()> {
     if args.len() != 7
         || args.iter().map(|v| v.len()).sum::<usize>() > 65536
         || args[0] != "lsp"
         || args[1] != "--transport"
         || args[2] != "stdio"
         || args[3] != "--profile"
-        || args[4] != LSP_PROFILE_ID
+        || (args[4] != LSP_PROFILE_ID && args[4] != LSP_OWNED_PROFILE_ID)
         || args[5] != "--host"
         || args[6].is_empty()
     {
         return Err(());
     }
-    Ok(PathBuf::from(&args[6]))
+    Ok((PathBuf::from(&args[6]), args[4] == LSP_OWNED_PROFILE_ID))
 }
 struct Server {
     service: LspFrontend,
@@ -238,6 +256,18 @@ impl Server {
                     if self.service.references_enabled() {
                         response["result"]["capabilities"]["referencesProvider"] = json!(true);
                     }
+                    if session.profile_id == LSP_OWNED_PROFILE_ID {
+                        response["result"]["capabilities"]["diagnosticProvider"]["workDoneProgress"] =
+                            json!(true);
+                        if local_definition {
+                            response["result"]["capabilities"]["definitionProvider"] =
+                                json!({"workDoneProgress":true});
+                        }
+                        if self.service.references_enabled() {
+                            response["result"]["capabilities"]["referencesProvider"] =
+                                json!({"workDoneProgress":true});
+                        }
+                    }
                     send(output, response)?;
                     Ok(Control::Continue)
                 }
@@ -299,35 +329,7 @@ impl Server {
                 let Some(id) = id else {
                     return notification_error(output, "pull diagnostics requires a request ID");
                 };
-                let request = (|| {
-                    only(
-                        &params,
-                        &[
-                            "textDocument",
-                            "identifier",
-                            "previousResultId",
-                            "workDoneToken",
-                            "partialResultToken",
-                        ],
-                    )?;
-                    let uri = document_uri(&params)?;
-                    if params
-                        .get("identifier")
-                        .is_some_and(|v| v.as_str() != Some("wow.private-syntax"))
-                    {
-                        return Err(());
-                    }
-                    let previous = params
-                        .get("previousResultId")
-                        .map(|v| {
-                            v.as_str()
-                                .filter(|s| s.len() <= 256)
-                                .map(str::to_owned)
-                                .ok_or(())
-                        })
-                        .transpose()?;
-                    Ok::<_, ()>((uri, previous))
-                })();
+                let request = diagnostic_request(&params);
                 let (uri, previous) = match request {
                     Ok(v) => v,
                     Err(()) => {
@@ -613,19 +615,7 @@ fn domain_error<W: Write>(
     error: ServiceError,
 ) -> Result<Control, ()> {
     if let Some(id) = id {
-        let code = match error.code() {
-            ServiceErrorCode::IdentityMismatch => -32801,
-            ServiceErrorCode::Cancelled => -32800,
-            ServiceErrorCode::InvalidContext => -32002,
-            ServiceErrorCode::InvalidRequest | ServiceErrorCode::InvalidConfiguration => -32602,
-            ServiceErrorCode::InternalContractViolation
-            | ServiceErrorCode::CanonicalizationFailed => -32603,
-            _ => -32001,
-        };
-        send(
-            output,
-            json!({"jsonrpc":"2.0","id":id,"error":{"code":code,"message":error.message(),"data":{"code":error.code(),"message":error.message()}}}),
-        )?;
+        send(output, domain_error_value(&id, &error))?;
         Ok(Control::Continue)
     } else {
         notification_error(
@@ -637,4 +627,48 @@ fn domain_error<W: Write>(
             },
         )
     }
+}
+fn domain_error_value(id: &LspRequestId, error: &ServiceError) -> Value {
+    let code = match error.code() {
+        ServiceErrorCode::IdentityMismatch => -32801,
+        ServiceErrorCode::Cancelled => -32800,
+        ServiceErrorCode::InvalidContext => -32002,
+        ServiceErrorCode::InvalidRequest | ServiceErrorCode::InvalidConfiguration => -32602,
+        ServiceErrorCode::InternalContractViolation | ServiceErrorCode::CanonicalizationFailed => {
+            -32603
+        }
+        _ => -32001,
+    };
+    json!({"jsonrpc":"2.0","id":id,"error":{"code":code,"message":error.message(),
+        "data":{"code":error.code(),"message":error.message()}}})
+}
+
+fn diagnostic_request(params: &Map<String, Value>) -> Result<(String, Option<String>), ()> {
+    only(
+        params,
+        &[
+            "textDocument",
+            "identifier",
+            "previousResultId",
+            "workDoneToken",
+            "partialResultToken",
+        ],
+    )?;
+    let uri = document_uri(params)?;
+    if params
+        .get("identifier")
+        .is_some_and(|v| v.as_str() != Some("wow.private-syntax"))
+    {
+        return Err(());
+    }
+    let previous = params
+        .get("previousResultId")
+        .map(|v| {
+            v.as_str()
+                .filter(|s| s.len() <= 256)
+                .map(str::to_owned)
+                .ok_or(())
+        })
+        .transpose()?;
+    Ok::<_, ()>((uri, previous))
 }

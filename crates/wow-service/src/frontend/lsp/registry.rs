@@ -15,6 +15,17 @@ pub struct LspOperationDescriptor {
     pub error_schema_id: &'static str,
     pub error_schema: Value,
     pub effect_class: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wire_projection: Option<LspWireProjection>,
+}
+#[derive(Debug, Clone, Serialize)]
+pub struct LspWireProjection {
+    pub schema: &'static str,
+    pub json_schema_dialect: &'static str,
+    pub request_schema: Value,
+    pub result_schema: Value,
+    pub error_data_schema: Value,
+    pub digest: Box<str>,
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct LspTransportProfile {
@@ -38,6 +49,12 @@ pub struct LspTransportProfile {
     pub max_json_depth: usize,
     pub max_active_requests: usize,
     pub max_queued_requests: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_queued_request_bytes: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_metadata_journal_entries: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub foreground_execution: Option<LspForegroundExecutionProfile>,
     pub max_diagnostics: usize,
     pub max_retained_report_bytes: usize,
 }
@@ -54,6 +71,169 @@ pub struct LspRegistry {
 }
 fn object(properties: Value, required: &[&str]) -> Value {
     json!({"type":"object","properties":properties,"required":required,"additionalProperties":false})
+}
+fn foreground_ticket_schema() -> Value {
+    let string = json!({"type":"string","maxLength":128});
+    let token = json!({"oneOf":[{"type":"integer","minimum":i32::MIN,"maximum":i32::MAX},
+        {"type":"string","maxLength":128,"x-maxUtf8Bytes":128,"pattern":"^[^\\u0000-\\u001F\\u007F-\\u009F]*$"}]});
+    let overlay = object(
+        json!({"document_version":{"type":"integer","minimum":0,"maximum":i32::MAX},
+        "snapshot_id":string,"content_digest":string,"digest":string}),
+        &[
+            "document_version",
+            "snapshot_id",
+            "content_digest",
+            "digest",
+        ],
+    );
+    object(
+        json!({
+            "schema":{"const":"wow-service/lsp-foreground-ticket/1"},
+            "ticket_id":string,"wire_id":token,"service_request_id":string,
+            "nonce":{"type":"integer","minimum":1,"maximum":9_007_199_254_740_991_u64},
+            "session_id":string,"profile_id":{"const":LSP_OWNED_PROFILE_ID},
+            "registry_digest":string,"request_digest":string,
+            "operation":{"enum":["diagnostics","definition","references"]},
+            "progress_token":{"oneOf":[{"type":"null"},token]},
+            "progress_events_coalesced":{"type":"integer","minimum":0,"maximum":2},
+            "overlay":{"oneOf":[{"type":"null"},overlay]},
+            "state":{"enum":["queued","dispatched","completed","failed","failed_before_owner",
+                "refused_not_ready","refused_session_closed","cancelled_before_dispatch","owner_acknowledged",
+                "completed_before_cancel","connection_lost_abandoned","process_stopped","dropped_before_dispatch",
+                "dropped_before_owner","owner_outcome_unknown"]},
+            "cancellation":{"enum":["not_requested","requested","forwarded_to_owner","owner_acknowledged",
+                "completed_before_cancel","cancelled_before_dispatch"]},
+            "cancel_origin":{"enum":[null,"client_request","request_deadline"]},
+            "stop_reason":{"enum":[null,"process_stop","connection_lost"]},
+            "delivery":{"enum":["prepared","sent","lost_before","lost_after_possible"]},
+            "result_digest":{"type":["string","null"],"maxLength":128},"digest":string,
+        }),
+        &[
+            "schema",
+            "ticket_id",
+            "wire_id",
+            "service_request_id",
+            "nonce",
+            "session_id",
+            "profile_id",
+            "registry_digest",
+            "request_digest",
+            "operation",
+            "progress_token",
+            "progress_events_coalesced",
+            "overlay",
+            "state",
+            "cancellation",
+            "cancel_origin",
+            "stop_reason",
+            "delivery",
+            "result_digest",
+            "digest",
+        ],
+    )
+}
+fn owned_wire_projection(operation: &LspOperationDescriptor) -> ServiceResult<LspWireProjection> {
+    let ticket = foreground_ticket_schema();
+    let token = json!({"oneOf":[{"type":"integer","minimum":i32::MIN,"maximum":i32::MAX},
+        {"type":"string","maxLength":128,"x-maxUtf8Bytes":128,"pattern":"^[^\\u0000-\\u001F\\u007F-\\u009F]*$"}]});
+    let uri = operation.request_schema["properties"]["uri"].clone();
+    if uri.is_null() {
+        return Err(invalid_frontend_request(
+            "owned read URI schema unavailable",
+        ));
+    }
+    let mut properties = json!({"textDocument":object(json!({"uri":uri}), &["uri"]),
+        "workDoneToken":token,"partialResultToken":token});
+    let mut required = vec!["textDocument"];
+    if operation.wire_method == "textDocument/diagnostic" {
+        properties["identifier"] = json!({"const":"wow.private-syntax"});
+        properties["previousResultId"] = json!({"type":"string","maxLength":256});
+    } else {
+        properties["position"] = operation.request_schema["properties"]["position"].clone();
+        required.push("position");
+        if operation.wire_method == "textDocument/references" {
+            properties["context"] = object(
+                json!({"includeDeclaration":{"type":"boolean"}}),
+                &["includeDeclaration"],
+            );
+            required.push("context");
+        }
+    }
+    let request_schema = object(properties, &required);
+    let result_schema = match operation.wire_method {
+        "textDocument/diagnostic" => {
+            let mut schema = operation.result_schema.clone();
+            let variants = schema["oneOf"]
+                .as_array_mut()
+                .ok_or_else(|| invalid_frontend_request("owned diagnostic variants unavailable"))?;
+            for variant in variants {
+                variant["properties"]["wow_ticket"] = ticket.clone();
+                variant["required"]
+                    .as_array_mut()
+                    .ok_or_else(|| invalid_frontend_request("owned diagnostic fields unavailable"))?
+                    .push(json!("wow_ticket"));
+            }
+            schema
+        }
+        "textDocument/definition" => {
+            let range =
+                operation.result_schema["properties"]["location"]["properties"]["range"].clone();
+            if range.is_null() {
+                return Err(invalid_frontend_request(
+                    "owned definition range unavailable",
+                ));
+            }
+            let item = object(
+                json!({"uri":uri,"range":range,"wow":operation.result_schema,"wow_ticket":ticket}),
+                &["uri", "range", "wow", "wow_ticket"],
+            );
+            json!({"type":"array","minItems":1,"maxItems":1,"items":item})
+        }
+        "textDocument/references" => {
+            let range =
+                operation.result_schema["properties"]["locations"]["items"]["properties"]["range"]
+                    .clone();
+            if range.is_null() {
+                return Err(invalid_frontend_request(
+                    "owned reference range unavailable",
+                ));
+            }
+            let first = object(
+                json!({"uri":uri,"range":range,"wow_binding":{"type":"string"},
+                "wow":operation.result_schema,"wow_ticket":ticket}),
+                &["uri", "range", "wow_binding", "wow", "wow_ticket"],
+            );
+            let rest = object(
+                json!({"uri":uri,"range":range,"wow_binding":{"type":"string"}}),
+                &["uri", "range", "wow_binding"],
+            );
+            json!({"type":"array","minItems":1,"maxItems":LSP_MAX_LOCAL_REFERENCES,
+                "prefixItems":[first],"items":rest})
+        }
+        _ => {
+            return Err(invalid_frontend_request(
+                "owned wire projection is not a registered read",
+            ));
+        }
+    };
+    let envelope = object(
+        json!({"ticket":ticket,
+        "owner_result":{"oneOf":[operation.result_schema,operation.error_schema]}}),
+        &["ticket", "owner_result"],
+    );
+    let error_data_schema = json!({"oneOf":[operation.error_schema,envelope]});
+    let digest = canonical_digest(
+        "lsp-wire-projection:sha256:",
+        &(&request_schema, &result_schema, &error_data_schema),
+    )?;
+    Ok(LspWireProjection {
+        schema: "wow-service/lsp-owned-wire-projection/1",
+        json_schema_dialect: "https://json-schema.org/draft/2020-12/schema",
+        request_schema,
+        result_schema,
+        error_data_schema,
+        digest,
+    })
 }
 fn references_descriptor(
     uri: &Value,
@@ -132,6 +312,7 @@ fn references_descriptor(
         error_schema_digest: canonical_digest("sha256:", error)?,
         error_schema: error.clone(),
         effect_class: "pure_read",
+        wire_projection: None,
     })
 }
 impl LspRegistry {
@@ -448,6 +629,7 @@ impl LspRegistry {
                 error_schema_id: "wow-service/lsp-operation-error/1",
                 error_schema: error.clone(),
                 effect_class: effect,
+                wire_projection: None,
             });
         }
         if local_definition {
@@ -504,6 +686,7 @@ impl LspRegistry {
                 error_schema_digest: canonical_digest("sha256:", &error)?,
                 error_schema: error.clone(),
                 effect_class: "pure_read",
+                wire_projection: None,
             });
         }
         if local_references {
@@ -548,6 +731,9 @@ impl LspRegistry {
             max_json_depth: LSP_MAX_JSON_DEPTH,
             max_active_requests: 1,
             max_queued_requests: 0,
+            max_queued_request_bytes: None,
+            max_metadata_journal_entries: None,
+            foreground_execution: None,
             max_diagnostics: LSP_MAX_DIAGNOSTICS,
             max_retained_report_bytes: LSP_MAX_RETAINED_REPORT_BYTES,
         };
@@ -563,6 +749,66 @@ impl LspRegistry {
             profile,
             profile_digest,
         })
+    }
+
+    pub(super) fn build_owned(
+        local_definition: bool,
+        uri_policy: OverlayUriPolicy,
+        local_references: bool,
+    ) -> ServiceResult<Self> {
+        let mut registry = Self::build(local_definition, uri_policy, local_references)?;
+        registry.registry_id = "wow-service/e7-a/lsp-owned-foreground-registry/1";
+        registry.profile_id = LSP_OWNED_PROFILE_ID;
+        registry.profile.schema = "wow-service/lsp-transport-profile/owned/1";
+        registry.profile.profile_id = LSP_OWNED_PROFILE_ID;
+        registry.profile.cancellation = "per_ticket_cooperative_owner_checkpoints";
+        registry.profile.max_queued_requests = LSP_FOREGROUND_MAX_QUEUED;
+        registry.profile.max_queued_request_bytes = Some(LSP_FOREGROUND_MAX_QUEUE_BYTES);
+        registry.profile.max_metadata_journal_entries = Some(LSP_FOREGROUND_MAX_METADATA);
+        registry.profile.foreground_execution = Some(LSP_FOREGROUND_EXECUTION);
+
+        for operation in &mut registry.operations {
+            if matches!(
+                operation.wire_method,
+                "textDocument/diagnostic" | "textDocument/definition" | "textDocument/references"
+            ) {
+                operation.wire_projection = Some(owned_wire_projection(operation)?);
+            }
+            if operation.operation_id == "frontend_session_open" {
+                operation.result_schema["properties"]["schema"] =
+                    json!({"const":"wow-service/lsp-private-foreground-session/1"});
+                operation.result_schema["properties"]["profile_id"] =
+                    json!({"const":LSP_OWNED_PROFILE_ID});
+                operation.result_schema_id =
+                    "wow-service/lsp/frontend_session_open/result/owned-1".into();
+                operation.result_schema_digest =
+                    canonical_digest("sha256:", &operation.result_schema)?;
+            } else if operation.operation_id == "frontend_operation_cancel" {
+                operation.result_schema = object(
+                    json!({"target":{"oneOf":[{"type":"integer"},{"type":"string","maxLength":128}]},
+                    "state":{"enum":["not_requested","requested","forwarded_to_owner","owner_acknowledged",
+                    "completed_before_cancel","cancelled_before_dispatch"]}}),
+                    &["target", "state"],
+                );
+                operation.result_schema_id =
+                    "wow-service/lsp/frontend_operation_cancel/result/owned-1".into();
+                operation.result_schema_digest =
+                    canonical_digest("sha256:", &operation.result_schema)?;
+            }
+        }
+        registry.digest = canonical_digest(
+            "frontend-lsp-registry:sha256:",
+            &(
+                &registry.operations,
+                wow_emmy::EMMYLUA_REVISION,
+                LSP_OWNED_PROFILE_ID,
+            ),
+        )?;
+        registry.profile_digest = canonical_digest(
+            "frontend-lsp-profile:sha256:",
+            &(&registry.profile, &registry.digest),
+        )?;
+        Ok(registry)
     }
     pub(super) fn require(&self, method: &str) -> ServiceResult<()> {
         if self

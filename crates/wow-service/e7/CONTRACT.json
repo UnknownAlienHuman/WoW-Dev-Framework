@@ -32,6 +32,17 @@
     "native_result": "unchanged E3 Context Inspect envelope after checked reverse closure",
     "full_e7_a_conformance": "not-accepted"
   },
+  "owned_lsp_subset": {
+    "activation_issue": 187,
+    "transport_profile": "lsp-3.18-stdio-owned-v1",
+    "implementation_state": "partial-executable",
+    "operations": ["typed read prepare", "dispatch-time overlay binding", "native read finish", "typed protocol refusal", "request cancellation", "deadline intent", "delivery recording", "checked session close"],
+    "bounds": {"active_reads": 1, "queued_reads": 8, "read_request_bytes": 65536, "queued_read_bytes": 524288, "metadata_entries": 16},
+    "identity": "session-scoped ticket and service-request IDs; canonical ticket-state and native-result digests are distinct from wire IDs",
+    "effect_class": "PureRead; volatile session metadata only",
+    "not_evaluated": ["native preemption", "hard owner runtime deadlines", "durable replay", "multi-client daemon", "reconnect", "full platform/client/runtime acceptance"],
+    "full_e7_a_conformance": "not-accepted"
+  },
   "application_contract": "apps/wow/e7/CONTRACT.json",
   "protocol_profiles": {
     "local_daemon": "wow-local-jsonrpc/1",
