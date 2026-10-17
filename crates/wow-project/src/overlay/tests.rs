@@ -337,7 +337,7 @@ fn symlink_root_and_descendant_are_never_followed() -> TestResult {
     assert!(workspace.reconcile_disk(&scope, &lease, &stop).is_err());
     drop(lease);
     workspace.close(&scope)?;
-    std::fs::remove_dir(&link)?;
+    std::fs::remove_file(&link)?;
     Ok(())
 }
 
