@@ -7,7 +7,7 @@ These rules apply to every human or automated contributor.
 Read, in this order:
 
 1. this file;
-2. [`docs/AUDIT_2026-10-17.md`](docs/AUDIT_2026-10-17.md) (normative 2026-10-17 audit and anti-bloat engineering mandate);
+2. [`docs/AUDIT_2026-10-17.md`](docs/AUDIT_2026-10-17.md) (reviewed audit, corrections and bounded refactoring plan);
 3. [`docs/EXECUTION_MODEL.md`](docs/EXECUTION_MODEL.md);
 4. the one canonical active GitHub Issue;
 5. the target owner package instructions and contracts;
@@ -16,26 +16,36 @@ Read, in this order:
 Do not use stale PR bodies or long chronological status diaries as the work queue.
 `docs/PROJECT_COMPLETION_MATRIX.md` is the package/launch census, not a task prompt.
 
-## Mandatory anti-bloat and engineering rules (2026-10-17 mandate)
+## Mandatory anti-bloat and engineering rules
 
-Read [`docs/AUDIT_2026-10-17.md`](docs/AUDIT_2026-10-17.md) before making any change. The following prohibitions are absolute:
+Apply the reviewed findings and scope corrections in
+[`docs/AUDIT_2026-10-17.md`](docs/AUDIT_2026-10-17.md). Earlier audit estimates and
+blanket deletion recommendations do not establish that code is unused.
 
-1. **No schema/profile version proliferation:** Do NOT mint `/N+1` schema constants (`replay17`, `report11`, `host6`, `graph-build-result/21`, or long capability-combination schema strings) for internal or pre-release changes. Consolidate each owner onto **one** current schema version, delete obsolete intermediate schema tables (`STORAGE_SCHEMAS_V1..V15`, `LegacyGlobalAccessV9`, `host1..4`), and update affected fixtures directly.
-2. **No multi-pass JSON serialization, self-hashing byte counts, or roundtrip `validate()`:**
-   - Never embed serialized JSON byte lengths (`output_bytes`, `delivered_page_bytes`) inside the hashed JSON payload or cursor itself. Delete fixed-point convergence loops (`for _ in 0..8`, `FINALIZATION_PASSES = 6`).
-   - Never call `serde_json::to_writer` or `charge_serialized` inside AST, XML, or graph traversal loops to meter budgets; use `O(1)` integer counters.
-   - Never implement `validate()` by cloning a structure and checking `Self::new(...) == *self` or round-tripping through `serde_json::from_slice(&serde_json::to_vec(...))`.
-3. **Single analyzer pass and true persistence:**
-   - Instantiate `EmmyLuaAnalysis` **once** per project analysis session/generation, not 4 times across separate syntax/call/flow passes.
-   - Never re-parse source files or re-run `EmmyLuaAnalysis` / graph builders when reading a persisted generation from `wow-store` (`hydrate_owner` / `validate_read_pair`). Never serialize an SQLite database file into a BLOB column of another SQLite database.
-4. **Strict crate boundaries and no `*Wire` duplication:**
-   - Keep `wow-service` a thin orchestration facade. Do not put graph-building, XML fingerprinting, Native API joining, Reference Pack building, or LSP AST traversal algorithms inside `wow-service`.
-   - Derive `Serialize` and `Deserialize` on domain DTOs directly instead of duplicating 7,300+ lines of `*Wire` structs in `wow-context`.
-   - Fix `render_context_pack_markdown` to emit real human/LLM-readable Markdown, not `\u00xx`-escaped JSON punctuation.
-5. **Standard-compliant, ergonomic CLI, LSP, and MCP:**
-   - CLI commands (`wow check`, `wow search`, `wow context`, etc.) must provide sensible defaults for all budgets/limits/store paths and auto-discover `.toc` files instead of requiring 25–28 mandatory flags.
-   - `wow lsp` and `wow mcp` must strictly follow JSON-RPC 2.0, LSP 3.18, and MCP 2025-11-25: no top-level `"wow"` fields in JSON-RPC responses, no `-32001` errors on empty definition/reference positions (return `null`/`[]`), no `exit(2)` on standard notifications, no artificial `document_symbol_disclosure` gates, and full integration with Project/Reference/Graph/Rules.
-6. **Plain prose and clean worktrees:** Write issue comments and commit messages in clear prose (never concatenated token gibberish like `Main319ca795/QuickPASS`), and remove merged git worktrees immediately.
+1. **One current pre-release representation per owner.** Do not mint `/N+1` or
+   capability-combination schemas for each internal slice. Consolidate obsolete
+   variants after identifying retained-data consumers and the explicit migration
+   or rebuild path. Do not silently discard user data.
+2. **No self-sizing serialization loops.** Keep delivery byte counts outside
+   their own hash input. Use constant-time traversal counters and a bounded final
+   writer. Preserve deterministic ordering, duplicate-key admission, cancellation
+   and actual output limits when removing serialization work.
+3. **Analyze once and persist reader-ready facts.** Reuse analysis for the same
+   registered input set. Normal retained-generation reads must not re-parse source
+   or rebuild analyzers/graphs. Keep reconstruction in explicit build/migration;
+   remove the nested SQLite-image/hex/JSON storage path through its owning Store API.
+4. **Keep algorithms in their owners.** Service orchestrates existing owners.
+   Share payload DTOs while retaining external admission and identity checks.
+   Delete proven redundant items, not whole live modules selected by
+   `allow(dead_code)`. Render readable Markdown with bounded source-as-data handling.
+5. **Make CLI and protocols usable.** Supply finite defaults and reusable project
+   configuration. TOC discovery produces bounded registration candidates; Project
+   and Service establish exact identity and resolve flavor/variant ambiguity.
+   Preserve standard LSP/MCP empty results, notifications and extensible metadata
+   without adding private profile combinations or widening advertised capabilities.
+6. **One writer/worktree, plain prose.** Follow the bounded claim below. Keep one
+   integration worktree per manager and retire it after its work is integrated;
+   never erase another writer's unpublished state. Use concise readable updates.
 
 ## Current priority
 
@@ -81,9 +91,11 @@ not reset, clean, stash, switch an unexpected branch, or erase that state. Read 
 named patch or artifact in full before using it, and classify any unpublished work
 as unverified until it has been checked. Post takeover before writing.
 
-Until protected PR publication is enabled, direct-to-main is transitional
-single-writer mode. Use exact expected-head/CAS publication and never force-push.
-A moved remote head requires reconciliation and the applicable gate again.
+Prepare refactoring changes on the manager's single branch/worktree and publish
+a reviewable PR. Integration into `main` requires the authorized integration
+action and a passing Quick result for the reconciled head. Use exact
+expected-head/CAS for ref updates and never force-push. A moved remote head
+requires reconciliation and the applicable gate again.
 
 ## Work states
 

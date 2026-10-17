@@ -4,12 +4,18 @@ English documentation is the canonical navigation surface.
 
 ```text
 planned architecture/documentation: complete through E7-B
-implementation frontier: not started
-next owned work package: I0-A / wow-core E0-A
+implementation frontier: 18 active workspace members; partial executable owners/apps
+next owned work: reviewed refactoring plan / Issue #191
 first runnable gate: R0 / E0-A through E0-F
 ```
 
 ## Read first
+
+For current work, start with [contributor instructions](../AGENTS.md), the
+[reviewed audit and refactoring plan](AUDIT_2026-10-17.md),
+[execution model](EXECUTION_MODEL.md) and [work map](PROJECT_WORK_MAP.md).
+The design documents below define scope; their historical bootstrap sequences
+do not replace the active issue or the executable census.
 
 1. [Project vision](PROJECT_VISION.md)
 2. [Architecture](ARCHITECTURE.md)
@@ -114,17 +120,13 @@ exact source/reference/project inputs
 
 ## Current state
 
-All planned E0-A through E7-B package contracts are documented. No Cargo workspace, Rust implementation, executable test evidence, supported platform, or public release exists. The implementation state remains `not-started` in [the completion matrix](PROJECT_COMPLETION_MATRIX.md).
+All planned E0-A through E7-B package contracts are documented. Cargo, Rust
+implementations, application routes and CI exist. Full package, platform and
+release acceptance remains incomplete; see the
+[completion matrix](PROJECT_COMPLETION_MATRIX.md).
 
-The next task is implementation, not another architecture package:
-
-```text
-I0-A
-owner: wow-core
-activate only crates/wow-core
-freeze exact Rust toolchain and minimal dependencies
-implement the complete E0-A primitives and tests
-populate fixture and checksum gates
-```
+The current task is to simplify the implemented local product under
+[Issue #191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191).
+Reuse its existing owners and maintain the separate acceptance obligations.
 
 Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.

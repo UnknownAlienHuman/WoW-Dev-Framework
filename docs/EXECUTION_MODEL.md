@@ -2,9 +2,9 @@
 
 **Status:** normative contributor process. Read this together with `AGENTS.md` and
 the mandatory remediation audit in [`docs/AUDIT_2026-10-17.md`](AUDIT_2026-10-17.md),
-which prohibits unreleased schema proliferation, multi-pass JSON byte-count loops,
-re-parsing on store reads, `*Wire` duplication, and protocol-breaking LSP/MCP/CLI
-ceremonies.
+which distinguishes verified defects from unsafe deletion recommendations and
+prioritizes schema consolidation, single-pass analysis, retained reads, owner
+boundaries and usable LSP/MCP/CLI routes.
 
 ## 1. Small context, one current task
 
@@ -93,7 +93,7 @@ actual incompatible interfaces blocked; work on independent paths meanwhile.
 
 The active architectural remediation mandate is Issue #191 (`docs/AUDIT_2026-10-17.md`);
 the implementation queue is Issue #122; #106 tracks W17 acceptance.
-The immediate capacity repair is #121; final corpus qualification remains #113.
+Closed #121 is historical capacity-repair evidence; final corpus qualification remains #113.
 Read their current bodies, not copied
 historical SHAs or obsolete ordering in an audit index.
 
@@ -200,10 +200,11 @@ an aggregate `/N+1` for each internal stage of an already selected capability se
 
 ## 8. Publication, compact evidence and work states
 
-Before publication reread remote `main`. Publish only an authorized coherent
-change through expected-head/CAS, without force. Reconcile a moved head; rerun the
-applicable checks for the reconciled tree. Direct-to-main remains transitional
-single-writer mode until protected PR publication is enabled.
+Before publication reread remote `main`. Publish a coherent refactoring change
+as a reviewable PR from the manager's single branch/worktree. Integration into
+`main` requires the authorized integration action and a passing Quick result for
+the reconciled head. Use expected-head/CAS for ref updates, without force.
+Reconcile a moved head and rerun the applicable checks for the reconciled tree.
 
 Verify the remote commit/tree and changed blob identities plus the named Quick
 result. An exact Git readback can verify the tree; do not require both individual

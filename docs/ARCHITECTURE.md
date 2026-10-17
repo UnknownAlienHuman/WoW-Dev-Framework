@@ -4,7 +4,7 @@
 
 **Planned contract baseline:** E0-A through E7-B, reviewed 2026-09-02.
 
-Detailed package contracts and [`../crates/MANIFEST.json`](../crates/MANIFEST.json) are authoritative for operations, dependencies, implementation states, and freeze gates. This document defines the final planned system shape. Rust implementation has not started.
+Detailed package contracts and [`../crates/MANIFEST.json`](../crates/MANIFEST.json) define operations, dependencies and acceptance requirements. This document defines the planned system shape, not an implementation census. The workspace has real Rust owners and applications; consult the [completion matrix](PROJECT_COMPLETION_MATRIX.md) for their current scope and the [reviewed refactoring plan](AUDIT_2026-10-17.md) for implementation-discovered violations and repairs.
 
 ## 1. Responsibility layers
 
@@ -57,7 +57,7 @@ wow
 
 `wow-reference-builder` and `wow-release` are internal or administrative service-only clients and are excluded from the default public bundle unless an exact distribution profile includes them.
 
-A documented directory is not an active crate. Implementation begins with I0-A and activates workspace members only when a real owned slice and its tests exist.
+A documented directory is not necessarily an active crate. `Cargo.toml` lists active members; activate another member only for a real owned responsibility, without placeholder topology.
 
 ## 2. Evidence universes
 
@@ -529,4 +529,4 @@ V1 public supported release: publication, install, update, rollback, and support
 
 The workspace plan is [`WORKSPACE_AND_BUILD_PLAN.md`](WORKSPACE_AND_BUILD_PLAN.md). Agent order is [`IMPLEMENTATION_HANDOFF.md`](IMPLEMENTATION_HANDOFF.md). Required commands are [`CONFORMANCE_COMMANDS.md`](CONFORMANCE_COMMANDS.md). Current state is [`PROJECT_COMPLETION_MATRIX.md`](PROJECT_COMPLETION_MATRIX.md).
 
-The next repository action is I0-A `wow-core`, not another speculative architecture package. An architecture change now requires a concrete implementation-discovered failure and the smallest tested seam or ADR change.
+The next repository action comes from [Issue #191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191) and the [current work map](PROJECT_WORK_MAP.md). Refactoring corrects demonstrated implementation/contract failures through the smallest owner seam; it does not restart I0-A or require completion of optional E5/E6/release work before repairing the local product.

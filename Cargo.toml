@@ -28,6 +28,10 @@ edition = "2024"
 license = "MIT"
 repository = "https://github.com/UnknownAlienHuman/WoW-Dev-Framework"
 
+[workspace.dependencies]
+emmylua_code_analysis = { git = "https://github.com/EmmyLuaLs/emmylua-analyzer-rust", rev = "aaaca68425d9362876228649b0b8d92f07654daa", default-features = false }
+emmylua_parser = { git = "https://github.com/EmmyLuaLs/emmylua-analyzer-rust", rev = "aaaca68425d9362876228649b0b8d92f07654daa", default-features = false }
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 
