@@ -41,6 +41,8 @@ struct HostInput {
     reconcile_on_save: bool,
     #[serde(default, deserialize_with = "present_navigation")]
     local_navigation: Option<LocalNavigationPolicy>,
+    #[serde(default, deserialize_with = "present_uri_profile")]
+    document_uri_profile: Option<OverlayUriPolicy>,
 }
 #[derive(Debug, Clone, Copy)]
 enum LocalNavigationPolicy {
@@ -56,6 +58,14 @@ fn present_navigation<'de, D: serde::Deserializer<'de>>(
         _ => Err(serde::de::Error::custom(
             "unsupported local navigation policy",
         )),
+    }
+}
+fn present_uri_profile<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<OverlayUriPolicy>, D::Error> {
+    match String::deserialize(deserializer)?.as_str() {
+        "lsp-local-file-uri/1" => Ok(Some(OverlayUriPolicy::LspLocalFileV1)),
+        _ => Err(serde::de::Error::custom("unsupported document URI profile")),
     }
 }
 /// Explicit host configuration; no directory registration or source scan on load.
@@ -88,7 +98,16 @@ impl LspHost {
         let navigation_profile = input.schema == "wow-service/lsp-private-overlay-host/2"
             && input.privacy == "session_private_metadata_diagnostics_and_same_document_locations"
             && input.local_navigation.is_some();
-        if (!old_profile && !navigation_profile)
+        let strict_profile =
+            (old_profile || navigation_profile) && input.document_uri_profile.is_none();
+        let client_uri_profile = input.schema == "wow-service/lsp-private-overlay-host/3"
+            && input.document_uri_profile == Some(OverlayUriPolicy::LspLocalFileV1)
+            && ((input.privacy == "session_private_metadata_and_diagnostics"
+                && input.local_navigation.is_none())
+                || (input.privacy
+                    == "session_private_metadata_diagnostics_and_same_document_locations"
+                    && input.local_navigation.is_some()));
+        if (!strict_profile && !client_uri_profile)
             || input.limits.max_document_bytes > LSP_MAX_FRAME_BYTES / 2
         {
             return Err(invalid_frontend_request("unsupported LSP host profile"));
@@ -121,6 +140,8 @@ pub struct LspSessionDescriptor {
     pub registry_digest: Box<str>,
     pub profile_digest: Box<str>,
     pub local_definition_enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document_uri_profile: Option<&'static str>,
     pub client: FrontendClientIdentity,
     pub position_encoding: &'static str,
     pub workspace: OverlayWorkspaceDescriptor,
@@ -183,6 +204,17 @@ struct Session {
     heads: BTreeMap<Box<str>, Head>,
     diagnostic: Option<LspDiagnosticReport>,
     last_completed: Option<LspRequestId>,
+    uri_policy: OverlayUriPolicy,
+}
+impl Session {
+    fn resolve_document(&self, uri: &str) -> ServiceResult<OverlayResolvedDocument> {
+        self.workspace
+            .resolve_document_uri(&self.scope, uri, self.uri_policy)
+            .map_err(owner)
+    }
+    fn document_path(&self, uri: &str) -> ServiceResult<Box<str>> {
+        Ok(self.resolve_document(uri)?.relative_path)
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -216,9 +248,13 @@ pub struct LspFrontend {
 impl LspFrontend {
     pub fn new(host: LspHost) -> ServiceResult<Self> {
         let local_definition = host.input.local_navigation.is_some();
+        let uri_policy = host
+            .input
+            .document_uri_profile
+            .unwrap_or(OverlayUriPolicy::StrictCanonical);
         Ok(Self {
             host,
-            registry: LspRegistry::build(local_definition)?,
+            registry: LspRegistry::build(local_definition, uri_policy)?,
             session: None,
             opened: false,
         })
@@ -274,6 +310,11 @@ impl LspFrontend {
             ));
         };
         let scope = OverlaySessionScope::begin().map_err(owner)?;
+        let uri_policy = self
+            .host
+            .input
+            .document_uri_profile
+            .unwrap_or(OverlayUriPolicy::StrictCanonical);
         let mut workspace = OverlayWorkspace::register(
             &scope,
             &self.host.input.workspace_root,
@@ -283,18 +324,29 @@ impl LspFrontend {
         )
         .map_err(owner)?;
         for uri in &request.workspace_uris {
-            if let Err(error) = workspace.validate_workspace_uri(&scope, uri) {
+            if let Err(error) =
+                workspace.validate_workspace_uri_with_policy(&scope, uri, uri_policy)
+            {
                 workspace.close(&scope).map_err(owner)?;
                 return Err(owner(error));
             }
         }
         let descriptor = LspSessionDescriptor {
-            schema: "wow-service/lsp-private-session/1",
+            schema: if uri_policy == OverlayUriPolicy::StrictCanonical {
+                "wow-service/lsp-private-session/1"
+            } else {
+                "wow-service/lsp-private-session/2"
+            },
             session_id: format!("lsp-session:{}", workspace.descriptor().session_scope).into(),
             profile_id: LSP_PROFILE_ID,
             registry_digest: self.registry.digest.clone(),
             profile_digest: self.registry.profile_digest.clone(),
             local_definition_enabled: self.definition_enabled(),
+            document_uri_profile: if uri_policy == OverlayUriPolicy::StrictCanonical {
+                None
+            } else {
+                Some(uri_policy.id())
+            },
             client,
             position_encoding: name,
             workspace: workspace.descriptor().clone(),
@@ -319,6 +371,7 @@ impl LspFrontend {
             heads: BTreeMap::new(),
             diagnostic: None,
             last_completed: None,
+            uri_policy,
         });
         self.opened = true;
         Ok(descriptor)
@@ -336,10 +389,8 @@ impl LspFrontend {
             ));
         }
         let session = self.active()?;
-        let path = session
-            .workspace
-            .relative_path_for_uri(&session.scope, &request.uri)
-            .map_err(owner)?;
+        let document = session.resolve_document(&request.uri)?;
+        let path = document.relative_path;
         if session
             .heads
             .get(&path)
@@ -353,7 +404,7 @@ impl LspFrontend {
                 &session.scope,
                 OverlayOpenRequest {
                     relative_path: &path,
-                    uri: &request.uri,
+                    uri: &document.canonical_uri,
                     client_version: request.version as u64,
                     content: request.content,
                 },
@@ -385,10 +436,7 @@ impl LspFrontend {
         self.registry.require("textDocument/didChange")?;
         checkpoint(stop)?;
         let session = self.active()?;
-        let path = session
-            .workspace
-            .relative_path_for_uri(&session.scope, &request.uri)
-            .map_err(owner)?;
+        let path = session.document_path(&request.uri)?;
         let request = match request.change {
             LspDocumentChange::Apply { version, changes } => AppliedChange { version, changes },
             LspDocumentChange::Rejected { .. } => {
@@ -462,10 +510,7 @@ impl LspFrontend {
         checkpoint(stop)?;
         let reconcile = self.host.input.reconcile_on_save;
         let session = self.active()?;
-        let path = session
-            .workspace
-            .relative_path_for_uri(&session.scope, &request.uri)
-            .map_err(owner)?;
+        let path = session.document_path(&request.uri)?;
         let head = session.heads.get(&path).ok_or_else(missing)?;
         if head.resynchronization_required {
             return Err(resynchronization());
@@ -520,10 +565,7 @@ impl LspFrontend {
         self.registry.require("textDocument/didClose")?;
         checkpoint(stop)?;
         let session = self.active()?;
-        let path = session
-            .workspace
-            .relative_path_for_uri(&session.scope, uri)
-            .map_err(owner)?;
+        let path = session.document_path(uri)?;
         let head = session.heads.get(&path).ok_or_else(missing)?;
         session
             .workspace

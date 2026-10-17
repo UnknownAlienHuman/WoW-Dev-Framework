@@ -185,27 +185,58 @@ impl OverlayWorkspace {
             .and_then(|tail| tail.strip_prefix('/'))
             .filter(|tail| tail.len() <= 4096 * 3)
             .ok_or_else(|| error(OverlayErrorCode::InvalidPath))?;
-        let mut bytes = Vec::with_capacity(encoded.len());
-        let mut cursor = encoded.bytes();
-        while let Some(byte) = cursor.next() {
-            bytes.push(if byte == b'%' {
-                let high = cursor
-                    .next()
-                    .and_then(hex_digit)
-                    .ok_or_else(|| error(OverlayErrorCode::InvalidPath))?;
-                let low = cursor
-                    .next()
-                    .and_then(hex_digit)
-                    .ok_or_else(|| error(OverlayErrorCode::InvalidPath))?;
-                (high << 4) | low
-            } else {
-                byte
-            });
-        }
-        let path = String::from_utf8(bytes).map_err(|_| error(OverlayErrorCode::InvalidPath))?;
+        let path = super::client_uri::decode_path(encoded, 4096)?;
         self.path_key(&path)?;
         self.require_uri(&path, uri)?;
         Ok(path.into())
+    }
+    pub fn validate_workspace_uri_with_policy(
+        &self,
+        scope: &OverlaySessionScope,
+        uri: &str,
+        policy: OverlayUriPolicy,
+    ) -> OverlayResult<()> {
+        self.require(scope)?;
+        if policy == OverlayUriPolicy::StrictCanonical {
+            return self.validate_workspace_uri(scope, uri);
+        }
+        let root = super::client_uri::decode_local_file_uri(&self.root_uri)?;
+        let supplied = super::client_uri::decode_local_file_uri(uri)?;
+        if supplied != root && supplied.strip_suffix('/') != Some(root.as_str()) {
+            return Err(error(OverlayErrorCode::InvalidRoot));
+        }
+        Ok(())
+    }
+    /// Resolve a declared client-wire policy to this exact canonical registry.
+    /// Alias normalization never opens, scans or selects another source root.
+    pub fn resolve_document_uri(
+        &self,
+        scope: &OverlaySessionScope,
+        uri: &str,
+        policy: OverlayUriPolicy,
+    ) -> OverlayResult<OverlayResolvedDocument> {
+        self.require(scope)?;
+        let path = match policy {
+            OverlayUriPolicy::StrictCanonical => self.relative_path_for_uri(scope, uri)?,
+            OverlayUriPolicy::LspLocalFileV1 => {
+                let root = super::client_uri::decode_local_file_uri(&self.root_uri)?;
+                let supplied = super::client_uri::decode_local_file_uri(uri)?;
+                let relative = supplied
+                    .strip_prefix(root.as_str())
+                    .and_then(|tail| tail.strip_prefix('/'))
+                    .ok_or_else(|| error(OverlayErrorCode::InvalidPath))?;
+                self.path_key(relative)?;
+                relative.into()
+            }
+        };
+        let canonical_uri = self.document_uri(scope, &path)?;
+        if canonical_uri.len() > 65536 {
+            return Err(error(OverlayErrorCode::Limit));
+        }
+        Ok(OverlayResolvedDocument {
+            relative_path: path,
+            canonical_uri,
+        })
     }
     pub(super) fn require_uri(&self, path: &str, uri: &str) -> OverlayResult<()> {
         if uri.len() > 65536 || uri != format!("{}/{}", self.root_uri, uri_path(path)) {
@@ -256,12 +287,4 @@ fn uri_path(path: &str) -> String {
         }
     }
     output
-}
-fn hex_digit(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        _ => None,
-    }
 }

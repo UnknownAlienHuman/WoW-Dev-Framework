@@ -12,7 +12,9 @@ use std::{
 };
 use wow_core::{CanonicalResult, ContentDigest, SourceContent};
 
+mod client_uri;
 mod coordinates;
+pub use client_uri::{OverlayResolvedDocument, OverlayUriPolicy};
 mod state;
 #[cfg(test)]
 mod tests;

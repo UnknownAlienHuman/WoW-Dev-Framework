@@ -26,6 +26,8 @@ pub struct LspTransportProfile {
     pub cancellation: &'static str,
     pub privacy: &'static str,
     pub local_definition_enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document_uri_profile: Option<&'static str>,
     pub max_header_bytes: usize,
     pub max_frame_bytes: usize,
     pub max_output_bytes: usize,
@@ -50,7 +52,11 @@ fn object(properties: Value, required: &[&str]) -> Value {
     json!({"type":"object","properties":properties,"required":required,"additionalProperties":false})
 }
 impl LspRegistry {
-    pub(super) fn build(local_definition: bool) -> ServiceResult<Self> {
+    pub(super) fn build(
+        local_definition: bool,
+        uri_policy: OverlayUriPolicy,
+    ) -> ServiceResult<Self> {
+        let client_uris = uri_policy != OverlayUriPolicy::StrictCanonical;
         let uri = json!({"type":"string","maxLength":65536});
         let version = json!({"type":"integer","minimum":0,"maximum":i32::MAX});
         let string = json!({"type":"string"});
@@ -116,7 +122,7 @@ impl LspRegistry {
             &["name", "version"],
         );
         let not_evaluated = json!({"type":"array","items":{"type":"string"}});
-        let session = object(
+        let mut session = object(
             json!({"schema":{"const":"wow-service/lsp-private-session/1"},"session_id":string,
             "profile_id":{"const":LSP_PROFILE_ID},"registry_digest":string,"profile_digest":string,"local_definition_enabled":{"type":"boolean"},"client":client,
             "position_encoding":{"enum":["utf-8","utf-16"]},"workspace":workspace,"coverage":string,
@@ -136,6 +142,14 @@ impl LspRegistry {
                 "not_evaluated",
             ],
         );
+        if client_uris {
+            session["properties"]["schema"] = json!({"const":"wow-service/lsp-private-session/2"});
+            session["properties"]["document_uri_profile"] = json!({"const":uri_policy.id()});
+            session["required"]
+                .as_array_mut()
+                .ok_or_else(|| invalid_frontend_request("LSP session schema invalid"))?
+                .push(json!("document_uri_profile"));
+        }
         let save = object(
             json!({"snapshot_id":string,"client_version":version,
             "state":{"enum":["content_acknowledged_only","disk_reconciled","conflict_with_disk"]}}),
@@ -325,7 +339,15 @@ impl LspRegistry {
                 request_schema_id: format!("wow-service/lsp/{operation}/request/1").into(),
                 request_schema_digest: canonical_digest("sha256:", &request)?,
                 request_schema: request,
-                result_schema_id: format!("wow-service/lsp/{operation}/result/1").into(),
+                result_schema_id: format!(
+                    "wow-service/lsp/{operation}/result/{}",
+                    if client_uris && operation == "frontend_session_open" {
+                        2
+                    } else {
+                        1
+                    }
+                )
+                .into(),
                 result_schema_digest: canonical_digest("sha256:", &result)?,
                 result_schema: result,
                 error_schema_digest: canonical_digest("sha256:", &error)?,
@@ -396,7 +418,11 @@ impl LspRegistry {
             &(&operations, wow_emmy::EMMYLUA_REVISION, LSP_PROFILE_ID),
         )?;
         let profile = LspTransportProfile {
-            schema: "wow-service/lsp-transport-profile/1",
+            schema: if client_uris {
+                "wow-service/lsp-transport-profile/2"
+            } else {
+                "wow-service/lsp-transport-profile/1"
+            },
             protocol: "3.18",
             profile_id: LSP_PROFILE_ID,
             transport: "stdio",
@@ -408,6 +434,11 @@ impl LspRegistry {
                 "session_private_metadata_and_diagnostics"
             },
             local_definition_enabled: local_definition,
+            document_uri_profile: if client_uris {
+                Some(uri_policy.id())
+            } else {
+                None
+            },
             max_header_bytes: LSP_MAX_HEADER_BYTES,
             max_frame_bytes: LSP_MAX_FRAME_BYTES,
             max_output_bytes: LSP_MAX_OUTPUT_BYTES,

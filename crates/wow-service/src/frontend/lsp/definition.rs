@@ -44,10 +44,7 @@ impl LspFrontend {
             max_name_bytes: 256,
         };
         let session = self.active()?;
-        let path = session
-            .workspace
-            .relative_path_for_uri(&session.scope, &request.uri)
-            .map_err(owner)?;
+        let path = session.document_path(&request.uri)?;
         let head = session.heads.get(&path).ok_or_else(missing)?;
         if head.resynchronization_required {
             return Err(resynchronization());

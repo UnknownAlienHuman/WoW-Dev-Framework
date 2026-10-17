@@ -458,3 +458,145 @@ fn canonical_uri_inverse_is_scoped_and_rejects_encoded_escape_and_aliases() -> T
     assert!(workspace.relative_path_for_uri(&scope, &uri).is_err());
     Ok(())
 }
+
+fn sdk_file_uri(canonical: &str) -> String {
+    if cfg!(windows) {
+        format!(
+            "file:///{}%3A{}",
+            char::from(canonical.as_bytes()[8]).to_ascii_lowercase(),
+            &canonical[10..]
+        )
+    } else {
+        canonical.into()
+    }
+}
+#[test]
+fn explicit_client_uri_policy_keeps_canonical_identity_and_strict_port_refusals() -> TestResult {
+    let fixture = Fixture::new()?;
+    let scope = OverlaySessionScope::begin()?;
+    let stop = AtomicBool::new(false);
+    let mut workspace = fixture.register(&scope, &stop)?;
+    let canonical = workspace.document_uri(&scope, "a b/中%.lua")?;
+    let sdk = sdk_file_uri(&canonical);
+    let alias = sdk.replace(".lua", ".l%75a");
+    assert!(workspace.relative_path_for_uri(&scope, &alias).is_err());
+    let policy = OverlayUriPolicy::LspLocalFileV1;
+    let one = workspace.resolve_document_uri(&scope, &sdk, policy)?;
+    let two = workspace.resolve_document_uri(&scope, &alias, policy)?;
+    assert_eq!(one.relative_path, two.relative_path);
+    assert_eq!(one.canonical_uri, two.canonical_uri);
+    assert_eq!(one.relative_path.as_ref(), "a b/中%.lua");
+    let opened = workspace.open_document(
+        &scope,
+        OverlayOpenRequest {
+            relative_path: &one.relative_path,
+            uri: &one.canonical_uri,
+            client_version: 0,
+            content: "local x = 1".into(),
+        },
+        &stop,
+    )?;
+    let replay = workspace.open_document(
+        &scope,
+        OverlayOpenRequest {
+            relative_path: &two.relative_path,
+            uri: &two.canonical_uri,
+            client_version: 0,
+            content: "local x = 1".into(),
+        },
+        &stop,
+    )?;
+    assert_eq!(opened, replay);
+    if cfg!(windows) {
+        let other =
+            workspace.resolve_document_uri(&scope, &sdk.replace("a%20b/", "A%20b/"), policy)?;
+        assert_eq!(
+            workspace
+                .open_document(
+                    &scope,
+                    OverlayOpenRequest {
+                        relative_path: &other.relative_path,
+                        uri: &other.canonical_uri,
+                        client_version: 0,
+                        content: "other".into()
+                    },
+                    &stop
+                )
+                .err()
+                .map(|e| e.code()),
+            Some(OverlayErrorCode::Conflict)
+        );
+    }
+    workspace.close(&scope)?;
+    assert!(
+        workspace
+            .resolve_document_uri(&scope, &sdk, policy)
+            .is_err()
+    );
+    Ok(())
+}
+#[test]
+fn client_uri_policy_enforces_exact_root_scope_and_never_decodes_escapes_twice() -> TestResult {
+    let fixture = Fixture::new()?;
+    let scope = OverlaySessionScope::begin()?;
+    let other = OverlaySessionScope::begin()?;
+    let stop = AtomicBool::new(false);
+    let mut workspace = fixture.register(&scope, &stop)?;
+    let canonical = workspace.document_uri(&scope, "main.lua")?;
+    let root = canonical.strip_suffix("/main.lua").ok_or("root URI")?;
+    let sdk_root = sdk_file_uri(root);
+    let policy = OverlayUriPolicy::LspLocalFileV1;
+    workspace.validate_workspace_uri_with_policy(&scope, &sdk_root, policy)?;
+    workspace.validate_workspace_uri_with_policy(&scope, &format!("{sdk_root}/"), policy)?;
+    assert!(
+        workspace
+            .validate_workspace_uri_with_policy(&scope, &format!("{sdk_root}//"), policy)
+            .is_err()
+    );
+    assert!(
+        workspace
+            .resolve_document_uri(&other, &format!("{sdk_root}/main.lua"), policy)
+            .is_err()
+    );
+    assert!(
+        workspace
+            .resolve_document_uri(&scope, &format!("{sdk_root}-other/main.lua"), policy)
+            .is_err()
+    );
+    for tail in [
+        "../main.lua",
+        "%2e%2e/main.lua",
+        "a%2Fmain.lua",
+        "a%5Cmain.lua",
+        "main.lua?x",
+        "main.lua#x",
+        "main.lua%00",
+        "main.lua:ads",
+        "NUL.lua",
+        "a//main.lua",
+        "%FF.lua",
+        "%GG.lua",
+    ] {
+        assert!(
+            workspace
+                .resolve_document_uri(&scope, &format!("{sdk_root}/{tail}"), policy)
+                .is_err(),
+            "{tail}"
+        );
+    }
+    let literal =
+        workspace.resolve_document_uri(&scope, &format!("{sdk_root}/literal%252e.lua"), policy)?;
+    assert_eq!(literal.relative_path.as_ref(), "literal%2e.lua");
+    assert!(
+        workspace
+            .resolve_document_uri(&scope, "file://server/share/main.lua", policy)
+            .is_err()
+    );
+    assert!(
+        workspace
+            .resolve_document_uri(&scope, "https://example.invalid/main.lua", policy)
+            .is_err()
+    );
+    workspace.close(&scope)?;
+    Ok(())
+}

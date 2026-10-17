@@ -55,11 +55,28 @@ and continues to expose syntax only. Unknown policies and mixed version/privacy
 combinations fail before session opening. The effective operation and transport
 profile digests include the enabled policy; no MCP profile is expanded.
 
+For client local-file URI projection, select host schema
+`wow-service/lsp-private-overlay-host/3` and add the required string
+`document_uri_profile: "lsp-local-file-uri/1"`. Privacy can remain syntax-only,
+or use the same explicit local-navigation policy above. Schemas 1/2 reject this
+field, including null. The new host produces session schema2 and transport
+profile schema2 with the selected URI policy bound into their digests; older
+profiles retain their schema and bytes.
+
+The Project owner accepts local file URI percent encodings, valid UTF-8 and
+Windows drive letter/encoded-colon aliases such as `file:///c%3A/...`, resolving
+them to the registered canonical path. Other component case remains exact.
+Equivalent encodings share the same document identity; no second decode occurs.
+Authorities, UNC/device/ADS, dot segments, encoded separators, duplicate
+separators, query/fragment, controls and malformed percent/UTF-8 are refused.
+See [`CLIENT_FILE_URIS.md`](../../crates/wow-project/CLIENT_FILE_URIS.md).
+
 The absolute local root is registered during `initialize`; any supplied
 `workspaceFolders` (at most one) or fallback `rootUri` must match its exact
-canonical URI. Neither changes the configured root. An empty folder selection
-uses the explicitly configured operator root. The selected path profile rejects
-noncanonical URI aliases and unsupported schemes, traversal, encoded separators,
+canonical URI under host-v1/v2, or its Project-qualified equivalent under host-v3.
+Neither changes the configured root. An empty folder selection uses the explicitly
+configured operator root. The physical path profile rejects
+unsupported schemes, traversal, encoded separators,
 device/UNC/ADS and symlink/reparse acquisition. Dynamic workspace-folder changes
 are unsupported.
 

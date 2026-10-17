@@ -25,6 +25,11 @@ project_document_overlay_analyzer_input
 
 ## Workspace request
 
+The selected strict owner URI projection and the separate explicit client
+local-file profile are documented in [CLIENT_FILE_URIS.md](CLIENT_FILE_URIS.md).
+The latter resolves wire aliases to the same canonical registry beneath the
+already held root; it does not widen physical acquisition or source authority.
+
 ```text
 explicit root URI/path
 platform path profile
