@@ -279,6 +279,16 @@ pub(super) fn ensure_session_can_close(core: &Mutex<LspForegroundState>) -> Serv
     Ok(())
 }
 
+pub(super) fn ensure_no_active_owner_call(core: &Mutex<LspForegroundState>) -> ServiceResult<()> {
+    if lock(core)?.active.is_some() {
+        return Err(ServiceError::new(
+            ServiceErrorCode::OperationBusy,
+            "foreground LSP owner call is active",
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn close_session(core: &Mutex<LspForegroundState>) -> ServiceResult<()> {
     lock(core)?.session = None;
     Ok(())

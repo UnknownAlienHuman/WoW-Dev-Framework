@@ -105,6 +105,18 @@ A result must expose which model applies. Published graph/search/context data ca
 
 Changing root, profile, includes, trust/privacy/license, or base project generation creates a new registration identity. Existing overlays remain bound to the prior registration until closed or explicitly migrated through a validated operation.
 
+The selected executable LSP host-v4 replacement policy keeps one active
+unmaterialized no-published-base workspace. Its finite operator allowlist includes
+the initial root and at most three replacement roots. One typed
+`frontend_workspace_folders_change` operation validates the removed URI against
+the held root, qualifies the added URI through the existing Project registration
+and URI owners, and requires no open documents or active owner call. It stages
+the new registration before checked old-owner closure. Invalid or cancelled
+admission preserves the prior registration; mandatory-close uncertainty fails
+closed. It preserves completed foreground metadata and allows queued future
+reads to bind the live registration at dispatch. It creates neither a concurrent
+multi-root workspace nor overlay migration, watched-file truth or publication.
+
 ## File watching
 
 File-watch notifications are hints, not source truth. The project owner reacquires exact bytes and publishes a new generation under its contracts. High fanout is bounded and coalesced; dropped hints require a rescan request, not silent completeness.

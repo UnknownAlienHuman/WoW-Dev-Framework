@@ -43,6 +43,8 @@ pub struct LspTransportProfile {
     pub max_local_references: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document_uri_profile: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_rebinding_policy: Option<&'static str>,
     pub max_header_bytes: usize,
     pub max_frame_bytes: usize,
     pub max_output_bytes: usize,
@@ -65,6 +67,8 @@ pub struct LspRegistry {
     pub profile_id: &'static str,
     pub digest: Box<str>,
     pub operations: Vec<LspOperationDescriptor>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_rebinding_policy: Option<&'static str>,
     pub implementation_pin: &'static str,
     pub profile: LspTransportProfile,
     pub profile_digest: Box<str>,
@@ -320,6 +324,7 @@ impl LspRegistry {
         local_definition: bool,
         uri_policy: OverlayUriPolicy,
         local_references: bool,
+        workspace_rebind_enabled: bool,
     ) -> ServiceResult<Self> {
         let client_uris = uri_policy != OverlayUriPolicy::StrictCanonical;
         let uri = json!({"type":"string","maxLength":65536});
@@ -422,6 +427,17 @@ impl LspRegistry {
                 .as_array_mut()
                 .ok_or_else(|| invalid_frontend_request("LSP session schema invalid"))?
                 .push(json!("local_references_enabled"));
+        }
+        if workspace_rebind_enabled {
+            session["properties"]["schema"] = json!({"const":"wow-service/lsp-private-session/4"});
+            session["properties"]["workspace_folders"] = object(
+                json!({"supported":{"const":true},"change_notifications":{"const":true}}),
+                &["supported", "change_notifications"],
+            );
+            session["required"]
+                .as_array_mut()
+                .ok_or_else(|| invalid_frontend_request("LSP session schema invalid"))?
+                .push(json!("workspace_folders"));
         }
         let save = object(
             json!({"snapshot_id":string,"client_version":version,
@@ -614,7 +630,9 @@ impl LspRegistry {
                 request_schema: request,
                 result_schema_id: format!(
                     "wow-service/lsp/{operation}/result/{}",
-                    if local_references && operation == "frontend_session_open" {
+                    if workspace_rebind_enabled && operation == "frontend_session_open" {
+                        4
+                    } else if local_references && operation == "frontend_session_open" {
                         3
                     } else if client_uris && operation == "frontend_session_open" {
                         2
@@ -694,13 +712,79 @@ impl LspRegistry {
                 &uri, &position, &range, &span, &backend, &binding, &error,
             )?);
         }
+        if workspace_rebind_enabled {
+            let folder_uri = json!({"type":"string","minLength":1,"maxLength":65536});
+            let request = object(
+                json!({"removed_uri":folder_uri,"added_uri":folder_uri}),
+                &["removed_uri", "added_uri"],
+            );
+            let result = object(
+                json!({
+                    "schema":{"const":"wow-service/lsp-workspace-rebind-result/1"},
+                    "previous_registration_id":{"type":"string","minLength":1,"maxLength":512},
+                    "workspace":workspace.clone(),
+                    "workspace_digest":{"type":"string","pattern":"^lsp-workspace-descriptor:sha256:[0-9a-f]{64}$"},
+                    "transition_digest":{"type":"string","pattern":"^lsp-workspace-transition:sha256:[0-9a-f]{64}$"}
+                }),
+                &[
+                    "schema",
+                    "previous_registration_id",
+                    "workspace",
+                    "workspace_digest",
+                    "transition_digest",
+                ],
+            );
+            let rebind_error = object(
+                json!({
+                    "code":{"enum":[
+                        "invalid_request","invalid_context","identity_mismatch","operation_busy",
+                        "component_unavailable","budget_exceeded","cancelled",
+                        "canonicalization_failed","internal_contract_violation"
+                    ]},
+                    "message":{"type":"string","maxLength":1024},
+                    "operation_id":{"type":["string","null"],"maxLength":512}
+                }),
+                &["code", "message"],
+            );
+            operations.push(LspOperationDescriptor {
+                wire_method: "workspace/didChangeWorkspaceFolders",
+                operation_id: "frontend_workspace_folders_change",
+                request_schema_id: "wow-service/lsp/frontend_workspace_folders_change/request/1"
+                    .into(),
+                request_schema_digest: canonical_digest("sha256:", &request)?,
+                request_schema: request,
+                result_schema_id: "wow-service/lsp/frontend_workspace_folders_change/result/1"
+                    .into(),
+                result_schema_digest: canonical_digest("sha256:", &result)?,
+                result_schema: result,
+                error_schema_digest: canonical_digest("sha256:", &rebind_error)?,
+                error_schema_id: "wow-service/lsp-workspace-rebind-error/1",
+                error_schema: rebind_error,
+                effect_class: "session_local_mutation",
+                wire_projection: None,
+            });
+        }
         operations.sort_by_key(|entry| entry.wire_method);
-        let digest = canonical_digest(
-            "frontend-lsp-registry:sha256:",
-            &(&operations, wow_emmy::EMMYLUA_REVISION, LSP_PROFILE_ID),
-        )?;
+        let digest = if workspace_rebind_enabled {
+            canonical_digest(
+                "frontend-lsp-registry:sha256:",
+                &(
+                    &operations,
+                    wow_emmy::EMMYLUA_REVISION,
+                    LSP_PROFILE_ID,
+                    LSP_WORKSPACE_REBIND_POLICY,
+                ),
+            )?
+        } else {
+            canonical_digest(
+                "frontend-lsp-registry:sha256:",
+                &(&operations, wow_emmy::EMMYLUA_REVISION, LSP_PROFILE_ID),
+            )?
+        };
         let profile = LspTransportProfile {
-            schema: if local_references {
+            schema: if workspace_rebind_enabled {
+                "wow-service/lsp-transport-profile/4"
+            } else if local_references {
                 "wow-service/lsp-transport-profile/3"
             } else if client_uris {
                 "wow-service/lsp-transport-profile/2"
@@ -725,6 +809,8 @@ impl LspRegistry {
             } else {
                 None
             },
+            workspace_rebinding_policy: workspace_rebind_enabled
+                .then_some(LSP_WORKSPACE_REBIND_POLICY),
             max_header_bytes: LSP_MAX_HEADER_BYTES,
             max_frame_bytes: LSP_MAX_FRAME_BYTES,
             max_output_bytes: LSP_MAX_OUTPUT_BYTES,
@@ -740,11 +826,17 @@ impl LspRegistry {
         let profile_digest =
             canonical_digest("frontend-lsp-profile:sha256:", &(&profile, &digest))?;
         Ok(Self {
-            schema: "wow-service/lsp-operation-registry/1",
+            schema: if workspace_rebind_enabled {
+                "wow-service/lsp-operation-registry/2"
+            } else {
+                "wow-service/lsp-operation-registry/1"
+            },
             registry_id: super::super::FRONTEND_REGISTRY_ID,
             profile_id: LSP_PROFILE_ID,
             digest,
             operations,
+            workspace_rebinding_policy: workspace_rebind_enabled
+                .then_some(LSP_WORKSPACE_REBIND_POLICY),
             implementation_pin: wow_emmy::EMMYLUA_REVISION,
             profile,
             profile_digest,
@@ -755,11 +847,21 @@ impl LspRegistry {
         local_definition: bool,
         uri_policy: OverlayUriPolicy,
         local_references: bool,
+        workspace_rebind_enabled: bool,
     ) -> ServiceResult<Self> {
-        let mut registry = Self::build(local_definition, uri_policy, local_references)?;
+        let mut registry = Self::build(
+            local_definition,
+            uri_policy,
+            local_references,
+            workspace_rebind_enabled,
+        )?;
         registry.registry_id = "wow-service/e7-a/lsp-owned-foreground-registry/1";
         registry.profile_id = LSP_OWNED_PROFILE_ID;
-        registry.profile.schema = "wow-service/lsp-transport-profile/owned/1";
+        registry.profile.schema = if workspace_rebind_enabled {
+            "wow-service/lsp-transport-profile/owned/2"
+        } else {
+            "wow-service/lsp-transport-profile/owned/1"
+        };
         registry.profile.profile_id = LSP_OWNED_PROFILE_ID;
         registry.profile.cancellation = "per_ticket_cooperative_owner_checkpoints";
         registry.profile.max_queued_requests = LSP_FOREGROUND_MAX_QUEUED;
@@ -775,12 +877,18 @@ impl LspRegistry {
                 operation.wire_projection = Some(owned_wire_projection(operation)?);
             }
             if operation.operation_id == "frontend_session_open" {
-                operation.result_schema["properties"]["schema"] =
-                    json!({"const":"wow-service/lsp-private-foreground-session/1"});
+                operation.result_schema["properties"]["schema"] = json!({"const": if workspace_rebind_enabled {
+                    "wow-service/lsp-private-foreground-session/2"
+                } else {
+                    "wow-service/lsp-private-foreground-session/1"
+                }});
                 operation.result_schema["properties"]["profile_id"] =
                     json!({"const":LSP_OWNED_PROFILE_ID});
-                operation.result_schema_id =
-                    "wow-service/lsp/frontend_session_open/result/owned-1".into();
+                operation.result_schema_id = if workspace_rebind_enabled {
+                    "wow-service/lsp/frontend_session_open/result/owned-2".into()
+                } else {
+                    "wow-service/lsp/frontend_session_open/result/owned-1".into()
+                };
                 operation.result_schema_digest =
                     canonical_digest("sha256:", &operation.result_schema)?;
             } else if operation.operation_id == "frontend_operation_cancel" {
@@ -796,14 +904,26 @@ impl LspRegistry {
                     canonical_digest("sha256:", &operation.result_schema)?;
             }
         }
-        registry.digest = canonical_digest(
-            "frontend-lsp-registry:sha256:",
-            &(
-                &registry.operations,
-                wow_emmy::EMMYLUA_REVISION,
-                LSP_OWNED_PROFILE_ID,
-            ),
-        )?;
+        registry.digest = if workspace_rebind_enabled {
+            canonical_digest(
+                "frontend-lsp-registry:sha256:",
+                &(
+                    &registry.operations,
+                    wow_emmy::EMMYLUA_REVISION,
+                    LSP_OWNED_PROFILE_ID,
+                    LSP_WORKSPACE_REBIND_POLICY,
+                ),
+            )?
+        } else {
+            canonical_digest(
+                "frontend-lsp-registry:sha256:",
+                &(
+                    &registry.operations,
+                    wow_emmy::EMMYLUA_REVISION,
+                    LSP_OWNED_PROFILE_ID,
+                ),
+            )?
+        };
         registry.profile_digest = canonical_digest(
             "frontend-lsp-profile:sha256:",
             &(&registry.profile, &registry.digest),

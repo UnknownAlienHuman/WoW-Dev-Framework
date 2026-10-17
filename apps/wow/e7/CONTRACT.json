@@ -66,6 +66,18 @@
     "not_evaluated": ["other-platform runtime", "named-editor qualification", "native preemption", "hard owner runtime deadlines", "durable replay", "daemon", "reconnect"],
     "full_e7_a_conformance": "not-accepted"
   },
+  "workspace_rebind_subset": {
+    "activation_issue": 189,
+    "host_schema": "wow-service/lsp-private-overlay-host/4",
+    "wire_method": "workspace/didChangeWorkspaceFolders",
+    "service_operation": "frontend_workspace_folders_change",
+    "selection": "one removed held root and one added operator-allowlisted root; no open documents",
+    "bounds": {"active_workspaces": 1, "allowed_roots": 4, "removed_folders": 1, "added_folders": 1, "folder_label_bytes": 128},
+    "owner_path": "existing Project registration, URI qualification and checked close",
+    "legacy_compatibility": "host1/2/3 and MCP profiles retain exact bytes when rebinding is not selected",
+    "not_evaluated": ["concurrent multi-root", "overlay migration", "watchers", "published dependencies", "named-client acceptance", "full E7 and launch"],
+    "full_e7_a_conformance": "not-accepted"
+  },
   "framework_dependencies": [
     "wow-service"
   ],

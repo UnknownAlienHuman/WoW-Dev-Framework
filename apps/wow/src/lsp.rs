@@ -13,7 +13,7 @@ use wow_service::{
         LSP_MAX_FRAME_BYTES, LSP_MAX_HEADER_BYTES, LSP_MAX_OUTPUT_BYTES, LSP_OWNED_PROFILE_ID,
         LSP_PROFILE_ID, LspContentChange, LspDocumentChange, LspDocumentChangeRequest,
         LspDocumentOpenRequest, LspDocumentSaveRequest, LspFrontend, LspHost, LspRequestId,
-        LspSessionOpenRequest, LspSynchronizationRefusal,
+        LspSessionOpenRequest, LspSynchronizationRefusal, LspWorkspaceFoldersChangeRequest,
     },
 };
 mod definition;
@@ -256,6 +256,9 @@ impl Server {
                     if self.service.references_enabled() {
                         response["result"]["capabilities"]["referencesProvider"] = json!(true);
                     }
+                    if self.service.workspace_rebind_enabled() {
+                        response["result"]["capabilities"]["workspace"] = json!({"workspaceFolders":{"supported":true,"changeNotifications":true}});
+                    }
                     if session.profile_id == LSP_OWNED_PROFILE_ID {
                         response["result"]["capabilities"]["diagnosticProvider"]["workDoneProgress"] =
                             json!(true);
@@ -290,6 +293,33 @@ impl Server {
         match method.as_str() {
             "textDocument/definition" => self.definition(id, &params, output, stop),
             "textDocument/references" => self.references(id, &params, output, stop),
+            "workspace/didChangeWorkspaceFolders" if self.service.workspace_rebind_enabled() => {
+                if id.is_some() {
+                    return response_error(
+                        output,
+                        id,
+                        -32600,
+                        "workspace synchronization requires a notification",
+                    );
+                }
+                let request = match workspace_folders_change(&params) {
+                    Ok(request) => request,
+                    Err(()) => {
+                        return notification_error(output, "invalid workspace folder change");
+                    }
+                };
+                match self
+                    .service
+                    .frontend_workspace_folders_change(request, stop)
+                {
+                    Ok(_) => Ok(Control::Continue),
+                    Err(error) if error.code() == ServiceErrorCode::InternalContractViolation => {
+                        domain_error(output, None, error)?;
+                        Err(())
+                    }
+                    Err(error) => domain_error(output, None, error),
+                }
+            }
             "shutdown" => {
                 let Some(id) = id else {
                     return notification_error(output, "shutdown requires a request ID");
@@ -459,6 +489,28 @@ impl Server {
             Err(()) => notification_error(output, "invalid document parameters"),
         }
     }
+}
+fn workspace_folders_change(
+    params: &Map<String, Value>,
+) -> Result<LspWorkspaceFoldersChangeRequest, ()> {
+    only(params, &["event"])?;
+    let event = params.get("event").and_then(Value::as_object).ok_or(())?;
+    only(event, &["added", "removed"])?;
+    let folder_uri = |field: &str| -> Result<String, ()> {
+        let folders = event.get(field).and_then(Value::as_array).ok_or(())?;
+        if folders.len() != 1 {
+            return Err(());
+        }
+        let folder = folders[0].as_object().ok_or(())?;
+        only(folder, &["uri", "name"])?;
+        // The client label is required by LSP but is never a selector or path.
+        string(folder, "name", 128)?;
+        string(folder, "uri", 65536)
+    };
+    Ok(LspWorkspaceFoldersChangeRequest {
+        removed_uri: folder_uri("removed")?,
+        added_uri: folder_uri("added")?,
+    })
 }
 fn initialize(params: &Map<String, Value>) -> Result<LspSessionOpenRequest, ()> {
     only(

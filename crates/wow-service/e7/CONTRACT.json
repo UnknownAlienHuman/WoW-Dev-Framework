@@ -43,6 +43,18 @@
     "not_evaluated": ["native preemption", "hard owner runtime deadlines", "durable replay", "multi-client daemon", "reconnect", "full platform/client/runtime acceptance"],
     "full_e7_a_conformance": "not-accepted"
   },
+  "workspace_rebind_subset": {
+    "activation_issue": 189,
+    "host_schema": "wow-service/lsp-private-overlay-host/4",
+    "operation": "frontend_workspace_folders_change",
+    "effect_class": "session_local_mutation",
+    "selection": "one removed held root and one added operator-allowlisted root; no open documents or active owner call",
+    "bounds": {"active_workspaces": 1, "allowed_roots": 4},
+    "publication": "stage and qualify new Project registration, checked old close, adopt new binding",
+    "ticket_policy": "preserve completed delivery metadata and queued future dispatch-time overlay bindings",
+    "not_evaluated": ["concurrent multi-root", "overlay migration", "watchers", "durable workspace state", "full platform/client/runtime acceptance"],
+    "full_e7_a_conformance": "not-accepted"
+  },
   "application_contract": "apps/wow/e7/CONTRACT.json",
   "protocol_profiles": {
     "local_daemon": "wow-local-jsonrpc/1",

@@ -82,11 +82,43 @@ See [`CLIENT_FILE_URIS.md`](../../crates/wow-project/CLIENT_FILE_URIS.md).
 The absolute local root is registered during `initialize`; any supplied
 `workspaceFolders` (at most one) or fallback `rootUri` must match its exact
 canonical URI under host-v1/v2, or its Project-qualified equivalent under host-v3.
-Neither changes the configured root. An empty folder selection uses the explicitly
+Neither changes the initial configured root. An empty folder selection uses the explicitly
 configured operator root. The physical path profile rejects
 unsupported schemes, traversal, encoded separators,
-device/UNC/ADS and symlink/reparse acquisition. Dynamic workspace-folder changes
-are unsupported.
+device/UNC/ADS and symlink/reparse acquisition. Workspace-folder changes require
+the separate explicit host-v4 policy below.
+
+### Explicit workspace replacement
+
+Host schema `wow-service/lsp-private-overlay-host/4` retains the host-v3 URI,
+privacy and optional local-navigation choices and additionally requires
+`workspace_rebind_targets`. This is an array of one to three operator-selected
+objects with exactly `workspace_root` and `workspace_id`. The initial host root
+is also allowed, giving at most four possible roots and one active registration.
+Other host schemas reject the added field, including null.
+
+Only this host policy advertises
+`workspace.workspaceFolders: {"supported": true, "changeNotifications": true}`.
+A `workspace/didChangeWorkspaceFolders` notification must contain exactly one
+removed folder and one added folder, each with a bounded `uri` and inert `name`.
+The removed URI must identify the currently registered root. The added URI must
+match one explicit allowed root through Project's existing URI validation.
+Client input never supplies a filesystem acquisition path.
+
+Close all documents before replacement. Service stages and validates the new
+Project registration before checking closure of the old registration and
+adopting the new binding. Invalid, ambiguous, busy, unavailable or cancelled
+replacement cannot report success. Mandatory-close uncertainty fails closed.
+Queued future reads keep their existing dispatch-time overlay binding policy;
+completed ticket and delivery metadata are retained. Subsequent document opens
+and queries use the new registration. There is no concurrent multi-root view,
+watcher, generation publication or overlay migration.
+
+The notification receives no success response. A refusal emits the existing
+bounded, redacted `window/logMessage`; clients must preserve their prior
+registration state after refusal. Current registration identities remain in the
+following exact owner results. Existing host-v1/v2/v3 wire bytes and the two MCP
+profiles retain their contracts.
 
 ## Implemented wire operations
 
@@ -100,6 +132,7 @@ are unsupported.
 | `textDocument/diagnostic` | `frontend_document_diagnostics` |
 | `textDocument/definition` (host-v2 opt-in) | `frontend_document_definition` |
 | `textDocument/references` (host-v3 references opt-in) | `frontend_document_references` |
+| `workspace/didChangeWorkspaceFolders` (host-v4 opt-in) | `frontend_workspace_folders_change` |
 | `$/cancelRequest` notification | `frontend_operation_cancel` observation |
 | `shutdown` | `frontend_session_close` |
 

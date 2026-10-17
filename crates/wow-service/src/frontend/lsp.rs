@@ -20,6 +20,7 @@ mod diagnostics;
 mod foreground;
 mod references;
 mod registry;
+mod workspace;
 pub use definition::{LspDefinitionLocation, LspDefinitionRequest, LspDefinitionResult};
 pub use diagnostics::{LspDiagnostic, LspDiagnosticReport, LspOverlayBinding};
 pub use foreground::{
@@ -45,7 +46,16 @@ pub const LSP_MAX_JSON_DEPTH: usize = 32;
 pub const LSP_MAX_DIAGNOSTICS: usize = 2048;
 pub const LSP_MAX_LOCAL_REFERENCES: usize = 2048;
 pub const LSP_MAX_RETAINED_REPORT_BYTES: usize = LSP_MAX_OUTPUT_BYTES / 2;
+const LSP_WORKSPACE_REBIND_POLICY: &str = "explicit_host_allowlist_single_workspace/1";
+const LSP_MAX_WORKSPACE_REBIND_TARGETS: usize = 3;
+const LSP_MAX_WORKSPACE_REBIND_CANDIDATES: usize = LSP_MAX_WORKSPACE_REBIND_TARGETS + 1;
 
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WorkspaceRebindTarget {
+    workspace_root: PathBuf,
+    workspace_id: String,
+}
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct HostInput {
@@ -60,6 +70,8 @@ struct HostInput {
     local_navigation: Option<LocalNavigationPolicy>,
     #[serde(default, deserialize_with = "present_uri_profile")]
     document_uri_profile: Option<OverlayUriPolicy>,
+    #[serde(default, deserialize_with = "present_workspace_rebind_targets")]
+    workspace_rebind_targets: Option<Vec<WorkspaceRebindTarget>>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LocalNavigationPolicy {
@@ -89,6 +101,11 @@ fn present_uri_profile<'de, D: serde::Deserializer<'de>>(
         _ => Err(serde::de::Error::custom("unsupported document URI profile")),
     }
 }
+fn present_workspace_rebind_targets<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Vec<WorkspaceRebindTarget>>, D::Error> {
+    Vec::<WorkspaceRebindTarget>::deserialize(deserializer).map(Some)
+}
 /// Explicit host configuration; no directory registration or source scan on load.
 pub struct LspHost {
     input: HostInput,
@@ -113,21 +130,34 @@ impl LspHost {
             .map_err(|_| acquisition(stop))?;
         let input: HostInput = serde_json::from_slice(&bytes)
             .map_err(|_| invalid_frontend_request("invalid LSP host"))?;
+        let no_rebind_targets = input.workspace_rebind_targets.is_none();
         let old_profile = input.schema == "wow-service/lsp-private-overlay-host/1"
             && input.privacy == "session_private_metadata_and_diagnostics"
-            && input.local_navigation.is_none();
+            && input.local_navigation.is_none()
+            && no_rebind_targets;
         let navigation_profile = input.schema == "wow-service/lsp-private-overlay-host/2"
             && input.privacy == "session_private_metadata_diagnostics_and_same_document_locations"
-            && input.local_navigation == Some(LocalNavigationPolicy::SameDocumentLexicalLocals);
+            && input.local_navigation == Some(LocalNavigationPolicy::SameDocumentLexicalLocals)
+            && no_rebind_targets;
         let strict_profile =
             (old_profile || navigation_profile) && input.document_uri_profile.is_none();
-        let client_uri_profile = input.schema == "wow-service/lsp-private-overlay-host/3"
-            && input.document_uri_profile == Some(OverlayUriPolicy::LspLocalFileV1)
+        let client_uri_policy = input.document_uri_profile
+            == Some(OverlayUriPolicy::LspLocalFileV1)
             && ((input.privacy == "session_private_metadata_and_diagnostics"
                 && input.local_navigation.is_none())
                 || (input.privacy
                     == "session_private_metadata_diagnostics_and_same_document_locations"
                     && input.local_navigation.is_some()));
+        let client_uri_schema = (input.schema == "wow-service/lsp-private-overlay-host/3"
+            && no_rebind_targets)
+            || (input.schema == "wow-service/lsp-private-overlay-host/4"
+                && input
+                    .workspace_rebind_targets
+                    .as_ref()
+                    .is_some_and(|targets| {
+                        (1..=LSP_MAX_WORKSPACE_REBIND_TARGETS).contains(&targets.len())
+                    }));
+        let client_uri_profile = client_uri_schema && client_uri_policy;
         if (!strict_profile && !client_uri_profile)
             || input.limits.max_document_bytes > LSP_MAX_FRAME_BYTES / 2
         {
@@ -165,12 +195,33 @@ pub struct LspSessionDescriptor {
     pub local_references_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document_uri_profile: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_folders: Option<LspWorkspaceFoldersCapability>,
     pub client: FrontendClientIdentity,
     pub position_encoding: &'static str,
     pub workspace: OverlayWorkspaceDescriptor,
     pub coverage: &'static str,
     pub cancellation: &'static str,
     pub not_evaluated: &'static [&'static str],
+}
+#[derive(Debug, Clone, Serialize)]
+pub struct LspWorkspaceFoldersCapability {
+    pub supported: bool,
+    pub change_notifications: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LspWorkspaceFoldersChangeRequest {
+    pub removed_uri: String,
+    pub added_uri: String,
+}
+#[derive(Debug, Clone, Serialize)]
+pub struct LspWorkspaceRebindResult {
+    pub schema: &'static str,
+    pub previous_registration_id: Box<str>,
+    pub workspace: OverlayWorkspaceDescriptor,
+    pub workspace_digest: Box<str>,
+    pub transition_digest: Box<str>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -274,13 +325,19 @@ impl LspFrontend {
         let local_definition = host.input.local_navigation.is_some();
         let local_references = host.input.local_navigation
             == Some(LocalNavigationPolicy::SameDocumentLexicalLocalsAndReferences);
+        let workspace_rebind_enabled = host.input.workspace_rebind_targets.is_some();
         let uri_policy = host
             .input
             .document_uri_profile
             .unwrap_or(OverlayUriPolicy::StrictCanonical);
         Ok(Self {
             host,
-            registry: LspRegistry::build(local_definition, uri_policy, local_references)?,
+            registry: LspRegistry::build(
+                local_definition,
+                uri_policy,
+                local_references,
+                workspace_rebind_enabled,
+            )?,
             session: None,
             opened: false,
             foreground: None,
@@ -295,7 +352,9 @@ impl LspFrontend {
             .input
             .document_uri_profile
             .unwrap_or(OverlayUriPolicy::StrictCanonical);
-        frontend.registry = LspRegistry::build_owned(definition, uri_policy, references)?;
+        let workspace_rebind_enabled = frontend.workspace_rebind_enabled();
+        frontend.registry =
+            LspRegistry::build_owned(definition, uri_policy, references, workspace_rebind_enabled)?;
         let core = Arc::new(Mutex::new(foreground::LspForegroundState::new()));
         frontend.foreground = Some(core.clone());
         Ok((frontend, LspForegroundControl { core }))
@@ -309,6 +368,9 @@ impl LspFrontend {
     pub fn references_enabled(&self) -> bool {
         self.host.input.local_navigation
             == Some(LocalNavigationPolicy::SameDocumentLexicalLocalsAndReferences)
+    }
+    pub fn workspace_rebind_enabled(&self) -> bool {
+        self.host.input.workspace_rebind_targets.is_some()
     }
     pub fn frontend_session_open(
         &mut self,
@@ -377,8 +439,13 @@ impl LspFrontend {
             }
         }
         let owned_foreground = self.foreground.is_some();
+        let workspace_rebind_enabled = self.workspace_rebind_enabled();
         let descriptor = LspSessionDescriptor {
-            schema: if owned_foreground {
+            schema: if workspace_rebind_enabled && owned_foreground {
+                "wow-service/lsp-private-foreground-session/2"
+            } else if workspace_rebind_enabled {
+                "wow-service/lsp-private-session/4"
+            } else if owned_foreground {
                 "wow-service/lsp-private-foreground-session/1"
             } else if self.references_enabled() {
                 "wow-service/lsp-private-session/3"
@@ -402,6 +469,10 @@ impl LspFrontend {
             } else {
                 Some(uri_policy.id())
             },
+            workspace_folders: workspace_rebind_enabled.then_some(LspWorkspaceFoldersCapability {
+                supported: true,
+                change_notifications: true,
+            }),
             client,
             position_encoding: name,
             workspace: workspace.descriptor().clone(),
@@ -460,6 +531,133 @@ impl LspFrontend {
         });
         self.opened = true;
         Ok(descriptor)
+    }
+    pub fn frontend_workspace_folders_change(
+        &mut self,
+        request: LspWorkspaceFoldersChangeRequest,
+        stop: &AtomicBool,
+    ) -> ServiceResult<LspWorkspaceRebindResult> {
+        self.registry
+            .require("workspace/didChangeWorkspaceFolders")?;
+        checkpoint(stop)?;
+        if request.removed_uri.is_empty()
+            || request.added_uri.is_empty()
+            || request.removed_uri.len() > 65_536
+            || request.added_uri.len() > 65_536
+        {
+            return Err(invalid_frontend_request("invalid LSP workspace folder URI"));
+        }
+        let mut targets = self
+            .host
+            .input
+            .workspace_rebind_targets
+            .clone()
+            .ok_or_else(|| invalid_frontend_request("workspace rebinding is disabled"))?;
+        targets.push(WorkspaceRebindTarget {
+            workspace_root: self.host.input.workspace_root.clone(),
+            workspace_id: self.host.input.workspace_id.clone(),
+        });
+        let uri_policy = self
+            .host
+            .input
+            .document_uri_profile
+            .unwrap_or(OverlayUriPolicy::StrictCanonical);
+        let limits = self.host.input.limits;
+        let foreground_core = self.foreground.clone();
+        if let Some(core) = &foreground_core {
+            foreground::ensure_no_active_owner_call(core)?;
+        }
+        let session = self.active()?;
+        if !session.heads.is_empty() {
+            return Err(ServiceError::new(
+                ServiceErrorCode::OperationBusy,
+                "LSP workspace rebinding requires no open documents",
+            ));
+        }
+        session
+            .workspace
+            .validate_workspace_uri_with_policy(
+                &session.scope,
+                &request.removed_uri,
+                session.uri_policy,
+            )
+            .map_err(owner)?;
+        let candidate = workspace::stage_replacement(
+            &session.scope,
+            &session.workspace,
+            &targets,
+            &request.added_uri,
+            uri_policy,
+            limits,
+            stop,
+        )?;
+        let previous_registration_id = session.workspace.descriptor().registration_id.clone();
+        let workspace_descriptor = candidate.descriptor().clone();
+        let workspace_digest =
+            match canonical_digest("lsp-workspace-descriptor:sha256:", &workspace_descriptor) {
+                Ok(digest) => digest,
+                Err(error) => {
+                    return Err(workspace::close_staged_or_error(
+                        candidate,
+                        &session.scope,
+                        error,
+                    ));
+                }
+            };
+        let transition_digest = match canonical_digest(
+            "lsp-workspace-transition:sha256:",
+            &(&previous_registration_id, &workspace_descriptor),
+        ) {
+            Ok(digest) => digest,
+            Err(error) => {
+                return Err(workspace::close_staged_or_error(
+                    candidate,
+                    &session.scope,
+                    error,
+                ));
+            }
+        };
+        let session_workspace_descriptor = workspace_descriptor.clone();
+        let result = LspWorkspaceRebindResult {
+            schema: "wow-service/lsp-workspace-rebind-result/1",
+            previous_registration_id,
+            workspace: workspace_descriptor,
+            workspace_digest,
+            transition_digest,
+        };
+        if let Some(core) = &foreground_core
+            && let Err(error) = foreground::ensure_no_active_owner_call(core)
+        {
+            return Err(workspace::close_staged_or_error(
+                candidate,
+                &session.scope,
+                error,
+            ));
+        }
+        if let Err(error) = checkpoint(stop) {
+            return Err(workspace::close_staged_or_error(
+                candidate,
+                &session.scope,
+                error,
+            ));
+        }
+        // This checkpoint is the commit decision: adoption is synchronous and
+        // no later cancellation or metadata serialization can interrupt it.
+        if session.workspace.close(&session.scope).is_err() {
+            return Err(workspace::close_staged_or_error(
+                candidate,
+                &session.scope,
+                ServiceError::new(
+                    ServiceErrorCode::InternalContractViolation,
+                    "held LSP workspace close failed during rebinding",
+                ),
+            ));
+        }
+        session.workspace = candidate;
+        session.descriptor.workspace = session_workspace_descriptor;
+        session.diagnostic = None;
+        session.last_completed = None;
+        Ok(result)
     }
     pub fn frontend_document_open(
         &mut self,

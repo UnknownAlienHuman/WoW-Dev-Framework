@@ -48,6 +48,14 @@ All document requests require a ready session, registered workspace/document, ex
 
 Workspace operations require exact session registration/profile guards. Stale document versions trigger resynchronization rather than analysis against guessed content.
 
+The executable host-v4 workspace-change subset permits one removed current root
+and one added operator-allowlisted root, with no open documents. It stages the
+new Project registration and checks old-owner closure before adopting it. It
+preserves the session, foreground ticket metadata and queued dispatch-time read
+bindings. It does not implement multiple active roots, watcher hints or migration
+of existing overlays. Other host policies do not advertise folder changes. See
+[`../LSP.md`](../LSP.md) for the strict host and wire shape.
+
 ## Unadvertised methods
 
 Rename, formatting, on-type formatting, semantic tokens, inlay hints, folding, selection ranges, code lens, executeCommand, type hierarchy, notebook documents and mutating file operations are rejected as unsupported initially.
