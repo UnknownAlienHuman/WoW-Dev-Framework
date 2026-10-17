@@ -8,6 +8,7 @@ mod lineage;
 mod mcp;
 mod native;
 mod output;
+mod overlay;
 mod project;
 mod search;
 mod source;
@@ -43,6 +44,9 @@ fn run() -> u8 {
     }
     if arguments.first().is_some_and(|value| value == "native") {
         return native::run(arguments);
+    }
+    if arguments.first().is_some_and(|value| value == "overlay") {
+        return overlay::run(arguments);
     }
     if arguments.first().is_some_and(|value| value == "graph") {
         return graph::run(arguments);

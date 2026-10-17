@@ -11,6 +11,8 @@ pub(crate) mod native_library_input;
 mod native_reference;
 mod native_resources;
 mod native_source;
+mod overlay_check;
+pub use overlay_check::{OverlayCheckResult, check_private_overlay};
 mod native_target;
 mod platform_input;
 mod projection;

@@ -1,6 +1,11 @@
 # E7-A project-owned workspace registration and document-overlay seam
 
-**Status:** normative cross-crate seam; implementation has not started.
+**Status:** normative cross-crate seam. The selected explicit local-root,
+session-private no-published-base Lua overlay owner is executable in
+`src/overlay.rs`. Its concrete Service/CLI consumer is documented in
+[`apps/wow/OVERLAY.md`](../../apps/wow/OVERLAY.md). Full frontend sessions,
+published-dependency overlays, watchers, recovery and generation publication
+remain outside this selected implementation.
 
 `wow-project` owns validation of explicit workspace roots, source acquisition under project policy, immutable unsaved document overlays, disk reconciliation, and publication of new exact project generations. `wow-service` coordinates frontend sessions and transports.
 

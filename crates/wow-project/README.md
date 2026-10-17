@@ -6,6 +6,16 @@
 
 ## Canonical routes
 
+### E7-A — private document overlays
+
+Read [`E7_A_DOCUMENT_OVERLAYS.md`](E7_A_DOCUMENT_OVERLAYS.md). `src/overlay.rs`
+owns explicit nofollow local-root registration and immutable session-private Lua
+snapshots, guarded sequential changes, UTF-8/UTF-16 mapping, leases and checked
+close. Save acknowledgment and explicit disk reconciliation do not publish a
+generation. The selected no-base consumer is
+[`wow overlay check`](../../apps/wow/OVERLAY.md); complete frontend and overlay
+acceptance remain open.
+
 ### E0-D — minimal project generation
 
 Read the root contract package beginning with [`E0_OVERVIEW.md`](E0_OVERVIEW.md), [`CONTRACT.json`](CONTRACT.json), and the root normative documents.

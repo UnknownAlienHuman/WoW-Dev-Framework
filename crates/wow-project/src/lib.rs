@@ -20,6 +20,7 @@ mod inventory;
 mod library_view;
 pub mod load;
 mod native_library_input;
+pub mod overlay;
 pub mod platform_source;
 mod publication;
 mod registry;

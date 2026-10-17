@@ -105,6 +105,43 @@ pub struct ProjectInputDirectory {
 }
 
 impl ProjectInputDirectory {
+    /// E7 registration opens every normal component relative to a held parent.
+    /// The explicit anchor is the only ambient operation; no parent is followed
+    /// after a separate path check. Caller supplies a canonical local absolute root.
+    pub(crate) fn open_workspace(root: &Path, stop: &AtomicBool) -> ProjectResult<Self> {
+        use std::path::{Component, PathBuf, Prefix};
+        checkpoint(stop)?;
+        let mut anchor = PathBuf::new();
+        let mut names = Vec::new();
+        for part in root.components() {
+            match part {
+                Component::Prefix(prefix) => match prefix.kind() {
+                    Prefix::Disk(_) => anchor.push(prefix.as_os_str()),
+                    _ => return Err(read_error()),
+                },
+                Component::RootDir => anchor.push(std::path::MAIN_SEPARATOR_STR),
+                Component::Normal(name) => {
+                    let text = name.to_str().ok_or_else(read_error)?;
+                    validate_path(text)?;
+                    names.push(name);
+                }
+                _ => return Err(read_error()),
+            }
+        }
+        if !root.is_absolute() || names.is_empty() || anchor.as_os_str().is_empty() {
+            return Err(read_error());
+        }
+        let mut directory = Dir::open_ambient_dir(anchor, cap_std::ambient_authority())
+            .map_err(|_| read_error())?;
+        for name in names {
+            checkpoint(stop)?;
+            directory = directory
+                .open_dir_nofollow(name)
+                .map_err(|_| read_error())?;
+        }
+        checkpoint(stop)?;
+        Ok(Self { directory })
+    }
     /// Register the directory explicitly selected by the caller. This is the only
     /// ambient filesystem operation. Descendant lookup never follows symlinks.
     pub fn open(root: &Path) -> ProjectResult<Self> {

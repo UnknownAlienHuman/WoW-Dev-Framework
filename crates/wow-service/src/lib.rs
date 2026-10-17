@@ -20,6 +20,7 @@ pub mod live_project;
 pub mod local;
 mod model;
 mod operation;
+pub mod overlay;
 mod presentation;
 pub mod reference_admin;
 pub mod reference_pack;
