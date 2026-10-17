@@ -122,6 +122,49 @@ profiles retain their contracts.
 
 ## Implemented wire operations
 
+### Explicit native document outline
+
+Host schema `wow-service/lsp-private-overlay-host/5` requires
+`document_symbol_disclosure: "same_document_outline_v1"` and the host-v3 local
+file URI policy. This explicit additional permission allows names, details,
+region captions, exact ranges/hierarchy and the caller-known document URI in
+outline output. Existing diagnostics/location privacy alone does not enable it.
+The ordinary navigation policy remains independent. `workspace_rebind_targets`
+may be omitted; when explicitly supplied, its existing bounded allowlist policy
+composes with the outline permission. Hosts 1–4 reject the new field, including
+null, and retain their original schemas and wire bytes.
+
+Only the selected implemented profile advertises `documentSymbolProvider`.
+`textDocument/documentSymbol` reaches one `frontend_document_symbols` operation,
+one exact held Project overlay and the actual native Emmy outline. Functions,
+assignments, table fields, parameters/closures, loops/branches/do scopes and
+regions follow the donor recipe. This is source outline data, not a complete
+runtime binding, API inventory or authoritative absence outside that recipe.
+
+Clients advertising `hierarchicalDocumentSymbolSupport` receive nested
+`DocumentSymbol`s; other clients receive the full flat `SymbolInformation`
+projection. Parentage is supplied by the owner. Baseline clients without a
+`symbolKind.valueSet` use the initial 1–18 UI kind set; Object/Struct display as
+the generic Variable kind while the exact original kind remains in `wow`.
+Native details and complete normalized evidence remain available even when the
+standard flat layout has no detail field.
+
+Each node carries `wow_binding` and `wow_symbol_index`. The first top-level node
+also carries the complete Service result in `wow`. A qualified empty array uses
+a top-level `wow` extension; owned mode likewise preserves its top-level
+`wow_ticket`. Parse/prerequisite failure is a typed error with the owner report,
+never a fabricated empty complete array. Native and projected spans use the
+exact overlay and negotiated UTF-8/UTF-16 encoding.
+
+The selected operation allows 2048 symbols, twelve outline levels, 256 AST
+levels, 131072 charged node visits, 1024-byte names, 2048-byte details and a
+1 MiB retained Service result. Host document/work limits also apply. These
+bounds leave room for original evidence and projection inside the existing
+4 MiB frame. Overflow fails the complete operation. In owned mode, the new
+closed read variant uses the existing cooperative cancellation, queue, progress
+and checked-delivery lifecycle; its expanded ticket schema is version 2.
+Older hosts continue using ticket schema 1.
+
 | Wire method | Service operation |
 |---|---|
 | `initialize` | `frontend_session_open` |
@@ -132,6 +175,7 @@ profiles retain their contracts.
 | `textDocument/diagnostic` | `frontend_document_diagnostics` |
 | `textDocument/definition` (host-v2 opt-in) | `frontend_document_definition` |
 | `textDocument/references` (host-v3 references opt-in) | `frontend_document_references` |
+| `textDocument/documentSymbol` (host-v5 disclosure opt-in) | `frontend_document_symbols` |
 | `workspace/didChangeWorkspaceFolders` (host-v4 opt-in) | `frontend_workspace_folders_change` |
 | `$/cancelRequest` notification | `frontend_operation_cancel` observation |
 | `shutdown` | `frontend_session_close` |

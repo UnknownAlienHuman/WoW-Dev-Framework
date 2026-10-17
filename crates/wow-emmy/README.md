@@ -17,6 +17,12 @@ It does not own WoW platform truth. API existence and restriction facets come fr
 
 ## E0-C outcome
 
+The bounded [`document_symbols::document_symbols`](DOCUMENT_SYMBOLS.md) port
+produces the native same-document outline as normalized UTF-8 records with
+explicit parent relations. It consumes an exact caller-owned snapshot and
+retains parse/prerequisite/cancellation/budget failures. Service owns disclosure,
+Project position conversion and frontend projection; no transport is added here.
+
 Named function-declaration bindings are available through the sealed native
 `SourceFunctionFact::binding_name()` port and its explicit disposition state.
 The adapter reads ordinary local/global and static dot/colon declaration tokens;

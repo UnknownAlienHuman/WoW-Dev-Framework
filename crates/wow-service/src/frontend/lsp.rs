@@ -17,12 +17,18 @@ use wow_project::{
 
 mod definition;
 mod diagnostics;
+mod document_symbols;
 mod foreground;
 mod references;
 mod registry;
 mod workspace;
 pub use definition::{LspDefinitionLocation, LspDefinitionRequest, LspDefinitionResult};
 pub use diagnostics::{LspDiagnostic, LspDiagnosticReport, LspOverlayBinding};
+pub use document_symbols::{
+    LSP_DOCUMENT_SYMBOL_DISCLOSURE, LSP_MAX_DOCUMENT_SYMBOL_DEPTH,
+    LSP_MAX_DOCUMENT_SYMBOL_RESULT_BYTES, LSP_MAX_DOCUMENT_SYMBOLS, LspDocumentSymbol,
+    LspDocumentSymbolClientCapabilities, LspDocumentSymbolsRequest, LspDocumentSymbolsResult,
+};
 pub use foreground::{
     LSP_FOREGROUND_EXECUTION, LSP_FOREGROUND_MAX_METADATA, LSP_FOREGROUND_MAX_QUEUE_BYTES,
     LSP_FOREGROUND_MAX_QUEUED, LSP_FOREGROUND_MAX_REQUEST_BYTES, LSP_OWNED_PROFILE_ID,
@@ -72,6 +78,22 @@ struct HostInput {
     document_uri_profile: Option<OverlayUriPolicy>,
     #[serde(default, deserialize_with = "present_workspace_rebind_targets")]
     workspace_rebind_targets: Option<Vec<WorkspaceRebindTarget>>,
+    #[serde(default, deserialize_with = "present_document_symbol_disclosure")]
+    document_symbol_disclosure: Option<DocumentSymbolDisclosure>,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DocumentSymbolDisclosure {
+    SameDocumentOutlineV1,
+}
+fn present_document_symbol_disclosure<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<DocumentSymbolDisclosure>, D::Error> {
+    match String::deserialize(deserializer)?.as_str() {
+        LSP_DOCUMENT_SYMBOL_DISCLOSURE => Ok(Some(DocumentSymbolDisclosure::SameDocumentOutlineV1)),
+        _ => Err(serde::de::Error::custom(
+            "unsupported document symbol disclosure",
+        )),
+    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LocalNavigationPolicy {
@@ -131,14 +153,17 @@ impl LspHost {
         let input: HostInput = serde_json::from_slice(&bytes)
             .map_err(|_| invalid_frontend_request("invalid LSP host"))?;
         let no_rebind_targets = input.workspace_rebind_targets.is_none();
+        let no_symbol_disclosure = input.document_symbol_disclosure.is_none();
         let old_profile = input.schema == "wow-service/lsp-private-overlay-host/1"
             && input.privacy == "session_private_metadata_and_diagnostics"
             && input.local_navigation.is_none()
-            && no_rebind_targets;
+            && no_rebind_targets
+            && no_symbol_disclosure;
         let navigation_profile = input.schema == "wow-service/lsp-private-overlay-host/2"
             && input.privacy == "session_private_metadata_diagnostics_and_same_document_locations"
             && input.local_navigation == Some(LocalNavigationPolicy::SameDocumentLexicalLocals)
-            && no_rebind_targets;
+            && no_rebind_targets
+            && no_symbol_disclosure;
         let strict_profile =
             (old_profile || navigation_profile) && input.document_uri_profile.is_none();
         let client_uri_policy = input.document_uri_profile
@@ -149,12 +174,23 @@ impl LspHost {
                     == "session_private_metadata_diagnostics_and_same_document_locations"
                     && input.local_navigation.is_some()));
         let client_uri_schema = (input.schema == "wow-service/lsp-private-overlay-host/3"
-            && no_rebind_targets)
+            && no_rebind_targets
+            && no_symbol_disclosure)
             || (input.schema == "wow-service/lsp-private-overlay-host/4"
+                && no_symbol_disclosure
                 && input
                     .workspace_rebind_targets
                     .as_ref()
                     .is_some_and(|targets| {
+                        (1..=LSP_MAX_WORKSPACE_REBIND_TARGETS).contains(&targets.len())
+                    }))
+            || (input.schema == "wow-service/lsp-private-overlay-host/5"
+                && input.document_symbol_disclosure
+                    == Some(DocumentSymbolDisclosure::SameDocumentOutlineV1)
+                && input
+                    .workspace_rebind_targets
+                    .as_ref()
+                    .is_none_or(|targets| {
                         (1..=LSP_MAX_WORKSPACE_REBIND_TARGETS).contains(&targets.len())
                     }));
         let client_uri_profile = client_uri_schema && client_uri_policy;
@@ -182,6 +218,8 @@ pub struct LspSessionOpenRequest {
     pub position_encodings: Vec<String>,
     pub pull_diagnostics: bool,
     pub workspace_uris: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document_symbols: Option<LspDocumentSymbolClientCapabilities>,
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct LspSessionDescriptor {
@@ -197,6 +235,10 @@ pub struct LspSessionDescriptor {
     pub document_uri_profile: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_folders: Option<LspWorkspaceFoldersCapability>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document_symbol_disclosure: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document_symbols_client: Option<LspDocumentSymbolClientCapabilities>,
     pub client: FrontendClientIdentity,
     pub position_encoding: &'static str,
     pub workspace: OverlayWorkspaceDescriptor,
@@ -326,6 +368,7 @@ impl LspFrontend {
         let local_references = host.input.local_navigation
             == Some(LocalNavigationPolicy::SameDocumentLexicalLocalsAndReferences);
         let workspace_rebind_enabled = host.input.workspace_rebind_targets.is_some();
+        let document_symbols_enabled = host.input.document_symbol_disclosure.is_some();
         let uri_policy = host
             .input
             .document_uri_profile
@@ -337,6 +380,7 @@ impl LspFrontend {
                 uri_policy,
                 local_references,
                 workspace_rebind_enabled,
+                document_symbols_enabled,
             )?,
             session: None,
             opened: false,
@@ -353,11 +397,23 @@ impl LspFrontend {
             .document_uri_profile
             .unwrap_or(OverlayUriPolicy::StrictCanonical);
         let workspace_rebind_enabled = frontend.workspace_rebind_enabled();
-        frontend.registry =
-            LspRegistry::build_owned(definition, uri_policy, references, workspace_rebind_enabled)?;
+        let document_symbols_enabled = frontend.document_symbols_enabled();
+        frontend.registry = LspRegistry::build_owned(
+            definition,
+            uri_policy,
+            references,
+            workspace_rebind_enabled,
+            document_symbols_enabled,
+        )?;
         let core = Arc::new(Mutex::new(foreground::LspForegroundState::new()));
         frontend.foreground = Some(core.clone());
-        Ok((frontend, LspForegroundControl { core }))
+        Ok((
+            frontend,
+            LspForegroundControl {
+                core,
+                document_symbols_enabled,
+            },
+        ))
     }
     pub fn registry(&self) -> &LspRegistry {
         &self.registry
@@ -372,6 +428,9 @@ impl LspFrontend {
     pub fn workspace_rebind_enabled(&self) -> bool {
         self.host.input.workspace_rebind_targets.is_some()
     }
+    pub fn document_symbols_enabled(&self) -> bool {
+        self.host.input.document_symbol_disclosure.is_some()
+    }
     pub fn frontend_session_open(
         &mut self,
         request: LspSessionOpenRequest,
@@ -379,6 +438,11 @@ impl LspFrontend {
     ) -> ServiceResult<LspSessionDescriptor> {
         self.registry.require("initialize")?;
         checkpoint(stop)?;
+        if self.document_symbols_enabled() != request.document_symbols.is_some() {
+            return Err(invalid_frontend_request(
+                "document symbol client projection does not match the selected host",
+            ));
+        }
         if self.opened
             || !request.pull_diagnostics
             || request.position_encodings.len() > 8
@@ -440,8 +504,13 @@ impl LspFrontend {
         }
         let owned_foreground = self.foreground.is_some();
         let workspace_rebind_enabled = self.workspace_rebind_enabled();
+        let document_symbols_enabled = self.document_symbols_enabled();
         let descriptor = LspSessionDescriptor {
-            schema: if workspace_rebind_enabled && owned_foreground {
+            schema: if document_symbols_enabled && owned_foreground {
+                "wow-service/lsp-private-foreground-session/3"
+            } else if document_symbols_enabled {
+                "wow-service/lsp-private-session/5"
+            } else if workspace_rebind_enabled && owned_foreground {
                 "wow-service/lsp-private-foreground-session/2"
             } else if workspace_rebind_enabled {
                 "wow-service/lsp-private-session/4"
@@ -473,10 +542,15 @@ impl LspFrontend {
                 supported: true,
                 change_notifications: true,
             }),
+            document_symbol_disclosure: document_symbols_enabled
+                .then_some(LSP_DOCUMENT_SYMBOL_DISCLOSURE),
+            document_symbols_client: request.document_symbols,
             client,
             position_encoding: name,
             workspace: workspace.descriptor().clone(),
-            coverage: if self.references_enabled() {
+            coverage: if document_symbols_enabled {
+                "overlay_local_native_outline_and_advertised_private_capabilities_no_published_base"
+            } else if self.references_enabled() {
                 "overlay_local_selected_syntax_and_lexical_navigation_no_published_base"
             } else {
                 "overlay_local_selected_syntax_no_published_base"

@@ -165,14 +165,20 @@ pub(super) fn response(result: LspForegroundResult) -> Result<Vec<u8>, ()> {
         Ok(LspReadResult::Diagnostics(report)) => json!({"jsonrpc":"2.0","id":id,"result":report}),
         Ok(LspReadResult::Definition(report)) => definition::result_response(id, &report),
         Ok(LspReadResult::References(report)) => references::result_response(id, &report)?,
+        Ok(LspReadResult::DocumentSymbols(report)) => {
+            document_symbols::result_response(id, &report)?
+        }
         Err(error) => domain_error_value(id, &error),
     };
     if value.get("error").is_some() {
         let data = value["error"]["data"].take();
         value["error"]["data"] = json!({"ticket":ticket,"owner_result":data});
     } else if let Some(locations) = value.get_mut("result").and_then(Value::as_array_mut) {
-        let first = locations.first_mut().ok_or(())?;
-        first["wow_ticket"] = serde_json::to_value(&ticket).map_err(|_| ())?;
+        if let Some(first) = locations.first_mut() {
+            first["wow_ticket"] = serde_json::to_value(&ticket).map_err(|_| ())?;
+        } else {
+            value["wow_ticket"] = serde_json::to_value(&ticket).map_err(|_| ())?;
+        }
     } else {
         value["result"]["wow_ticket"] = serde_json::to_value(&ticket).map_err(|_| ())?;
     }

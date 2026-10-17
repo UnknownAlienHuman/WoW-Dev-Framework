@@ -100,6 +100,15 @@ callHierarchy/outgoingCalls
 
 ## Deliberately unadvertised in the initial profile
 
+The selected host-v5 `same_document_outline_v1` disclosure policy enables the
+native `textDocument/documentSymbol` route. Service preserves the exact native
+flat preorder/parent records and Project-projected positions; App mechanically
+renders the negotiated hierarchy or flat standard layout. The source names,
+details and region labels require that explicit permission independently of
+navigation and workspace replacement. The owner contract and concrete bounds
+are in [`apps/wow/LSP.md`](../../../apps/wow/LSP.md) and
+[`wow-emmy/DOCUMENT_SYMBOLS.md`](../../wow-emmy/DOCUMENT_SYMBOLS.md).
+
 ```text
 rename
 formatting/on-type formatting

@@ -60,6 +60,7 @@ pub enum LspReadRequest {
     },
     Definition(LspDefinitionRequest),
     References(LspReferencesRequest),
+    DocumentSymbols(LspDocumentSymbolsRequest),
 }
 
 impl LspReadRequest {
@@ -68,6 +69,7 @@ impl LspReadRequest {
             Self::Diagnostics { uri, .. } => uri,
             Self::Definition(request) => &request.uri,
             Self::References(request) => &request.uri,
+            Self::DocumentSymbols(request) => &request.uri,
         }
     }
 
@@ -76,6 +78,7 @@ impl LspReadRequest {
             Self::Diagnostics { .. } => LspForegroundOperation::Diagnostics,
             Self::Definition(_) => LspForegroundOperation::Definition,
             Self::References(_) => LspForegroundOperation::References,
+            Self::DocumentSymbols(_) => LspForegroundOperation::DocumentSymbols,
         }
     }
 
@@ -84,6 +87,7 @@ impl LspReadRequest {
             Self::Diagnostics { .. } => "textDocument/diagnostic",
             Self::Definition(_) => "textDocument/definition",
             Self::References(_) => "textDocument/references",
+            Self::DocumentSymbols(_) => "textDocument/documentSymbol",
         }
     }
 }
@@ -94,6 +98,7 @@ pub enum LspForegroundOperation {
     Diagnostics,
     Definition,
     References,
+    DocumentSymbols,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -200,6 +205,7 @@ pub enum LspReadResult {
     Diagnostics(LspDiagnosticReport),
     Definition(LspDefinitionResult),
     References(LspReferencesResult),
+    DocumentSymbols(LspDocumentSymbolsResult),
 }
 
 #[derive(Debug)]
@@ -220,6 +226,7 @@ struct SessionBinding {
     registry_digest: Box<str>,
     definition_enabled: bool,
     references_enabled: bool,
+    document_symbols_enabled: bool,
 }
 
 struct TicketRecord {
@@ -258,6 +265,9 @@ impl LspForegroundState {
             registry_digest: descriptor.registry_digest.clone(),
             definition_enabled: descriptor.local_definition_enabled,
             references_enabled: descriptor.local_references_enabled == Some(true),
+            document_symbols_enabled: descriptor.document_symbol_disclosure
+                == Some(LSP_DOCUMENT_SYMBOL_DISCLOSURE)
+                && descriptor.document_symbols_client.is_some(),
         });
     }
 }
@@ -296,9 +306,15 @@ pub(super) fn close_session(core: &Mutex<LspForegroundState>) -> ServiceResult<(
 
 pub struct LspForegroundControl {
     pub(super) core: Arc<Mutex<LspForegroundState>>,
+    pub(super) document_symbols_enabled: bool,
 }
 
 impl LspForegroundControl {
+    /// Immutable host capability for App framing before session initialization.
+    /// This is not session admission or source authorization from client data.
+    pub fn document_symbols_enabled(&self) -> bool {
+        self.document_symbols_enabled
+    }
     pub fn prepare(
         &self,
         wire_id: LspRequestId,
@@ -356,6 +372,12 @@ impl LspForegroundControl {
                 return Err(ServiceError::new(
                     ServiceErrorCode::ComponentUnavailable,
                     "local references are disabled by the session profile",
+                ));
+            }
+            LspForegroundOperation::DocumentSymbols if !session.document_symbols_enabled => {
+                return Err(ServiceError::new(
+                    ServiceErrorCode::ComponentUnavailable,
+                    "document outline disclosure is disabled by the session profile",
                 ));
             }
             _ => {}
@@ -421,7 +443,11 @@ impl LspForegroundControl {
             )
         })?;
         let ticket = LspForegroundTicket {
-            schema: "wow-service/lsp-foreground-ticket/1",
+            schema: if session.document_symbols_enabled {
+                "wow-service/lsp-foreground-ticket/2"
+            } else {
+                "wow-service/lsp-foreground-ticket/1"
+            },
             ticket_id,
             wire_id,
             service_request_id,
@@ -926,6 +952,9 @@ impl LspFrontend {
             LspReadRequest::References(request) => self
                 .frontend_document_references(request, &dispatched.stop)
                 .map(LspReadResult::References),
+            LspReadRequest::DocumentSymbols(request) => self
+                .frontend_document_symbols(request, &dispatched.stop)
+                .map(LspReadResult::DocumentSymbols),
         };
         self.record_finished_result(dispatched, result)
     }
@@ -1208,9 +1237,11 @@ mod tests {
             registry_digest: "test-registry".into(),
             definition_enabled: true,
             references_enabled: true,
+            document_symbols_enabled: false,
         });
         LspForegroundControl {
             core: Arc::new(Mutex::new(state)),
+            document_symbols_enabled: false,
         }
     }
     fn control() -> LspForegroundControl {

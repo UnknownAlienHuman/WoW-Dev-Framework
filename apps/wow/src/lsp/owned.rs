@@ -333,6 +333,10 @@ impl Driver {
             };
         }
         let request = match message.method.as_str() {
+            "textDocument/documentSymbol" if control.document_symbols_enabled() => Some(
+                document_symbols::parse_request(&message.params)
+                    .map(LspReadRequest::DocumentSymbols),
+            ),
             "textDocument/diagnostic" => Some(diagnostic_request(&message.params).map(
                 |(uri, previous_result_id)| LspReadRequest::Diagnostics {
                     uri,

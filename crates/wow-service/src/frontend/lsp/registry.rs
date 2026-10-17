@@ -1,5 +1,6 @@
 use super::*;
 use serde_json::{Value, json};
+mod document_symbols;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LspOperationDescriptor {
@@ -45,6 +46,14 @@ pub struct LspTransportProfile {
     pub document_uri_profile: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_rebinding_policy: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document_symbol_disclosure: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_document_symbols: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_document_symbol_depth: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_document_symbol_result_bytes: Option<usize>,
     pub max_header_bytes: usize,
     pub max_frame_bytes: usize,
     pub max_output_bytes: usize,
@@ -76,7 +85,7 @@ pub struct LspRegistry {
 fn object(properties: Value, required: &[&str]) -> Value {
     json!({"type":"object","properties":properties,"required":required,"additionalProperties":false})
 }
-fn foreground_ticket_schema() -> Value {
+fn foreground_ticket_schema(document_symbols_enabled: bool) -> Value {
     let string = json!({"type":"string","maxLength":128});
     let token = json!({"oneOf":[{"type":"integer","minimum":i32::MIN,"maximum":i32::MAX},
         {"type":"string","maxLength":128,"x-maxUtf8Bytes":128,"pattern":"^[^\\u0000-\\u001F\\u007F-\\u009F]*$"}]});
@@ -90,14 +99,28 @@ fn foreground_ticket_schema() -> Value {
             "digest",
         ],
     );
+    let operations = if document_symbols_enabled {
+        json!([
+            "diagnostics",
+            "definition",
+            "references",
+            "document_symbols"
+        ])
+    } else {
+        json!(["diagnostics", "definition", "references"])
+    };
     object(
         json!({
-            "schema":{"const":"wow-service/lsp-foreground-ticket/1"},
+            "schema":{"const":if document_symbols_enabled {
+                "wow-service/lsp-foreground-ticket/2"
+            } else {
+                "wow-service/lsp-foreground-ticket/1"
+            }},
             "ticket_id":string,"wire_id":token,"service_request_id":string,
             "nonce":{"type":"integer","minimum":1,"maximum":9_007_199_254_740_991_u64},
             "session_id":string,"profile_id":{"const":LSP_OWNED_PROFILE_ID},
             "registry_digest":string,"request_digest":string,
-            "operation":{"enum":["diagnostics","definition","references"]},
+            "operation":{"enum":operations},
             "progress_token":{"oneOf":[{"type":"null"},token]},
             "progress_events_coalesced":{"type":"integer","minimum":0,"maximum":2},
             "overlay":{"oneOf":[{"type":"null"},overlay]},
@@ -136,8 +159,11 @@ fn foreground_ticket_schema() -> Value {
         ],
     )
 }
-fn owned_wire_projection(operation: &LspOperationDescriptor) -> ServiceResult<LspWireProjection> {
-    let ticket = foreground_ticket_schema();
+fn owned_wire_projection(
+    operation: &LspOperationDescriptor,
+    document_symbols_enabled: bool,
+) -> ServiceResult<LspWireProjection> {
+    let ticket = foreground_ticket_schema(document_symbols_enabled);
     let token = json!({"oneOf":[{"type":"integer","minimum":i32::MIN,"maximum":i32::MAX},
         {"type":"string","maxLength":128,"x-maxUtf8Bytes":128,"pattern":"^[^\\u0000-\\u001F\\u007F-\\u009F]*$"}]});
     let uri = operation.request_schema["properties"]["uri"].clone();
@@ -152,7 +178,7 @@ fn owned_wire_projection(operation: &LspOperationDescriptor) -> ServiceResult<Ls
     if operation.wire_method == "textDocument/diagnostic" {
         properties["identifier"] = json!({"const":"wow.private-syntax"});
         properties["previousResultId"] = json!({"type":"string","maxLength":256});
-    } else {
+    } else if operation.wire_method != "textDocument/documentSymbol" {
         properties["position"] = operation.request_schema["properties"]["position"].clone();
         required.push("position");
         if operation.wire_method == "textDocument/references" {
@@ -165,6 +191,7 @@ fn owned_wire_projection(operation: &LspOperationDescriptor) -> ServiceResult<Ls
     }
     let request_schema = object(properties, &required);
     let result_schema = match operation.wire_method {
+        "textDocument/documentSymbol" => document_symbols::wire_result(operation, Some(&ticket)),
         "textDocument/diagnostic" => {
             let mut schema = operation.result_schema.clone();
             let variants = schema["oneOf"]
@@ -325,6 +352,7 @@ impl LspRegistry {
         uri_policy: OverlayUriPolicy,
         local_references: bool,
         workspace_rebind_enabled: bool,
+        document_symbols_enabled: bool,
     ) -> ServiceResult<Self> {
         let client_uris = uri_policy != OverlayUriPolicy::StrictCanonical;
         let uri = json!({"type":"string","maxLength":65536});
@@ -438,6 +466,23 @@ impl LspRegistry {
                 .as_array_mut()
                 .ok_or_else(|| invalid_frontend_request("LSP session schema invalid"))?
                 .push(json!("workspace_folders"));
+        }
+        let symbol_client = object(
+            json!({"hierarchical":{"type":"boolean"},"extended_kinds":{"type":"boolean"}}),
+            &["hierarchical", "extended_kinds"],
+        );
+        if document_symbols_enabled {
+            session["properties"]["schema"] = json!({"const":"wow-service/lsp-private-session/5"});
+            session["properties"]["document_symbol_disclosure"] =
+                json!({"const":LSP_DOCUMENT_SYMBOL_DISCLOSURE});
+            session["properties"]["document_symbols_client"] = symbol_client.clone();
+            let required = session["required"]
+                .as_array_mut()
+                .ok_or_else(|| invalid_frontend_request("LSP symbol session schema invalid"))?;
+            required.extend([
+                json!("document_symbol_disclosure"),
+                json!("document_symbols_client"),
+            ]);
         }
         let save = object(
             json!({"snapshot_id":string,"client_version":version,
@@ -630,7 +675,9 @@ impl LspRegistry {
                 request_schema: request,
                 result_schema_id: format!(
                     "wow-service/lsp/{operation}/result/{}",
-                    if workspace_rebind_enabled && operation == "frontend_session_open" {
+                    if document_symbols_enabled && operation == "frontend_session_open" {
+                        5
+                    } else if workspace_rebind_enabled && operation == "frontend_session_open" {
                         4
                     } else if local_references && operation == "frontend_session_open" {
                         3
@@ -764,8 +811,36 @@ impl LspRegistry {
                 wire_projection: None,
             });
         }
+        if document_symbols_enabled {
+            let initialize = operations
+                .iter_mut()
+                .find(|operation| operation.operation_id == "frontend_session_open")
+                .ok_or_else(|| invalid_frontend_request("LSP initialize schema unavailable"))?;
+            initialize.request_schema["properties"]["document_symbols"] = symbol_client;
+            initialize.request_schema["required"]
+                .as_array_mut()
+                .ok_or_else(|| invalid_frontend_request("LSP symbol initialize schema invalid"))?
+                .push(json!("document_symbols"));
+            initialize.request_schema_id = "wow-service/lsp/frontend_session_open/request/5".into();
+            initialize.request_schema_digest =
+                canonical_digest("sha256:", &initialize.request_schema)?;
+            operations.push(document_symbols::operation(
+                &uri, &range, &span, &backend, &binding, &error,
+            )?);
+        }
         operations.sort_by_key(|entry| entry.wire_method);
-        let digest = if workspace_rebind_enabled {
+        let digest = if document_symbols_enabled {
+            canonical_digest(
+                "frontend-lsp-registry:sha256:",
+                &(
+                    &operations,
+                    wow_emmy::EMMYLUA_REVISION,
+                    LSP_PROFILE_ID,
+                    workspace_rebind_enabled.then_some(LSP_WORKSPACE_REBIND_POLICY),
+                    LSP_DOCUMENT_SYMBOL_DISCLOSURE,
+                ),
+            )?
+        } else if workspace_rebind_enabled {
             canonical_digest(
                 "frontend-lsp-registry:sha256:",
                 &(
@@ -782,7 +857,9 @@ impl LspRegistry {
             )?
         };
         let profile = LspTransportProfile {
-            schema: if workspace_rebind_enabled {
+            schema: if document_symbols_enabled {
+                "wow-service/lsp-transport-profile/5"
+            } else if workspace_rebind_enabled {
                 "wow-service/lsp-transport-profile/4"
             } else if local_references {
                 "wow-service/lsp-transport-profile/3"
@@ -811,6 +888,13 @@ impl LspRegistry {
             },
             workspace_rebinding_policy: workspace_rebind_enabled
                 .then_some(LSP_WORKSPACE_REBIND_POLICY),
+            document_symbol_disclosure: document_symbols_enabled
+                .then_some(LSP_DOCUMENT_SYMBOL_DISCLOSURE),
+            max_document_symbols: document_symbols_enabled.then_some(LSP_MAX_DOCUMENT_SYMBOLS),
+            max_document_symbol_depth: document_symbols_enabled
+                .then_some(LSP_MAX_DOCUMENT_SYMBOL_DEPTH),
+            max_document_symbol_result_bytes: document_symbols_enabled
+                .then_some(LSP_MAX_DOCUMENT_SYMBOL_RESULT_BYTES),
             max_header_bytes: LSP_MAX_HEADER_BYTES,
             max_frame_bytes: LSP_MAX_FRAME_BYTES,
             max_output_bytes: LSP_MAX_OUTPUT_BYTES,
@@ -826,7 +910,9 @@ impl LspRegistry {
         let profile_digest =
             canonical_digest("frontend-lsp-profile:sha256:", &(&profile, &digest))?;
         Ok(Self {
-            schema: if workspace_rebind_enabled {
+            schema: if document_symbols_enabled {
+                "wow-service/lsp-operation-registry/3"
+            } else if workspace_rebind_enabled {
                 "wow-service/lsp-operation-registry/2"
             } else {
                 "wow-service/lsp-operation-registry/1"
@@ -848,16 +934,20 @@ impl LspRegistry {
         uri_policy: OverlayUriPolicy,
         local_references: bool,
         workspace_rebind_enabled: bool,
+        document_symbols_enabled: bool,
     ) -> ServiceResult<Self> {
         let mut registry = Self::build(
             local_definition,
             uri_policy,
             local_references,
             workspace_rebind_enabled,
+            document_symbols_enabled,
         )?;
         registry.registry_id = "wow-service/e7-a/lsp-owned-foreground-registry/1";
         registry.profile_id = LSP_OWNED_PROFILE_ID;
-        registry.profile.schema = if workspace_rebind_enabled {
+        registry.profile.schema = if document_symbols_enabled {
+            "wow-service/lsp-transport-profile/owned/3"
+        } else if workspace_rebind_enabled {
             "wow-service/lsp-transport-profile/owned/2"
         } else {
             "wow-service/lsp-transport-profile/owned/1"
@@ -872,19 +962,27 @@ impl LspRegistry {
         for operation in &mut registry.operations {
             if matches!(
                 operation.wire_method,
-                "textDocument/diagnostic" | "textDocument/definition" | "textDocument/references"
+                "textDocument/diagnostic"
+                    | "textDocument/definition"
+                    | "textDocument/references"
+                    | "textDocument/documentSymbol"
             ) {
-                operation.wire_projection = Some(owned_wire_projection(operation)?);
+                operation.wire_projection =
+                    Some(owned_wire_projection(operation, document_symbols_enabled)?);
             }
             if operation.operation_id == "frontend_session_open" {
-                operation.result_schema["properties"]["schema"] = json!({"const": if workspace_rebind_enabled {
+                operation.result_schema["properties"]["schema"] = json!({"const": if document_symbols_enabled {
+                    "wow-service/lsp-private-foreground-session/3"
+                } else if workspace_rebind_enabled {
                     "wow-service/lsp-private-foreground-session/2"
                 } else {
                     "wow-service/lsp-private-foreground-session/1"
                 }});
                 operation.result_schema["properties"]["profile_id"] =
                     json!({"const":LSP_OWNED_PROFILE_ID});
-                operation.result_schema_id = if workspace_rebind_enabled {
+                operation.result_schema_id = if document_symbols_enabled {
+                    "wow-service/lsp/frontend_session_open/result/owned-3".into()
+                } else if workspace_rebind_enabled {
                     "wow-service/lsp/frontend_session_open/result/owned-2".into()
                 } else {
                     "wow-service/lsp/frontend_session_open/result/owned-1".into()
@@ -904,7 +1002,18 @@ impl LspRegistry {
                     canonical_digest("sha256:", &operation.result_schema)?;
             }
         }
-        registry.digest = if workspace_rebind_enabled {
+        registry.digest = if document_symbols_enabled {
+            canonical_digest(
+                "frontend-lsp-registry:sha256:",
+                &(
+                    &registry.operations,
+                    wow_emmy::EMMYLUA_REVISION,
+                    LSP_OWNED_PROFILE_ID,
+                    workspace_rebind_enabled.then_some(LSP_WORKSPACE_REBIND_POLICY),
+                    LSP_DOCUMENT_SYMBOL_DISCLOSURE,
+                ),
+            )?
+        } else if workspace_rebind_enabled {
             canonical_digest(
                 "frontend-lsp-registry:sha256:",
                 &(

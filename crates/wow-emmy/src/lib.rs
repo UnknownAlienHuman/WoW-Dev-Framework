@@ -8,6 +8,7 @@
 
 pub mod bindings;
 pub mod compatibility;
+pub mod document_symbols;
 pub mod flow;
 pub mod function_calls;
 pub mod local_references;

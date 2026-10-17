@@ -17,6 +17,7 @@ use wow_service::{
     },
 };
 mod definition;
+mod document_symbols;
 mod framing;
 mod io;
 mod owned;
@@ -229,7 +230,7 @@ impl Server {
             if self.initialized {
                 return response_error(output, Some(id), -32600, "already initialized");
             }
-            let request = match initialize(&params) {
+            let request = match initialize(&params, self.service.document_symbols_enabled()) {
                 Ok(request) => request,
                 Err(()) => {
                     return response_error(
@@ -255,6 +256,10 @@ impl Server {
                     }
                     if self.service.references_enabled() {
                         response["result"]["capabilities"]["referencesProvider"] = json!(true);
+                    }
+                    if self.service.document_symbols_enabled() {
+                        response["result"]["capabilities"]["documentSymbolProvider"] =
+                            json!({"workDoneProgress":session.profile_id == LSP_OWNED_PROFILE_ID});
                     }
                     if self.service.workspace_rebind_enabled() {
                         response["result"]["capabilities"]["workspace"] = json!({"workspaceFolders":{"supported":true,"changeNotifications":true}});
@@ -293,6 +298,9 @@ impl Server {
         match method.as_str() {
             "textDocument/definition" => self.definition(id, &params, output, stop),
             "textDocument/references" => self.references(id, &params, output, stop),
+            "textDocument/documentSymbol" if self.service.document_symbols_enabled() => {
+                self.document_symbols(id, &params, output, stop)
+            }
             "workspace/didChangeWorkspaceFolders" if self.service.workspace_rebind_enabled() => {
                 if id.is_some() {
                     return response_error(
@@ -512,7 +520,10 @@ fn workspace_folders_change(
         added_uri: folder_uri("added")?,
     })
 }
-fn initialize(params: &Map<String, Value>) -> Result<LspSessionOpenRequest, ()> {
+fn initialize(
+    params: &Map<String, Value>,
+    document_symbols_enabled: bool,
+) -> Result<LspSessionOpenRequest, ()> {
     only(
         params,
         &[
@@ -611,6 +622,11 @@ fn initialize(params: &Map<String, Value>) -> Result<LspSessionOpenRequest, ()> 
         position_encodings,
         pull_diagnostics,
         workspace_uris,
+        document_symbols: if document_symbols_enabled {
+            Some(document_symbols::client_capabilities(capabilities)?)
+        } else {
+            None
+        },
     })
 }
 fn document_uri(params: &Map<String, Value>) -> Result<String, ()> {

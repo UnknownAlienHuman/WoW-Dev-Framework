@@ -66,6 +66,13 @@ Scheduling and cache layout are nonsemantic. Equivalent exact inputs produce ide
 
 ## Position boundary
 
+The native [`document_symbols`](DOCUMENT_SYMBOLS.md) port consumes the same exact
+single-file overlay view. Its source-derived captions, details, byte ranges and
+parent indices follow the compiled native outline recipe, not a local-variable
+proxy or a runtime symbol inventory. It remains independent of source disclosure
+permission and protocol layout. Failed or partial collection cannot become an
+empty complete result.
+
 `wow-emmy` returns canonical UTF-8 byte source ranges. It never performs LSP position conversion or stores client position encoding. The E7-A service maps exact ranges to the negotiated transport encoding using the exact overlay line index.
 
 ## Hard boundaries

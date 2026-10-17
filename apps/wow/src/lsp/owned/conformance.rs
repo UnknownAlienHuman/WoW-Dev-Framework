@@ -17,6 +17,7 @@ fn fixture() -> TestResult<(Server, Arc<LspForegroundControl>, String)> {
             position_encodings: vec!["utf-16".into()],
             pull_diagnostics: true,
             workspace_uris: vec![],
+            document_symbols: None,
         },
         &stop,
     )?;
