@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 use crate::identity::canonical_digest;
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 mod context;
+pub mod lsp;
 pub use context::{
     FrontendContextInspectRequest, FrontendContextRegistrationDescriptor,
     MCP_CONTEXT_MAX_OUTPUT_BYTES, MCP_CONTEXT_PROFILE_ID, MCP_CONTEXT_PROFILE_RESOURCE_URI,

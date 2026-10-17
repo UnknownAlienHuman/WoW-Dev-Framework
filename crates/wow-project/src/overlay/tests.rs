@@ -385,3 +385,55 @@ fn analyzer_input_private_copies_are_charged_until_actual_drop() -> TestResult {
     assert_eq!(workspace.analyzer_bytes.load(Ordering::Acquire), 0);
     Ok(())
 }
+
+#[test]
+fn canonical_uri_inverse_is_scoped_and_rejects_encoded_escape_and_aliases() -> TestResult {
+    let fixture = Fixture::new()?;
+    let scope = OverlaySessionScope::begin()?;
+    let other = OverlaySessionScope::begin()?;
+    let stop = AtomicBool::new(false);
+    let mut workspace = fixture.register(&scope, &stop)?;
+    let path = "a b/中%.lua";
+    let uri = workspace.document_uri(&scope, path)?;
+    assert_eq!(
+        workspace.relative_path_for_uri(&scope, &uri)?.as_ref(),
+        path
+    );
+    assert!(workspace.relative_path_for_uri(&other, &uri).is_err());
+    let parent = workspace.document_uri(&scope, "main.lua")?;
+    let base = parent
+        .strip_suffix("main.lua")
+        .ok_or("missing URI suffix")?;
+    workspace.validate_workspace_uri(&scope, base.trim_end_matches('/'))?;
+    assert!(
+        workspace
+            .validate_workspace_uri(&scope, &format!("{base}other"))
+            .is_err()
+    );
+    for tail in [
+        "../main.lua",
+        "%2E%2E/main.lua",
+        "a%2Fmain.lua",
+        "a%5Cmain.lua",
+        "main.lua%00",
+        "%FF.lua",
+        "%xx.lua",
+        "%",
+        "C%3A/main.lua",
+    ] {
+        assert!(
+            workspace
+                .relative_path_for_uri(&scope, &format!("{base}{tail}"))
+                .is_err(),
+            "{tail}"
+        );
+    }
+    assert!(
+        workspace
+            .relative_path_for_uri(&scope, "https://example.invalid/main.lua")
+            .is_err()
+    );
+    workspace.close(&scope)?;
+    assert!(workspace.relative_path_for_uri(&scope, &uri).is_err());
+    Ok(())
+}

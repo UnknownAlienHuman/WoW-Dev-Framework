@@ -8,6 +8,8 @@ The executable subset is `wow transport capabilities` and
 `wow mcp --transport stdio --profile mcp-2025-11-25-stdio-v1`, with fixed
 `wow.status` and the exact profile resource. An explicit registered Context
 profile adds native inspection; see [MCP mapping](MCP_TOOL_RESOURCE_MAPPING.md).
+The selected private-overlay LSP syntax profile is documented in
+[`../LSP.md`](../LSP.md); it does not establish full E7-A/client acceptance.
 The other host modes below remain
 specified and unimplemented; their inventory does not advertise runtime support.
 

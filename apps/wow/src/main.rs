@@ -4,7 +4,9 @@ mod context;
 mod graph;
 mod graph_build;
 mod graph_store;
+mod json;
 mod lineage;
+mod lsp;
 mod mcp;
 mod native;
 mod output;
@@ -47,6 +49,9 @@ fn run() -> u8 {
     }
     if arguments.first().is_some_and(|value| value == "overlay") {
         return overlay::run(arguments);
+    }
+    if arguments.first().is_some_and(|value| value == "lsp") {
+        return lsp::run(arguments);
     }
     if arguments.first().is_some_and(|value| value == "graph") {
         return graph::run(arguments);

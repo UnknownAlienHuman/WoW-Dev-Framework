@@ -157,6 +157,56 @@ impl OverlayWorkspace {
         self.path_key(path)?;
         Ok(format!("{}/{}", self.root_uri, uri_path(path)).into())
     }
+    /// Validate a caller's explicit root URI without exposing the private root.
+    pub fn validate_workspace_uri(
+        &self,
+        scope: &OverlaySessionScope,
+        uri: &str,
+    ) -> OverlayResult<()> {
+        self.require(scope)?;
+        if uri != self.root_uri.as_ref() {
+            return Err(error(OverlayErrorCode::InvalidRoot));
+        }
+        Ok(())
+    }
+    /// Resolve only this registration's exact canonical URI. This is a bounded
+    /// inverse of `document_uri`, not an ambient file/URL acquisition port.
+    pub fn relative_path_for_uri(
+        &self,
+        scope: &OverlaySessionScope,
+        uri: &str,
+    ) -> OverlayResult<Box<str>> {
+        self.require(scope)?;
+        if uri.len() > 65536 {
+            return Err(error(OverlayErrorCode::InvalidPath));
+        }
+        let encoded = uri
+            .strip_prefix(self.root_uri.as_ref())
+            .and_then(|tail| tail.strip_prefix('/'))
+            .filter(|tail| tail.len() <= 4096 * 3)
+            .ok_or_else(|| error(OverlayErrorCode::InvalidPath))?;
+        let mut bytes = Vec::with_capacity(encoded.len());
+        let mut cursor = encoded.bytes();
+        while let Some(byte) = cursor.next() {
+            bytes.push(if byte == b'%' {
+                let high = cursor
+                    .next()
+                    .and_then(hex_digit)
+                    .ok_or_else(|| error(OverlayErrorCode::InvalidPath))?;
+                let low = cursor
+                    .next()
+                    .and_then(hex_digit)
+                    .ok_or_else(|| error(OverlayErrorCode::InvalidPath))?;
+                (high << 4) | low
+            } else {
+                byte
+            });
+        }
+        let path = String::from_utf8(bytes).map_err(|_| error(OverlayErrorCode::InvalidPath))?;
+        self.path_key(&path)?;
+        self.require_uri(&path, uri)?;
+        Ok(path.into())
+    }
     pub(super) fn require_uri(&self, path: &str, uri: &str) -> OverlayResult<()> {
         if uri.len() > 65536 || uri != format!("{}/{}", self.root_uri, uri_path(path)) {
             return Err(error(OverlayErrorCode::InvalidPath));
@@ -206,4 +256,12 @@ fn uri_path(path: &str) -> String {
         }
     }
     output
+}
+fn hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        _ => None,
+    }
 }

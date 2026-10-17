@@ -11,8 +11,11 @@ resource. The explicit `mcp-2025-11-25-stdio-context-v1` profile additionally bi
 one approved metadata-only native Context host and exposes `wow.context_inspect`
 through the existing E3 operation. Registration is configured metadata, with
 actual acquisition and membership checked on use; it is not workspace acceptance.
-The remaining operations below are the final contract inventory; workspace,
-document, daemon and LSP functionality is not implemented by this subset.
+The separate selected private-overlay LSP profile in `src/frontend/lsp.rs`
+coordinates real Project workspace/document ownership and local syntax; see
+[`apps/wow/LSP.md`](../../../apps/wow/LSP.md). The remaining operations below are
+the final contract inventory; broader workspace/session, language features,
+daemon and full LSP/client acceptance are not implemented by these subsets.
 
 ## Mission
 

@@ -1,6 +1,9 @@
 # E7-A Language Server Protocol 3.18 profile
 
-**Status:** normative supported profile; implementation has not started.
+**Status:** normative final profile. The selected synchronous private-overlay
+syntax path is executable; see [`apps/wow/LSP.md`](../../../apps/wow/LSP.md).
+Broader language features, asynchronous lifecycle and full client/platform
+acceptance remain open.
 
 Official protocol reference: <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/specification/>
 
