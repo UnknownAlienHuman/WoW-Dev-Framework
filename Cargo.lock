@@ -534,7 +534,7 @@ dependencies = [
  "dirs",
  "emmy_lsp_types",
  "emmylua_diagnostic_macro",
- "emmylua_parser 0.29.1 (git+https://github.com/EmmyLuaLs/emmylua-analyzer-rust?rev=aaaca68425d9362876228649b0b8d92f07654daa)",
+ "emmylua_parser",
  "encoding_rs",
  "flagset",
  "hashbrown 0.17.1",
@@ -566,16 +566,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "emmylua_parser"
-version = "0.29.1"
-source = "git+https://github.com/EmmyLuaLs/emmylua-analyzer-rust?branch=main#aaaca68425d9362876228649b0b8d92f07654daa"
-dependencies = [
- "rowan",
- "rust-i18n",
- "serde",
 ]
 
 [[package]]
@@ -2523,7 +2513,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 name = "wow-annotations"
 version = "0.1.0"
 dependencies = [
- "emmylua_parser 0.29.1 (git+https://github.com/EmmyLuaLs/emmylua-analyzer-rust?branch=main)",
+ "emmylua_parser",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -2577,7 +2567,7 @@ version = "0.1.0"
 dependencies = [
  "emmy_lsp_types",
  "emmylua_code_analysis",
- "emmylua_parser 0.29.1 (git+https://github.com/EmmyLuaLs/emmylua-analyzer-rust?rev=aaaca68425d9362876228649b0b8d92f07654daa)",
+ "emmylua_parser",
  "rowan",
  "serde",
  "serde_json",
@@ -2644,7 +2634,7 @@ dependencies = [
 name = "wow-reference"
 version = "0.1.0"
 dependencies = [
- "emmylua_parser 0.29.1 (git+https://github.com/EmmyLuaLs/emmylua-analyzer-rust?branch=main)",
+ "emmylua_parser",
  "serde",
  "serde_json",
  "sha2 0.11.0",

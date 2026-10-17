@@ -9,9 +9,9 @@ These instructions apply to every crate directory and cross-crate owner seam.
 ```text
 documentation frontier: E7-B / planned architecture
 implementation: partial executable E0/E1/E2 owner slices
-active workspace: 14 members; Cargo.toml and the current completion matrix
+active workspace: 18 members; Cargo.toml and the current completion matrix
 current state and concrete blockers: docs/PROJECT_COMPLETION_MATRIX.md
-next: E0 prerequisite fixture/identity/checksum closure, then I0-F / R0
+next: reviewed refactoring plan and current canonical Issue; reuse existing owners
 full product, real-addon, installation and release gates: blocked / NotEvaluated
 ```
 
@@ -58,7 +58,7 @@ Cross-crate seam Markdown files are normative operations and projections, not se
 
 ## Scope discipline
 
-- Work sequentially in `main`, one primary crate or explicitly named seam at a time; do not create task branches or worktrees.
+- Follow root `AGENTS.md`: one integration manager, one worktree and one bounded claim. Prepare a reviewable branch/PR; do not overwrite another writer's state or force-push.
 - Do not edit sibling owners to make a local implementation convenient.
 - If implementation proves a contract contradictory or insufficient, record the exact failing use case and propose the smallest seam or ADR correction.
 - Do not create every planned crate during I0. Activate only the current implementation package and exact prerequisites.
@@ -192,7 +192,8 @@ remaining exact blockers
 Use [the current completion matrix](../docs/PROJECT_COMPLETION_MATRIX.md) and
 [the execution audit](../docs/AUDIT_2026-09-19.md). Existing analyzer, project,
 service, store, graph and recognizer code must not be recreated because of an old
-README status line. Resolve the required E0 fixture gates and missing I0-F app;
+README status line. The I0-F app exists; select the current bounded repair from
+the reviewed 2026-10-17 audit and keep remaining E0 acceptance separately tracked;
 retain the [Ketho port route](../docs/KETHO_RUST_PORT.md) for annotation changes.
 
 Do not start another primary owner until the current checkpoint is validated,

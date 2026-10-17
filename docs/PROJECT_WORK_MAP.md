@@ -1,88 +1,63 @@
 # Current project work map
 
-> **Mandatory 2026-10-17 Audit & Engineering Remediation ([#191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191)):** Read
-> [`docs/AUDIT_2026-10-17.md`](AUDIT_2026-10-17.md) and
-> [Issue #191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191) first. All active work must follow
-> its anti-bloat engineering rules and phased remediation plan (eliminating schema
-> proliferation, multi-pass JSON serialization, re-parsing on SQLite read, 4x
-> `EmmyLuaAnalysis` instantiation, `*Wire` duplication, `xtask` completion traps, and
-> CLI/LSP/MCP usability/protocol defects).
+The current refactoring preparation and integration claim belong to
+[Issue #191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191).
+Read root [AGENTS.md](../AGENTS.md), the [reviewed audit and bounded plan](AUDIT_2026-10-17.md)
+and [execution model](EXECUTION_MODEL.md). The audit records verified defects,
+corrections to Gemini's deletion recommendations, and the next code slices.
 
-The canonical remediation mandate is [#191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191);
-the implementation queue and current integration lease are in
-[#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
-Read their current bodies with [the execution model](EXECUTION_MODEL.md) and
-[the 2026-10-17 audit](AUDIT_2026-10-17.md).
-The [completion matrix](PROJECT_COMPLETION_MATRIX.md) owns package/launch states;
-[implementation status](IMPLEMENTATION_STATUS.md) describes executable scope.
+The [completion matrix](PROJECT_COMPLETION_MATRIX.md) records package/launch
+acceptance. Existing owners and applications must not be recreated from stale
+bootstrap prose. A pending acceptance issue blocks its named claim, not all
+independent implementation work.
 
-Verified product checkpoint: `d36ba6e0ceec974f3a41cbb841c1c21de803d4f3`,
-[Quick 39030281410](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/39030281410).
-This is exact-head build evidence, not full package or launch acceptance.
+## Active routing
 
-## Next bounded actions
+| Work | Canonical tracker | Next bounded direction |
+|---|---|---|
+| Refactoring preparation, analyzer/canonical cost and Service ownership | [#191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191) | Follow the reviewed plan; one owner/consumer path per claim. |
+| Machine-state and checksum consistency | [#120](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/120) | Replace one owner's pending-state snapshot checks with evidence/consistency validation. Keep acceptance distinct from checksums. |
+| Retained Project read cost | [#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131) | Persist/hydrate the minimum exact read model instead of rebuilding source analysis during normal acquisition. |
+| Context | [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122) | Shared payload shapes and readable Markdown, preserving external admission and owner evidence. |
+| Search | [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169) | Simplify retained FTS storage and pagination without replacing the existing search owners. |
+| CLI and LSP/MCP usability | [#125](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/125) | Finite defaults; standard empty results, notifications and metadata; then one missing owner-backed operation. |
 
-0. **Execute the 2026-10-17 Audit Remediation Plan ([`docs/AUDIT_2026-10-17.md`](AUDIT_2026-10-17.md)):**
-   - Phase 1: Remove `pending`/`NotEvaluated`/`null`-checksum traps in `tools/xtask`, unify `emmylua_*` dependencies in root `Cargo.toml`, prune obsolete worktrees, and enable fast unit tests in `quick-check.yml`.
-   - Phase 2: Replace DOM-allocating `CanonicalSerializer` and 6x/8x byte-count convergence loops in `wow-core`/`wow-search`, collapse 4x `EmmyLuaAnalysis` passes into 1, delete `replay1..15` / `LegacyGlobalAccessV9`, and stop re-parsing source on SQLite reads (`hydrate_owner`).
-   - Phase 3: Delete 10,335 lines of `#![allow(dead_code)]` in `wow-recognizers` and 7,300+ lines of `*Wire` duplicates in `wow-context`, fix `\u00xx`-escaped Markdown rendering, and move domain algorithms out of `wow-service`.
-   - Phase 4: Provide `.toc` auto-discovery and default budgets in `apps/wow` CLI, and fix JSON-RPC 2.0 / LSP 3.18 / MCP protocol violations and owner integration.
-1. Reconcile the retained W5 repair with the current Service path and exact graph
-   readback in [#166](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/166).
-2. Qualify genuine EventRegistry bridge and CVar callback Service positives in
-   [#161](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/161);
-   custom-signal receiver/multiple-producer work remains
-   [#162](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/162).
-3. Implement typed local receiver/result-zero custody before activating the real
-   AceAddon embed convention in
-   [#159](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/159).
-   The former synthetic LibStub embed endpoint is not available.
-4. Finish durable exact-generation Search build/reopen/query/retention in
-   [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169).
-   Broader frontend conformance remains
-   [#170](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/170).
-5. Run the composed Tier A campaign at a coherent functional milestone. Fresh
-   source/Ketho/WoW API Ketho MCP and named-client Tier X remain separate gates.
-
-Root integrates one released worker patch at a time, publishes through exact
-expected-head/CAS without force, reads back the remote tree, and waits for the
-current-head Quick before another product publication. Preserve surviving dirty
-worktrees and exact artifacts during recovery; unpublished work is unverified.
+Lifecycle, context and frontend repairs can proceed independently when their
+owned paths do not overlap. They do not wait for optional E5/E6 or release work.
+Use the existing bounded Clippy/Quick cadence; keep expanded tests for a coherent
+functional milestone under the operator's instructions.
 
 ## Existing application routes
 
-- [Project publication and retained lifecycle](../apps/wow/LIVE_PROJECT.md).
+- [Local status/check](../apps/wow/LOCAL_INPUT.md),
+  [Project publication and retained lifecycle](../apps/wow/LIVE_PROJECT.md).
 - [Map](../apps/wow/CONTEXT_MAP.md), [Inspect](../apps/wow/CONTEXT_INSPECT.md),
-  [Build/render/continuation](../apps/wow/CONTEXT_BUILD.md), and
-  [native declarations/signatures](../apps/wow/PRIMARY_CALLABLE_INPUT.md).
+  [Build/render/continuation](../apps/wow/CONTEXT_BUILD.md).
 - [Exact-generation Search build/query](../apps/wow/SEARCH_BUILD_QUERY.md).
 - [Manifest-bound platform input](../apps/wow/PLATFORM_INPUT.md),
-  [source-only Reference](../apps/wow/SOURCE_REFERENCE.md), and
+  [source-only Reference](../apps/wow/SOURCE_REFERENCE.md),
   [source census](../apps/wow/SOURCE_CENSUS.md).
-- `wow transport capabilities` and the selected MCP 2025-11-25 stdio profile:
-  fixed `wow.status` and exact profile resource; selected
-  [Service](../crates/wow-service/e7/CONTRACT.json) and
-  [application](../apps/wow/e7/CONTRACT.json) contracts.
+- [Frontend Service](../crates/wow-service/e7/CONTRACT.json) and
+  [application](../apps/wow/e7/CONTRACT.json) contracts: selected LSP routes,
+  MCP status and opt-in context. Partial implementations are not full conformance.
 
-These routes retain their exact profiles, identities, coverage and omissions.
-Partial/Truncated output does not prove absence, complete roots, runtime behavior,
-or full corpus fit. Do not recreate existing owners from historical status text.
+These routes preserve exact generations, source/owner identities and coverage.
+Partial output never establishes complete corpus coverage or runtime authority.
 
-## Acceptance and deferred work
+## Acceptance and historical work
 
 | Trackers | Responsibility |
 |---|---|
-| [#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106), #113, #116–#118 | W17 corpus, capacity, candidate/Skeleton, classification and fingerprint qualification |
-| [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103), #107–#111 | W11–W16 structural, graph, update, retention and recovery acceptance |
-| [#112](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112), #120 | Remaining docs/version-consumer inventory and machine-state census |
-| [#124](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/124), #125 | Legacy reconciliation and future W20–W25 implementation queue |
-| [#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131) | Deferred exact read-owner reconstruction cost |
+| #106, #113, #116–#118 | W17 corpus, capacity, candidate/Skeleton, classification and fingerprint qualification |
+| #103, #107–#111 | W11–W16 structural, graph, update, retention and recovery acceptance |
+| #112, #120 | Documentation/version-consumer inventory and machine-state census |
+| #124, #125 | Residual hardening and future implementation scope |
 
-Closed #114/#115/#119/#121/#123 are historical evidence, not active blockers.
-Closed #105 tracks reconciled PR/remote-branch retirement. Use Issues for remaining
-work; do not revive obsolete tracking PRs. The whole-project Goal includes later
-owners/apps, full Tier A/X and launch; it is not reduced to W17.
+Closed #159, #161, #162, #166 and #170 are delivered selected scopes, not the next
+work queue. Likewise #114/#115/#119/#121/#123 are historical evidence. Full
+acceptance remains in the open trackers above; do not reopen or recreate those
+closed implementations merely because a previous work map listed them.
 
-The prior detailed routing and historical evidence links remain in the immutable
-[d76c8226 work map](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/d76c822634b73bb34d0e40621e3c70a902e4812a/docs/PROJECT_WORK_MAP.md).
-It preserves older checkpoint/specification links without making them the queue.
+Publication uses one manager/worktree/claim and a reviewable branch/PR, without
+force. Record the exact commit and Quick result once in the canonical issue/PR;
+keep detailed historical evidence there instead of duplicating it in hot routing.

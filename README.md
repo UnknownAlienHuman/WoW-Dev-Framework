@@ -4,7 +4,7 @@
 
 > **Planned architecture:** complete through E7-B.
 >
-> **Implementation frontier:** 16 active workspace members, including real analyzer, project, rules, service, storage, graph and recognizer slices. Full package acceptance remains incomplete. Next: finish the remaining TOC/XML/state recognizer path, then its acceptance evidence and downstream owners. See the [current work map](docs/PROJECT_WORK_MAP.md).
+> **Implementation frontier:** 18 active workspace members, including the public CLI, internal Reference Pack builder and real analyzer, project, rules, service, storage, graph, recognizer, context and search slices. Full package acceptance remains incomplete. Current priority: the [reviewed refactoring plan](docs/AUDIT_2026-10-17.md) and [work map](docs/PROJECT_WORK_MAP.md).
 >
 > **First runnable gate:** E0-A through E0-F (`wow status` and `wow check`).
 >
@@ -150,18 +150,19 @@ Updates are explicit by default. Check, download, verify, stage, backup, migrate
 
 ## Current executable state
 
-The root workspace has 14 members. Real analyzer, project-generation, diagnostic,
-service, persistence, graph and recognizer implementations already exist alongside
-the native reference/annotation pipeline and literal/Wasm modules. This is a
-partial executable product, not an empty documentation repository.
+The root workspace has 18 members. `apps/wow` implements status/check, project,
+graph, context, search and selected frontend routes. `apps/wow-reference-builder`
+is an active internal frontend. Native analyzer, reference/annotation, persistence,
+graph and recognizer owners are implemented to varying scopes.
 
-The public `apps/wow` CLI is still absent. `apps/wow-reference-builder` has source
-outside the workspace, with unresolved service/contract mismatches; it is not
-covered by ordinary workspace CI. Required E0 fixture/checksum gates remain open.
-Passing workspace tests do not establish R0, real-addon or release readiness.
+The refactoring review identifies repeated analysis on retained reads, redundant
+serialization, intermediate schema growth and domain algorithms inside Service.
+These repairs preserve the existing executable paths. Required package,
+fixture/checksum and launch acceptance remains open; a passing build does not
+establish real-addon or release readiness.
 
 Start with [the current completion matrix](docs/PROJECT_COMPLETION_MATRIX.md),
-[the execution audit](docs/AUDIT_2026-09-19.md) and
+[the reviewed architectural audit](docs/AUDIT_2026-10-17.md) and
 [the implementation/update ledger](docs/IMPLEMENTATION_STATUS.md).
 Owner contracts define requirements; older owner status prose is not a code census.
 
@@ -177,11 +178,11 @@ V1  selected scope plus complete E7-A/E7-B Windows release evidence
 
 ## Next implementation step
 
-Follow the existing [I0–I7 plan](docs/IMPLEMENTATION_HANDOFF.md), starting with
-unclosed E0 prerequisite fixture/identity/checksum gates, then I0-F's missing thin
-`wow status` / `wow check` frontend and whole-command acceptance. Reuse the real
-`wow-emmy`, project, rules and service code. Do not activate placeholder crates,
-freeze unreviewed output, or mistake an annotation development command for R0.
+Select one bounded repair from [Issue #191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191)
+and the [reviewed plan](docs/AUDIT_2026-10-17.md#4-bounded-implementation-order).
+The existing [I0–I7 plan](docs/IMPLEMENTATION_HANDOFF.md) defines package scope;
+it is not an instruction to rebuild already implemented owners. Keep E0 and
+later acceptance debt in its named issues while fixing the selected code path.
 
 ## Routes
 

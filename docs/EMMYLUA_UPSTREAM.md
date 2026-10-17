@@ -1,10 +1,12 @@
 # EmmyLua upstream compatibility
 
-The Rust adapter manifest and Cargo.lock identify one exact compiled dependency
-pin, not a permanently current revision. CI runs locked
-builds and an independently updated dependency graph using `cargo update`, then
-runs reference and annotation tests against that graph. No manifest editing or
-static upstream-symbol scraping is needed to pretend a compile probe ran.
+The root workspace dependencies and Cargo.lock identify one exact compiled Emmy
+revision shared by the adapter, Reference and Annotations. This pin is not a
+claim of upstream freshness. Normal builds use the lockfile. The existing manual
+CI rolling-parser lane first isolates Reference/Annotations, then changes only
+that temporary workspace's parser dependency to upstream `main` before
+`cargo update` and its consumer checks. The job retains its resolved inputs;
+source freshness or a manifest change alone is not compile/probe evidence.
 
 For an explicit local checkout:
 
