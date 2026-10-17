@@ -160,8 +160,8 @@ impl OverlayWorkspace {
             content: text,
         } = request;
         self.require(scope)?;
-        self.require_uri(path, uri)?;
         let key = self.path_key(path)?;
+        self.require_uri(path, uri)?;
         let limits = self.descriptor.limits;
         let mut budget = OverlayBudget::new(limits.max_work, stop);
         budget.work(text.len())?;
@@ -236,6 +236,12 @@ impl OverlayWorkspace {
                 return Err(error(OverlayErrorCode::Limit));
             }
         }
+        // Admit owner-issued guards before canonicalizing the change manifest.
+        // Caller-supplied unmatched identifiers must not allocate identity data.
+        let current = self.by_document(document)?;
+        if expected_snapshot.len() != current.descriptor.snapshot_id.len() {
+            return Err(error(OverlayErrorCode::ResynchronizationRequired));
+        }
         #[derive(Serialize)]
         struct EditIdentity {
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -267,7 +273,6 @@ impl OverlayWorkspace {
                 manifest,
             ),
         )?;
-        let current = self.by_document(document)?;
         if current.descriptor.client_version == version
             && current.prior.as_deref() == Some(expected_snapshot)
             && current.change_digest.as_deref() == Some(change.as_ref())
