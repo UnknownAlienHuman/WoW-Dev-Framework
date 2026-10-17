@@ -8,11 +8,13 @@ use std::{
 use wow_service::ServiceErrorCode;
 use wow_service::lineage::{
     LineageBuildRequest, LineageCandidateQuery, LineageQueryRequest, LineageReadRequest,
-    abandon_lineage_snapshot, build_lineage_snapshot, compare_lineage_snapshot,
-    query_lineage_snapshot, retire_lineage_snapshot,
+    ReferenceLineageRoots, abandon_lineage_snapshot, abandon_reference_lineage_snapshot,
+    build_lineage_snapshot, build_reference_lineage_snapshot, compare_lineage_snapshot,
+    compare_reference_lineage_snapshot, query_lineage_snapshot, query_reference_lineage_snapshot,
+    retire_lineage_snapshot, retire_reference_lineage_snapshot,
 };
 
-const HELP: &str = "wow lineage build|compare|retire|abandon|status|validate|explain --store-root <EXISTING-ORDINARY-PROJECT-STORE> --lineage-store <ABSOLUTE-STORE-FILE> --request-json <ABSOLUTE-JSON-FILE|-> [--operation-id <RETIRE-OR-ABANDON-ID>] [--max-output-bytes <ABANDON-BOUND>]\nOrdinary build/abandon: wow-service/lineage-build/1. Source uses explicit source-lineage-build/1, source-lineage-read/1 or source-lineage-query/1 plus source_selection with a stored composed candidate; see apps/wow/SOURCE_LINEAGE.md. Each Source Store has its own fixed profile. Compare/retire: wow-service/lineage-read/1, exact original build operation/digest/snapshot and Store limits. Status/validate/explain and exact entity compare: wow-service/lineage-query/1, original build/digest/snapshot guards, exact proposal/component or role-bound node IDs, finite read limits and logical lease expiry. Same query operation replays its original capture; use a new operation ID for a fresh read. Candidate-only source-span discovery; no accepted lineage, absence, change, migration or runtime conclusion. Build/compare/status/validate/explain exit2. Retire releases exact snapshot/source roots; retained journal bytes remain. Abandon fences an unfinished original build, removes any inactive target, then releases its source holds. Abandon requires its own --max-output-bytes independent of the failed build bound.\n";
+const HELP: &str = "wow lineage build|compare|retire|abandon|status|validate|explain --store-root <EXISTING-ORDINARY-PROJECT-STORE> --lineage-store <ABSOLUTE-STORE-FILE> --request-json <ABSOLUTE-JSON-FILE|-> [--operation-id <RETIRE-OR-ABANDON-ID>] [--max-output-bytes <ABANDON-BOUND>]\nReference requires --after-store-root <EXISTING-AFTER-STORE>, reference-lineage-build/read/query/1 and reference_selection, genuine native target/C0 and a separate Reference Store; see apps/wow/REFERENCE_LINEAGE.md.\nOrdinary build/abandon: wow-service/lineage-build/1. Source uses explicit source-lineage-build/1, source-lineage-read/1 or source-lineage-query/1 plus source_selection with a stored composed candidate; see apps/wow/SOURCE_LINEAGE.md. Each Source Store has its own fixed profile. Compare/retire: wow-service/lineage-read/1, exact original build operation/digest/snapshot and Store limits. Status/validate/explain and exact entity compare: wow-service/lineage-query/1, original build/digest/snapshot guards, exact proposal/component or role-bound node IDs, finite read limits and logical lease expiry. Same query operation replays its original capture; use a new operation ID for a fresh read. Candidate-only source-span discovery; no accepted lineage, absence, change, migration or runtime conclusion. Build/compare/status/validate/explain exit2. Retire releases exact snapshot/source roots; retained journal bytes remain. Abandon fences an unfinished original build, removes any inactive target, then releases its source holds. Abandon requires its own --max-output-bytes independent of the failed build bound.\n";
 pub(super) fn run(values: Vec<OsString>) -> u8 {
     if values.len() == 2 && values[1] == "--help" {
         return if io::stdout().lock().write_all(HELP.as_bytes()).is_ok() {
@@ -28,27 +30,65 @@ pub(super) fn run(values: Vec<OsString>) -> u8 {
     let Some(stop) = crate::cancellation_flag() else {
         return 64;
     };
+    let roots = command
+        .after_source
+        .as_deref()
+        .map(|after| ReferenceLineageRoots {
+            before: &command.source,
+            after,
+        });
     let result = match command.request {
-        Request::Build(request) => {
-            build_lineage_snapshot(&command.source, &command.store, &request, &stop)
+        Request::Build(request) => match roots {
+            Some(roots) => build_reference_lineage_snapshot(roots, &command.store, &request, &stop),
+            None => build_lineage_snapshot(&command.source, &command.store, &request, &stop),
+        },
+        Request::Compare(request) => match roots {
+            Some(roots) => {
+                compare_reference_lineage_snapshot(roots, &command.store, &request, &stop)
+            }
+            None => compare_lineage_snapshot(&command.source, &command.store, &request, &stop),
+        },
+        Request::Retire(request, operation) => match roots {
+            Some(roots) => retire_reference_lineage_snapshot(
+                roots,
+                &command.store,
+                &request,
+                &operation,
+                &stop,
+            ),
+            None => retire_lineage_snapshot(
+                &command.source,
+                &command.store,
+                &request,
+                &operation,
+                &stop,
+            ),
+        },
+        Request::Abandon(request, operation, limit) => {
+            if let Some(roots) = roots {
+                abandon_reference_lineage_snapshot(
+                    roots,
+                    &command.store,
+                    &request,
+                    &operation,
+                    limit,
+                    &stop,
+                )
+            } else {
+                abandon_lineage_snapshot(
+                    &command.source,
+                    &command.store,
+                    &request,
+                    &operation,
+                    limit,
+                    &stop,
+                )
+            }
         }
-        Request::Compare(request) => {
-            compare_lineage_snapshot(&command.source, &command.store, &request, &stop)
-        }
-        Request::Retire(request, operation) => {
-            retire_lineage_snapshot(&command.source, &command.store, &request, &operation, &stop)
-        }
-        Request::Abandon(request, operation, limit) => abandon_lineage_snapshot(
-            &command.source,
-            &command.store,
-            &request,
-            &operation,
-            limit,
-            &stop,
-        ),
-        Request::Query(request) => {
-            query_lineage_snapshot(&command.source, &command.store, &request, &stop)
-        }
+        Request::Query(request) => match roots {
+            Some(roots) => query_reference_lineage_snapshot(roots, &command.store, &request, &stop),
+            None => query_lineage_snapshot(&command.source, &command.store, &request, &stop),
+        },
     };
     match result {
         Ok(bytes) => {
@@ -92,13 +132,14 @@ enum CompareInput {
 }
 struct Command {
     source: PathBuf,
+    after_source: Option<PathBuf>,
     store: PathBuf,
     request: Request,
     retire: bool,
 }
 fn parse(values: Vec<OsString>) -> Result<Command, ()> {
     if values.len() < 8
-        || values.len() > 12
+        || values.len() > 14
         || values
             .iter()
             .try_fold(0usize, |n, v| n.checked_add(v.len()))
@@ -120,6 +161,7 @@ fn parse(values: Vec<OsString>) -> Result<Command, ()> {
             key.to_str(),
             Some(
                 "--store-root"
+                    | "--after-store-root"
                     | "--lineage-store"
                     | "--request-json"
                     | "--operation-id"
@@ -132,8 +174,16 @@ fn parse(values: Vec<OsString>) -> Result<Command, ()> {
     }
     let field = |key: &str| fields.get(&OsString::from(key)).ok_or(());
     let source = PathBuf::from(field("--store-root")?);
+    let after_source = fields
+        .get(&OsString::from("--after-store-root"))
+        .map(PathBuf::from);
     let store = PathBuf::from(field("--lineage-store")?);
-    if !source.is_absolute() || !store.is_absolute() {
+    if !source.is_absolute()
+        || !store.is_absolute()
+        || after_source
+            .as_ref()
+            .is_some_and(|path| !path.is_absolute())
+    {
         return Err(());
     }
     let input = field("--request-json")?;
@@ -206,8 +256,17 @@ fn parse(values: Vec<OsString>) -> Result<Command, ()> {
         }
         _ => return Err(()),
     };
+    let reference = match &request {
+        Request::Build(r) | Request::Abandon(r, ..) => r.reference_selection.is_some(),
+        Request::Compare(r) | Request::Retire(r, ..) => r.reference_selection.is_some(),
+        Request::Query(r) => r.reference_selection.is_some(),
+    };
+    if reference != after_source.is_some() {
+        return Err(());
+    }
     Ok(Command {
         source,
+        after_source,
         store,
         request,
         retire,

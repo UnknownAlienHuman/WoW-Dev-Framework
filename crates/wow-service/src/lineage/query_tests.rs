@@ -20,6 +20,7 @@ pub(super) fn native_queries(
     let mut request = LineageQueryRequest {
         schema: "wow-service/lineage-query/1".into(),
         source_selection: None,
+        reference_selection: None,
         operation_id: "native-lineage-explain-query".into(),
         build_operation_id: receipt.request.operation_id.clone(),
         build_request_digest: receipt.request_digest.clone(),

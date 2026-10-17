@@ -44,6 +44,7 @@ fn native_lineage_snapshot_survives_reopen_replay_and_exact_retirement()
     let request = LineageBuildRequest {
         schema: "wow-service/lineage-build/1".into(),
         source_selection: None,
+        reference_selection: None,
         operation_id: "native-lineage-build".into(),
         before_generation: before.generation_id.as_str().into(),
         after_generation: after.generation_id.as_str().into(),
@@ -68,6 +69,7 @@ fn native_lineage_snapshot_survives_reopen_replay_and_exact_retirement()
     let selector = LineageReadRequest {
         schema: "wow-service/lineage-read/1".into(),
         source_selection: None,
+        reference_selection: None,
         build_operation_id: request.operation_id.clone(),
         build_request_digest: result.request_digest.clone(),
         snapshot_id: result.snapshot.snapshot_id.clone(),

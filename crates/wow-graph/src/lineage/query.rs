@@ -131,6 +131,14 @@ pub struct LineageNativeFunctionSupport {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct LineageNativeReferenceSupport {
+    pub entity: LineageEntityAddress,
+    pub scope: GraphAssertionRecordScope,
+    pub entity_proposal: GraphEntityProposal,
+    pub entity_accepted: GraphAcceptedEntityProposal,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LineageRoleSource {
     pub role: LineageRole,
     pub source: SourceHandle,
@@ -147,7 +155,11 @@ pub struct LineageQueryClosure {
     pub components: Vec<LineageCandidateComponent>,
     pub proposals: Vec<LineageCandidateProposal>,
     pub functions: Vec<LineageFunctionRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reference_callables: Vec<LineageReferenceCallableRecord>,
     pub native_support: Vec<LineageNativeFunctionSupport>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_reference_support: Vec<LineageNativeReferenceSupport>,
     pub sources: Vec<LineageRoleSource>,
     pub evidence: Vec<LineageRoleEvidence>,
 }
@@ -178,6 +190,8 @@ pub struct LineageQueryResult {
     pub input_partitions: Vec<LineagePartitionCoverage>,
     pub skipped_buckets: Vec<LineageSkippedBucket>,
     pub unavailable_features: Vec<LineageUnavailableFeature>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reference_omissions: Vec<LineageReferenceOmission>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub closure: Option<LineageQueryClosure>,
     pub accepted_assertion_count: usize,
@@ -188,8 +202,13 @@ pub struct LineageQueryResult {
 
 #[derive(Serialize)]
 struct ClosureIdentity<'a> {
+    #[serde(skip_serializing_if = "slice_is_empty")]
+    reference_omissions: &'a [LineageReferenceOmission],
     #[serde(skip_serializing_if = "Option::is_none")]
     closure: Option<&'a LineageQueryClosure>,
+}
+fn slice_is_empty<T>(value: &[T]) -> bool {
+    value.is_empty()
 }
 impl LineageQueryResult {
     fn semantic_identity(&self) -> impl Serialize + '_ {
@@ -207,6 +226,7 @@ impl LineageQueryResult {
             &self.skipped_buckets,
             &self.unavailable_features,
             ClosureIdentity {
+                reference_omissions: &self.reference_omissions,
                 closure: self.closure.as_ref(),
             },
             (
@@ -240,6 +260,18 @@ impl LineageQueryResult {
             query,
             SOURCE_SPAN_LINEAGE_PROFILE,
             "native_blizzard_ui_source_span_candidates_valid",
+        )
+    }
+    pub fn validate_reference_capture(
+        &self,
+        snapshot_id: &str,
+        query: &LineageCandidateQuery,
+    ) -> GraphResult<()> {
+        self.validate_capture_profile(
+            snapshot_id,
+            query,
+            REFERENCE_KEY_LINEAGE_PROFILE,
+            "native_reference_original_key_candidates_valid",
         )
     }
     fn validate_capture_profile(
@@ -307,23 +339,40 @@ pub(super) fn execute(
     let candidates = &record.candidates;
     ledger.work(candidates.components.len())?;
     let summary = LineageReadSummary {
-        functions: data.records.len(),
+        functions: data
+            .records
+            .len()
+            .saturating_add(data.reference_records.len()),
         proposals: candidates.proposals.len(),
         components: candidates.components.len(),
         ambiguous_components: candidates.components.iter().filter(|c| c.ambiguous).count(),
         skipped_buckets: candidates.skipped_buckets.len(),
-        unavailable_features: candidates.unavailable_features.len(),
+        unavailable_features: candidates
+            .unavailable_features
+            .len()
+            .saturating_add(data.reference_omissions.len()),
     };
     let mut selected = BTreeSet::new();
     match query {
         LineageCandidateQuery::Compare { before, after } => {
             for address in [before, after] {
-                ledger.work(data.records.len())?;
-                if !data
-                    .records
-                    .iter()
-                    .any(|r| r.role == address.role && r.node.node_id() == &address.node_id)
-                {
+                ledger.work(
+                    data.records
+                        .len()
+                        .saturating_add(data.reference_records.len()),
+                )?;
+                let observed = match &address.reference_entity {
+                    None => data
+                        .records
+                        .iter()
+                        .any(|r| r.role == address.role && r.node.node_id() == &address.node_id),
+                    Some(original) => data.reference_records.iter().any(|r| {
+                        r.role == address.role
+                            && r.node.node_id() == &address.node_id
+                            && &r.reference_entity == original.as_ref()
+                    }),
+                };
+                if !observed {
                     return Err(query_invalid());
                 }
                 let mut found = false;
@@ -406,6 +455,7 @@ pub(super) fn execute(
         .into(),
         selected_validation: match record.profile_id.as_ref() {
             SOURCE_SPAN_LINEAGE_PROFILE => "native_blizzard_ui_source_span_candidates_valid",
+            REFERENCE_KEY_LINEAGE_PROFILE => "native_reference_original_key_candidates_valid",
             _ => "native_project_source_span_candidates_valid",
         }
         .into(),
@@ -414,6 +464,7 @@ pub(super) fn execute(
         input_partitions: data.partitions.clone(),
         skipped_buckets: candidates.skipped_buckets.clone(),
         unavailable_features: candidates.unavailable_features.clone(),
+        reference_omissions: data.reference_omissions.clone(),
         closure,
         accepted_assertion_count: 0,
         promotion: "not_evaluated".into(),
@@ -462,7 +513,9 @@ fn build_closure(
         components: Vec::new(),
         proposals: Vec::new(),
         functions: Vec::new(),
+        reference_callables: Vec::new(),
         native_support: Vec::new(),
+        native_reference_support: Vec::new(),
         sources: Vec::new(),
         evidence: Vec::new(),
     };
@@ -511,13 +564,31 @@ fn build_closure(
         let key = LineageEntityAddress {
             role: r.role,
             node_id: r.node.node_id().clone(),
+            reference_entity: None,
         };
         if addresses.contains(&key) {
             ledger.metadata(r)?;
             output.functions.push(r.clone());
         }
     }
-    if output.functions.len() != addresses.len() {
+    for r in &record.input.reference_records {
+        ledger.work(1)?;
+        let key = LineageEntityAddress {
+            role: r.role,
+            node_id: r.node.node_id().clone(),
+            reference_entity: Some(Box::new(r.reference_entity.clone())),
+        };
+        if addresses.contains(&key) {
+            ledger.metadata(r)?;
+            output.reference_callables.push(r.clone());
+        }
+    }
+    if output
+        .functions
+        .len()
+        .saturating_add(output.reference_callables.len())
+        != addresses.len()
+    {
         return Err(query_invalid());
     }
     native_support(record, sources, ledger, stop, &mut output)?;
@@ -607,6 +678,7 @@ fn native_support(
                 entity: LineageEntityAddress {
                     role,
                     node_id: r.node.node_id().clone(),
+                    reference_entity: None,
                 },
                 scope: binding.original_graph_scope.clone(),
                 entity_proposal: entity.proposal().clone(),
@@ -615,6 +687,34 @@ fn native_support(
                 ownership_accepted: ownership.accepted().clone(),
                 original_source_file_node: parent.clone(),
             });
+        }
+        for r in output.reference_callables.iter().filter(|r| r.role == role) {
+            ledger.work(1)?;
+            let entity = lookup.entity(&binding.original_graph_scope, &r.source_assertion, stop)?;
+            if entity.proposal().entity_kind_id() != "native_api_callable" {
+                return Err(query_invalid());
+            }
+            for id in entity.proposal().evidence_ids() {
+                ledger.metadata(id)?;
+                evidence_ids.insert(*id);
+            }
+            for id in entity.proposal().source_handle_ids() {
+                ledger.metadata(id)?;
+                handle_ids.insert(*id);
+            }
+            ledger.metadata(&(entity.proposal(), entity.accepted()))?;
+            output
+                .native_reference_support
+                .push(LineageNativeReferenceSupport {
+                    entity: LineageEntityAddress {
+                        role,
+                        node_id: r.node.node_id().clone(),
+                        reference_entity: Some(Box::new(r.reference_entity.clone())),
+                    },
+                    scope: binding.original_graph_scope.clone(),
+                    entity_proposal: entity.proposal().clone(),
+                    entity_accepted: entity.accepted().clone(),
+                });
         }
         for id in evidence_ids {
             ledger.work(1)?;

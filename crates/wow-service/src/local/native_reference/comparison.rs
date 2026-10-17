@@ -161,6 +161,7 @@ fn require_compatible(
         || before.profile.edition_id() != after.profile.edition_id()
         || before.profile.schema_versions() != after.profile.schema_versions()
         || before.environment != after.environment
+        || before.reference_target != after.reference_target
         || before.reference.schema != after.reference.schema
         || before.has_compatibility_aliases()
         || after.has_compatibility_aliases()
@@ -180,6 +181,8 @@ fn require_compatible(
 struct Origin<'a> {
     configuration_content_digest: &'a ContentDigest<SourceContent>,
     profile: &'a ProfileIdentity,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reference_target: Option<&'a NativeReferenceTarget>,
     reference_generation: ReferenceGenerationId,
     reference_view_digest: &'a str,
     revision: &'a str,
@@ -200,6 +203,7 @@ impl<'a> From<&'a SourceReferenceResult> for Origin<'a> {
         Self {
             configuration_content_digest: &value.configuration_content_digest,
             profile: &value.profile,
+            reference_target: value.reference_target.as_ref(),
             reference_generation: value.reference_generation,
             reference_view_digest: value.reference.view.self_digest(),
             revision: &value.revision,

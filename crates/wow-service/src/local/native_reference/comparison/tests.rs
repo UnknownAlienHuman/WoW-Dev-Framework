@@ -74,6 +74,52 @@ fn expected(result: &SourceReferenceResult) -> Value {
 }
 
 #[test]
+fn explicit_native_target_is_captured_in_profile_identity_and_legacy_schema_refuses_it()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = Fixture::new()?;
+    let text = r#"APIDocumentation:AddDocumentationTable({Name="Example",Type="System",Namespace="C_Example",Environment="All",Functions={{Name="Read",Type="Function"}}})"#;
+    let config = fixture.config("before", "1111111111111111111111111111111111111111", text)?;
+    let stop = AtomicBool::new(false);
+    let original = read_local_source_reference(&config, &stop)?;
+    let mut value: Value = serde_json::from_slice(&fs::read(&config)?)?;
+    value["profile"]["reference_target"] =
+        json!({"schema":"wow-service/native-reference-target/1","product":"wow","channel":"live"});
+    fs::write(&config, serde_json::to_vec(&value)?)?;
+    assert!(
+        matches!(read_local_source_reference(&config,&stop),Err(error) if error.code()==ServiceErrorCode::InvalidConfiguration)
+    );
+    value["schema"] = json!(SOURCE_REFERENCE_TARGET_INPUT_SCHEMA);
+    fs::write(&config, serde_json::to_vec(&value)?)?;
+    let targeted = read_local_source_reference(&config, &stop)?;
+    assert_ne!(targeted.profile(), original.profile());
+    assert_ne!(
+        targeted.reference_generation(),
+        original.reference_generation()
+    );
+    let captured: Value = serde_json::from_slice(&targeted.canonical_bytes(&stop)?)?;
+    assert_eq!(
+        captured["reference_target"],
+        value["profile"]["reference_target"]
+    );
+    assert_eq!(
+        captured["schema"],
+        "wow-service/source-reference-target-result/1"
+    );
+    value["profile"]["reference_target"]["channel"] = json!("ptr");
+    fs::write(&config, serde_json::to_vec(&value)?)?;
+    let changed = read_local_source_reference(&config, &stop)?;
+    assert_ne!(targeted.profile(), changed.profile());
+    assert_ne!(
+        targeted.reference_generation(),
+        changed.reference_generation()
+    );
+    value["profile"]["reference_target"] = Value::Null;
+    fs::write(&config, serde_json::to_vec(&value)?)?;
+    assert!(read_local_source_reference(&config, &stop).is_err());
+    Ok(())
+}
+
+#[test]
 fn native_reference_comparison_service_reaches_original_owner_and_guards_inputs()
 -> Result<(), Box<dyn std::error::Error>> {
     let fixture = Fixture::new()?;

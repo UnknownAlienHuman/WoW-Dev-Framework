@@ -1,6 +1,16 @@
 //! Exact native Project -> retained Candidate lineage orchestration.
 //! Every durable effect uses the existing typed Store/retention owners.
 mod query;
+mod reference;
+mod reference_sources;
+mod reference_workflow;
+pub use reference::{ReferenceLineageGuard, ReferenceLineageSelection};
+pub use reference_sources::ReferenceLineageRoots;
+pub use reference_workflow::{
+    abandon_reference_lineage_snapshot, build_reference_lineage_snapshot,
+    compare_reference_lineage_snapshot, query_reference_lineage_snapshot,
+    retire_reference_lineage_snapshot,
+};
 #[cfg(test)]
 mod query_tests;
 mod source_holds;
@@ -25,6 +35,29 @@ use wow_store::{
     PendingObject, RequestDigest, Store, StoreConfiguration, WriteBatch,
 };
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LineageMode {
+    Project,
+    Source,
+    Reference,
+}
+#[derive(Clone, Copy)]
+struct LineageSelections<'a> {
+    source: Option<&'a PlatformProjectSelection>,
+    reference: Option<&'a ReferenceLineageSelection>,
+}
+impl LineageSelections<'_> {
+    fn mode(self) -> LineageMode {
+        if self.reference.is_some() {
+            LineageMode::Reference
+        } else if self.source.is_some() {
+            LineageMode::Source
+        } else {
+            LineageMode::Project
+        }
+    }
+}
+
 /// Closed, exact-generation request. Physical roots are supplied separately and
 /// never enter semantic output or source-fingerprint identity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,16 +77,35 @@ pub struct LineageBuildRequest {
         deserialize_with = "selection_option"
     )]
     pub source_selection: Option<PlatformProjectSelection>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "reference_option"
+    )]
+    pub reference_selection: Option<ReferenceLineageSelection>,
 }
 impl LineageBuildRequest {
+    fn selections(&self) -> LineageSelections<'_> {
+        LineageSelections {
+            source: self.source_selection.as_ref(),
+            reference: self.reference_selection.as_ref(),
+        }
+    }
     fn validate(&self) -> ServiceResult<()> {
         selection_schema(
             &self.schema,
-            self.source_selection.as_ref(),
-            "wow-service/lineage-build/1",
-            "wow-service/source-lineage-build/1",
+            self.selections(),
+            (
+                "wow-service/lineage-build/1",
+                "wow-service/source-lineage-build/1",
+                "wow-service/reference-lineage-build/1",
+            ),
         )?;
         if self.max_source_bytes == 0
+            || self
+                .reference_selection
+                .as_ref()
+                .is_some_and(|selection| selection.limits.max_view_bytes > self.max_source_bytes)
             || self.max_source_bytes > 64 * 1024 * 1024
             || self.max_output_bytes == 0
             || self.max_output_bytes > 64 * 1024 * 1024
@@ -84,14 +136,29 @@ pub struct LineageReadRequest {
         deserialize_with = "selection_option"
     )]
     pub source_selection: Option<PlatformProjectSelection>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "reference_option"
+    )]
+    pub reference_selection: Option<ReferenceLineageSelection>,
 }
 impl LineageReadRequest {
+    fn selections(&self) -> LineageSelections<'_> {
+        LineageSelections {
+            source: self.source_selection.as_ref(),
+            reference: self.reference_selection.as_ref(),
+        }
+    }
     fn validate(&self) -> ServiceResult<()> {
         selection_schema(
             &self.schema,
-            self.source_selection.as_ref(),
-            "wow-service/lineage-read/1",
-            "wow-service/source-lineage-read/1",
+            self.selections(),
+            (
+                "wow-service/lineage-read/1",
+                "wow-service/source-lineage-read/1",
+                "wow-service/reference-lineage-read/1",
+            ),
         )?;
         if self.max_output_bytes == 0
             || self.max_output_bytes > 64 * 1024 * 1024
@@ -136,7 +203,7 @@ pub fn build_lineage_snapshot(
         lineage_store,
         request.store_limits,
         true,
-        request.source_selection.as_ref(),
+        request.selections(),
         stop,
         |source, slot| workflow::build(lineage_store, source, slot, request, stop),
     )
@@ -156,7 +223,7 @@ pub fn compare_lineage_snapshot(
         lineage_store,
         request.store_limits,
         false,
-        request.source_selection.as_ref(),
+        request.selections(),
         stop,
         |source, slot| {
             let store = current(slot)?;
@@ -187,7 +254,7 @@ pub fn retire_lineage_snapshot(
         lineage_store,
         request.store_limits,
         false,
-        request.source_selection.as_ref(),
+        request.selections(),
         stop,
         |source, slot| workflow::retire(source, current(slot)?, request, &operation_id, stop),
     )
@@ -213,7 +280,7 @@ pub fn abandon_lineage_snapshot(
         lineage_store,
         request.store_limits,
         false,
-        request.source_selection.as_ref(),
+        request.selections(),
         stop,
         |source, slot| {
             workflow::abandon(
@@ -372,11 +439,14 @@ fn resources<T>(
     lineage_store: &Path,
     limits: LineageStoreLimits,
     create: bool,
-    selection: Option<&PlatformProjectSelection>,
+    selection: LineageSelections<'_>,
     stop: &AtomicBool,
     run: impl FnOnce(&mut crate::live_project::LiveProjectStore, &mut Option<Store>) -> ServiceResult<T>,
 ) -> ServiceResult<T> {
     checkpoint(stop)?;
+    if selection.reference.is_some() {
+        return Err(failure(ServiceErrorCode::InvalidRequest));
+    }
     if !source_root.is_absolute()
         || !lineage_store.is_absolute()
         || source_root.as_os_str().len() > 32768
@@ -384,7 +454,7 @@ fn resources<T>(
     {
         return Err(failure(ServiceErrorCode::InvalidRequest));
     }
-    let mut source = match selection {
+    let mut source = match selection.source {
         Some(selection) => crate::live_project::LiveProjectStore::open_in_namespace(
             source_root,
             selection.owner(),
@@ -445,9 +515,15 @@ fn configuration(limits: LineageStoreLimits) -> ServiceResult<StoreConfiguration
 }
 fn configuration_selected(
     limits: LineageStoreLimits,
-    selection: Option<&PlatformProjectSelection>,
+    selection: LineageSelections<'_>,
 ) -> ServiceResult<StoreConfiguration> {
-    if selection.is_some() {
+    if selection.mode() == LineageMode::Reference {
+        StoreConfiguration::new_with_instance_identity(
+            wow_graph::lineage::REFERENCE_LINEAGE_STORE_PROFILE,
+            limits,
+        )
+        .map_err(store_error)
+    } else if selection.source.is_some() {
         StoreConfiguration::new_with_instance_identity(
             wow_graph::lineage::SOURCE_LINEAGE_STORE_PROFILE,
             limits,
@@ -459,16 +535,16 @@ fn configuration_selected(
 }
 fn selection_schema(
     schema: &str,
-    selection: Option<&PlatformProjectSelection>,
-    ordinary: &str,
-    source: &str,
+    selection: LineageSelections<'_>,
+    family: (&str, &str, &str),
 ) -> ServiceResult<()> {
-    match selection {
-        None if schema == ordinary => Ok(()),
-        Some(selection) if schema == source => {
+    match (selection.source, selection.reference) {
+        (None, None) if schema == family.0 => Ok(()),
+        (Some(selection), None) if schema == family.1 => {
             selection.require_candidate()?;
             selection.owner().validate()
         }
+        (None, Some(selection)) if schema == family.2 => selection.validate(),
         _ => Err(failure(ServiceErrorCode::InvalidRequest)),
     }
 }
@@ -477,8 +553,16 @@ fn selection_option<'de, D: serde::Deserializer<'de>>(
 ) -> Result<Option<PlatformProjectSelection>, D::Error> {
     PlatformProjectSelection::deserialize(deserializer).map(Some)
 }
+fn reference_option<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<ReferenceLineageSelection>, D::Error> {
+    ReferenceLineageSelection::deserialize(deserializer).map(Some)
+}
 fn open_lineage_store(store: &mut Store) -> wow_graph::GraphResult<PersistentLineageStore<'_>> {
-    if store.configuration().profile_id() == wow_graph::lineage::SOURCE_LINEAGE_STORE_PROFILE {
+    if store.configuration().profile_id() == wow_graph::lineage::REFERENCE_LINEAGE_STORE_PROFILE {
+        PersistentLineageStore::new_reference(store)
+    } else if store.configuration().profile_id() == wow_graph::lineage::SOURCE_LINEAGE_STORE_PROFILE
+    {
         PersistentLineageStore::new_source(store)
     } else {
         PersistentLineageStore::new(store)
@@ -497,6 +581,29 @@ fn native_provenance<'a>(
             .pair()
             .source_provenance()
             .ok_or_else(|| failure(ServiceErrorCode::ComponentUnavailable)),
+    }
+}
+fn native_source_side<'a, 'g>(
+    selection: LineageSelections<'_>,
+    read: &'a crate::live_project::LiveProjectRead,
+    graph: &'a wow_graph::GraphPartitionRead<'g>,
+) -> ServiceResult<wow_graph::lineage::LineageNativeSourceSide<'a, 'g>> {
+    if selection.reference.is_some() {
+        let api = read
+            .native_api()
+            .ok_or_else(|| failure(ServiceErrorCode::ComponentUnavailable))?;
+        Ok(wow_graph::lineage::LineageNativeSourceSide {
+            graph,
+            source_handles: api.source_handles(),
+            evidence: api.evidence(),
+        })
+    } else {
+        let source = native_provenance(selection.source, read)?;
+        Ok(wow_graph::lineage::LineageNativeSourceSide {
+            graph,
+            source_handles: source.source_handles(),
+            evidence: source.evidence(),
+        })
     }
 }
 fn bounded(bytes: Box<[u8]>, limit: usize) -> ServiceResult<Box<[u8]>> {

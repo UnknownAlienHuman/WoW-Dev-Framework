@@ -75,6 +75,7 @@ pub fn build_project_source_fingerprint_partition(
         before: binding(before, l.scope()),
         after: binding(after, r.scope()),
         source: None,
+        reference: None,
     };
     let mut builder = Builder {
         retained,
@@ -86,6 +87,8 @@ pub fn build_project_source_fingerprint_partition(
             producer_id: PROJECT_SPAN_PRODUCER.into(),
             binding,
             records: Vec::new(),
+            reference_records: Vec::new(),
+            reference_omissions: Vec::new(),
             partitions: Vec::new(),
             coverage: "partial".into(),
             source_bodies: "excluded".into(),
@@ -106,6 +109,15 @@ pub fn build_project_source_fingerprint_partition(
     )
     .map_err(lineage_error)
 }
+/// Exact retained owner metadata for a separately validated lineage producer.
+/// This data does not construct a retained read or assert comparison authority.
+pub fn retained_lineage_generation_binding(
+    pair: &AcquiredProjectPair,
+    scope: &wow_graph::GraphAssertionRecordScope,
+) -> LineageGenerationBinding {
+    binding(pair, scope)
+}
+
 fn binding(
     owner: &AcquiredProjectPair,
     scope: &wow_graph::GraphAssertionRecordScope,

@@ -25,12 +25,14 @@ pub enum LineageRole {
 pub enum LineageFunctionKind {
     Chunk,
     Closure,
+    ReferenceCallable,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LineageUniverseClass {
     UserProject,
     BlizzardUiSource,
+    ReferencePlatformContract,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -72,6 +74,8 @@ pub struct LineageComparisonBinding {
     pub after: LineageGenerationBinding,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<LineageSourceComparisonBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference: Option<LineageReferenceComparisonBinding>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -120,6 +124,10 @@ pub struct ProjectFingerprintPartition {
     pub producer_id: Box<str>,
     pub binding: LineageComparisonBinding,
     pub records: Vec<LineageFunctionRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reference_records: Vec<LineageReferenceCallableRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reference_omissions: Vec<LineageReferenceOmission>,
     pub partitions: Vec<LineagePartitionCoverage>,
     pub coverage: Box<str>,
     pub source_bodies: Box<str>,
@@ -204,7 +212,7 @@ pub fn validate_source_fingerprint_partition(
     }
     validate_fingerprint_partition(data, before, after, limits, stop)
 }
-fn validate_fingerprint_partition(
+pub(super) fn validate_fingerprint_partition(
     mut data: ProjectFingerprintPartition,
     before: &GraphPartitionRead<'_>,
     after: &GraphPartitionRead<'_>,
@@ -224,9 +232,15 @@ fn validate_fingerprint_partition(
         || data.coverage.as_ref() != "partial"
         || data.source_bodies.as_ref() != "excluded"
         || data.proof_ceiling != GraphConfidence::Candidate
-        || data.records.len() > limits.max_entities
+        || data
+            .records
+            .len()
+            .saturating_add(data.reference_records.len())
+            > limits.max_entities
+        || data.reference_omissions.len() > limits.max_entities
         || data.partitions.len() > crate::MAX_GRAPH_PRODUCER_PARTITIONS * 2
-        || data.binding.before.store_epoch_id != data.binding.after.store_epoch_id
+        || (data.binding.universe_class != LineageUniverseClass::ReferencePlatformContract
+            && data.binding.before.store_epoch_id != data.binding.after.store_epoch_id)
         || data.binding.before.project_id != data.binding.after.project_id
         || data.binding.before.project_kind != data.binding.after.project_kind
         || (ordinary
@@ -243,6 +257,14 @@ fn validate_fingerprint_partition(
                     != data.binding.after.reference_generation_id
                 || data.binding.before.original_graph_scope.universe
                     != data.binding.after.original_graph_scope.universe))
+    {
+        return Err(invalid());
+    }
+    let reference = data.binding.universe_class == LineageUniverseClass::ReferencePlatformContract;
+    if !reference
+        && (data.binding.reference.is_some()
+            || !data.reference_records.is_empty()
+            || !data.reference_omissions.is_empty())
     {
         return Err(invalid());
     }
@@ -356,6 +378,10 @@ fn validate_fingerprint_partition(
         };
         let node = graph.published_entity(partition_id, &assertion.proposal_id, stop)?;
         if node != &record.node
+            || !matches!(
+                record.function_kind,
+                LineageFunctionKind::Chunk | LineageFunctionKind::Closure
+            )
             || node.kind() != "lua_source_function"
             || entity.proposal().entity_kind_id() != "lua_source_function"
             || ownership.proposal().relation_kind_id() != "source_declaration_owns"
@@ -404,6 +430,9 @@ fn validate_fingerprint_partition(
                 return Err(invalid());
             }
         }
+    }
+    if reference {
+        super::reference_model::validate_records(&mut data, before, after, &mut ledger, stop)?;
     }
     checkpoint(stop)?;
     let partition_id = identity("wow-graph/lineage-input-partition/1", &data)?;

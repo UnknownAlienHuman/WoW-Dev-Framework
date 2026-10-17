@@ -4,9 +4,12 @@
 The selected original-native callable observation producer is implemented in
 `native_view::comparison` and exposed through
 [`wow source reference-compare`](../../apps/wow/SOURCE_REFERENCE_COMPARISON.md).
-It compares exact selected callable fields under Candidate association only;
-the broader explicit transition/graph admission/review contract below remains
-unimplemented and is tracked by Issue #125.
+It compares exact selected callable fields under Candidate association only.
+The selected retained native Reference Candidate graph/lifecycle is implemented
+under Issue #182 through [REFERENCE_LINEAGE.md](../../apps/wow/REFERENCE_LINEAGE.md):
+two original native carrier Stores, independent Graph validation and a separate
+immutable Candidate snapshot. Explicit transitions, accepted review/relations,
+migration/impact and full Reference qualification below remain Issue #125 debt.
 
 `wow-reference` owns exact cross-profile ReferenceView transition, deprecation, replacement, availability, signature/type/restriction and correction evidence. It does not own project-source continuity, search ranking, accepted lineage graph publication, migration application or runtime behavior.
 

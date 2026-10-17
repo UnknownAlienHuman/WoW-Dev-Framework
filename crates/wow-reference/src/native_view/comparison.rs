@@ -20,7 +20,7 @@ pub const CALLABLE_COMPARISON_PROFILE: &str = "wow-reference/native-callable-com
 #[cfg(test)]
 mod tests;
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CallableComparisonLimits {
     pub max_keys: usize,
@@ -59,6 +59,9 @@ pub struct NativeCallableComparison {
     observations: Vec<CallableObservation>,
 }
 impl NativeCallableComparison {
+    pub fn comparison_digest(&self) -> &str {
+        &self.comparison_digest
+    }
     pub fn is_partial(&self) -> bool {
         self.observations
             .iter()

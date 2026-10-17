@@ -126,6 +126,15 @@ pub(crate) struct NativeApiProvenance {
     library: RequalifiedNativeLibrary,
 }
 
+/// Borrowed original support for an accepted local projection. This is data for
+/// independent Graph validation, not an accepted cross-generation relation.
+pub(crate) struct NativeApiLineageOrigin<'a> {
+    pub(crate) node: wow_graph::GraphNode,
+    pub(crate) source_assertion: GraphAssertionRef,
+    pub(crate) source_handle: &'a SourceHandle,
+    pub(crate) evidence: &'a EvidenceRecord,
+}
+
 // Structured target tuples remain values, including during bounded counting.
 // JSON object keys cannot represent SymbolTarget; preserve the map's exact order.
 fn serialize_bindings<S: serde::Serializer>(
@@ -140,6 +149,46 @@ fn serialize_bindings<S: serde::Serializer>(
 }
 
 impl NativeApiProvenance {
+    pub(crate) fn original_reference_library(&self) -> &RequalifiedNativeLibrary {
+        &self.library
+    }
+
+    pub(crate) fn reference_lineage_origin<'a>(
+        &'a self,
+        graph: &wow_graph::GraphPartitionRead<'_>,
+        record_key: &str,
+        record_digest: &str,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Option<NativeApiLineageOrigin<'a>>> {
+        let Some((endpoint, node)) =
+            self.reference_endpoint(graph, record_key, record_digest, stop)?
+        else {
+            return Ok(None);
+        };
+        let source_handle = self
+            .source_handles
+            .get(&endpoint.source_handle_id)
+            .ok_or_else(incompatible)?;
+        let evidence = self
+            .evidence
+            .get(&endpoint.evidence_id)
+            .ok_or_else(incompatible)?;
+        if source_handle.handle_id() != endpoint.source_handle_id
+            || evidence.evidence_id() != endpoint.evidence_id
+            || evidence.context_id() != self.context.context_id()
+            || !evidence
+                .source_handle_ids()
+                .contains(&endpoint.source_handle_id)
+        {
+            return Err(incompatible());
+        }
+        Ok(Some(NativeApiLineageOrigin {
+            node,
+            source_assertion: endpoint.assertion.clone(),
+            source_handle,
+            evidence,
+        }))
+    }
     pub(crate) const fn context(&self) -> &GenerationContext {
         &self.context
     }
@@ -170,6 +219,17 @@ impl NativeApiProvenance {
         record_digest: &str,
         stop: &AtomicBool,
     ) -> ServiceResult<Option<wow_graph::GraphNodeId>> {
+        self.reference_endpoint(graph, record_key, record_digest, stop)
+            .map(|value| value.map(|(_, node)| node.node_id().clone()))
+    }
+
+    fn reference_endpoint<'a>(
+        &'a self,
+        graph: &wow_graph::GraphPartitionRead<'_>,
+        record_key: &str,
+        record_digest: &str,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Option<(&'a NativeApiEndpoint, wow_graph::GraphNode)>> {
         checkpoint(stop)?;
         if graph.owner().source_context_id() != self.context.context_id() {
             return Err(incompatible());
@@ -211,7 +271,7 @@ impl NativeApiProvenance {
             if node.kind() != wow_project::graph::NATIVE_API_CALLABLE_KIND || selected.is_some() {
                 return Err(incompatible());
             }
-            selected = Some(node.node_id().clone());
+            selected = Some((endpoint, node.clone()));
         }
         checkpoint(stop)?;
         Ok(selected)

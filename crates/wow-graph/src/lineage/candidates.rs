@@ -11,6 +11,8 @@ use wow_core::{CanonicalResult, ContentDigest};
 pub struct LineageEntityAddress {
     pub role: LineageRole,
     pub node_id: GraphNodeId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference_entity: Option<Box<LineageReferenceEntityAddress>>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -95,7 +97,20 @@ impl LineageCandidateSet {
 struct Bucket<'a> {
     before: Vec<LineageEntityAddress>,
     after: Vec<LineageEntityAddress>,
-    feature: &'a LineageSourceSpanFeature,
+    feature: BucketFeature<'a>,
+}
+
+enum BucketFeature<'a> {
+    SourceSpan(&'a LineageSourceSpanFeature),
+    ReferenceKey(&'a LineageReferenceKeyFeature),
+}
+impl BucketFeature<'_> {
+    fn profile(&self) -> &str {
+        match self {
+            Self::SourceSpan(feature) => &feature.profile_id,
+            Self::ReferenceKey(feature) => &feature.profile_id,
+        }
+    }
 }
 
 pub fn generate_lineage_candidate_components(
@@ -106,7 +121,14 @@ pub fn generate_lineage_candidate_components(
     let mut buckets: BTreeMap<(LineageFunctionKind, ContentDigest<CanonicalResult>), Bucket<'_>> =
         BTreeMap::new();
     let mut output = LineageCandidateSet {
-        schema: "wow-graph/lineage-source-span-candidates/1".into(),
+        schema: if input.data.binding.universe_class
+            == LineageUniverseClass::ReferencePlatformContract
+        {
+            "wow-graph/lineage-reference-callable-candidates/1"
+        } else {
+            "wow-graph/lineage-source-span-candidates/1"
+        }
+        .into(),
         profile_id: input.data.binding.profile_id.clone(),
         input_partition_id: input.partition_id.clone(),
         proposals: Vec::new(),
@@ -129,6 +151,7 @@ pub fn generate_lineage_candidate_components(
         let address = LineageEntityAddress {
             role: record.role,
             node_id: record.node.node_id().clone(),
+            reference_entity: None,
         };
         ledger.metadata(&address)?;
         match &record.fingerprint {
@@ -138,11 +161,9 @@ pub fn generate_lineage_candidate_components(
                 let bucket = buckets.entry(key).or_insert_with(|| Bucket {
                     before: Vec::new(),
                     after: Vec::new(),
-                    feature: source_span,
+                    feature: BucketFeature::SourceSpan(source_span),
                 });
-                if bucket.feature.profile_id != source_span.profile_id
-                    || bucket.feature.content_sha256 != source_span.content_sha256
-                    || bucket.feature.byte_length != source_span.byte_length
+                if !matches!(&bucket.feature, BucketFeature::SourceSpan(prior) if *prior == source_span)
                 {
                     return Err(invalid());
                 }
@@ -164,6 +185,33 @@ pub fn generate_lineage_candidate_components(
                 output.unavailable_features.push(unavailable);
                 singleton(&mut output, &mut ledger, address, "feature_unavailable")?;
             }
+        }
+    }
+    for record in &input.data.reference_records {
+        ledger.work(1)?;
+        let address = LineageEntityAddress {
+            role: record.role,
+            node_id: record.node.node_id().clone(),
+            reference_entity: Some(Box::new(record.reference_entity.clone())),
+        };
+        ledger.metadata(&address)?;
+        let key = (
+            LineageFunctionKind::ReferenceCallable,
+            record.feature.fingerprint,
+        );
+        ledger.metadata(&key)?;
+        let bucket = buckets.entry(key).or_insert_with(|| Bucket {
+            before: Vec::new(),
+            after: Vec::new(),
+            feature: BucketFeature::ReferenceKey(&record.feature),
+        });
+        if !matches!(&bucket.feature, BucketFeature::ReferenceKey(prior) if *prior == &record.feature)
+        {
+            return Err(invalid());
+        }
+        match record.role {
+            LineageRole::Before => bucket.before.push(address),
+            LineageRole::After => bucket.after.push(address),
         }
     }
     for ((kind, fingerprint), mut bucket) in buckets {
@@ -239,7 +287,7 @@ pub fn generate_lineage_candidate_components(
                     after: after.clone(),
                     confidence: GraphConfidence::Candidate,
                     proof_ceiling: GraphConfidence::Candidate,
-                    feature_profile_id: SOURCE_SPAN_FEATURE_PROFILE.into(),
+                    feature_profile_id: bucket.feature.profile().into(),
                     fingerprint,
                 };
                 ledger.metadata(&proposal)?;

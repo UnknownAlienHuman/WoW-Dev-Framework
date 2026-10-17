@@ -357,6 +357,7 @@ fn source_service_roundtrip(
         store_limits: LineageStoreLimits::default(),
         max_output_bytes: 8 * 1024 * 1024,
         source_selection: Some(selected),
+        reference_selection: None,
     };
     let lineage_path = path.join("lineage.sqlite");
     // Explicit test transport artifact, never native authority or a DB copy.
@@ -390,6 +391,7 @@ fn source_service_roundtrip(
         store_limits: build.store_limits,
         max_output_bytes: build.max_output_bytes,
         source_selection: build.source_selection.clone(),
+        reference_selection: None,
     };
     let saved = compare_lineage_snapshot(store_path, &lineage_path, &read, stop)?;
     let data: serde_json::Value = serde_json::from_slice(&saved)?;
@@ -428,6 +430,7 @@ fn source_service_roundtrip(
         },
         lease_expires_after: 10,
         source_selection: build.source_selection.clone(),
+        reference_selection: None,
     };
     let observation = query_lineage_snapshot(store_path, &lineage_path, &query, stop)?;
     let observation_data: serde_json::Value = serde_json::from_slice(&observation)?;

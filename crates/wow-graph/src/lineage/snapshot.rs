@@ -12,6 +12,9 @@ pub const LINEAGE_SNAPSHOT_KIND: &str = "wow.graph.lineage.candidate.snapshot";
 pub const LINEAGE_SNAPSHOT_SCHEMA: &str = "wow-graph/lineage-candidate-snapshot/1";
 pub const SOURCE_LINEAGE_STORE_PROFILE: &str = "wow-graph.lineage-source-span-store.v1";
 pub const SOURCE_LINEAGE_SNAPSHOT_SCHEMA: &str = "wow-graph/lineage-source-candidate-snapshot/1";
+pub const REFERENCE_LINEAGE_STORE_PROFILE: &str = "wow-graph.lineage-reference-key-store.v1";
+pub const REFERENCE_LINEAGE_SNAPSHOT_SCHEMA: &str =
+    "wow-graph/lineage-reference-candidate-snapshot/1";
 const REGISTRY: &str = "wow-graph/lineage-project-span-candidate-registry/1";
 const SOURCE_REGISTRY: &str = "wow-graph/lineage-source-span-candidate-registry/1";
 #[derive(Clone, Copy)]
@@ -36,10 +39,18 @@ const SOURCE_STORAGE: StorageProfile = StorageProfile {
     store: SOURCE_LINEAGE_STORE_PROFILE,
     validation_scope: "native-blizzard-ui-source-span-candidates-only",
 };
+const REFERENCE_STORAGE: StorageProfile = StorageProfile {
+    profile: REFERENCE_KEY_LINEAGE_PROFILE,
+    schema: REFERENCE_LINEAGE_SNAPSHOT_SCHEMA,
+    registry: "wow-graph/lineage-reference-key-candidate-registry/1",
+    store: REFERENCE_LINEAGE_STORE_PROFILE,
+    validation_scope: "native-reference-original-key-candidates-only",
+};
 fn storage_profile(profile: &str) -> GraphResult<StorageProfile> {
     match profile {
         PROJECT_SPAN_LINEAGE_PROFILE => Ok(PROJECT_STORAGE),
         SOURCE_SPAN_LINEAGE_PROFILE => Ok(SOURCE_STORAGE),
+        REFERENCE_KEY_LINEAGE_PROFILE => Ok(REFERENCE_STORAGE),
         _ => Err(invalid()),
     }
 }
@@ -204,6 +215,9 @@ impl<'a> PersistentLineageStore<'a> {
     }
     pub fn new_source(store: &'a mut Store) -> GraphResult<Self> {
         Self::open_profile(store, SOURCE_STORAGE)
+    }
+    pub fn new_reference(store: &'a mut Store) -> GraphResult<Self> {
+        Self::open_profile(store, REFERENCE_STORAGE)
     }
     fn open_profile(store: &'a mut Store, profile: StorageProfile) -> GraphResult<Self> {
         if store.configuration().profile_id() != profile.store {

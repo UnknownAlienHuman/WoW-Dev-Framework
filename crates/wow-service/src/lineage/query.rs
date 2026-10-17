@@ -5,7 +5,7 @@ pub use wow_graph::lineage::{
     LineageCandidateQuery, LineageEntityAddress, LineageExplanationTarget, LineageQueryLimits,
     LineageQueryResult, LineageRole,
 };
-use wow_graph::lineage::{LineageNativeSourceSide, LineageNativeSources, LineageReadLeaseRequest};
+use wow_graph::lineage::{LineageNativeSources, LineageReadLeaseRequest};
 use wow_store::{LogicalEpoch, OperationBegin};
 const KIND: &str = "wow.service.lineage.query";
 
@@ -27,11 +27,25 @@ pub struct LineageQueryRequest {
         deserialize_with = "selection_option"
     )]
     pub source_selection: Option<PlatformProjectSelection>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "reference_option"
+    )]
+    pub reference_selection: Option<ReferenceLineageSelection>,
 }
 impl LineageQueryRequest {
-    fn selector(&self) -> LineageReadRequest {
+    fn selections(&self) -> LineageSelections<'_> {
+        LineageSelections {
+            source: self.source_selection.as_ref(),
+            reference: self.reference_selection.as_ref(),
+        }
+    }
+    pub(super) fn selector(&self) -> LineageReadRequest {
         LineageReadRequest {
-            schema: if self.source_selection.is_some() {
+            schema: if self.reference_selection.is_some() {
+                "wow-service/reference-lineage-read/1"
+            } else if self.source_selection.is_some() {
                 "wow-service/source-lineage-read/1"
             } else {
                 "wow-service/lineage-read/1"
@@ -43,14 +57,18 @@ impl LineageQueryRequest {
             store_limits: self.store_limits,
             max_output_bytes: self.limits.max_output_bytes,
             source_selection: self.source_selection.clone(),
+            reference_selection: self.reference_selection.clone(),
         }
     }
-    fn validate(&self) -> ServiceResult<()> {
+    pub(super) fn validate(&self) -> ServiceResult<()> {
         selection_schema(
             &self.schema,
-            self.source_selection.as_ref(),
-            "wow-service/lineage-query/1",
-            "wow-service/source-lineage-query/1",
+            self.selections(),
+            (
+                "wow-service/lineage-query/1",
+                "wow-service/source-lineage-query/1",
+                "wow-service/reference-lineage-query/1",
+            ),
         )?;
         if self.lease_expires_after == 0 || self.lease_expires_after > i64::MAX as u64 {
             return Err(failure(ServiceErrorCode::InvalidRequest));
@@ -64,14 +82,16 @@ impl LineageQueryRequest {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct QueryReceipt {
-    schema: Box<str>,
-    operation_id: Box<str>,
-    request_digest: RequestDigest,
-    request: LineageQueryRequest,
-    result: LineageQueryResult,
-    resource_closure: Box<str>,
-    capture_kind: Box<str>,
+pub(super) struct QueryReceipt {
+    pub(super) schema: Box<str>,
+    pub(super) operation_id: Box<str>,
+    pub(super) request_digest: RequestDigest,
+    pub(super) request: LineageQueryRequest,
+    pub(super) result: LineageQueryResult,
+    pub(super) resource_closure: Box<str>,
+    pub(super) capture_kind: Box<str>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) reference_comparison: Option<serde_json::Value>,
 }
 
 pub fn query_lineage_snapshot(
@@ -86,7 +106,7 @@ pub fn query_lineage_snapshot(
         lineage_store,
         request.store_limits,
         false,
-        request.source_selection.as_ref(),
+        request.selections(),
         stop,
         |source, slot| run(source, current(slot)?, request, stop),
     )
@@ -145,19 +165,9 @@ fn run(
     let result = with_prepared_pair(&build.request, source, stop, |expected, before, after| {
         let left = before.pair().graph_read(stop).map_err(graph_error)?;
         let right = after.pair().graph_read(stop).map_err(graph_error)?;
-        let left_sources = native_provenance(build.request.source_selection.as_ref(), before)?;
-        let right_sources = native_provenance(build.request.source_selection.as_ref(), after)?;
         let sources = LineageNativeSources {
-            before: LineageNativeSourceSide {
-                graph: &left,
-                source_handles: left_sources.source_handles(),
-                evidence: left_sources.evidence(),
-            },
-            after: LineageNativeSourceSide {
-                graph: &right,
-                source_handles: right_sources.source_handles(),
-                evidence: right_sources.evidence(),
-            },
+            before: native_source_side(build.request.selections(), before, &left)?,
+            after: native_source_side(build.request.selections(), after, &right)?,
         };
         let mut owner = open_lineage_store(store).map_err(graph_error)?;
         let mut view = owner
@@ -183,7 +193,9 @@ fn run(
     })?;
     checkpoint(stop)?;
     let receipt = QueryReceipt {
-        schema: if request.source_selection.is_some() {
+        schema: if request.reference_selection.is_some() {
+            "wow-service/reference-lineage-query-result/1"
+        } else if request.source_selection.is_some() {
             "wow-service/source-lineage-query-result/1"
         } else {
             "wow-service/lineage-query-result/1"
@@ -195,9 +207,12 @@ fn run(
         result,
         resource_closure: "closed".into(),
         capture_kind: "recorded_native_candidate_observation".into(),
+        reference_comparison: None,
     };
     let bytes = encode(&receipt, request.limits.max_output_bytes)?;
-    let kind = if request.source_selection.is_some() {
+    let kind = if request.reference_selection.is_some() {
+        "wow.service.reference_lineage.query"
+    } else if request.source_selection.is_some() {
         "wow.service.source_lineage.query"
     } else {
         KIND
@@ -212,14 +227,16 @@ fn run(
         .map_err(|_| unknown())?;
     Ok(bytes)
 }
-fn replay(
+pub(super) fn replay(
     store: &Store,
     request: &LineageQueryRequest,
     digest: &RequestDigest,
     id: &ObjectId,
 ) -> ServiceResult<Box<[u8]>> {
     let object = store.object(id).map_err(store_error)?.ok_or_else(unknown)?;
-    let kind = if request.source_selection.is_some() {
+    let kind = if request.reference_selection.is_some() {
+        "wow.service.reference_lineage.query"
+    } else if request.source_selection.is_some() {
         "wow.service.source_lineage.query"
     } else {
         KIND
@@ -228,7 +245,9 @@ fn replay(
         return Err(failure(ServiceErrorCode::IdentityMismatch));
     }
     let receipt: QueryReceipt = object.decode().map_err(store_error)?;
-    let schema = if request.source_selection.is_some() {
+    let schema = if request.reference_selection.is_some() {
+        "wow-service/reference-lineage-query-result/1"
+    } else if request.source_selection.is_some() {
         "wow-service/source-lineage-query-result/1"
     } else {
         "wow-service/lineage-query-result/1"
@@ -242,7 +261,15 @@ fn replay(
     {
         return Err(failure(ServiceErrorCode::IdentityMismatch));
     }
-    if request.source_selection.is_some() {
+    reference::validate_capture(
+        receipt.reference_comparison.as_ref(),
+        &receipt.result.binding,
+    )?;
+    if request.reference_selection.is_some() {
+        receipt
+            .result
+            .validate_reference_capture(&request.snapshot_id, &request.query)
+    } else if request.source_selection.is_some() {
         receipt
             .result
             .validate_source_capture(&request.snapshot_id, &request.query)

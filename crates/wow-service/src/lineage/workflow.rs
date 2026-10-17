@@ -83,6 +83,7 @@ pub(super) fn build(
                     store_limits: request.store_limits,
                     max_output_bytes: request.max_output_bytes,
                     source_selection: request.source_selection.clone(),
+                    reference_selection: None,
                 };
                 let (receipt, bytes) = recorded(store, &selector, false)?;
                 let expected = qualify(source, store, &receipt, stop)?;
@@ -274,6 +275,7 @@ fn recorded(
         || receipt.request_digest != request.build_request_digest
         || receipt.request.store_limits != request.store_limits
         || receipt.request.source_selection != request.source_selection
+        || receipt.request.reference_selection != request.reference_selection
         || receipt.status.as_ref() != "candidate_only"
         || receipt.accepted_assertion_count != 0
         || receipt.promotion.as_ref() != "not_evaluated"
@@ -393,7 +395,7 @@ pub(super) fn retire(
         .map_err(|_| unknown())?;
     Ok(bytes)
 }
-fn digest<T: Serialize>(domain: &str, value: &T) -> ServiceResult<RequestDigest> {
+pub(super) fn digest<T: Serialize>(domain: &str, value: &T) -> ServiceResult<RequestDigest> {
     let hash = wow_core::domain_separated_digest(domain, value)
         .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
     RequestDigest::new(

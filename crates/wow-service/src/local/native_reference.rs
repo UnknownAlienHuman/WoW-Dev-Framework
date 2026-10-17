@@ -22,6 +22,44 @@ const PROFILE_VERSION: &str = "1.0.0";
 mod comparison;
 pub use comparison::{SourceReferenceComparisonResult, compare_local_source_references};
 pub const SOURCE_REFERENCE_INPUT_SCHEMA: &str = "wow-service/source-reference-input/1";
+pub const SOURCE_REFERENCE_TARGET_INPUT_SCHEMA: &str =
+    "wow-service/source-reference-target-input/1";
+
+/// Declared native target provenance. It is not current-source/client evidence.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativeReferenceTarget {
+    schema: String,
+    product: String,
+    channel: String,
+}
+impl NativeReferenceTarget {
+    pub fn product(&self) -> &str {
+        &self.product
+    }
+    pub fn channel(&self) -> &str {
+        &self.channel
+    }
+    pub(super) fn validate(&self) -> ServiceResult<()> {
+        if self.schema != "wow-service/native-reference-target/1" {
+            return Err(invalid("unsupported native Reference target schema"));
+        }
+        for label in [&self.product, &self.channel] {
+            if label.is_empty()
+                || label.len() > 64
+                || !label.bytes().all(|c| {
+                    c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'_' | b'-')
+                })
+                || matches!(label.as_str(), "current" | "latest" | "default" | "nearest")
+            {
+                return Err(invalid(
+                    "native Reference target requires exact product/channel labels",
+                ));
+            }
+        }
+        Ok(())
+    }
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -41,6 +79,8 @@ pub struct SourceReferenceResult {
     schema: &'static str,
     configuration_content_digest: ContentDigest<SourceContent>,
     profile: ProfileIdentity,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reference_target: Option<NativeReferenceTarget>,
     reference_generation: ReferenceGenerationId,
     revision: String,
     environment: String,
@@ -118,7 +158,14 @@ pub fn read_local_source_reference(
         .map_err(super::disk_input::acquisition_error)?;
     let input: SourceReferenceInput = serde_json::from_slice(&bytes)
         .map_err(|_| invalid("invalid source reference configuration"))?;
-    if input.schema != SOURCE_REFERENCE_INPUT_SCHEMA {
+    if !matches!(
+        input.schema.as_str(),
+        SOURCE_REFERENCE_INPUT_SCHEMA | SOURCE_REFERENCE_TARGET_INPUT_SCHEMA
+    ) || (input.schema == SOURCE_REFERENCE_TARGET_INPUT_SCHEMA)
+        != input.profile.reference_target.is_some()
+        || (input.profile.reference_target.is_some()
+            && (input.native_documents.is_some() || input.compatibility_aliases.is_some()))
+    {
         return Err(invalid("unsupported source reference schema"));
     }
     input.profile.validate_selector()?;
@@ -172,13 +219,16 @@ pub fn read_local_source_reference(
         .map_err(|_| invalid("native reference owner returned an invalid generation"))?;
     cancelled(stop)?;
     Ok(SourceReferenceResult {
-        schema: if compatibility_aliases.is_some() {
+        schema: if input.profile.reference_target.is_some() {
+            "wow-service/source-reference-target-result/1"
+        } else if compatibility_aliases.is_some() {
             "wow-service/source-reference-compatibility-result/1"
         } else {
             "wow-service/source-reference-result/1"
         },
         configuration_content_digest: ContentDigest::from_bytes(Sha256::digest(bytes).into()),
         profile: built.profile,
+        reference_target: input.profile.reference_target.clone(),
         reference_generation,
         revision: input.profile.revision,
         environment: input.profile.environment,
@@ -392,10 +442,19 @@ pub(super) struct NativeProfile {
     pub(super) client_build: u64,
     pub(super) revision: String,
     pub(super) environment: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::native_resources::present"
+    )]
+    pub(super) reference_target: Option<NativeReferenceTarget>,
 }
 
 impl NativeProfile {
     pub(super) fn validate_selector(&self) -> ServiceResult<()> {
+        if let Some(target) = &self.reference_target {
+            target.validate()?;
+        }
         if self.profile_id.as_str() == wow_rules::FIXTURE_PROFILE_ID {
             return Err(invalid(
                 "native production input cannot use the fixture rule profile",
@@ -425,6 +484,36 @@ impl NativeProfile {
         source_digest: ContentDigest<SourceLogicalSnapshot>,
         correction_digest: Option<ContentDigest<CorrectionSet>>,
     ) -> ServiceResult<ProfileIdentity> {
+        self.validate_selector()?;
+        let source_digest = if let Some(target) = &self.reference_target {
+            let bytes = wow_core::canonical_json_bytes(&(
+                "wow-service/native-reference-target-source/1",
+                source_digest,
+                target,
+            ))
+            .map_err(|_| invalid("native Reference target identity rejected"))?;
+            ContentDigest::from_bytes(Sha256::digest(bytes).into())
+        } else {
+            source_digest
+        };
+        let mut schemas = vec![SchemaVersionEntry::new(
+            "schema:wow:native-source-input"
+                .parse()
+                .map_err(|_| invalid("native schema identity rejected"))?,
+            PROFILE_VERSION
+                .parse()
+                .map_err(|_| invalid("native schema version rejected"))?,
+        )];
+        if self.reference_target.is_some() {
+            schemas.push(SchemaVersionEntry::new(
+                "schema:wow:native-reference-target"
+                    .parse()
+                    .map_err(|_| invalid("native target schema identity rejected"))?,
+                "1.0.0"
+                    .parse()
+                    .map_err(|_| invalid("native target schema version rejected"))?,
+            ));
+        }
         // Bind the canonical explicitly selected correction set; omission retains
         // the original no-corrections identity. Raw source observations stay intact.
         let corrections =
@@ -449,14 +538,7 @@ impl NativeProfile {
                 .parse()
                 .map_err(|_| invalid("native builder version rejected"))?,
         )
-        .schema_versions(vec![SchemaVersionEntry::new(
-            "schema:wow:native-source-input"
-                .parse()
-                .map_err(|_| invalid("native schema identity rejected"))?,
-            PROFILE_VERSION
-                .parse()
-                .map_err(|_| invalid("native schema version rejected"))?,
-        )])
+        .schema_versions(schemas)
         .correction_set_digest(correction_digest.unwrap_or_else(|| {
             ContentDigest::<CorrectionSet>::from_bytes(Sha256::digest(&corrections).into())
         }));

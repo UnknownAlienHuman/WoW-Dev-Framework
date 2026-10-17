@@ -78,6 +78,7 @@ pub fn build_source_fingerprint_partition(
         before: binding(before, l.scope()),
         after: binding(after, r.scope()),
         source: Some(source),
+        reference: None,
     };
     retained.charge_serialized(&binding, stop)?;
     let mut builder = Builder {
@@ -90,6 +91,8 @@ pub fn build_source_fingerprint_partition(
             producer_id: SOURCE_SPAN_PRODUCER.into(),
             binding,
             records: Vec::new(),
+            reference_records: Vec::new(),
+            reference_omissions: Vec::new(),
             partitions: Vec::new(),
             coverage: "partial".into(),
             source_bodies: "excluded".into(),

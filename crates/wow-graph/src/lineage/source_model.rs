@@ -249,17 +249,29 @@ pub(super) fn selected_input_profile(
     data: &ProjectFingerprintPartition,
 ) -> GraphResult<(&'static str, &'static str, &'static str)> {
     match data.binding.universe_class {
-        LineageUniverseClass::UserProject if data.binding.source.is_none() => Ok((
-            PROJECT_SPAN_LINEAGE_PROFILE,
-            PROJECT_SPAN_INPUT_SCHEMA,
-            PROJECT_SPAN_PRODUCER,
-        )),
-        LineageUniverseClass::BlizzardUiSource => {
+        LineageUniverseClass::UserProject
+            if data.binding.source.is_none() && data.binding.reference.is_none() =>
+        {
+            Ok((
+                PROJECT_SPAN_LINEAGE_PROFILE,
+                PROJECT_SPAN_INPUT_SCHEMA,
+                PROJECT_SPAN_PRODUCER,
+            ))
+        }
+        LineageUniverseClass::BlizzardUiSource if data.binding.reference.is_none() => {
             validate_source_binding(&data.binding)?;
             Ok((
                 SOURCE_SPAN_LINEAGE_PROFILE,
                 SOURCE_SPAN_INPUT_SCHEMA,
                 SOURCE_SPAN_PRODUCER,
+            ))
+        }
+        LineageUniverseClass::ReferencePlatformContract => {
+            super::reference_model::validate_binding(data)?;
+            Ok((
+                REFERENCE_KEY_LINEAGE_PROFILE,
+                REFERENCE_KEY_INPUT_SCHEMA,
+                REFERENCE_KEY_PRODUCER,
             ))
         }
         _ => Err(invalid()),

@@ -10,6 +10,7 @@ mod library_witnesses;
 mod native_type_resolution;
 mod project_budgets;
 mod reference_context_handoff;
+mod reference_lineage;
 mod signal_witnesses;
 mod w5_secure_hooks;
 mod xml_classification;

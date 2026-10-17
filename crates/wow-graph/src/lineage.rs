@@ -3,6 +3,8 @@ mod model;
 pub use model::*;
 mod source_model;
 pub use source_model::*;
+mod reference_model;
+pub use reference_model::*;
 mod candidates;
 pub use candidates::*;
 mod snapshot;

@@ -25,8 +25,8 @@ use super::cancelled;
 use super::input::invalid;
 use super::native_input::{NativeFileIdentity, report_bytes_with_limit};
 use super::native_reference::{
-    InputFailure, NativeProfile, NativeReferenceBuild, project_native_reference,
-    project_native_reference_with_type_resolution,
+    InputFailure, NativeProfile, NativeReferenceBuild, NativeReferenceTarget,
+    project_native_reference, project_native_reference_with_type_resolution,
 };
 use super::native_resources::{NativeAnnotationResources, present};
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
@@ -35,6 +35,7 @@ const INPUT_SCHEMA: &str = "wow-service/native-library-producer-input/1";
 // Selected Reference type overlays change producer identities and interpretation.
 // Legacy inputs continue to reconstruct their original Reference projection.
 const TYPE_RESOLUTION_INPUT_SCHEMA: &str = "wow-service/native-library-producer-input/2";
+const TARGET_INPUT_SCHEMA: &str = "wow-service/native-library-producer-input/3";
 // Existing native report/join ceilings; the raw input has its separate Project bound.
 const METADATA_MAX_BYTES: usize = 64 * 1024 * 1024;
 const BINDING_MAX_WORK: usize = 1_000_000;
@@ -84,6 +85,12 @@ struct ProducerIds {
 #[serde(deny_unknown_fields)]
 struct ProducerInput {
     schema: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
+    normalization: Option<String>,
     profile: NativeProfile,
     #[serde(deserialize_with = "sources")]
     sources: Vec<SourceInput>,
@@ -143,6 +150,8 @@ pub(super) fn capture(
     #[derive(Serialize)]
     struct CapturedInput<'a> {
         schema: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        normalization: Option<&'static str>,
         profile: &'a NativeProfile,
         sources: Vec<CapturedSource<'a>>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -163,11 +172,20 @@ pub(super) fn capture(
     // reconsider each original input rather than reconstructing successful rows.
     let bytes = canonical_bytes(
         &CapturedInput {
-            schema: if original.reference.type_resolution_profile().is_some() {
+            schema: if original.profile.reference_target.is_some() {
+                TARGET_INPUT_SCHEMA
+            } else if original.reference.type_resolution_profile().is_some() {
                 TYPE_RESOLUTION_INPUT_SCHEMA
             } else {
                 INPUT_SCHEMA
             },
+            normalization: original.profile.reference_target.as_ref().map(|_| {
+                if original.reference.type_resolution_profile().is_some() {
+                    "type_resolution"
+                } else {
+                    "original"
+                }
+            }),
             profile: original.profile,
             sources,
             source_manifest: original
@@ -193,6 +211,8 @@ pub(super) fn capture(
 pub struct RequalifiedNativeLibrary {
     pub(super) project_snapshot_id: Box<str>,
     pub(super) profile: ProfileIdentity,
+    environment: Box<str>,
+    reference_target: Option<NativeReferenceTarget>,
     pub(super) reference: NativeViewProjection,
     pub(super) source_files: Vec<NativeFileIdentity>,
     pub(super) input_failures: Vec<InputFailure>,
@@ -205,6 +225,12 @@ pub struct RequalifiedNativeLibrary {
 }
 
 impl RequalifiedNativeLibrary {
+    pub(crate) fn environment(&self) -> &str {
+        &self.environment
+    }
+    pub(crate) fn reference_target(&self) -> Option<&NativeReferenceTarget> {
+        self.reference_target.as_ref()
+    }
     #[must_use]
     pub fn project_snapshot_id(&self) -> &str {
         &self.project_snapshot_id
@@ -267,6 +293,7 @@ pub(crate) fn rebuild_for_project(
         )
     })?;
     let decoded = from_bytes(retained.bytes(), stop)?;
+    let type_resolution = selected_type_resolution(&decoded);
     let mut captured = Vec::with_capacity(decoded.sources.len());
     for file in decoded.sources {
         cancelled(stop)?;
@@ -306,7 +333,7 @@ pub(crate) fn rebuild_for_project(
         documents,
         failures,
         source_files,
-    } = if decoded.schema == TYPE_RESOLUTION_INPUT_SCHEMA {
+    } = if type_resolution {
         project_native_reference_with_type_resolution(
             &decoded.profile,
             &captured,
@@ -422,6 +449,8 @@ pub(crate) fn rebuild_for_project(
     Ok(RequalifiedNativeLibrary {
         project_snapshot_id: project.snapshot_id().into(),
         profile,
+        environment: decoded.profile.environment.into(),
+        reference_target: decoded.profile.reference_target,
         reference,
         source_files,
         input_failures: failures,
@@ -571,10 +600,19 @@ fn from_bytes(bytes: &[u8], stop: &AtomicBool) -> ServiceResult<ProducerInput> {
     let input: ProducerInput = serde_json::from_slice(bytes)
         .map_err(|_| invalid("invalid or ambiguous native Library input"))?;
     cancelled(stop)?;
-    if input.schema != INPUT_SCHEMA && input.schema != TYPE_RESOLUTION_INPUT_SCHEMA {
+    if !matches!(
+        input.schema.as_str(),
+        INPUT_SCHEMA | TYPE_RESOLUTION_INPUT_SCHEMA | TARGET_INPUT_SCHEMA
+    ) || (input.schema == TARGET_INPUT_SCHEMA) != input.profile.reference_target.is_some()
+        || (input.schema == TARGET_INPUT_SCHEMA) != input.normalization.is_some()
+        || input
+            .normalization
+            .as_deref()
+            .is_some_and(|mode| !matches!(mode, "original" | "type_resolution"))
+    {
         return Err(invalid("unsupported native Library producer-input schema"));
     }
-    if input.schema == TYPE_RESOLUTION_INPUT_SCHEMA
+    if selected_type_resolution(&input)
         && !matches!(
             &input.annotation_inputs,
             AnnotationInputs::Selected {
@@ -591,6 +629,12 @@ fn from_bytes(bytes: &[u8], stop: &AtomicBool) -> ServiceResult<ProducerInput> {
     }
     cancelled(stop)?;
     Ok(input)
+}
+
+fn selected_type_resolution(input: &ProducerInput) -> bool {
+    input.schema == TYPE_RESOLUTION_INPUT_SCHEMA
+        || (input.schema == TARGET_INPUT_SCHEMA
+            && input.normalization.as_deref() == Some("type_resolution"))
 }
 
 fn canonical_bytes(value: &impl Serialize, stop: &AtomicBool) -> ServiceResult<Vec<u8>> {
