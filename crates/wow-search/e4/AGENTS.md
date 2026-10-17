@@ -6,13 +6,20 @@ Implement exact-generation SearchDocument projections, immutable SearchShards, s
 
 Do not implement source parsing, project/reference/graph truth, lineage, migration, impact, context, service, CLI, models, Codebase Memory, runtime data, diagnostics, remediation, or edits.
 
-## Before coding
+## Start with the selected work
 
-1. Read repository, crate, E4-A, owner, store, and current KB routing.
-2. Freeze every prerequisite implementation commit and fixture bundle digest.
-3. Freeze exact owner read ports, field/document schemas, normalization/tokenizer/FTS5/index profiles, lane/ranking/miss/pagination profiles, corpora, thresholds, and canonical bytes.
-4. Probe the exact SQLite library, Rust binding, compile options, static FTS5 availability, tokenizer behavior, integrity commands, and platform adapters. No loadable-extension fallback.
-5. Freeze SearchShard build/query/integrity vectors before the first Rust commit.
+Follow repository instructions and the selected Issue's reading list. Read the
+owner and caller contracts, storage boundary, and exact schema/profile IDs
+touched by the bounded change. Check existing implementation and fixtures before
+recreating behavior. For an existing-code refactor, do not make a new corpus,
+fixture campaign, or freeze exercise a prerequisite to replacing the path.
+
+Keep closed query/result schemas, exact shard and generation admission,
+authority, coverage, and `wow-store` physical-storage ownership intact. Exact
+profile, SQLite/FTS5, and expected-byte freezes remain required where the
+selected acceptance milestone needs them. Record historical missed freezes
+under #120; do not fabricate retroactive evidence or expand a storage refactor
+into unrelated query, ranking, corpus, threshold, and platform qualification.
 
 ## Authority discipline
 

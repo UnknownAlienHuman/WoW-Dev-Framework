@@ -2,36 +2,30 @@
 
 These instructions apply to every future change under `crates/wow-store/`.
 
-## Required reading
+## Start with the selected work
 
-Read in order:
+Follow the repository [contributor protocol](../../AGENTS.md) and
+[execution model](../../docs/EXECUTION_MODEL.md). Read the selected Issue or
+[`docs/REFACTOR_QUEUE.md`](../../docs/REFACTOR_QUEUE.md) task's exact reading
+list, then the relevant Store contract sections and actual consumer contract.
+The crate README links the primary SQLite documentation. Read only the schema,
+transaction, object, integrity, or consumer material touched by the task;
+[`TEST_MATRIX.md`](TEST_MATRIX.md) and [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
+are milestone references, not mandatory full pre-reading for every slice.
 
-1. [`../../AGENTS.md`](../../AGENTS.md)
-2. [`../AGENTS.md`](../AGENTS.md)
-3. [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md)
-4. [`../WORKSTREAMS.md`](../WORKSTREAMS.md)
-5. [`../wow-core/CONSUMER_GUIDE.md`](../wow-core/CONSUMER_GUIDE.md)
-6. [`README.md`](README.md)
-7. [`DECISIONS.md`](DECISIONS.md)
-8. [`DATA_MODEL.md`](DATA_MODEL.md)
-9. [`SCHEMA_AND_MIGRATIONS.md`](SCHEMA_AND_MIGRATIONS.md)
-10. [`SQLITE_PROFILE.md`](SQLITE_PROFILE.md)
-11. [`TRANSACTIONS_AND_PUBLICATION.md`](TRANSACTIONS_AND_PUBLICATION.md)
-12. [`OBJECT_STORE.md`](OBJECT_STORE.md)
-13. [`REFERENCE_STORE.md`](REFERENCE_STORE.md)
-14. [`PROJECT_STORE.md`](PROJECT_STORE.md)
-15. [`INTEGRITY_AND_SECURITY.md`](INTEGRITY_AND_SECURITY.md)
-16. [`ERROR_MODEL.md`](ERROR_MODEL.md)
-17. [`TEST_MATRIX.md`](TEST_MATRIX.md)
-18. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
-19. [`CONTRACT.json`](CONTRACT.json)
-20. the active consumer contract (`wow-reference` for E1, `wow-project` for E2)
+When a change depends on SQLite binding/API behavior, verify it against the
+version pinned by the current workspace and its selected profile. Do not upgrade
+the dependency or run a rolling source/release campaign for a refactor unless
+the selected contract requires current external semantics or Tier X.
 
-Primary SQLite documentation is linked from the crate README. Re-check the selected SQLite Rust binding and SQLite version before implementation; do not rely on historical crate behavior.
+## Historical E1-A baseline only
 
-## E1-A scope
-
-Implement only the persistence foundation required to build and consume one immutable ReferenceStore plus the content-addressed object store.
+E1-A originally scoped the persistence foundation required to build and consume
+one immutable ReferenceStore plus the content-addressed object store. Its
+milestone exclusions below are not blanket prohibitions on later work: current
+ProjectStore and Search code already exists, and selected #196/#169 or other
+current owner Issues may authorize bounded changes through their actual
+contracts. Do not infer blanket permission for unrelated functionality.
 
 Active:
 
@@ -48,7 +42,7 @@ read-only ReferenceStore opening
 content-addressed logical object write/read/dedup/reference/GC safety
 ```
 
-Deferred:
+Deferred under the E1-A milestone:
 
 ```text
 ProjectStore WAL and mutable generation publication (E2)
@@ -127,9 +121,14 @@ A row/table can be absent while coverage is partial; store never derives negativ
 
 ## ProjectStore rules
 
-E1-A documentation may define the future seam, but implementation remains Deferred.
+Historically, E1-A documentation could define this future seam without
+implementing it as part of E1-A. This does not prohibit the existing later E2
+ProjectStore owner or selected work under its current Issue/contract.
 
-Do not add WAL, mutable project schemas, watcher integration, or project-generation transactions to E1-A merely because they are planned.
+Do not add WAL, mutable project schemas, watcher integration, or
+project-generation transactions to an E1-A slice merely because they were
+planned there. For later work, follow the selected Issue and actual owner
+contract, preserving the dependency and domain boundaries above.
 
 ## Object store rules
 
@@ -193,36 +192,19 @@ Never claim byte-identical SQLite files without an executable proof.
 
 ## Test discipline
 
-Run all applicable IDs from [`TEST_MATRIX.md`](TEST_MATRIX.md), including:
-
-- capability/open-profile probes;
-- schema graph/migration digest validation;
-- empty-to-target ReferenceStore build;
-- in-place released migration rejection;
-- every publication crash/cancellation point;
-- read-only sealed-open mutation attempts;
-- object write/dedup/corruption/reference/GC cases;
-- path traversal/symlink/extension/attach/untrusted SQL cases;
-- integrity/foreign-key/schema/file/object mismatch rejection;
-- random insertion/temp/order/compression determinism;
-- explicit ProjectStore-deferred behavior.
+For a bounded implementation slice, use the repository Tier S chain and one
+existing targeted reproduction after the changed path works. Select relevant
+IDs from [`TEST_MATRIX.md`](TEST_MATRIX.md) for the affected Store boundary;
+the full matrix is required only by the corresponding Store acceptance
+milestone. Do not claim SQLite durability, crash, or platform behavior without
+the named tests. Preserve all applicable matrix cases and the explicit E1-A
+ProjectStore deferral when changing that historical milestone's behavior.
 
 Every test must prove the target path executed and should fail under a deliberate contract break.
 
 ## Completion report
 
-Report:
-
-```text
-SQLite library/version/capability probe
-active direct dependency
-schema bundle/migration graph IDs
-ReferenceStore generation and manifest identities
-publication state/crash/cancellation tests
-read-only open and integrity checks
-object logical/payload/reference/GC vectors
-durability level achieved per platform
-all tests/commands: pass | fail | skipped
-security/no-SQL-injection/no-extension/no-attach/no-source-execution checks
-ProjectStore and other deferred capabilities
-```
+Report the affected Store operation/schema, pinned SQLite behavior if relevant,
+identity or compatibility effect, checks run or skipped, achieved durability
+claims, and known deferred capabilities. Use the full matrix report at its
+acceptance milestone, not for every bounded slice.

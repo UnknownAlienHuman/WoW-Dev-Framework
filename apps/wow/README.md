@@ -1,9 +1,13 @@
 # `apps/wow` contract router
 
 Executable one-shot `status` / `check`: [LOCAL_INPUT.md](LOCAL_INPUT.md).
-Native live project commands: [LIVE_PROJECT.md](LIVE_PROJECT.md).
+Other implemented route contracts: native Project [publish/read/update](LIVE_PROJECT.md),
+Context [build/render](CONTEXT_BUILD.md), and exact Search [build/query](SEARCH_BUILD_QUERY.md).
 Manifest-bound source measurements: [SOURCE_CENSUS.md](SOURCE_CENSUS.md).
-Full roadmap/transport acceptance is not implied.
+Selected frontend behavior and profile scope are described in the [E7-A host](e7/README.md),
+[LSP profile](LSP.md), and [MCP mapping](e7/MCP_TOOL_RESOURCE_MAPPING.md).
+See the [implementation status](../../docs/IMPLEMENTATION_STATUS.md) and
+route-specific contracts for scope and remaining acceptance.
 
 **Status:** partial executable Rust transport; later product modes remain planned.
 
@@ -132,13 +136,9 @@ Each layer can narrow but never widen. Default LSP and MCP developer exposure is
 
 ## Current state
 
-```text
-planned application documentation: complete through E7-B
-implementation frontier: not-started
-first application implementation: I0-F status/check after I0-A through I0-E
-repository next package: I0-A / wow-core E0-A
-Cargo.toml: absent
-Rust source: absent
-CI/workflows: absent
-supported public release: none
-```
+The app has a partial executable Rust implementation. The routes above document
+selected `status`/`check`, native Project, Context build/render, Search
+build/query, MCP status/context behavior, and LSP profile scope. Their exact scope
+and outstanding acceptance are tracked in
+[IMPLEMENTATION_STATUS.md](../../docs/IMPLEMENTATION_STATUS.md) and the linked
+owner contracts.

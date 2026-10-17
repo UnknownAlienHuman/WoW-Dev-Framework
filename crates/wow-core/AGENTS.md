@@ -8,26 +8,24 @@ The assigned work package is **E0-A**: pure identity, generation, source-handle,
 
 No WoW API lookup, Secret rule, parser, graph, database, search, project indexing, transport, editor, network, filesystem, clock, random ID, or runtime behavior belongs here.
 
-## Required reading order
+## Start with the selected work
 
-1. [`../../AGENTS.md`](../../AGENTS.md)
-2. [`../AGENTS.md`](../AGENTS.md)
-3. [`README.md`](README.md)
-4. [`DECISIONS.md`](DECISIONS.md)
-5. [`DATA_MODEL.md`](DATA_MODEL.md)
-6. [`OPERATIONS.md`](OPERATIONS.md)
-7. [`CANONICALIZATION.md`](CANONICALIZATION.md)
-8. [`ERROR_MODEL.md`](ERROR_MODEL.md)
-9. [`TEST_MATRIX.md`](TEST_MATRIX.md)
-10. [`CONSUMER_GUIDE.md`](CONSUMER_GUIDE.md)
-11. [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
-12. [`CONTRACT.json`](CONTRACT.json)
-13. [`../DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md)
-14. Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
+Follow the repository [contributor protocol](../../AGENTS.md) and
+[execution model](../../docs/EXECUTION_MODEL.md). Read the selected Issue or
+[`docs/REFACTOR_QUEUE.md`](../../docs/REFACTOR_QUEUE.md) task's exact reading
+list, then the relevant sections of this crate's contract, decisions, canonical
+format, and consumer guide. Read the full [`TEST_MATRIX.md`](TEST_MATRIX.md)
+or implementation plan when that task changes their scope or reaches the named
+acceptance milestone; they are not mandatory pre-reading for every slice.
+
+Consult a pinned dependency's existing API only when the selected change depends
+on that API. Do not upgrade dependencies or run a source/release campaign for a
+refactor unless its contract requires current external semantics or Tier X.
 
 ## Implementation constraints
 
-- Implement in the order defined by `IMPLEMENTATION_PLAN.md`.
+- Follow the relevant `IMPLEMENTATION_PLAN.md` sequence when the selected task
+  depends on it; do not treat unrelated plan stages as blockers.
 - Preserve every normative decision ID in `DECISIONS.md`.
 - Do not add a public type/function merely because a later crate might need it.
 - Do not expose unchecked constructors for identity-bearing values.
@@ -40,10 +38,11 @@ No WoW API lookup, Secret rule, parser, graph, database, search, project indexin
 ## Test constraints
 
 - Preserve `TEST_MATRIX.md` case IDs in executable test names or table data.
-- Hash-vector tests merge before downstream crates consume core.
-- Randomized-order tests record the failing seed.
-- Every regression test proves the intended path executed.
-- Mutation tests must demonstrate that profile/context/coverage/authority invariants can fail.
+- Preserve the `TEST_MATRIX.md` hash, determinism, and mutation requirements
+  when changing those behaviors or completing their acceptance milestone; they
+  are not a full-suite gate for unrelated slices.
+- Tests added or changed must prove the intended path executed; randomized-order
+  failures record the seed, and authority mutations must prove the guard can fail.
 - No network, clock, random OS state, or WoW client is required.
 
 ## Contract changes
@@ -63,15 +62,7 @@ an ADR when repository-wide architecture changes
 
 ## Completion report
 
-Report:
-
-```text
-implemented operation IDs
-public API inventory
-external dependencies and justification
-hash vectors and test case IDs executed
-fmt/clippy/test results
-canonical byte/digest results
-known gaps
-confirmation that no sibling crate or forbidden responsibility changed
-```
+Report the selected operation/owner change, compatibility or canonical-byte
+effect, relevant tests and checks run or skipped, known gaps, and any dependency
+or sibling-owner boundary affected. Use the full contract inventory at its
+acceptance milestone, not for every bounded slice.

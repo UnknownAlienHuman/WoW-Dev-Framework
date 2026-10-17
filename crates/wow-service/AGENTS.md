@@ -1,19 +1,24 @@
 # AGENTS.md — `wow-service`
 
-## Current state
+## Current implementation
 
-```text
-planned service documentation: complete through E7-B
-service implementation: E0 orchestration, ReferenceView administration and local owner composition
-first service implementation package: I0-F / E0-F
-repository next work: missing functional owner and application code
-```
-
-Do not implement E7 service operations before prerequisite owner packages. Later documentation defines the final interface, but implementation follows the dependency and launch order.
+Service has executable owner composition and application routes at partial scope.
+See [`docs/IMPLEMENTATION_STATUS.md`](../../docs/IMPLEMENTATION_STATUS.md) for
+the current implementation record. It is a status reference, not a task list or
+package-acceptance gate.
 
 ## Required routing
 
-Read repository and crate instructions, the service router, dependency graph, workstreams, workspace plan, implementation handoff, conformance commands, completion matrix, then exactly one service package:
+Start with the root instructions, selected canonical Issue (or the
+[refactoring queue](../../docs/REFACTOR_QUEUE.md) when choosing work), this
+crate's [`README.md`](README.md) and relevant service contract. Read the actual
+owner contracts and application/tool caller contracts needed for the selected
+operation; use [`DEPENDENCY_GRAPH.md`](../DEPENDENCY_GRAPH.md) when its edges
+matter. `WORKSTREAMS.md`, workspace/build plans, handoff guides, conformance
+commands, completion matrices, and test matrices are scoped references, not
+mandatory reading before every task.
+
+Select only the service package and operation touched:
 
 ```text
 E0-F -> root E0 service contract
@@ -26,8 +31,14 @@ E6-B -> e6/
 E7-A -> e7/
 E7-B -> e7b/
 ```
+Read current external WoW source/KB material only when correctness depends on
+current WoW semantics or the selected contract requires it. Read actual addon
+instructions only for addon-facing work.
 
-Read current external WoW engineering KB routes for patch-sensitive work and actual addon instructions for addon-facing operations.
+For E7 work, require the direct owner capabilities and contracts used by the
+selected operation. Do not make full acceptance of every prerequisite package,
+optional E5/E6 work, or E7-B release work a blanket gate for an independent
+service repair.
 
 ## Common ownership
 
@@ -127,10 +138,12 @@ Service semantic code cannot execute source, repository, build, release, install
 
 ## Active implementation
 
-`src/local/` composes real project/analyzer/reference/rule owners for the one-shot
-application. Read `../../apps/wow/LOCAL_INPUT.md`. Implement missing behavior
-before new acceptance matrices; do not recreate owners or promote partial code
-to full package acceptance. The operator's current code-first priority applies.
+`src/local/` composes project/analyzer/reference/rule owners for the one-shot
+application. For that route, read [`LOCAL_INPUT.md`](../../apps/wow/LOCAL_INPUT.md);
+for another operation, follow its selected contract and caller. Implement the
+selected missing behavior without recreating owners or promoting partial code
+to full package acceptance. Follow the root execution model for proportional
+checks.
 
 ## Completion report
 
@@ -146,5 +159,3 @@ security, privacy, license, authorization, and credential state
 launch and completion state advanced or unchanged
 remaining exact blockers
 ```
-
-Do not start another service package while the current worktree remains open.
