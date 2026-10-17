@@ -17,6 +17,14 @@ coordinates real Project workspace/document ownership and local syntax; see
 the final contract inventory; broader workspace/session, language features,
 daemon and full LSP/client acceptance are not implemented by these subsets.
 
+The explicit host-v3 local-reference navigation policy adds
+`frontend_document_references`: one held Project private overlay reaches the
+accepted native same-file lexical declaration/reference index, followed by
+Project-owned position projection. The original host policies retain their
+registries and bytes. See the application guide for privacy, bounds and empty
+observation handling; this does not implement in-flight cancellation or general
+reference search.
+
 ## Mission
 
 Expose existing `wow-service` capabilities through one exact session/operation registry projected into the command line, a local daemon protocol, Language Server Protocol 3.18, and Model Context Protocol revision 2025-11-25 without moving domain logic into a transport.

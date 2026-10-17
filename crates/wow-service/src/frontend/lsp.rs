@@ -14,9 +14,11 @@ use wow_project::{
 
 mod definition;
 mod diagnostics;
+mod references;
 mod registry;
 pub use definition::{LspDefinitionLocation, LspDefinitionRequest, LspDefinitionResult};
 pub use diagnostics::{LspDiagnostic, LspDiagnosticReport, LspOverlayBinding};
+pub use references::{LspReferencesLocation, LspReferencesRequest, LspReferencesResult};
 pub use registry::{LspOperationDescriptor, LspRegistry, LspTransportProfile};
 pub use wow_project::overlay::OverlayPosition as LspPosition;
 pub use wow_project::overlay::{OverlayEdit as LspContentChange, OverlayRange as LspRange};
@@ -27,6 +29,7 @@ pub const LSP_MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 pub const LSP_MAX_OUTPUT_BYTES: usize = 4 * 1024 * 1024;
 pub const LSP_MAX_JSON_DEPTH: usize = 32;
 pub const LSP_MAX_DIAGNOSTICS: usize = 2048;
+pub const LSP_MAX_LOCAL_REFERENCES: usize = 2048;
 pub const LSP_MAX_RETAINED_REPORT_BYTES: usize = LSP_MAX_OUTPUT_BYTES / 2;
 
 #[derive(Deserialize)]
@@ -44,9 +47,10 @@ struct HostInput {
     #[serde(default, deserialize_with = "present_uri_profile")]
     document_uri_profile: Option<OverlayUriPolicy>,
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LocalNavigationPolicy {
     SameDocumentLexicalLocals,
+    SameDocumentLexicalLocalsAndReferences,
 }
 fn present_navigation<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
@@ -55,6 +59,9 @@ fn present_navigation<'de, D: serde::Deserializer<'de>>(
         "same_document_lexical_locals" => {
             Ok(Some(LocalNavigationPolicy::SameDocumentLexicalLocals))
         }
+        "same_document_lexical_locals_and_references" => Ok(Some(
+            LocalNavigationPolicy::SameDocumentLexicalLocalsAndReferences,
+        )),
         _ => Err(serde::de::Error::custom(
             "unsupported local navigation policy",
         )),
@@ -97,7 +104,7 @@ impl LspHost {
             && input.local_navigation.is_none();
         let navigation_profile = input.schema == "wow-service/lsp-private-overlay-host/2"
             && input.privacy == "session_private_metadata_diagnostics_and_same_document_locations"
-            && input.local_navigation.is_some();
+            && input.local_navigation == Some(LocalNavigationPolicy::SameDocumentLexicalLocals);
         let strict_profile =
             (old_profile || navigation_profile) && input.document_uri_profile.is_none();
         let client_uri_profile = input.schema == "wow-service/lsp-private-overlay-host/3"
@@ -140,6 +147,8 @@ pub struct LspSessionDescriptor {
     pub registry_digest: Box<str>,
     pub profile_digest: Box<str>,
     pub local_definition_enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_references_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document_uri_profile: Option<&'static str>,
     pub client: FrontendClientIdentity,
@@ -248,13 +257,15 @@ pub struct LspFrontend {
 impl LspFrontend {
     pub fn new(host: LspHost) -> ServiceResult<Self> {
         let local_definition = host.input.local_navigation.is_some();
+        let local_references = host.input.local_navigation
+            == Some(LocalNavigationPolicy::SameDocumentLexicalLocalsAndReferences);
         let uri_policy = host
             .input
             .document_uri_profile
             .unwrap_or(OverlayUriPolicy::StrictCanonical);
         Ok(Self {
             host,
-            registry: LspRegistry::build(local_definition, uri_policy)?,
+            registry: LspRegistry::build(local_definition, uri_policy, local_references)?,
             session: None,
             opened: false,
         })
@@ -264,6 +275,10 @@ impl LspFrontend {
     }
     pub fn definition_enabled(&self) -> bool {
         self.host.input.local_navigation.is_some()
+    }
+    pub fn references_enabled(&self) -> bool {
+        self.host.input.local_navigation
+            == Some(LocalNavigationPolicy::SameDocumentLexicalLocalsAndReferences)
     }
     pub fn frontend_session_open(
         &mut self,
@@ -332,7 +347,9 @@ impl LspFrontend {
             }
         }
         let descriptor = LspSessionDescriptor {
-            schema: if uri_policy == OverlayUriPolicy::StrictCanonical {
+            schema: if self.references_enabled() {
+                "wow-service/lsp-private-session/3"
+            } else if uri_policy == OverlayUriPolicy::StrictCanonical {
                 "wow-service/lsp-private-session/1"
             } else {
                 "wow-service/lsp-private-session/2"
@@ -342,6 +359,7 @@ impl LspFrontend {
             registry_digest: self.registry.digest.clone(),
             profile_digest: self.registry.profile_digest.clone(),
             local_definition_enabled: self.definition_enabled(),
+            local_references_enabled: self.references_enabled().then_some(true),
             document_uri_profile: if uri_policy == OverlayUriPolicy::StrictCanonical {
                 None
             } else {
@@ -350,7 +368,11 @@ impl LspFrontend {
             client,
             position_encoding: name,
             workspace: workspace.descriptor().clone(),
-            coverage: "overlay_local_selected_syntax_no_published_base",
+            coverage: if self.references_enabled() {
+                "overlay_local_selected_syntax_and_lexical_navigation_no_published_base"
+            } else {
+                "overlay_local_selected_syntax_no_published_base"
+            },
             cancellation: "synchronous_process_stop_owner_checkpoints",
             not_evaluated: &[
                 "published_dependencies",

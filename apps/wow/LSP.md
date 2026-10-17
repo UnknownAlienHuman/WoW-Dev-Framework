@@ -63,6 +63,14 @@ field, including null. The new host produces session schema2 and transport
 profile schema2 with the selected URI policy bound into their digests; older
 profiles retain their schema and bytes.
 
+Host-v3 can explicitly select
+`local_navigation: "same_document_lexical_locals_and_references"` with the
+existing same-document-location privacy string. This enables both definition
+and `textDocument/references`; the original navigation policy enables definition
+only. Host-v2 rejects the new policy. The selected session/profile schemas are
+3, with `local_references_enabled: true` and a 2048-location bound included in
+the profile digest. Old host policies omit these fields and retain their bytes.
+
 The Project owner accepts local file URI percent encodings, valid UTF-8 and
 Windows drive letter/encoded-colon aliases such as `file:///c%3A/...`, resolving
 them to the registered canonical path. Other component case remains exact.
@@ -91,6 +99,7 @@ are unsupported.
 | `textDocument/didClose` | `frontend_document_close` |
 | `textDocument/diagnostic` | `frontend_document_diagnostics` |
 | `textDocument/definition` (host-v2 opt-in) | `frontend_document_definition` |
+| `textDocument/references` (host-v3 references opt-in) | `frontend_document_references` |
 | `$/cancelRequest` notification | `frontend_operation_cancel` observation |
 | `shutdown` | `frontend_session_close` |
 
@@ -112,6 +121,19 @@ result in their `wow` extension. The URI is the owner-qualified queried URI;
 no directory discovery or other source URI is exposed. Default logs and errors
 still omit private paths and source bodies. This is static source navigation,
 not runtime binding or general definition/reference authority.
+
+References resolve one same-file lexical declaration through native Emmy
+`NoTrace` and its declaration reference index. The request requires
+`context.includeDeclaration`; shadowed declarations stay distinct. Returned
+locations are sorted, unique, and projected against the exact overlay encoding.
+The first location's `wow` extension carries the exact Service/native report;
+each location carries the same `wow_binding`. The report contains spans and
+identities, without identifier names or source bodies. Unsupported, parse-failed
+and empty observations return an explicit bounded error with the report; they
+never become an authoritative empty array. Reference overflow fails the complete
+operation. No cross-file/global/member references or complete negative authority
+are implied. This operation retains the existing synchronous lifetime and
+process-stop limitations described below.
 
 Documents must have language ID `lua` and nonnegative versions within the LSP
 integer range. A change requires the next version exactly. Ordered edits refer

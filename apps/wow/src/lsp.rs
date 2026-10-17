@@ -18,6 +18,7 @@ use wow_service::{
 };
 mod definition;
 mod framing;
+mod references;
 use framing::{Limits, read_frame, write_frame};
 
 const HELP: &str = "wow lsp --transport stdio --profile lsp-3.18-stdio-v1 --host <explicit.json>\nSynchronous private Lua syntax diagnostics over an explicit workspace. Published dependencies, Reference, Graph, Rules and runtime are not evaluated. See apps/wow/LSP.md.\n";
@@ -234,6 +235,9 @@ impl Server {
                     if local_definition {
                         response["result"]["capabilities"]["definitionProvider"] = json!(true);
                     }
+                    if self.service.references_enabled() {
+                        response["result"]["capabilities"]["referencesProvider"] = json!(true);
+                    }
                     send(output, response)?;
                     Ok(Control::Continue)
                 }
@@ -255,6 +259,7 @@ impl Server {
         }
         match method.as_str() {
             "textDocument/definition" => self.definition(id, &params, output, stop),
+            "textDocument/references" => self.references(id, &params, output, stop),
             "shutdown" => {
                 let Some(id) = id else {
                     return notification_error(output, "shutdown requires a request ID");

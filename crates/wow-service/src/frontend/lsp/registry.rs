@@ -27,6 +27,10 @@ pub struct LspTransportProfile {
     pub privacy: &'static str,
     pub local_definition_enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_references_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_local_references: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub document_uri_profile: Option<&'static str>,
     pub max_header_bytes: usize,
     pub max_frame_bytes: usize,
@@ -51,10 +55,90 @@ pub struct LspRegistry {
 fn object(properties: Value, required: &[&str]) -> Value {
     json!({"type":"object","properties":properties,"required":required,"additionalProperties":false})
 }
+fn references_descriptor(
+    uri: &Value,
+    position: &Value,
+    range: &Value,
+    span: &Value,
+    backend: &Value,
+    binding: &Value,
+    error: &Value,
+) -> ServiceResult<LspOperationDescriptor> {
+    let string = json!({"type":"string"});
+    let limits = object(
+        json!({
+            "max_file_bytes":{"type":"integer"},"max_work":{"type":"integer"},
+            "max_name_bytes":{"type":"integer"},"max_references":{"type":"integer"},
+        }),
+        &[
+            "max_file_bytes",
+            "max_work",
+            "max_name_bytes",
+            "max_references",
+        ],
+    );
+    let original = object(
+        json!({
+            "schema":{"const":"wow-emmy/local-references-result/1"},
+            "profile":{"const":"same_file_lexical_local_references_no_trace/1"},
+            "analysis_id":string,"workspace_snapshot_id":string,"backend":backend,
+            "path":string,"content_sha256":string,"query_byte_offset":{"type":"integer","minimum":0},
+            "include_declaration":{"type":"boolean"},"limits":limits,
+            "state":{"enum":["resolved_local","not_evaluated","source_parse_failed"]},
+        "reason":{"enum":["unsupported_token","declaration_not_observed","outside_local_scope","target_unavailable","reference_index_unavailable"]},
+        "origin_span":span,"declaration_span":span,
+            "references":{"type":"array","maxItems":LSP_MAX_LOCAL_REFERENCES,"items":span},
+        "negative_authority":{"const":false},
+        "coverage":{"const":"same_file_native_local_reference_index_observed_subset"},
+        }),
+        &[
+            "schema",
+            "profile",
+            "analysis_id",
+            "workspace_snapshot_id",
+            "backend",
+            "path",
+            "content_sha256",
+            "query_byte_offset",
+            "include_declaration",
+            "limits",
+            "state",
+            "references",
+            "negative_authority",
+            "coverage",
+        ],
+    );
+    let request = object(
+        json!({"uri":uri,"position":position,"include_declaration":{"type":"boolean"}}),
+        &["uri", "position", "include_declaration"],
+    );
+    let location = object(json!({"uri":uri,"range":range}), &["uri", "range"]);
+    let result = object(
+        json!({"schema":{"const":"wow-service/lsp-local-references-result/1"},
+        "locations":{"type":"array","maxItems":LSP_MAX_LOCAL_REFERENCES,"items":location},
+        "binding":binding,"original":original}),
+        &["schema", "locations", "binding", "original"],
+    );
+    Ok(LspOperationDescriptor {
+        wire_method: "textDocument/references",
+        operation_id: "frontend_document_references",
+        request_schema_id: "wow-service/lsp/frontend_document_references/request/1".into(),
+        request_schema_digest: canonical_digest("sha256:", &request)?,
+        request_schema: request,
+        result_schema_id: "wow-service/lsp/frontend_document_references/result/1".into(),
+        result_schema_digest: canonical_digest("sha256:", &result)?,
+        result_schema: result,
+        error_schema_id: "wow-service/lsp-operation-error/1",
+        error_schema_digest: canonical_digest("sha256:", error)?,
+        error_schema: error.clone(),
+        effect_class: "pure_read",
+    })
+}
 impl LspRegistry {
     pub(super) fn build(
         local_definition: bool,
         uri_policy: OverlayUriPolicy,
+        local_references: bool,
     ) -> ServiceResult<Self> {
         let client_uris = uri_policy != OverlayUriPolicy::StrictCanonical;
         let uri = json!({"type":"string","maxLength":65536});
@@ -149,6 +233,14 @@ impl LspRegistry {
                 .as_array_mut()
                 .ok_or_else(|| invalid_frontend_request("LSP session schema invalid"))?
                 .push(json!("document_uri_profile"));
+        }
+        if local_references {
+            session["properties"]["schema"] = json!({"const":"wow-service/lsp-private-session/3"});
+            session["properties"]["local_references_enabled"] = json!({"const":true});
+            session["required"]
+                .as_array_mut()
+                .ok_or_else(|| invalid_frontend_request("LSP session schema invalid"))?
+                .push(json!("local_references_enabled"));
         }
         let save = object(
             json!({"snapshot_id":string,"client_version":version,
@@ -341,7 +433,9 @@ impl LspRegistry {
                 request_schema: request,
                 result_schema_id: format!(
                     "wow-service/lsp/{operation}/result/{}",
-                    if client_uris && operation == "frontend_session_open" {
+                    if local_references && operation == "frontend_session_open" {
+                        3
+                    } else if client_uris && operation == "frontend_session_open" {
                         2
                     } else {
                         1
@@ -408,9 +502,14 @@ impl LspRegistry {
                 result_schema: result,
                 error_schema_id: "wow-service/lsp-operation-error/1",
                 error_schema_digest: canonical_digest("sha256:", &error)?,
-                error_schema: error,
+                error_schema: error.clone(),
                 effect_class: "pure_read",
             });
+        }
+        if local_references {
+            operations.push(references_descriptor(
+                &uri, &position, &range, &span, &backend, &binding, &error,
+            )?);
         }
         operations.sort_by_key(|entry| entry.wire_method);
         let digest = canonical_digest(
@@ -418,7 +517,9 @@ impl LspRegistry {
             &(&operations, wow_emmy::EMMYLUA_REVISION, LSP_PROFILE_ID),
         )?;
         let profile = LspTransportProfile {
-            schema: if client_uris {
+            schema: if local_references {
+                "wow-service/lsp-transport-profile/3"
+            } else if client_uris {
                 "wow-service/lsp-transport-profile/2"
             } else {
                 "wow-service/lsp-transport-profile/1"
@@ -434,6 +535,8 @@ impl LspRegistry {
                 "session_private_metadata_and_diagnostics"
             },
             local_definition_enabled: local_definition,
+            local_references_enabled: local_references.then_some(true),
+            max_local_references: local_references.then_some(LSP_MAX_LOCAL_REFERENCES),
             document_uri_profile: if client_uris {
                 Some(uri_policy.id())
             } else {
