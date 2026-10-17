@@ -1,6 +1,8 @@
 //! Separate Candidate-only cross-generation overlay; local E2 records stay intact.
 mod model;
 pub use model::*;
+mod source_model;
+pub use source_model::*;
 mod candidates;
 pub use candidates::*;
 mod snapshot;

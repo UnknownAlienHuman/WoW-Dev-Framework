@@ -23,6 +23,16 @@
     "wow-core",
     "wow-store"
   ],
+  "source_candidate_subset": {
+    "issue": 180,
+    "owner": "crates/wow-graph/src/lineage/source_model.rs",
+    "profile": "wow-graph/lineage/blizzard-ui-source-span-candidates/1",
+    "snapshot_schema": "wow-graph/lineage-source-candidate-snapshot/1",
+    "store_profile": "wow-graph.lineage-source-span-store.v1",
+    "contract": "apps/wow/SOURCE_LINEAGE.md",
+    "proof_ceiling": "Candidate",
+    "full_e4_b_acceptance": "not-accepted"
+  },
   "producer_contract_owners": [
     "wow-project",
     "wow-reference",

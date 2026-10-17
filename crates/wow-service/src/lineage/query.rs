@@ -21,23 +21,38 @@ pub struct LineageQueryRequest {
     pub query: LineageCandidateQuery,
     pub limits: LineageQueryLimits,
     pub lease_expires_after: u64,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "selection_option"
+    )]
+    pub source_selection: Option<PlatformProjectSelection>,
 }
 impl LineageQueryRequest {
     fn selector(&self) -> LineageReadRequest {
         LineageReadRequest {
-            schema: "wow-service/lineage-read/1".into(),
+            schema: if self.source_selection.is_some() {
+                "wow-service/source-lineage-read/1"
+            } else {
+                "wow-service/lineage-read/1"
+            }
+            .into(),
             build_operation_id: self.build_operation_id.clone(),
             build_request_digest: self.build_request_digest.clone(),
             snapshot_id: self.snapshot_id.clone(),
             store_limits: self.store_limits,
             max_output_bytes: self.limits.max_output_bytes,
+            source_selection: self.source_selection.clone(),
         }
     }
     fn validate(&self) -> ServiceResult<()> {
-        if self.schema.as_ref() != "wow-service/lineage-query/1"
-            || self.lease_expires_after == 0
-            || self.lease_expires_after > i64::MAX as u64
-        {
+        selection_schema(
+            &self.schema,
+            self.source_selection.as_ref(),
+            "wow-service/lineage-query/1",
+            "wow-service/source-lineage-query/1",
+        )?;
+        if self.lease_expires_after == 0 || self.lease_expires_after > i64::MAX as u64 {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
         self.selector().validate()?;
@@ -71,6 +86,7 @@ pub fn query_lineage_snapshot(
         lineage_store,
         request.store_limits,
         false,
+        request.source_selection.as_ref(),
         stop,
         |source, slot| run(source, current(slot)?, request, stop),
     )
@@ -129,14 +145,8 @@ fn run(
     let result = with_prepared_pair(&build.request, source, stop, |expected, before, after| {
         let left = before.pair().graph_read(stop).map_err(graph_error)?;
         let right = after.pair().graph_read(stop).map_err(graph_error)?;
-        let left_sources = before
-            .pair()
-            .source_provenance()
-            .ok_or_else(|| failure(ServiceErrorCode::ComponentUnavailable))?;
-        let right_sources = after
-            .pair()
-            .source_provenance()
-            .ok_or_else(|| failure(ServiceErrorCode::ComponentUnavailable))?;
+        let left_sources = native_provenance(build.request.source_selection.as_ref(), before)?;
+        let right_sources = native_provenance(build.request.source_selection.as_ref(), after)?;
         let sources = LineageNativeSources {
             before: LineageNativeSourceSide {
                 graph: &left,
@@ -149,7 +159,7 @@ fn run(
                 evidence: right_sources.evidence(),
             },
         };
-        let mut owner = PersistentLineageStore::new(store).map_err(graph_error)?;
+        let mut owner = open_lineage_store(store).map_err(graph_error)?;
         let mut view = owner
             .open_lineage_graph_view(
                 &build.snapshot,
@@ -173,7 +183,12 @@ fn run(
     })?;
     checkpoint(stop)?;
     let receipt = QueryReceipt {
-        schema: "wow-service/lineage-query-result/1".into(),
+        schema: if request.source_selection.is_some() {
+            "wow-service/source-lineage-query-result/1"
+        } else {
+            "wow-service/lineage-query-result/1"
+        }
+        .into(),
         operation_id: request.operation_id.clone(),
         request_digest: digest.clone(),
         request: request.clone(),
@@ -182,8 +197,13 @@ fn run(
         capture_kind: "recorded_native_candidate_observation".into(),
     };
     let bytes = encode(&receipt, request.limits.max_output_bytes)?;
+    let kind = if request.source_selection.is_some() {
+        "wow.service.source_lineage.query"
+    } else {
+        KIND
+    };
     let pending =
-        PendingObject::from_json(KIND, 1, &receipt, request.store_limits).map_err(store_error)?;
+        PendingObject::from_json(kind, 1, &receipt, request.store_limits).map_err(store_error)?;
     let result_id = pending.object_id().clone();
     let mut batch = WriteBatch::new();
     batch.add_object(pending).map_err(store_error)?;
@@ -199,11 +219,21 @@ fn replay(
     id: &ObjectId,
 ) -> ServiceResult<Box<[u8]>> {
     let object = store.object(id).map_err(store_error)?.ok_or_else(unknown)?;
-    if object.kind() != KIND || object.schema_version() != 1 {
+    let kind = if request.source_selection.is_some() {
+        "wow.service.source_lineage.query"
+    } else {
+        KIND
+    };
+    if object.kind() != kind || object.schema_version() != 1 {
         return Err(failure(ServiceErrorCode::IdentityMismatch));
     }
     let receipt: QueryReceipt = object.decode().map_err(store_error)?;
-    if receipt.schema.as_ref() != "wow-service/lineage-query-result/1"
+    let schema = if request.source_selection.is_some() {
+        "wow-service/source-lineage-query-result/1"
+    } else {
+        "wow-service/lineage-query-result/1"
+    };
+    if receipt.schema.as_ref() != schema
         || receipt.operation_id != request.operation_id
         || receipt.request_digest != *digest
         || receipt.request != *request
@@ -212,10 +242,16 @@ fn replay(
     {
         return Err(failure(ServiceErrorCode::IdentityMismatch));
     }
-    receipt
-        .result
-        .validate_capture(&request.snapshot_id, &request.query)
-        .map_err(graph_error)?;
+    if request.source_selection.is_some() {
+        receipt
+            .result
+            .validate_source_capture(&request.snapshot_id, &request.query)
+    } else {
+        receipt
+            .result
+            .validate_capture(&request.snapshot_id, &request.query)
+    }
+    .map_err(graph_error)?;
     bounded(
         object.canonical_json().into(),
         request.limits.max_output_bytes,

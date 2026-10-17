@@ -10,6 +10,7 @@ pub use current_recovery::{
     LiveProjectRecoveryObservation, recover_current_live_project,
 };
 pub(crate) use generation_pair::with_pair_in_owner as with_native_generation_pair;
+pub(crate) use generation_pair::with_source_pair_in_owner as with_native_source_generation_pair;
 pub use generation_pair::{
     PROJECT_GENERATION_PAIR_MAX_OUTPUT_BYTES, ProjectGenerationPairRequest,
     ProjectGenerationPairResult, read_live_project_generation_pair,

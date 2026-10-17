@@ -25,8 +25,13 @@ impl ReadSnapshotOrigin {
 pub struct ReadSnapshotCustody<'a> {
     owner: &'a Arc<()>,
     read: &'a Arc<()>,
+    epoch: &'a EpochManifest,
 }
 impl ReadSnapshotCustody<'_> {
+    /// Original admitted metadata held by this live read; no raw storage handle.
+    pub fn epoch(&self) -> &EpochManifest {
+        self.epoch
+    }
     pub fn same_open_owner(&self, other: &Self) -> bool {
         Arc::ptr_eq(self.owner, other.owner)
     }
@@ -139,6 +144,7 @@ impl ReadSnapshot {
         ReadSnapshotCustody {
             owner: &self.life.custody,
             read: &self.custody,
+            epoch: &self.epoch,
         }
     }
     pub fn epoch(&self) -> &EpochManifest {

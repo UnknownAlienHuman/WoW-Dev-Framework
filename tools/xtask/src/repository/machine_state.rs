@@ -59,6 +59,28 @@ struct OwnerSpec {
 
 const PROJECT_CAPABILITIES: &[CapabilitySpec] = &[
     CapabilitySpec {
+        name: "native-blizzard-ui-lineage-source-span-candidates",
+        owners: &[
+            (
+                "crates/wow-project/src/replay/publication/source_generation_pair.rs",
+                "RetainedSourceGenerationPair::bind",
+            ),
+            (
+                "crates/wow-project/src/graph/lineage_input/source.rs",
+                "build_source_fingerprint_partition",
+            ),
+        ],
+        application_routes: &[
+            (
+                "crates/wow-service/src/lineage.rs",
+                "build_lineage_snapshot",
+            ),
+            ("apps/wow/src/lineage.rs", "run"),
+        ],
+        service_routes: None,
+        application_selection: None,
+    },
+    CapabilitySpec {
         name: "native-project-lineage-source-span-candidates",
         owners: &[(
             "crates/wow-project/src/graph/lineage_input.rs",

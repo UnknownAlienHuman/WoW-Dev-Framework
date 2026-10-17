@@ -22,6 +22,8 @@ pub(super) struct SourceHoldPlan {
     request_digest: RequestDigest,
     before: RetentionRoot,
     after: RetentionRoot,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_namespace_id: Option<Box<str>>,
 }
 impl SourceHoldPlan {
     pub(super) fn prepare(
@@ -33,23 +35,81 @@ impl SourceHoldPlan {
         after: &StoreGenerationId,
         stop: &AtomicBool,
     ) -> ServiceResult<Self> {
+        Self::make(
+            source,
+            consumer,
+            operation,
+            digest,
+            [before, after],
+            false,
+            stop,
+        )
+    }
+    pub(super) fn prepare_source(
+        source: &ProjectStore,
+        consumer: &StoreInstanceId,
+        operation: &OperationId,
+        digest: &RequestDigest,
+        before: &StoreGenerationId,
+        after: &StoreGenerationId,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Self> {
+        Self::make(
+            source,
+            consumer,
+            operation,
+            digest,
+            [before, after],
+            true,
+            stop,
+        )
+    }
+    fn make(
+        source: &ProjectStore,
+        consumer: &StoreInstanceId,
+        operation: &OperationId,
+        digest: &RequestDigest,
+        generations: [&StoreGenerationId; 2],
+        is_source: bool,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Self> {
         checkpoint(stop)?;
-        if source.epoch().namespace().is_some() {
+        if source.epoch().namespace().is_some() != is_source {
             return Err(failure(ServiceErrorCode::InvalidRequest));
         }
+        let [before, after] = generations;
+        let source_namespace_id = source
+            .epoch()
+            .namespace()
+            .map(|n| Box::<str>::from(n.id().as_str()));
         let epoch = source.epoch().epoch_id();
         let root = |role: &str, generation: &StoreGenerationId| -> ServiceResult<RetentionRoot> {
-            let hash = wow_core::domain_separated_digest(
-                "wow-service/lineage-source-generation-hold/1",
-                &(
-                    consumer,
-                    operation.as_str(),
-                    digest,
-                    epoch,
-                    role,
-                    generation,
-                ),
-            )
+            let hash = if let Some(namespace) = source_namespace_id.as_ref() {
+                wow_core::domain_separated_digest(
+                    "wow-service/blizzard-ui-source-lineage-hold/1",
+                    &(
+                        consumer,
+                        operation.as_str(),
+                        digest,
+                        epoch,
+                        namespace,
+                        role,
+                        generation,
+                    ),
+                )
+            } else {
+                wow_core::domain_separated_digest(
+                    "wow-service/lineage-source-generation-hold/1",
+                    &(
+                        consumer,
+                        operation.as_str(),
+                        digest,
+                        epoch,
+                        role,
+                        generation,
+                    ),
+                )
+            }
             .map_err(|_| failure(ServiceErrorCode::CanonicalizationFailed))?;
             let root_id = RetentionRootId::new(format!(
                 "wow-service.lineage-source-hold:{}",
@@ -61,18 +121,28 @@ impl SourceHoldPlan {
                 root_id,
                 RetentionRootKind::Policy,
                 generation.clone(),
-                HOLDER,
+                if is_source {
+                    "wow-graph.lineage-blizzard-ui-source-span"
+                } else {
+                    HOLDER
+                },
             )
             .map_err(crate::live_project::store_error)
         };
         Ok(Self {
-            schema: SCHEMA.into(),
+            schema: if is_source {
+                "wow-service/blizzard-ui-source-lineage-holds/1"
+            } else {
+                SCHEMA
+            }
+            .into(),
             source_epoch_id: epoch.clone(),
             consumer_store_instance_id: consumer.as_str().into(),
             operation_id: operation.as_str().into(),
             request_digest: digest.clone(),
             before: root("before", before)?,
             after: root("after", after)?,
+            source_namespace_id,
         })
     }
     pub(super) fn validate(
@@ -85,7 +155,12 @@ impl SourceHoldPlan {
             return Err(failure(ServiceErrorCode::IdentityMismatch));
         }
         let operation = OperationId::new(self.operation_id.clone())?;
-        let expected = Self::prepare(
+        let make = if self.source_namespace_id.is_some() {
+            Self::prepare_source
+        } else {
+            Self::prepare
+        };
+        let expected = make(
             source,
             consumer,
             &operation,

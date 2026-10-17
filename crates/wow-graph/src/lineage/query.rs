@@ -223,14 +223,40 @@ impl LineageQueryResult {
         snapshot_id: &str,
         query: &LineageCandidateQuery,
     ) -> GraphResult<()> {
+        self.validate_capture_profile(
+            snapshot_id,
+            query,
+            PROJECT_SPAN_LINEAGE_PROFILE,
+            "native_project_source_span_candidates_valid",
+        )
+    }
+    pub fn validate_source_capture(
+        &self,
+        snapshot_id: &str,
+        query: &LineageCandidateQuery,
+    ) -> GraphResult<()> {
+        self.validate_capture_profile(
+            snapshot_id,
+            query,
+            SOURCE_SPAN_LINEAGE_PROFILE,
+            "native_blizzard_ui_source_span_candidates_valid",
+        )
+    }
+    fn validate_capture_profile(
+        &self,
+        snapshot_id: &str,
+        query: &LineageCandidateQuery,
+        profile: &str,
+        validation: &str,
+    ) -> GraphResult<()> {
         if self.schema.as_ref() != "wow-graph/lineage-candidate-query-result/1"
             || self.snapshot_id.as_ref() != snapshot_id
-            || self.profile_id.as_ref() != PROJECT_SPAN_LINEAGE_PROFILE
+            || self.profile_id.as_ref() != profile
             || &self.query != query
             || self.accepted_assertion_count != 0
             || self.promotion.as_ref() != "not_evaluated"
             || self.negative_authority
-            || self.selected_validation.as_ref() != "native_project_source_span_candidates_valid"
+            || self.selected_validation.as_ref() != validation
             || self.full_e4_b_validation.as_ref() != "not_evaluated"
             || !matches!(self.status.as_ref(), "candidate_only" | "truncated")
             || self.result_id
@@ -378,7 +404,11 @@ pub(super) fn execute(
             "candidate_only"
         }
         .into(),
-        selected_validation: "native_project_source_span_candidates_valid".into(),
+        selected_validation: match record.profile_id.as_ref() {
+            SOURCE_SPAN_LINEAGE_PROFILE => "native_blizzard_ui_source_span_candidates_valid",
+            _ => "native_project_source_span_candidates_valid",
+        }
+        .into(),
         full_e4_b_validation: "not_evaluated".into(),
         summary,
         input_partitions: data.partitions.clone(),

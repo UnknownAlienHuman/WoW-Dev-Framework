@@ -4,6 +4,29 @@ use super::*;
 const RECEIPT_KIND: &str = "wow.service.lineage.build";
 const INTENT_KIND: &str = "wow.service.lineage.intent";
 const INTENTS: &str = "lineage.intents";
+fn chosen(source: bool, ordinary: &'static str, selected: &'static str) -> &'static str {
+    if source { selected } else { ordinary }
+}
+fn receipt_kind(source: bool) -> &'static str {
+    chosen(source, RECEIPT_KIND, "wow.service.source_lineage.build")
+}
+fn receipt_schema(source: bool) -> &'static str {
+    chosen(
+        source,
+        "wow-service/lineage-build-result/1",
+        "wow-service/source-lineage-build-result/1",
+    )
+}
+fn intent_kind(source: bool) -> &'static str {
+    chosen(source, INTENT_KIND, "wow.service.source_lineage.intent")
+}
+fn intent_schema(source: bool) -> &'static str {
+    chosen(
+        source,
+        "wow-service/lineage-build-intent/1",
+        "wow-service/source-lineage-build-intent/1",
+    )
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -48,16 +71,22 @@ pub(super) fn build(
         match record.state() {
             OperationState::Completed => {
                 let selector = LineageReadRequest {
-                    schema: "wow-service/lineage-read/1".into(),
+                    schema: chosen(
+                        request.source_selection.is_some(),
+                        "wow-service/lineage-read/1",
+                        "wow-service/source-lineage-read/1",
+                    )
+                    .into(),
                     build_operation_id: request.operation_id.clone(),
                     build_request_digest: request_digest,
                     snapshot_id: "".into(),
                     store_limits: request.store_limits,
                     max_output_bytes: request.max_output_bytes,
+                    source_selection: request.source_selection.clone(),
                 };
                 let (receipt, bytes) = recorded(store, &selector, false)?;
                 let expected = qualify(source, store, &receipt, stop)?;
-                PersistentLineageStore::new(store)
+                open_lineage_store(store)
                     .map_err(graph_error)?
                     .validate_sealed(&receipt.snapshot, &expected, stop)
                     .map_err(|_| failure(ServiceErrorCode::OperationReleased))?;
@@ -75,7 +104,12 @@ pub(super) fn build(
             .map_err(|_| unknown())?;
     }
     let consumer = store.store_instance_id().map_err(store_error)?.clone();
-    let holds = SourceHoldPlan::prepare(
+    let hold = if request.source_selection.is_some() {
+        SourceHoldPlan::prepare_source
+    } else {
+        SourceHoldPlan::prepare
+    };
+    let holds = hold(
         source.retained_owner(),
         &consumer,
         &OperationId::new(request.operation_id.clone())?,
@@ -85,7 +119,7 @@ pub(super) fn build(
         stop,
     )?;
     let intent = BuildIntent {
-        schema: "wow-service/lineage-build-intent/1".into(),
+        schema: intent_schema(request.source_selection.is_some()).into(),
         request_digest: request_digest.clone(),
         request: request.clone(),
         source_holds: holds.clone(),
@@ -97,7 +131,7 @@ pub(super) fn build(
         .install(source.retained_owner_mut(), &consumer, stop)
         .map_err(|_| unknown())?;
     let expected = prepare(request, source, stop)?;
-    let stored = PersistentLineageStore::new(current(slot)?)
+    let stored = open_lineage_store(current(slot)?)
         .map_err(graph_error)?
         .store_inactive(
             operation.as_str(),
@@ -108,7 +142,7 @@ pub(super) fn build(
         )
         .map_err(|_| unknown())?;
     reopen(slot, lineage_path, request.store_limits)?;
-    let validated = PersistentLineageStore::new(current(slot)?)
+    let validated = open_lineage_store(current(slot)?)
         .map_err(graph_error)?
         .validate_inactive(stored, &expected, stop)
         .map_err(graph_error)?;
@@ -117,12 +151,12 @@ pub(super) fn build(
         current(slot)?.store_instance_id().map_err(store_error)?,
         stop,
     )?;
-    let plan = PersistentLineageStore::new(current(slot)?)
+    let plan = open_lineage_store(current(slot)?)
         .map_err(graph_error)?
         .plan_seal(validated, stop)
         .map_err(graph_error)?;
     let receipt = BuildReceipt {
-        schema: "wow-service/lineage-build-result/1".into(),
+        schema: receipt_schema(request.source_selection.is_some()).into(),
         operation: "lineage_build".into(),
         request_digest: request_digest.clone(),
         request: request.clone(),
@@ -135,8 +169,13 @@ pub(super) fn build(
         negative_authority: false,
     };
     let bytes = encode(&receipt, request.max_output_bytes)?;
-    let pending = PendingObject::from_json(RECEIPT_KIND, 1, &receipt, request.store_limits)
-        .map_err(store_error)?;
+    let pending = PendingObject::from_json(
+        receipt_kind(request.source_selection.is_some()),
+        1,
+        &receipt,
+        request.store_limits,
+    )
+    .map_err(store_error)?;
     let result_id = pending.object_id().clone();
     let mut batch = plan.batch;
     batch.add_object(pending).map_err(store_error)?;
@@ -146,7 +185,7 @@ pub(super) fn build(
         .map_err(|_| unknown())?;
     reopen(slot, lineage_path, request.store_limits)?;
     let store = current(slot)?;
-    PersistentLineageStore::new(store)
+    open_lineage_store(store)
         .map_err(graph_error)?
         .validate_sealed(&receipt.snapshot, &expected, stop)
         .map_err(graph_error)?;
@@ -163,7 +202,8 @@ fn retain_intent(
     operation: &wow_store::OperationId,
     intent: &BuildIntent,
 ) -> ServiceResult<()> {
-    let pending = PendingObject::from_json(INTENT_KIND, 1, intent, store.configuration().limits())
+    let kind = intent_kind(intent.request.source_selection.is_some());
+    let pending = PendingObject::from_json(kind, 1, intent, store.configuration().limits())
         .map_err(store_error)?;
     let catalog = CatalogName::new(INTENTS).map_err(store_error)?;
     let path = CatalogPath::new(operation.as_str().to_owned()).map_err(store_error)?;
@@ -173,7 +213,7 @@ fn retain_intent(
             .map_err(store_error)?
             .ok_or_else(unknown)?;
         if object.object_id() != pending.object_id()
-            || object.kind() != INTENT_KIND
+            || object.kind() != kind
             || object.schema_version() != 1
             || object.decode::<BuildIntent>().map_err(store_error)? != *intent
         {
@@ -222,15 +262,18 @@ fn recorded(
         .object(record.result_object_id().ok_or_else(unknown)?)
         .map_err(store_error)?
         .ok_or_else(unknown)?;
-    if object.kind() != RECEIPT_KIND || object.schema_version() != 1 {
+    if object.kind() != receipt_kind(request.source_selection.is_some())
+        || object.schema_version() != 1
+    {
         return Err(failure(ServiceErrorCode::IdentityMismatch));
     }
     let receipt: BuildReceipt = object.decode().map_err(store_error)?;
-    if receipt.schema.as_ref() != "wow-service/lineage-build-result/1"
+    if receipt.schema.as_ref() != receipt_schema(request.source_selection.is_some())
         || receipt.operation.as_ref() != "lineage_build"
         || receipt.request.operation_id != request.build_operation_id
         || receipt.request_digest != request.build_request_digest
         || receipt.request.store_limits != request.store_limits
+        || receipt.request.source_selection != request.source_selection
         || receipt.status.as_ref() != "candidate_only"
         || receipt.accepted_assertion_count != 0
         || receipt.promotion.as_ref() != "not_evaluated"
@@ -282,7 +325,12 @@ pub(super) fn retire(
     let operation =
         wow_store::OperationId::new(operation.as_str().to_owned()).map_err(store_error)?;
     let result = Retirement {
-        schema: "wow-service/lineage-retire-result/1".into(),
+        schema: chosen(
+            request.source_selection.is_some(),
+            "wow-service/lineage-retire-result/1",
+            "wow-service/source-lineage-retire-result/1",
+        )
+        .into(),
         operation_id: operation.as_str().into(),
         request_digest: digest.clone(),
         build_operation_id: request.build_operation_id.clone(),
@@ -330,7 +378,7 @@ pub(super) fn retire(
     receipt
         .source_holds
         .verify(source.retained_owner(), &consumer, stop)?;
-    let mut batch = PersistentLineageStore::new(store)
+    let mut batch = open_lineage_store(store)
         .map_err(graph_error)?
         .plan_retire(&receipt.snapshot)
         .map_err(graph_error)?;
@@ -385,7 +433,12 @@ pub(super) fn abandon(
         return Err(failure(ServiceErrorCode::OperationConflict));
     }
     let consumer = store.store_instance_id().map_err(store_error)?.clone();
-    let holds = SourceHoldPlan::prepare(
+    let hold = if request.source_selection.is_some() {
+        SourceHoldPlan::prepare_source
+    } else {
+        SourceHoldPlan::prepare
+    };
+    let holds = hold(
         source.retained_owner(),
         &consumer,
         &OperationId::new(request.operation_id.clone())?,
@@ -395,7 +448,7 @@ pub(super) fn abandon(
         stop,
     )?;
     let intent = BuildIntent {
-        schema: "wow-service/lineage-build-intent/1".into(),
+        schema: intent_schema(request.source_selection.is_some()).into(),
         request_digest: original_digest.clone(),
         request: request.clone(),
         source_holds: holds.clone(),
@@ -424,7 +477,11 @@ pub(super) fn abandon(
         resource_closure: &'static str,
     }
     let result = Result {
-        schema: "wow-service/lineage-abandon-result/1",
+        schema: chosen(
+            request.source_selection.is_some(),
+            "wow-service/lineage-abandon-result/1",
+            "wow-service/source-lineage-abandon-result/1",
+        ),
         operation_id: operation.as_str(),
         request_digest: &request_digest,
         build_operation_id: original.as_str(),
@@ -454,7 +511,7 @@ pub(super) fn abandon(
             {
                 return Err(unknown());
             }
-            let remaining = PersistentLineageStore::new(store)
+            let remaining = open_lineage_store(store)
                 .map_err(graph_error)?
                 .plan_abandon(original.as_str())
                 .map_err(graph_error)?;
@@ -476,7 +533,7 @@ pub(super) fn abandon(
     }
     // Terminal original state fences future build resumes before deleting any
     // inactive root. Failed means effects may exist; it never asserts no-effect.
-    let mut batch = PersistentLineageStore::new(store)
+    let mut batch = open_lineage_store(store)
         .map_err(graph_error)?
         .plan_abandon(original.as_str())
         .map_err(graph_error)?;

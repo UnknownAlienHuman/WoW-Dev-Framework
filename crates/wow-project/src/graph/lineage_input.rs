@@ -12,6 +12,8 @@ use wow_emmy::function_calls::SourceFunctionKind;
 use wow_graph::GraphNode;
 use wow_graph::lineage::*;
 use wow_graph::{GraphAssertionKind, GraphAssertionRef, GraphLocalAssertion, GraphPartitionRead};
+mod source;
+pub use source::build_source_fingerprint_partition;
 
 pub fn build_project_source_fingerprint_partition(
     pair: &RetainedGenerationPair<'_>,
@@ -72,6 +74,7 @@ pub fn build_project_source_fingerprint_partition(
         pair_id: pair.pair_id().into(),
         before: binding(before, l.scope()),
         after: binding(after, r.scope()),
+        source: None,
     };
     let mut builder = Builder {
         retained,
@@ -168,6 +171,17 @@ impl Builder<'_> {
         lookup: &wow_graph::GraphProducerLookup<'_>,
     ) -> ProjectResult<()> {
         let source = owner.source_provenance().ok_or_else(deferred)?;
+        self.role_native(owner, source, None, role, graph, lookup)
+    }
+    fn role_native(
+        &mut self,
+        owner: &AcquiredProjectPair,
+        source: &ProjectGraphProvenance,
+        native: Option<&PlatformIndexSourceParts>,
+        role: LineageRole,
+        graph: &GraphPartitionRead<'_>,
+        lookup: &wow_graph::GraphProducerLookup<'_>,
+    ) -> ProjectResult<()> {
         let project = owner.project();
         let analyzer = project.snapshot().analyzer_binding();
         let report = source.function_call_report().ok_or_else(deferred)?;
@@ -226,10 +240,6 @@ impl Builder<'_> {
                 conflicts: raw.to_vec(),
             });
         }
-        let part = graph
-            .owner()
-            .partition(SOURCE_GRAPH_PARTITION)
-            .ok_or_else(invalid)?;
         for (fact, function) in report.functions().iter().zip(source.functions()) {
             crate::analyzer::checkpoint(self.stop)?;
             if function.function_id != fact.fact_id()
@@ -239,19 +249,29 @@ impl Builder<'_> {
             {
                 return Err(invalid());
             }
-            let reference = |kind, proposal: &str| GraphAssertionRef::Producer {
-                partition_id: SOURCE_GRAPH_PARTITION.into(),
-                batch_id: part.batch().batch_id().into(),
-                assertion: GraphLocalAssertion {
+            let reference = |kind, proposal: &str| -> ProjectResult<GraphAssertionRef> {
+                let assertion = GraphLocalAssertion {
                     kind,
                     proposal_id: proposal.into(),
-                },
+                };
+                if let Some(native) = native {
+                    return native.assertion(&assertion).cloned().ok_or_else(invalid);
+                }
+                let part = graph
+                    .owner()
+                    .partition(SOURCE_GRAPH_PARTITION)
+                    .ok_or_else(invalid)?;
+                Ok(GraphAssertionRef::Producer {
+                    partition_id: SOURCE_GRAPH_PARTITION.into(),
+                    batch_id: part.batch().batch_id().into(),
+                    assertion,
+                })
             };
-            let entity_ref = reference(GraphAssertionKind::Entity, &function.proposal_id);
+            let entity_ref = reference(GraphAssertionKind::Entity, &function.proposal_id)?;
             let owner_ref = reference(
                 GraphAssertionKind::Relation,
                 &function.ownership_proposal_id,
-            );
+            )?;
             let entity = lookup
                 .entity(lookup.scope(), &entity_ref, self.stop)
                 .map_err(lineage_error)?;
@@ -343,8 +363,16 @@ impl Builder<'_> {
                     },
                 }
             };
+            let GraphAssertionRef::Producer {
+                partition_id,
+                assertion,
+                ..
+            } = &entity_ref
+            else {
+                return Err(invalid());
+            };
             let node = graph
-                .published_entity(SOURCE_GRAPH_PARTITION, &function.proposal_id, self.stop)
+                .published_entity(partition_id, &assertion.proposal_id, self.stop)
                 .map_err(lineage_error)?;
             #[derive(Serialize)]
             struct BorrowedRecord<'a> {

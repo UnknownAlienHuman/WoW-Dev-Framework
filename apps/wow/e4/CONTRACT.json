@@ -19,6 +19,13 @@
   "framework_dependencies": [
     "wow-service"
   ],
+  "source_lineage_candidate_subset": {
+    "issue": 180,
+    "request_schemas": ["wow-service/source-lineage-build/1", "wow-service/source-lineage-read/1", "wow-service/source-lineage-query/1"],
+    "owner": "apps/wow/src/lineage.rs",
+    "contract": "apps/wow/SOURCE_LINEAGE.md",
+    "full_e4_c_acceptance": "not-accepted"
+  },
   "lineage_candidate_subset": {
     "issue": 178,
     "commands": ["lineage build", "lineage compare", "lineage retire", "lineage abandon", "lineage status", "lineage validate", "lineage explain"],

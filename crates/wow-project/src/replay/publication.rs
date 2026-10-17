@@ -3,6 +3,8 @@
 mod commitments;
 mod direct;
 mod generation_pair;
+mod source_generation_pair;
+pub use source_generation_pair::*;
 mod namespace;
 use super::{ProjectReplay, invalid};
 use crate::graph::{

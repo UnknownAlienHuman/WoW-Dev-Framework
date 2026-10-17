@@ -7,6 +7,7 @@ mod source_holds;
 #[cfg(test)]
 mod tests;
 mod workflow;
+use crate::live_project::PlatformProjectSelection;
 use crate::{OperationId, ServiceError, ServiceErrorCode, ServiceResult};
 pub use query::*;
 use serde::{Deserialize, Serialize};
@@ -37,11 +38,22 @@ pub struct LineageBuildRequest {
     pub max_source_bytes: usize,
     pub store_limits: LineageStoreLimits,
     pub max_output_bytes: usize,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "selection_option"
+    )]
+    pub source_selection: Option<PlatformProjectSelection>,
 }
 impl LineageBuildRequest {
     fn validate(&self) -> ServiceResult<()> {
-        if self.schema.as_ref() != "wow-service/lineage-build/1"
-            || self.max_source_bytes == 0
+        selection_schema(
+            &self.schema,
+            self.source_selection.as_ref(),
+            "wow-service/lineage-build/1",
+            "wow-service/source-lineage-build/1",
+        )?;
+        if self.max_source_bytes == 0
             || self.max_source_bytes > 64 * 1024 * 1024
             || self.max_output_bytes == 0
             || self.max_output_bytes > 64 * 1024 * 1024
@@ -66,11 +78,22 @@ pub struct LineageReadRequest {
     pub snapshot_id: Box<str>,
     pub store_limits: LineageStoreLimits,
     pub max_output_bytes: usize,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "selection_option"
+    )]
+    pub source_selection: Option<PlatformProjectSelection>,
 }
 impl LineageReadRequest {
     fn validate(&self) -> ServiceResult<()> {
-        if self.schema.as_ref() != "wow-service/lineage-read/1"
-            || self.max_output_bytes == 0
+        selection_schema(
+            &self.schema,
+            self.source_selection.as_ref(),
+            "wow-service/lineage-read/1",
+            "wow-service/source-lineage-read/1",
+        )?;
+        if self.max_output_bytes == 0
             || self.max_output_bytes > 64 * 1024 * 1024
             || self.snapshot_id.is_empty()
             || self.snapshot_id.len() > 256
@@ -113,6 +136,7 @@ pub fn build_lineage_snapshot(
         lineage_store,
         request.store_limits,
         true,
+        request.source_selection.as_ref(),
         stop,
         |source, slot| workflow::build(lineage_store, source, slot, request, stop),
     )
@@ -132,12 +156,13 @@ pub fn compare_lineage_snapshot(
         lineage_store,
         request.store_limits,
         false,
+        request.source_selection.as_ref(),
         stop,
         |source, slot| {
             let store = current(slot)?;
             let receipt = workflow::read_receipt(store, request)?;
             let expected = qualify(source, store, &receipt, stop)?;
-            let bytes = PersistentLineageStore::new(store)
+            let bytes = open_lineage_store(store)
                 .map_err(graph_error)?
                 .read_sealed(&receipt.snapshot, &expected, stop)
                 .map_err(graph_error)?;
@@ -162,6 +187,7 @@ pub fn retire_lineage_snapshot(
         lineage_store,
         request.store_limits,
         false,
+        request.source_selection.as_ref(),
         stop,
         |source, slot| workflow::retire(source, current(slot)?, request, &operation_id, stop),
     )
@@ -187,6 +213,7 @@ pub fn abandon_lineage_snapshot(
         lineage_store,
         request.store_limits,
         false,
+        request.source_selection.as_ref(),
         stop,
         |source, slot| {
             workflow::abandon(
@@ -223,12 +250,46 @@ fn with_prepared_pair<T>(
         &request.after_generation,
         1,
     )?;
-    crate::live_project::with_native_generation_pair(
-        source,
-        &pair_request,
-        stop,
-        &std::cell::Cell::new("pending"),
-        |before, after| {
+    let build = |before: &crate::live_project::LiveProjectRead,
+                 after: &crate::live_project::LiveProjectRead| {
+        let fingerprint_limits = wow_project::graph::fingerprints::FunctionFingerprintLimits::new(
+            request.limits.max_entities,
+            request.max_source_bytes,
+            request.limits.max_metadata_bytes,
+        )
+        .map_err(crate::live_project::project_error)?;
+        let input = if let Some(selection) = &request.source_selection {
+            use wow_project::replay::publication::{
+                RetainedSourceGenerationPair, SourceGenerationSide,
+            };
+            let pair = RetainedSourceGenerationPair::bind(
+                SourceGenerationSide {
+                    pair: before.pair(),
+                    native: before
+                        .candidate()
+                        .ok_or_else(|| failure(ServiceErrorCode::ComponentUnavailable))?
+                        .native(),
+                    custody: before.custody(),
+                },
+                SourceGenerationSide {
+                    pair: after.pair(),
+                    native: after
+                        .candidate()
+                        .ok_or_else(|| failure(ServiceErrorCode::ComponentUnavailable))?
+                        .native(),
+                    custody: after.custody(),
+                },
+                selection.owner().namespace(),
+                stop,
+            )
+            .map_err(crate::live_project::project_error)?;
+            wow_project::graph::lineage_input::build_source_fingerprint_partition(
+                &pair,
+                fingerprint_limits,
+                request.limits,
+                stop,
+            )
+        } else {
             let pair = wow_project::replay::publication::RetainedGenerationPair::bind(
                 before.pair(),
                 after.pair(),
@@ -237,32 +298,42 @@ fn with_prepared_pair<T>(
                 stop,
             )
             .map_err(crate::live_project::project_error)?;
-            let fingerprint_limits =
-                wow_project::graph::fingerprints::FunctionFingerprintLimits::new(
-                    request.limits.max_entities,
-                    request.max_source_bytes,
-                    request.limits.max_metadata_bytes,
-                )
-                .map_err(crate::live_project::project_error)?;
-            let input =
-                wow_project::graph::lineage_input::build_project_source_fingerprint_partition(
-                    &pair,
-                    fingerprint_limits,
-                    request.limits,
-                    stop,
-                )
-                .map_err(crate::live_project::project_error)?;
-            if input.data().binding.before.store_epoch_id.as_ref()
+            wow_project::graph::lineage_input::build_project_source_fingerprint_partition(
+                &pair,
+                fingerprint_limits,
+                request.limits,
+                stop,
+            )
+        }
+        .map_err(crate::live_project::project_error)?;
+        if input.data().binding.before.store_epoch_id.as_ref()
+            != source.retained_owner().epoch().epoch_id().as_str()
+            || input.data().binding.after.store_epoch_id.as_ref()
                 != source.retained_owner().epoch().epoch_id().as_str()
-                || input.data().binding.after.store_epoch_id.as_ref()
-                    != source.retained_owner().epoch().epoch_id().as_str()
-            {
-                return Err(failure(ServiceErrorCode::IdentityMismatch));
-            }
-            let expected = PreparedLineageSnapshot::build(input, stop).map_err(graph_error)?;
-            run(expected, before, after)
-        },
-    )
+        {
+            return Err(failure(ServiceErrorCode::IdentityMismatch));
+        }
+        let expected = PreparedLineageSnapshot::build(input, stop).map_err(graph_error)?;
+        run(expected, before, after)
+    };
+    let closure = std::cell::Cell::new("pending");
+    match &request.source_selection {
+        Some(selection) => crate::live_project::with_native_source_generation_pair(
+            source,
+            selection.owner(),
+            &pair_request,
+            stop,
+            &closure,
+            build,
+        ),
+        None => crate::live_project::with_native_generation_pair(
+            source,
+            &pair_request,
+            stop,
+            &closure,
+            build,
+        ),
+    }
 }
 fn qualify(
     source: &crate::live_project::LiveProjectStore,
@@ -301,6 +372,7 @@ fn resources<T>(
     lineage_store: &Path,
     limits: LineageStoreLimits,
     create: bool,
+    selection: Option<&PlatformProjectSelection>,
     stop: &AtomicBool,
     run: impl FnOnce(&mut crate::live_project::LiveProjectStore, &mut Option<Store>) -> ServiceResult<T>,
 ) -> ServiceResult<T> {
@@ -312,11 +384,18 @@ fn resources<T>(
     {
         return Err(failure(ServiceErrorCode::InvalidRequest));
     }
-    let mut source = crate::live_project::LiveProjectStore::open(source_root)?;
+    let mut source = match selection {
+        Some(selection) => crate::live_project::LiveProjectStore::open_in_namespace(
+            source_root,
+            selection.owner(),
+        )?,
+        None => crate::live_project::LiveProjectStore::open(source_root)?,
+    };
+    let configuration = configuration_selected(limits, selection)?;
     let opened = if create {
-        Store::open(lineage_store, configuration(limits)?)
+        Store::open(lineage_store, configuration)
     } else {
-        Store::open_existing(lineage_store, configuration(limits)?)
+        Store::open_existing(lineage_store, configuration)
     };
     let mut slot = match opened {
         Ok(store) => Some(store),
@@ -336,6 +415,10 @@ fn resources<T>(
     result
 }
 fn reopen(slot: &mut Option<Store>, path: &Path, limits: LineageStoreLimits) -> ServiceResult<()> {
+    let configuration = current(slot)?.configuration().clone();
+    if configuration.limits() != limits {
+        return Err(failure(ServiceErrorCode::IdentityMismatch));
+    }
     let original = current(slot)?
         .store_instance_id()
         .map_err(store_error)?
@@ -344,7 +427,7 @@ fn reopen(slot: &mut Option<Store>, path: &Path, limits: LineageStoreLimits) -> 
         .ok_or_else(unknown)?
         .close()
         .map_err(|_| unknown())?;
-    *slot = Some(Store::open_existing(path, configuration(limits)?).map_err(|_| unknown())?);
+    *slot = Some(Store::open_existing(path, configuration).map_err(|_| unknown())?);
     if current(slot)?.store_instance_id().map_err(store_error)? != &original {
         return Err(unknown());
     }
@@ -359,6 +442,62 @@ fn configuration(limits: LineageStoreLimits) -> ServiceResult<StoreConfiguration
         limits,
     )
     .map_err(store_error)
+}
+fn configuration_selected(
+    limits: LineageStoreLimits,
+    selection: Option<&PlatformProjectSelection>,
+) -> ServiceResult<StoreConfiguration> {
+    if selection.is_some() {
+        StoreConfiguration::new_with_instance_identity(
+            wow_graph::lineage::SOURCE_LINEAGE_STORE_PROFILE,
+            limits,
+        )
+        .map_err(store_error)
+    } else {
+        configuration(limits)
+    }
+}
+fn selection_schema(
+    schema: &str,
+    selection: Option<&PlatformProjectSelection>,
+    ordinary: &str,
+    source: &str,
+) -> ServiceResult<()> {
+    match selection {
+        None if schema == ordinary => Ok(()),
+        Some(selection) if schema == source => {
+            selection.require_candidate()?;
+            selection.owner().validate()
+        }
+        _ => Err(failure(ServiceErrorCode::InvalidRequest)),
+    }
+}
+fn selection_option<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<PlatformProjectSelection>, D::Error> {
+    PlatformProjectSelection::deserialize(deserializer).map(Some)
+}
+fn open_lineage_store(store: &mut Store) -> wow_graph::GraphResult<PersistentLineageStore<'_>> {
+    if store.configuration().profile_id() == wow_graph::lineage::SOURCE_LINEAGE_STORE_PROFILE {
+        PersistentLineageStore::new_source(store)
+    } else {
+        PersistentLineageStore::new(store)
+    }
+}
+fn native_provenance<'a>(
+    selection: Option<&PlatformProjectSelection>,
+    read: &'a crate::live_project::LiveProjectRead,
+) -> ServiceResult<&'a wow_project::graph::ProjectGraphProvenance> {
+    match selection {
+        Some(_) => read
+            .candidate()
+            .map(|c| c.native().source())
+            .ok_or_else(|| failure(ServiceErrorCode::ComponentUnavailable)),
+        None => read
+            .pair()
+            .source_provenance()
+            .ok_or_else(|| failure(ServiceErrorCode::ComponentUnavailable)),
+    }
 }
 fn bounded(bytes: Box<[u8]>, limit: usize) -> ServiceResult<Box<[u8]>> {
     if bytes.len().checked_add(1).is_none_or(|n| n > limit) {

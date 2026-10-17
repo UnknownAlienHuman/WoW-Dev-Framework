@@ -19,6 +19,7 @@ use wow_project::platform_source::{
 
 mod direct_service;
 mod native_assertions;
+mod source_lineage;
 
 const SOURCE_PROFILE: &str = "profile:fixture:service-platform-namespace-v1";
 

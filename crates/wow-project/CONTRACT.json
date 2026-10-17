@@ -12,6 +12,14 @@
   "operation_inventory_role": "specified final E0-D surface; the selected capability rows describe existing code without accepting the complete package",
   "capability_routing": [
     {
+      "capability": "native-blizzard-ui-lineage-source-span-candidates",
+      "status": "partial-functional",
+      "owners": [{"path": "crates/wow-project/src/replay/publication/source_generation_pair.rs", "symbol": "RetainedSourceGenerationPair::bind"}, {"path": "crates/wow-project/src/graph/lineage_input/source.rs", "symbol": "build_source_fingerprint_partition"}],
+      "application_routes": [{"path": "crates/wow-service/src/lineage.rs", "symbol": "build_lineage_snapshot"}, {"path": "apps/wow/src/lineage.rs", "symbol": "run"}],
+      "acceptance_status": "pending",
+      "blocking_issues": [120, 125, 106]
+    },
+    {
       "capability": "native-project-lineage-source-span-candidates",
       "status": "partial-functional",
       "owners": [{"path": "crates/wow-project/src/graph/lineage_input.rs", "symbol": "build_project_source_fingerprint_partition"}],

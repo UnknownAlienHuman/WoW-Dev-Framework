@@ -107,7 +107,7 @@ pub fn generate_lineage_candidate_components(
         BTreeMap::new();
     let mut output = LineageCandidateSet {
         schema: "wow-graph/lineage-source-span-candidates/1".into(),
-        profile_id: PROJECT_SPAN_LINEAGE_PROFILE.into(),
+        profile_id: input.data.binding.profile_id.clone(),
         input_partition_id: input.partition_id.clone(),
         proposals: Vec::new(),
         components: Vec::new(),

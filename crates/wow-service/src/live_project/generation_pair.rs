@@ -129,39 +129,64 @@ pub(crate) fn with_pair_in_owner<T>(
     if store.store.epoch().namespace().is_some() {
         Err(fail(ServiceErrorCode::InvalidRequest))
     } else {
-        match store.read_checked(
-            &ReadSelector::Exact(request.before_generation.clone()),
+        pair_reads(store, None, request, stop, closure, build)
+    }
+}
+pub(crate) fn with_source_pair_in_owner<T>(
+    store: &LiveProjectStore,
+    selection: &PlatformStoreSelection,
+    request: &ProjectGenerationPairRequest,
+    stop: &AtomicBool,
+    closure: &Cell<&'static str>,
+    build: impl FnOnce(&LiveProjectRead, &LiveProjectRead) -> ServiceResult<T>,
+) -> ServiceResult<T> {
+    store.require_namespace(selection)?;
+    pair_reads(store, Some(selection), request, stop, closure, build)
+}
+fn pair_reads<T>(
+    store: &LiveProjectStore,
+    selection: Option<&PlatformStoreSelection>,
+    request: &ProjectGenerationPairRequest,
+    stop: &AtomicBool,
+    closure: &Cell<&'static str>,
+    build: impl FnOnce(&LiveProjectRead, &LiveProjectRead) -> ServiceResult<T>,
+) -> ServiceResult<T> {
+    publication_checkpoint(stop)?;
+    let read = |generation: &StoreGenerationId| match selection {
+        Some(selection) => store.read_in_namespace_checked(
+            selection,
+            &ReadSelector::Exact(generation.clone()),
             stop,
-        ) {
-            Err(error) => {
-                closure.set(closure_name(error.closure));
-                Err(error.error)
-            }
-            Ok(before) => {
-                let draft = match store
-                    .read_checked(&ReadSelector::Exact(request.after_generation.clone()), stop)
-                {
-                    Err(error) => {
-                        closure.set(closure_name(error.closure));
-                        Err(error.error)
-                    }
-                    Ok(after) => {
-                        let draft = build(&before, &after);
-                        match after.close() {
-                            Ok(()) => draft,
-                            Err(_) => {
-                                closure.set("failed");
-                                Err(fail(ServiceErrorCode::InternalContractViolation))
-                            }
+        ),
+        None => store.read_checked(&ReadSelector::Exact(generation.clone()), stop),
+    };
+    match read(&request.before_generation) {
+        Err(error) => {
+            closure.set(closure_name(error.closure));
+            Err(error.error)
+        }
+        Ok(before) => {
+            let draft = match read(&request.after_generation) {
+                Err(error) => {
+                    closure.set(closure_name(error.closure));
+                    Err(error.error)
+                }
+                Ok(after) => {
+                    let draft = build(&before, &after);
+                    match after.close() {
+                        Ok(()) => draft,
+                        Err(_) => {
+                            closure.set("failed");
+                            Err(fail(ServiceErrorCode::InternalContractViolation))
                         }
                     }
-                };
-                match before.close() {
-                    Ok(()) => draft,
-                    Err(_) => {
-                        closure.set("failed");
-                        Err(fail(ServiceErrorCode::InternalContractViolation))
-                    }
+                }
+            };
+            match before.close() {
+                Ok(()) => draft,
+                Err(_) => {
+                    closure.set("failed");
+                    Err(fail(ServiceErrorCode::InternalContractViolation))
                 }
             }
         }

@@ -10,7 +10,39 @@ use wow_store::{
 pub const LINEAGE_STORE_PROFILE: &str = "wow-graph.lineage-project-span-store.v1";
 pub const LINEAGE_SNAPSHOT_KIND: &str = "wow.graph.lineage.candidate.snapshot";
 pub const LINEAGE_SNAPSHOT_SCHEMA: &str = "wow-graph/lineage-candidate-snapshot/1";
+pub const SOURCE_LINEAGE_STORE_PROFILE: &str = "wow-graph.lineage-source-span-store.v1";
+pub const SOURCE_LINEAGE_SNAPSHOT_SCHEMA: &str = "wow-graph/lineage-source-candidate-snapshot/1";
 const REGISTRY: &str = "wow-graph/lineage-project-span-candidate-registry/1";
+const SOURCE_REGISTRY: &str = "wow-graph/lineage-source-span-candidate-registry/1";
+#[derive(Clone, Copy)]
+struct StorageProfile {
+    profile: &'static str,
+    schema: &'static str,
+    registry: &'static str,
+    store: &'static str,
+    validation_scope: &'static str,
+}
+const PROJECT_STORAGE: StorageProfile = StorageProfile {
+    profile: PROJECT_SPAN_LINEAGE_PROFILE,
+    schema: LINEAGE_SNAPSHOT_SCHEMA,
+    registry: REGISTRY,
+    store: LINEAGE_STORE_PROFILE,
+    validation_scope: "native-project-source-span-candidates-only",
+};
+const SOURCE_STORAGE: StorageProfile = StorageProfile {
+    profile: SOURCE_SPAN_LINEAGE_PROFILE,
+    schema: SOURCE_LINEAGE_SNAPSHOT_SCHEMA,
+    registry: SOURCE_REGISTRY,
+    store: SOURCE_LINEAGE_STORE_PROFILE,
+    validation_scope: "native-blizzard-ui-source-span-candidates-only",
+};
+fn storage_profile(profile: &str) -> GraphResult<StorageProfile> {
+    match profile {
+        PROJECT_SPAN_LINEAGE_PROFILE => Ok(PROJECT_STORAGE),
+        SOURCE_SPAN_LINEAGE_PROFILE => Ok(SOURCE_STORAGE),
+        _ => Err(invalid()),
+    }
+}
 const INACTIVE: &str = "lineage.inactive";
 const SEALED: &str = "lineage.snapshots";
 const VALIDATION: &str = "lineage.validation";
@@ -60,9 +92,16 @@ impl SnapshotRecord {
     }
     fn validate_identity(&self, stop: &AtomicBool) -> GraphResult<()> {
         checkpoint(stop)?;
-        if self.schema.as_ref() != LINEAGE_SNAPSHOT_SCHEMA
-            || self.profile_id.as_ref() != PROJECT_SPAN_LINEAGE_PROFILE
-            || self.registry_id.as_ref() != REGISTRY
+        let profile = storage_profile(&self.profile_id)?;
+        let (input_profile, input_schema, input_producer) =
+            super::source_model::selected_input_profile(&self.input)?;
+        if self.schema.as_ref() != profile.schema
+            || self.registry_id.as_ref() != profile.registry
+            || input_profile != profile.profile
+            || self.input.schema.as_ref() != input_schema
+            || self.input.producer_id.as_ref() != input_producer
+            || self.candidates.profile_id.as_ref() != profile.profile
+            || self.candidates.input_partition_id != self.input_partition_id
             || self.accepted_assertion_count != 0
             || self.promotion.as_ref() != "not_evaluated"
             || self.negative_authority
@@ -86,11 +125,12 @@ pub struct PreparedLineageSnapshot {
 impl PreparedLineageSnapshot {
     pub fn build(input: ValidatedLineageInput, stop: &AtomicBool) -> GraphResult<Self> {
         let candidates = generate_lineage_candidate_components(&input, stop)?;
+        let profile = storage_profile(&input.data.binding.profile_id)?;
         let mut ledger = OperationBudget::resume(input.limits, candidates.usage(), stop)?;
         let mut record = SnapshotRecord {
-            schema: LINEAGE_SNAPSHOT_SCHEMA.into(),
-            profile_id: PROJECT_SPAN_LINEAGE_PROFILE.into(),
-            registry_id: REGISTRY.into(),
+            schema: profile.schema.into(),
+            profile_id: profile.profile.into(),
+            registry_id: profile.registry.into(),
             snapshot_id: "".into(),
             input_partition_id: input.partition_id,
             limits: input.limits,
@@ -156,17 +196,24 @@ pub struct SealedLineageHandle {
 
 pub struct PersistentLineageStore<'a> {
     pub(super) store: &'a mut Store,
+    profile: StorageProfile,
 }
 impl<'a> PersistentLineageStore<'a> {
     pub fn new(store: &'a mut Store) -> GraphResult<Self> {
-        if store.configuration().profile_id() != LINEAGE_STORE_PROFILE {
+        Self::open_profile(store, PROJECT_STORAGE)
+    }
+    pub fn new_source(store: &'a mut Store) -> GraphResult<Self> {
+        Self::open_profile(store, SOURCE_STORAGE)
+    }
+    fn open_profile(store: &'a mut Store, profile: StorageProfile) -> GraphResult<Self> {
+        if store.configuration().profile_id() != profile.store {
             return Err(GraphError::new(
                 GraphErrorCode::LineageProfileInvalid,
                 "lineage store profile differs",
             ));
         }
         store.store_instance_id()?;
-        Ok(Self { store })
+        Ok(Self { store, profile })
     }
     pub fn store_inactive(
         &mut self,
@@ -178,6 +225,9 @@ impl<'a> PersistentLineageStore<'a> {
     ) -> GraphResult<StoredInactiveLineageSnapshot> {
         checkpoint(stop)?;
         prepared.record.validate_identity(stop)?;
+        if prepared.record.profile_id.as_ref() != self.profile.profile {
+            return Err(invalid());
+        }
         let operation = self.store.operation(operation_id)?.ok_or_else(invalid)?;
         if operation.state() != OperationState::Prepared
             || operation.request_digest() != request_digest
@@ -269,7 +319,7 @@ impl<'a> PersistentLineageStore<'a> {
                 snapshot_id: &stored.snapshot_id,
                 object_id: &stored.object_id,
                 status: "valid",
-                scope: "native-project-source-span-candidates-only",
+                scope: self.profile.validation_scope,
             },
             self.store.configuration().limits(),
         )?;
@@ -358,7 +408,7 @@ impl<'a> PersistentLineageStore<'a> {
                 snapshot_id: &handle.snapshot_id,
                 object_id: &handle.object_id,
                 status: "valid",
-                scope: "native-project-source-span-candidates-only",
+                scope: self.profile.validation_scope,
             },
             self.store.configuration().limits(),
         )?;
@@ -454,6 +504,9 @@ impl<'a> PersistentLineageStore<'a> {
         }
         let record: SnapshotRecord = object.decode()?;
         record.validate_identity(stop)?;
+        if record.profile_id.as_ref() != self.profile.profile {
+            return Err(invalid());
+        }
         Ok(record)
     }
 }

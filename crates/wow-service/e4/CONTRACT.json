@@ -49,6 +49,14 @@
     "wow-search",
     "wow-context"
   ],
+  "source_lineage_candidate_subset": {
+    "issue": 180,
+    "schemas": ["wow-service/source-lineage-build/1", "wow-service/source-lineage-read/1", "wow-service/source-lineage-query/1"],
+    "selection": "wow-service/platform-project-selection/1 with genuine stored candidate",
+    "owner": "crates/wow-service/src/lineage.rs",
+    "contract": "apps/wow/SOURCE_LINEAGE.md",
+    "full_e4_c_acceptance": "not-accepted"
+  },
   "inactive_direct_dependencies": [
     "wow-annotations",
     "wow-emmy",

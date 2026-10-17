@@ -12,6 +12,14 @@ graph, lineage assertion or sealed lineage snapshot.
 
 `wow-project` owns project/source/analyzer/recognizer generation facts that can support cross-generation lineage candidate and change analysis. It does not own accepted lineage assertions, review promotion, replacement authority, migration recipes, or static impact traversal.
 
+The selected native Blizzard UI Source pair/physical-span producer is implemented
+under #180. It consumes genuine selected native Source parts and original read
+custodies, preserves both revision-scoped universes and complete provenance
+metadata, and resolves original native assertion addresses. Its separately named
+Candidate profile and retained consumer are specified in
+[`SOURCE_LINEAGE.md`](../../apps/wow/SOURCE_LINEAGE.md). This does not implement the
+remaining stable-identity, structural-change, review or accepted-lineage inventory.
+
 ## Producer operations
 
 ```text

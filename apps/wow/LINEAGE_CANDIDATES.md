@@ -1,5 +1,8 @@
 # Retained ordinary Project Candidate snapshots
 
+The explicit Blizzard UI Source profile is documented separately in
+[SOURCE_LINEAGE.md](SOURCE_LINEAGE.md); it does not widen these ordinary schemas.
+
 Issue #178 implements one selected W21 path. `wow lineage` supports `build`,
 `compare`, `retire` and `abandon`; run `wow lineage --help` for transport syntax.
 Every command takes an explicit ordinary ProjectStore root, a separate absolute

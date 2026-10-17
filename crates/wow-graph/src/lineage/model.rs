@@ -30,6 +30,7 @@ pub enum LineageFunctionKind {
 #[serde(rename_all = "snake_case")]
 pub enum LineageUniverseClass {
     UserProject,
+    BlizzardUiSource,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -69,6 +70,8 @@ pub struct LineageComparisonBinding {
     pub pair_id: Box<str>,
     pub before: LineageGenerationBinding,
     pub after: LineageGenerationBinding,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<LineageSourceComparisonBinding>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -178,6 +181,30 @@ impl ValidatedLineageInput {
 }
 
 pub fn validate_project_fingerprint_partition(
+    data: ProjectFingerprintPartition,
+    before: &GraphPartitionRead<'_>,
+    after: &GraphPartitionRead<'_>,
+    limits: LineageLimits,
+    stop: &AtomicBool,
+) -> GraphResult<ValidatedLineageInput> {
+    if data.binding.universe_class != LineageUniverseClass::UserProject {
+        return Err(invalid());
+    }
+    validate_fingerprint_partition(data, before, after, limits, stop)
+}
+pub fn validate_source_fingerprint_partition(
+    data: ProjectFingerprintPartition,
+    before: &GraphPartitionRead<'_>,
+    after: &GraphPartitionRead<'_>,
+    limits: LineageLimits,
+    stop: &AtomicBool,
+) -> GraphResult<ValidatedLineageInput> {
+    if data.binding.universe_class != LineageUniverseClass::BlizzardUiSource {
+        return Err(invalid());
+    }
+    validate_fingerprint_partition(data, before, after, limits, stop)
+}
+fn validate_fingerprint_partition(
     mut data: ProjectFingerprintPartition,
     before: &GraphPartitionRead<'_>,
     after: &GraphPartitionRead<'_>,
@@ -187,9 +214,13 @@ pub fn validate_project_fingerprint_partition(
     checkpoint(stop)?;
     limits.validate()?;
     let mut ledger = OperationBudget::resume(limits, LineageUsage::default(), stop)?;
-    if data.schema.as_ref() != PROJECT_SPAN_INPUT_SCHEMA
-        || data.producer_id.as_ref() != PROJECT_SPAN_PRODUCER
-        || data.binding.profile_id.as_ref() != PROJECT_SPAN_LINEAGE_PROFILE
+    // Bound/cancel the full projection before traversing Source metadata.
+    ledger.metadata(&data)?;
+    let (profile, schema, producer) = super::source_model::selected_input_profile(&data)?;
+    let ordinary = data.binding.universe_class == LineageUniverseClass::UserProject;
+    if data.schema.as_ref() != schema
+        || data.producer_id.as_ref() != producer
+        || data.binding.profile_id.as_ref() != profile
         || data.coverage.as_ref() != "partial"
         || data.source_bodies.as_ref() != "excluded"
         || data.proof_ceiling != GraphConfidence::Candidate
@@ -198,23 +229,36 @@ pub fn validate_project_fingerprint_partition(
         || data.binding.before.store_epoch_id != data.binding.after.store_epoch_id
         || data.binding.before.project_id != data.binding.after.project_id
         || data.binding.before.project_kind != data.binding.after.project_kind
-        || !matches!(
-            data.binding.before.project_kind.as_ref(),
-            "fixture" | "repository"
-        )
-        || data.binding.before.selected_profile != data.binding.after.selected_profile
-        || data.binding.before.configuration_digest != data.binding.after.configuration_digest
-        || data.binding.before.analyzer_pin_id != data.binding.after.analyzer_pin_id
-        || data.binding.before.analyzer_configuration_digest
-            != data.binding.after.analyzer_configuration_digest
-        || data.binding.before.reference_generation_id != data.binding.after.reference_generation_id
-        || data.binding.before.original_graph_scope.universe
-            != data.binding.after.original_graph_scope.universe
+        || (ordinary
+            && (!matches!(
+                data.binding.before.project_kind.as_ref(),
+                "fixture" | "repository"
+            ) || data.binding.before.selected_profile != data.binding.after.selected_profile
+                || data.binding.before.configuration_digest
+                    != data.binding.after.configuration_digest
+                || data.binding.before.analyzer_pin_id != data.binding.after.analyzer_pin_id
+                || data.binding.before.analyzer_configuration_digest
+                    != data.binding.after.analyzer_configuration_digest
+                || data.binding.before.reference_generation_id
+                    != data.binding.after.reference_generation_id
+                || data.binding.before.original_graph_scope.universe
+                    != data.binding.after.original_graph_scope.universe))
     {
         return Err(invalid());
     }
-    ledger.metadata(&data)?;
-    for (binding, graph) in [(&data.binding.before, before), (&data.binding.after, after)] {
+    if let Some(source) = &data.binding.source {
+        ledger.work(
+            source
+                .before
+                .inventory_entries
+                .checked_add(source.after.inventory_entries)
+                .ok_or_else(budget)?,
+        )?;
+    }
+    for (index, (binding, graph)) in [(&data.binding.before, before), (&data.binding.after, after)]
+        .into_iter()
+        .enumerate()
+    {
         checkpoint(stop)?;
         ledger.work(1)?;
         if &binding.published_graph_snapshot_id != graph.owner().snapshot().snapshot_id()
@@ -222,6 +266,19 @@ pub fn validate_project_fingerprint_partition(
             || binding.original_graph_scope.source_context_id != graph.owner().source_context_id()
         {
             return Err(invalid());
+        }
+        if let Some(source) = &data.binding.source {
+            let metadata = if index == 0 {
+                &source.before
+            } else {
+                &source.after
+            };
+            if metadata.native_registry_digest.as_ref()
+                != graph.owner().registry().registry_digest()
+                || &metadata.foundation_snapshot_id != graph.owner().foundation().snapshot_id()
+            {
+                return Err(invalid());
+            }
         }
     }
     data.records
