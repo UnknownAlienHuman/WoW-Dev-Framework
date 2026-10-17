@@ -5,6 +5,7 @@ use super::{
     fail, publication_checkpoint, publish_input_in_namespace, update_input_in_namespace,
 };
 use crate::{LocalProjectInput, ServiceErrorCode, ServiceResult, graph::GraphBuildRequest};
+use serde::de::Error as _;
 use serde::{Deserialize, Serialize};
 use std::{path::Path, sync::atomic::AtomicBool};
 use wow_core::ProfileId;
@@ -17,20 +18,20 @@ pub const PLATFORM_PROJECT_SELECTION_SCHEMA: &str = "wow-service/platform-projec
 pub const PLATFORM_PROJECT_SELECTION_MAX_BYTES: usize =
     super::super::graph::GRAPH_REQUEST_MAX_BYTES;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum DeclarationCatalog {
     Absent,
     DeclaredSyntaxV1,
     DeclaredSyntaxAndBodyShapeV1,
 }
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum SignatureCatalog {
     Absent,
     IndexedTypesV1,
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CatalogIntent {
     xml_schema_classification: bool,
@@ -38,7 +39,7 @@ struct CatalogIntent {
     physical_function_signatures: SignatureCatalog,
     composed_candidate: bool,
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SelectionDocument {
     schema: String,
@@ -49,6 +50,11 @@ pub(crate) struct SelectionDocument {
 
 /// Explicit transport selection, validated against the actual retained epoch
 /// and genuine configuration by the existing namespace operations.
+///
+/// This is a data-only transport intent: decoding never acquires a native
+/// source or candidate, and no native owner can be forged from the document.
+/// New request structs may embed it for the same owner read/validation rules.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlatformProjectSelection {
     document: SelectionDocument,
     selection: PlatformStoreSelection,
@@ -119,6 +125,31 @@ impl PlatformProjectSelection {
     }
     pub(crate) fn intent(&self) -> &impl Serialize {
         &self.document
+    }
+}
+
+/// Serialize the exact existing selection document only. The rebuilt store
+/// selection is metadata, so the wire shape stays the current schema.
+impl Serialize for PlatformProjectSelection {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.document.serialize(serializer)
+    }
+}
+
+/// Deserialize this transport intent from a closed document. This never
+/// reconstructs a native source, candidate, or epoch, and never derives a
+/// native authority from the payload.
+impl<'de> Deserialize<'de> for PlatformProjectSelection {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let document = SelectionDocument::deserialize(deserializer)?;
+        Self::from_document(document, &AtomicBool::new(false))
+            .map_err(|_| D::Error::custom("invalid platform project selection"))
     }
 }
 
