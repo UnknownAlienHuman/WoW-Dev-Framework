@@ -57,6 +57,14 @@ impl NativeCallableField {
     pub const fn source_span(&self) -> Span {
         self.source_span
     }
+
+    pub(super) fn raw_default(&self) -> Option<&RawValue> {
+        self.default.as_ref()
+    }
+
+    pub(super) fn raw_stride_index(&self) -> Option<&RawValue> {
+        self.stride_index.as_ref()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -146,6 +154,7 @@ impl NativeCallableSignature<'_> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct SignatureCatalog {
+    projection_profile: &'static str,
     generation: String,
     view_digest: String,
     rows: BTreeMap<String, SignatureRow>,
@@ -218,6 +227,7 @@ impl SignatureCatalog {
         Ok(())
     }
     pub(super) fn finish(
+        projection_profile: &'static str,
         view: &ReferenceView,
         mut pending: BTreeMap<String, Vec<SignatureRow>>,
         stop: &AtomicBool,
@@ -245,10 +255,27 @@ impl SignatureCatalog {
             rows.insert(record.key().to_owned(), row);
         }
         Ok(Self {
+            projection_profile,
             generation: view.generation_id().to_owned(),
             view_digest: view.self_digest().to_owned(),
             rows,
         })
+    }
+
+    pub(super) fn require_view(
+        &self,
+        projection_profile: &str,
+        view: &ReferenceView,
+        stop: &AtomicBool,
+    ) -> Result<(), NativeError> {
+        checkpoint(stop)?;
+        if self.projection_profile != projection_profile
+            || self.generation != view.generation_id()
+            || self.view_digest != view.self_digest()
+        {
+            return Err(error(NativeErrorCode::InvalidIdentity));
+        }
+        Ok(())
     }
 
     pub(super) fn read<'a>(

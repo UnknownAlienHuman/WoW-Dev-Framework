@@ -30,6 +30,7 @@ pub mod search;
 mod service;
 pub mod source_census;
 pub mod source_reference;
+pub mod source_reference_compare;
 
 pub use backend::{OwnedServiceBackend, ServiceBackend, ServiceBackendStatus};
 pub use configuration::{

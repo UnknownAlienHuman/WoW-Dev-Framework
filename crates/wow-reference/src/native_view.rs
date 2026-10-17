@@ -18,6 +18,7 @@ use crate::{
     ReferenceView, RestrictionFacet, RestrictionState,
 };
 
+pub mod comparison;
 mod declarations;
 mod documentation;
 mod events;
@@ -726,7 +727,8 @@ fn project_callables_inner(
     let view = ReferenceView::new(generation.to_string(), partitions, conflicts)
         .map_err(|_| error(NativeErrorCode::InvalidIdentity))?;
     let type_resolution_profile = type_catalog.as_ref().map(|catalog| catalog.profile());
-    let signatures = signatures::SignatureCatalog::finish(&view, signatures, stop)?;
+    let signatures =
+        signatures::SignatureCatalog::finish(projection_profile, &view, signatures, stop)?;
     let events = event_build.finish(&view, stop)?;
     let declarations = declaration_build.finish(&view, stop)?;
     let restrictions = RestrictionCatalog::finish(&view, restriction_rows, stop)?;

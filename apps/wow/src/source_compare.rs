@@ -1,4 +1,4 @@
-//! Disjoint CLI worker for source reference comparison.
+//! Thin transport for the original native Reference callable comparison.
 use crate::args::Format;
 use std::{
     ffi::OsString,
@@ -92,7 +92,10 @@ fn parse(values: Vec<OsString>) -> Result<(PathBuf, PathBuf, PathBuf, Format), &
     if values.next().is_none_or(|value| value != "source") {
         return Err("expected source command");
     }
-    if values.next().is_none_or(|value| value != "reference-compare") {
+    if values
+        .next()
+        .is_none_or(|value| value != "reference-compare")
+    {
         return Err("expected source reference-compare");
     }
     let mut before_config = None;
@@ -100,8 +103,13 @@ fn parse(values: Vec<OsString>) -> Result<(PathBuf, PathBuf, PathBuf, Format), &
     let mut request_file = None;
     let mut format = None;
     while let Some(flag) = values.next() {
-        let value = values.next().ok_or("missing source reference-compare option value")?;
-        match flag.to_str().ok_or("invalid source reference-compare option encoding")? {
+        let value = values
+            .next()
+            .ok_or("missing source reference-compare option value")?;
+        match flag
+            .to_str()
+            .ok_or("invalid source reference-compare option encoding")?
+        {
             "--before-config" if before_config.is_none() && !value.is_empty() => {
                 before_config = Some(PathBuf::from(value))
             }
@@ -134,17 +142,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_requires_all_three_paths() {
+    fn parse_requires_all_three_paths() -> Result<(), &'static str> {
         let values = vec![
             OsString::from("source"),
             OsString::from("reference-compare"),
         ];
-        let err = parse(values).unwrap_err();
+        let err = parse(values).err().ok_or("missing paths must fail")?;
         assert!(err.contains("--before-config"));
+        Ok(())
     }
 
     #[test]
-    fn parse_rejects_repeated_option() {
+    fn parse_rejects_repeated_option() -> Result<(), &'static str> {
         let values = vec![
             OsString::from("source"),
             OsString::from("reference-compare"),
@@ -153,35 +162,38 @@ mod tests {
             OsString::from("--before-config"),
             OsString::from("b.json"),
         ];
-        let err = parse(values).unwrap_err();
+        let err = parse(values).err().ok_or("duplicate paths must fail")?;
         assert!(err.contains("repeated") || err.contains("unknown"));
+        Ok(())
     }
 
     #[test]
-    fn parse_rejects_unknown_option() {
+    fn parse_rejects_unknown_option() -> Result<(), &'static str> {
         let values = vec![
             OsString::from("source"),
             OsString::from("reference-compare"),
             OsString::from("--unknown"),
             OsString::from("value"),
         ];
-        let err = parse(values).unwrap_err();
+        let err = parse(values).err().ok_or("unknown flags must fail")?;
         assert!(err.contains("unknown") || err.contains("repeated"));
+        Ok(())
     }
 
     #[test]
-    fn parse_rejects_missing_value() {
+    fn parse_rejects_missing_value() -> Result<(), &'static str> {
         let values = vec![
             OsString::from("source"),
             OsString::from("reference-compare"),
             OsString::from("--before-config"),
         ];
-        let err = parse(values).unwrap_err();
+        let err = parse(values).err().ok_or("missing value must fail")?;
         assert!(err.contains("missing") || err.contains("required"));
+        Ok(())
     }
 
     #[test]
-    fn parse_accepts_valid_arguments() {
+    fn parse_accepts_valid_arguments() -> Result<(), &'static str> {
         let values = vec![
             OsString::from("source"),
             OsString::from("reference-compare"),
@@ -194,10 +206,11 @@ mod tests {
             OsString::from("--format"),
             OsString::from("text"),
         ];
-        let result = parse(values).unwrap();
+        let result = parse(values)?;
         assert_eq!(result.0, PathBuf::from("before.json"));
         assert_eq!(result.1, PathBuf::from("after.json"));
         assert_eq!(result.2, PathBuf::from("request.json"));
-        assert_eq!(result.3, Format::Text);
+        assert!(matches!(result.3, Format::Text));
+        Ok(())
     }
 }

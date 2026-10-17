@@ -11,6 +11,7 @@ mod output;
 mod project;
 mod search;
 mod source;
+mod source_compare;
 
 use std::io::Write;
 use std::process::ExitCode;

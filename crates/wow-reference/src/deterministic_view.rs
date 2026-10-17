@@ -970,7 +970,7 @@ fn encode_digest(digest: impl IntoIterator<Item = u8>) -> String {
     encoded
 }
 
-fn bounded_digest(
+pub(crate) fn bounded_digest(
     value: &impl Serialize,
     max_bytes: usize,
     max_steps: usize,

@@ -1,6 +1,12 @@
 # E4-B Reference transition evidence seam
 
-**Status:** normative supporting contract for [`wow-graph/e4`](../wow-graph/e4/README.md); implementation has not started.
+**Status:** normative supporting contract for [`wow-graph/e4`](../wow-graph/e4/README.md).
+The selected original-native callable observation producer is implemented in
+`native_view::comparison` and exposed through
+[`wow source reference-compare`](../../apps/wow/SOURCE_REFERENCE_COMPARISON.md).
+It compares exact selected callable fields under Candidate association only;
+the broader explicit transition/graph admission/review contract below remains
+unimplemented and is tracked by Issue #125.
 
 `wow-reference` owns exact cross-profile ReferenceView transition, deprecation, replacement, availability, signature/type/restriction and correction evidence. It does not own project-source continuity, search ranking, accepted lineage graph publication, migration application or runtime behavior.
 

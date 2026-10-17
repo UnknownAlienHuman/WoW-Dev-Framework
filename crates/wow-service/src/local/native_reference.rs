@@ -19,6 +19,8 @@ use wow_reference::{
 };
 
 const PROFILE_VERSION: &str = "1.0.0";
+mod comparison;
+pub use comparison::{SourceReferenceComparisonResult, compare_local_source_references};
 pub const SOURCE_REFERENCE_INPUT_SCHEMA: &str = "wow-service/source-reference-input/1";
 
 #[derive(Deserialize)]
