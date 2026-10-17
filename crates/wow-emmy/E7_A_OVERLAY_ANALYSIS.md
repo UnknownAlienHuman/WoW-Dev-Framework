@@ -1,6 +1,9 @@
 # E7-A EmmyLua overlay-analysis seam
 
-**Status:** normative cross-crate seam; implementation has not started.
+**Status:** normative full cross-crate seam. Selected no-published-base Project
+overlay inputs already reach the existing syntax adapter and the bounded
+[lexical local-definition port](LOCAL_DEFINITION.md). Complete dependency,
+incremental-overlay snapshot and actor acceptance remain open.
 
 `wow-emmy` analyzes one exact project-owned overlay input view using the same pinned upstream EmmyLua adapter as saved project generations. It does not own sessions, workspace paths, document synchronization, transport positions, diagnostics policy, or editor protocols.
 

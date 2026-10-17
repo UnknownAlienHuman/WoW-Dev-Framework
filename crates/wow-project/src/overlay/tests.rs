@@ -104,6 +104,27 @@ fn sequential_unicode_edits_exact_replay_and_stale_guards() -> TestResult {
         changed
     );
     assert_eq!(old.descriptor(), &original);
+    let position = OverlayPosition {
+        line: 0,
+        character: 3,
+    };
+    assert_eq!(
+        workspace.byte_offsets(&scope, &old, &[position], OverlayEncoding::Utf16, &stop)?,
+        vec![5]
+    );
+    assert_eq!(
+        workspace.positions(&scope, &old, &[5], OverlayEncoding::Utf16, &stop)?,
+        vec![position]
+    );
+    stop.store(true, Ordering::Release);
+    assert_eq!(
+        workspace
+            .byte_offsets(&scope, &old, &[], OverlayEncoding::Utf16, &stop)
+            .err()
+            .map(|e| e.code()),
+        Some(OverlayErrorCode::Cancelled)
+    );
+    stop.store(false, Ordering::Release);
     assert!(
         workspace
             .snapshots

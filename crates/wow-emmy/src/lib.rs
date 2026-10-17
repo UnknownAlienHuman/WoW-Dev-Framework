@@ -10,6 +10,7 @@ pub mod bindings;
 pub mod compatibility;
 pub mod flow;
 pub mod function_calls;
+pub mod navigation;
 pub mod references;
 pub mod session;
 pub mod syntax;

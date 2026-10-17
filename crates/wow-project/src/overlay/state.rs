@@ -420,6 +420,33 @@ impl OverlayWorkspace {
         }
         Ok(output)
     }
+    /// Exact inverse coordinate projection against a live immutable read lease.
+    pub fn byte_offsets(
+        &self,
+        scope: &OverlaySessionScope,
+        lease: &OverlaySnapshotLease,
+        positions: &[OverlayPosition],
+        encoding: OverlayEncoding,
+        stop: &AtomicBool,
+    ) -> OverlayResult<Vec<usize>> {
+        self.require_lease(scope, lease)?;
+        if positions.len() > 4096 {
+            return Err(error(OverlayErrorCode::Limit));
+        }
+        let mut budget = OverlayBudget::new(self.descriptor.limits.max_work, stop);
+        let mut output = Vec::with_capacity(positions.len());
+        budget.work(1)?;
+        for position in positions {
+            budget.work(1)?;
+            output.push(
+                lease
+                    .snapshot
+                    .index
+                    .byte_offset(*position, encoding, &mut budget)?,
+            );
+        }
+        Ok(output)
+    }
     pub fn analyzer_input(
         &self,
         scope: &OverlaySessionScope,

@@ -45,6 +45,16 @@ digest and byte length through the existing Project disk schema. A synthetic
 report does not qualify a current upstream donor. No config includes, environment
 interpolation, parent search or editor/Git/WoW root discovery occurs.
 
+For lexical same-document definition, use host schema
+`wow-service/lsp-private-overlay-host/2`, privacy
+`session_private_metadata_diagnostics_and_same_document_locations` and the
+additional required string `local_navigation: "same_document_lexical_locals"`.
+This explicitly permits returning the caller-known queried document URI and
+local declaration metadata. Host-v1 rejects the added field (including null)
+and continues to expose syntax only. Unknown policies and mixed version/privacy
+combinations fail before session opening. The effective operation and transport
+profile digests include the enabled policy; no MCP profile is expanded.
+
 The absolute local root is registered during `initialize`; any supplied
 `workspaceFolders` (at most one) or fallback `rootUri` must match its exact
 canonical URI. Neither changes the configured root. An empty folder selection
@@ -63,6 +73,7 @@ are unsupported.
 | `textDocument/didSave` | `frontend_document_save` |
 | `textDocument/didClose` | `frontend_document_close` |
 | `textDocument/diagnostic` | `frontend_document_diagnostics` |
+| `textDocument/definition` (host-v2 opt-in) | `frontend_document_definition` |
 | `$/cancelRequest` notification | `frontend_operation_cancel` observation |
 | `shutdown` | `frontend_session_close` |
 
@@ -72,6 +83,18 @@ chosen when offered, otherwise UTF-16 when offered or when encoding capabilities
 are omitted. The encoding remains fixed. The initialize result carries the exact
 reviewed registry/schema digests, content-addressed transport profile and limits in
 `capabilities.experimental.wow`.
+
+The opt-in definition operation reaches the genuine compiled Emmy lexical
+declaration API. It supports same-file locals, explicit parameters and local
+function bindings with exact original spans; shadowed names retain their native
+declaration identity. Globals, members, types, implicit self, other files and
+unknown/parse-failed source are not evaluated by this port. Such results are
+explicit errors carrying the normalized owner state and binding, never an empty
+clean-negative array. Successful standard locations carry the exact normalized
+result in their `wow` extension. The URI is the owner-qualified queried URI;
+no directory discovery or other source URI is exposed. Default logs and errors
+still omit private paths and source bodies. This is static source navigation,
+not runtime binding or general definition/reference authority.
 
 Documents must have language ID `lua` and nonnegative versions within the LSP
 integer range. A change requires the next version exactly. Ordered edits refer
@@ -123,7 +146,7 @@ The cancel operation reports only an exactly observed completed ticket or no
 cancellation claim. Process stop reaches the existing owner checkpoints; an
 upstream synchronous call completes before observing it. Progress, asynchronous
 wire cancellation, reconnect, transport deadlines and durable response journals
-are not implemented. No hover, definition, completion, workspace diagnostics,
+are not implemented. No hover, cross-file/global/member definition, completion, workspace diagnostics,
 push diagnostics, commands, edits, daemon or network listener is advertised.
 
 Stdout contains framed messages only. Graceful shutdown/exit is 0; abnormal

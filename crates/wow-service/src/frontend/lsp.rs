@@ -12,10 +12,13 @@ use wow_project::{
     overlay::*,
 };
 
+mod definition;
 mod diagnostics;
 mod registry;
+pub use definition::{LspDefinitionLocation, LspDefinitionRequest, LspDefinitionResult};
 pub use diagnostics::{LspDiagnostic, LspDiagnosticReport, LspOverlayBinding};
 pub use registry::{LspOperationDescriptor, LspRegistry, LspTransportProfile};
+pub use wow_project::overlay::OverlayPosition as LspPosition;
 pub use wow_project::overlay::{OverlayEdit as LspContentChange, OverlayRange as LspRange};
 
 pub const LSP_PROFILE_ID: &str = "lsp-3.18-stdio-v1";
@@ -36,6 +39,24 @@ struct HostInput {
     analyzer_report: ProjectDiskFile,
     limits: OverlayLimits,
     reconcile_on_save: bool,
+    #[serde(default, deserialize_with = "present_navigation")]
+    local_navigation: Option<LocalNavigationPolicy>,
+}
+#[derive(Debug, Clone, Copy)]
+enum LocalNavigationPolicy {
+    SameDocumentLexicalLocals,
+}
+fn present_navigation<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<LocalNavigationPolicy>, D::Error> {
+    match String::deserialize(deserializer)?.as_str() {
+        "same_document_lexical_locals" => {
+            Ok(Some(LocalNavigationPolicy::SameDocumentLexicalLocals))
+        }
+        _ => Err(serde::de::Error::custom(
+            "unsupported local navigation policy",
+        )),
+    }
 }
 /// Explicit host configuration; no directory registration or source scan on load.
 pub struct LspHost {
@@ -61,8 +82,13 @@ impl LspHost {
             .map_err(|_| acquisition(stop))?;
         let input: HostInput = serde_json::from_slice(&bytes)
             .map_err(|_| invalid_frontend_request("invalid LSP host"))?;
-        if input.schema != "wow-service/lsp-private-overlay-host/1"
-            || input.privacy != "session_private_metadata_and_diagnostics"
+        let old_profile = input.schema == "wow-service/lsp-private-overlay-host/1"
+            && input.privacy == "session_private_metadata_and_diagnostics"
+            && input.local_navigation.is_none();
+        let navigation_profile = input.schema == "wow-service/lsp-private-overlay-host/2"
+            && input.privacy == "session_private_metadata_diagnostics_and_same_document_locations"
+            && input.local_navigation.is_some();
+        if (!old_profile && !navigation_profile)
             || input.limits.max_document_bytes > LSP_MAX_FRAME_BYTES / 2
         {
             return Err(invalid_frontend_request("unsupported LSP host profile"));
@@ -94,6 +120,7 @@ pub struct LspSessionDescriptor {
     pub profile_id: &'static str,
     pub registry_digest: Box<str>,
     pub profile_digest: Box<str>,
+    pub local_definition_enabled: bool,
     pub client: FrontendClientIdentity,
     pub position_encoding: &'static str,
     pub workspace: OverlayWorkspaceDescriptor,
@@ -188,15 +215,19 @@ pub struct LspFrontend {
 }
 impl LspFrontend {
     pub fn new(host: LspHost) -> ServiceResult<Self> {
+        let local_definition = host.input.local_navigation.is_some();
         Ok(Self {
             host,
-            registry: LspRegistry::build()?,
+            registry: LspRegistry::build(local_definition)?,
             session: None,
             opened: false,
         })
     }
     pub fn registry(&self) -> &LspRegistry {
         &self.registry
+    }
+    pub fn definition_enabled(&self) -> bool {
+        self.host.input.local_navigation.is_some()
     }
     pub fn frontend_session_open(
         &mut self,
@@ -263,6 +294,7 @@ impl LspFrontend {
             profile_id: LSP_PROFILE_ID,
             registry_digest: self.registry.digest.clone(),
             profile_digest: self.registry.profile_digest.clone(),
+            local_definition_enabled: self.definition_enabled(),
             client,
             position_encoding: name,
             workspace: workspace.descriptor().clone(),

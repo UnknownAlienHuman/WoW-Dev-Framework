@@ -25,6 +25,7 @@ pub struct LspTransportProfile {
     pub synchronization: &'static str,
     pub cancellation: &'static str,
     pub privacy: &'static str,
+    pub local_definition_enabled: bool,
     pub max_header_bytes: usize,
     pub max_frame_bytes: usize,
     pub max_output_bytes: usize,
@@ -49,7 +50,7 @@ fn object(properties: Value, required: &[&str]) -> Value {
     json!({"type":"object","properties":properties,"required":required,"additionalProperties":false})
 }
 impl LspRegistry {
-    pub(super) fn build() -> ServiceResult<Self> {
+    pub(super) fn build(local_definition: bool) -> ServiceResult<Self> {
         let uri = json!({"type":"string","maxLength":65536});
         let version = json!({"type":"integer","minimum":0,"maximum":i32::MAX});
         let string = json!({"type":"string"});
@@ -117,7 +118,7 @@ impl LspRegistry {
         let not_evaluated = json!({"type":"array","items":{"type":"string"}});
         let session = object(
             json!({"schema":{"const":"wow-service/lsp-private-session/1"},"session_id":string,
-            "profile_id":{"const":LSP_PROFILE_ID},"registry_digest":string,"profile_digest":string,"client":client,
+            "profile_id":{"const":LSP_PROFILE_ID},"registry_digest":string,"profile_digest":string,"local_definition_enabled":{"type":"boolean"},"client":client,
             "position_encoding":{"enum":["utf-8","utf-16"]},"workspace":workspace,"coverage":string,
             "cancellation":string,"not_evaluated":not_evaluated}),
             &[
@@ -126,6 +127,7 @@ impl LspRegistry {
                 "profile_id",
                 "registry_digest",
                 "profile_digest",
+                "local_definition_enabled",
                 "client",
                 "position_encoding",
                 "workspace",
@@ -332,6 +334,62 @@ impl LspRegistry {
                 effect_class: effect,
             });
         }
+        if local_definition {
+            let target = object(
+                json!({"name":{"type":"string","maxLength":256},
+                "kind":{"enum":["local_binding","parameter"]},"span":span}),
+                &["name", "kind", "span"],
+            );
+            let limits = object(
+                json!({"max_file_bytes":{"type":"integer"},"max_work":{"type":"integer"},"max_name_bytes":{"type":"integer"}}),
+                &["max_file_bytes", "max_work", "max_name_bytes"],
+            );
+            let original = object(
+                json!({"schema":{"const":"wow-emmy/local-definition-result/1"},
+                "profile":{"const":"same_file_lexical_local_no_trace/1"},"analysis_id":string,"workspace_snapshot_id":string,"backend":backend,
+                "path":string,"content_sha256":string,"query_byte_offset":{"type":"integer","minimum":0},"limits":limits,
+                "state":{"enum":["resolved_local","not_evaluated","source_parse_failed"]},
+                "reason":{"enum":["unsupported_token","declaration_not_observed","outside_local_scope","target_unavailable"]},
+                "origin_span":span,"target":target,"negative_authority":{"const":false},"coverage":{"const":"one_exact_main_file_lexical_locals_only"}}),
+                &[
+                    "schema",
+                    "profile",
+                    "analysis_id",
+                    "workspace_snapshot_id",
+                    "backend",
+                    "path",
+                    "content_sha256",
+                    "query_byte_offset",
+                    "limits",
+                    "state",
+                    "negative_authority",
+                    "coverage",
+                ],
+            );
+            let request = object(json!({"uri":uri,"position":position}), &["uri", "position"]);
+            let location = object(
+                json!({"uri":uri,"range":range,"origin_range":range}),
+                &["uri", "range", "origin_range"],
+            );
+            let result = object(
+                json!({"schema":{"const":"wow-service/lsp-local-definition-result/1"},"location":location,"binding":binding,"original":original}),
+                &["schema", "binding", "original"],
+            );
+            operations.push(LspOperationDescriptor {
+                wire_method: "textDocument/definition",
+                operation_id: "frontend_document_definition",
+                request_schema_id: "wow-service/lsp/frontend_document_definition/request/1".into(),
+                request_schema_digest: canonical_digest("sha256:", &request)?,
+                request_schema: request,
+                result_schema_id: "wow-service/lsp/frontend_document_definition/result/1".into(),
+                result_schema_digest: canonical_digest("sha256:", &result)?,
+                result_schema: result,
+                error_schema_id: "wow-service/lsp-operation-error/1",
+                error_schema_digest: canonical_digest("sha256:", &error)?,
+                error_schema: error,
+                effect_class: "pure_read",
+            });
+        }
         operations.sort_by_key(|entry| entry.wire_method);
         let digest = canonical_digest(
             "frontend-lsp-registry:sha256:",
@@ -344,7 +402,12 @@ impl LspRegistry {
             transport: "stdio",
             synchronization: "sequential_intermediate_exact_next_version",
             cancellation: "synchronous_observations_process_stop_owner_checkpoints",
-            privacy: "session_private_metadata_and_diagnostics",
+            privacy: if local_definition {
+                "session_private_metadata_diagnostics_and_same_document_locations"
+            } else {
+                "session_private_metadata_and_diagnostics"
+            },
+            local_definition_enabled: local_definition,
             max_header_bytes: LSP_MAX_HEADER_BYTES,
             max_frame_bytes: LSP_MAX_FRAME_BYTES,
             max_output_bytes: LSP_MAX_OUTPUT_BYTES,

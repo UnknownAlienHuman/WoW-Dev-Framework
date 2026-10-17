@@ -2,6 +2,10 @@
 
 ## Implemented executable boundaries
 
+- Exact single-file lexical local-definition observation through the actual
+  compiled semantic model, with NoTrace/same-file/local checks and conservative
+  nonlocal/parse-failure states; see [LOCAL_DEFINITION.md](LOCAL_DEFINITION.md).
+
 - Exact pinned `emmylua_code_analysis` adapter at the accepted upstream commit/tree/crate version.
 - Rust revalidation of the compatibility report before backend identity is accepted.
 - Explicit content-addressed in-memory Lua workspaces bound to one backend identity and source universe.
@@ -24,7 +28,8 @@ These outputs are normalized analyzer and control-flow observations only. They d
 
 - Normalization of additional upstream diagnostic families beyond the three explicitly accepted E0 families.
 
-- General symbol, definition, reference, type, hover, call-hierarchy, or rename operations.
+- General symbol, cross-file/global/member definition, reference, type, hover,
+  call-hierarchy, or rename operations beyond the selected lexical local port.
 - Non-call member/reference inventory and dynamic/computed member facts.
 - General assignment/copy propagation, interprocedural dataflow, full CFG construction, loops, exceptional control flow, or arbitrary guard semantics.
 - Project-generation ownership, persistent analyzer sessions, overlays, concurrent clients, and multi-generation caches.

@@ -16,6 +16,7 @@ use wow_service::{
         LspSynchronizationRefusal,
     },
 };
+mod definition;
 mod framing;
 use framing::{Limits, read_frame, write_frame};
 
@@ -223,15 +224,17 @@ impl Server {
             return match self.service.frontend_session_open(request, stop) {
                 Ok(session) => {
                     self.initialized = true;
-                    send(
-                        output,
-                        json!({"jsonrpc":"2.0","id":id,"result":{"capabilities":{
+                    let local_definition = session.local_definition_enabled;
+                    let mut response = json!({"jsonrpc":"2.0","id":id,"result":{"capabilities":{
                         "positionEncoding":session.position_encoding,
                         "textDocumentSync":{"openClose":true,"change":2,"save":{"includeText":false}},
                         "diagnosticProvider":{"identifier":"wow.private-syntax","interFileDependencies":false,"workspaceDiagnostics":false},
                         "experimental":{"wow":{"session":session,"registry":self.service.registry()}}
-                    },"serverInfo":{"name":"wow-private-syntax","version":env!("CARGO_PKG_VERSION")}}}),
-                    )?;
+                    },"serverInfo":{"name":"wow-private-syntax","version":env!("CARGO_PKG_VERSION")}}});
+                    if local_definition {
+                        response["result"]["capabilities"]["definitionProvider"] = json!(true);
+                    }
+                    send(output, response)?;
                     Ok(Control::Continue)
                 }
                 Err(error) => domain_error(output, Some(id), error),
@@ -251,6 +254,7 @@ impl Server {
             return response_error(output, id, -32002, "initialized notification required");
         }
         match method.as_str() {
+            "textDocument/definition" => self.definition(id, &params, output, stop),
             "shutdown" => {
                 let Some(id) = id else {
                     return notification_error(output, "shutdown requires a request ID");
