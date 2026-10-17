@@ -143,6 +143,9 @@ jobs:
               exit 1
             fi
           done
+          # This isolated consumer lane follows main; normal builds keep the shared pin.
+          sed -i '/^emmylua_parser = /s/rev = "[^"]*"/branch = "main"/' Cargo.toml
+          grep -Eq '^emmylua_parser = .*branch = "main"' Cargo.toml
       - name: Resolve current parser in isolated CI checkout
         run: |
           cargo +stable update

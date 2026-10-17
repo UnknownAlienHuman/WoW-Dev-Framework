@@ -21,17 +21,16 @@ A completed documentation package is not implemented software. A compiling binar
 
 ```text
 planned architecture/documentation: complete through E7-B
-implementation frontier: not-started
-next owned package: I0-A / wow-core E0-A
-Cargo workspace: absent
-Cargo.lock and rust-toolchain: absent
-Rust source: absent
-CI/workflows: absent
-real end-to-end implementation evidence: absent
+implementation frontier: partial executable owner/application scopes
+next owned work: reviewed refactoring plan / Issue #191
+Cargo workspace: 18 active members
+Cargo.lock: present; CI records its selected Rust toolchain
+Rust source and CI/workflows: present
+full composed launch acceptance: incomplete
 supported targets and public releases: none
 ```
 
-E7-A completes the canonical frontend operation-registry, session, overlay, daemon, LSP, and MCP contracts. E7-B completes the source/build/reproducibility/evidence/signing/bundle/channel/install/update/rollback/support contracts. Implementation begins with I0-A, not another documentation package.
+E7-A defines frontend operation-registry, session, overlay, daemon, LSP and MCP requirements. E7-B defines build, distribution and installation requirements. The [completion matrix](PROJECT_COMPLETION_MATRIX.md) records implemented scope; [Issue #191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191) and the [work map](PROJECT_WORK_MAP.md) route current repairs. Gate definitions below remain acceptance requirements, not assertions that all prerequisite code is absent.
 
 ## Gate R0 — first runnable bootstrap
 
@@ -62,7 +61,7 @@ Required evidence:
 
 R0 does not require E1 through E7 implementation. It is the earliest runnable project state.
 
-**Current state:** blocked; every required implementation item is absent.
+**Current state:** blocked on complete E0 acceptance. The owner chain and status/check application exist; remaining fixture, identity, output and platform evidence must be reconciled with those implementations.
 
 ## Gate A0 — useful internal alpha
 
@@ -89,7 +88,7 @@ Required evidence:
 
 A0 may remain one-shot CLI-only.
 
-**Current state:** blocked by R0 and all E1 through E3 implementation.
+**Current state:** blocked by R0 and complete E1–E3 acceptance. Partial Reference, Project/Graph and Context application paths already exist.
 
 ## Gate A1 — developer preview
 
@@ -128,7 +127,7 @@ Required evidence:
 
 A1 is the first sensible external developer preview. It is not stable v1.
 
-**Current state:** blocked by A0, E4, and E7-A implementation.
+**Current state:** blocked by A0 and complete E4/E7-A scope and acceptance. Selected Search, lineage and frontend paths already exist.
 
 ## Gate B0 — governed beta
 
@@ -246,18 +245,22 @@ Public supported v1:
 
 ## Current blockers
 
-```text
-no Cargo workspace, lockfile, Rust toolchain, or Rust source
-no implemented owner ports, service operations, or protocol adapters
-no frozen implementation commits or populated implementation checksums
-no real Reference Pack, project generation, analyzer, diagnostic, search, or context execution
-no admitted calibration corpus or published core pack
-no live external provider adapter, mapping, or context evidence
-no live LSP, MCP, daemon, client, or platform tests
-no independent reproducible build or release pipeline
-no packaged, signed, or attested public artifact
-no install, migration, update, reconciliation, or rollback rehearsal
-no current-client release validation
-```
+The Cargo workspace, owner implementations, Service operations, CLI and selected
+LSP/MCP routes exist. Their partial delivery does not establish the launch gates
+above. Current blockers are scoped evidence and implementation obligations:
 
-The architecture documentation is complete through E7-B. Additional architecture text does not advance launch readiness. The next step is I0-A `wow-core` implementation.
+- reconcile owner lifecycle/checksum records with delivered implementations
+  without inferring acceptance from a green build (#120);
+- complete the named corpus, capacity, graph, retention and recovery qualification
+  tracked in the [work map](PROJECT_WORK_MAP.md);
+- complete the selected frontend, external-provider and runtime scope before
+  advertising it as accepted;
+- establish the required reproducible release, packaging, signing, installation,
+  update and rollback evidence for the chosen launch gate;
+- perform current-client validation where that gate requires it.
+
+The architecture documentation is complete through E7-B. Current engineering work
+starts with the [reviewed refactoring plan](AUDIT_2026-10-17.md) in
+[Issue #191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191),
+not another I0-A bootstrap. Use the [completion matrix](PROJECT_COMPLETION_MATRIX.md)
+for the exact unaccepted scopes; additional architecture prose does not satisfy them.

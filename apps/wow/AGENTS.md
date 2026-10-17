@@ -4,9 +4,9 @@
 
 ```text
 planned application documentation: complete through E7-B
-application implementation: partial executable status/check over explicit materialized inputs
+application implementation: status/check, project/graph/context/search and selected frontend routes
 first application package: I0-F / wow status and wow check
-repository next work: functional input materialization and supported owner routing
+repository next work: reviewed refactoring plan and current canonical Issue
 ```
 
 ## Required routing
@@ -49,6 +49,13 @@ There is no generic invoke, call-service, call-tool, raw RPC, shell, script, plu
 - Explicit file, stdin, configuration, manifest, bundle, and protocol data is bounded transport input and never executed.
 - No include, interpolation, command substitution, environment expansion, plugin, hidden discovery, or arbitrary URL fetch.
 - Sensitive signing, provider, build, distribution, CI, and installation material is never accepted in public arguments, configuration, messages, fixtures, logs, or results.
+
+The current explicit materialized-input grammar is a low-level route, not a
+permanent requirement for users to supply every budget or derived identity.
+The refactoring target adds finite defaults and reusable configuration. Planned
+TOC discovery supplies bounded registration candidates to Project through Service;
+it does not grant source authority or silently select an ambiguous flavor/variant.
+Update the affected input contract with that implementation, preserving this boundary.
 
 ## E7-A session and frontend rules
 
@@ -101,7 +108,7 @@ There is no generic invoke, call-service, call-tool, raw RPC, shell, script, plu
 
 Read LOCAL_INPUT.md. Complete missing functional code before extending test
 matrices. Existing E0-F/R0 acceptance remains separate; do not claim it from build
-success. Keep only main, no worktrees or task branches.
+success. Follow root `AGENTS.md`: one manager/worktree/claim and a reviewable branch.
 
 ## Completion report
 
@@ -116,4 +123,4 @@ commands and tests with pass, fail, skipped, or NotEvaluated
 launch and completion state advanced or unchanged
 ```
 
-Publish coherent work to main without a force push.
+Publish coherent authorized work through the root branch/PR protocol without a force push.
