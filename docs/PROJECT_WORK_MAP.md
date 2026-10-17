@@ -1,17 +1,32 @@
 # Current project work map
 
-The canonical implementation queue and current integration lease are in
+> **Mandatory 2026-10-17 Audit & Engineering Remediation ([#191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191)):** Read
+> [`docs/AUDIT_2026-10-17.md`](AUDIT_2026-10-17.md) and
+> [Issue #191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191) first. All active work must follow
+> its anti-bloat engineering rules and phased remediation plan (eliminating schema
+> proliferation, multi-pass JSON serialization, re-parsing on SQLite read, 4x
+> `EmmyLuaAnalysis` instantiation, `*Wire` duplication, `xtask` completion traps, and
+> CLI/LSP/MCP usability/protocol defects).
+
+The canonical remediation mandate is [#191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191);
+the implementation queue and current integration lease are in
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
-Read its current body and claim with [the execution model](EXECUTION_MODEL.md).
+Read their current bodies with [the execution model](EXECUTION_MODEL.md) and
+[the 2026-10-17 audit](AUDIT_2026-10-17.md).
 The [completion matrix](PROJECT_COMPLETION_MATRIX.md) owns package/launch states;
 [implementation status](IMPLEMENTATION_STATUS.md) describes executable scope.
 
-Verified product checkpoint: `d76c822634b73bb34d0e40621e3c70a902e4812a`,
-[Quick 38695889112](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/38695889112).
+Verified product checkpoint: `d36ba6e0ceec974f3a41cbb841c1c21de803d4f3`,
+[Quick 39030281410](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/39030281410).
 This is exact-head build evidence, not full package or launch acceptance.
 
 ## Next bounded actions
 
+0. **Execute the 2026-10-17 Audit Remediation Plan ([`docs/AUDIT_2026-10-17.md`](AUDIT_2026-10-17.md)):**
+   - Phase 1: Remove `pending`/`NotEvaluated`/`null`-checksum traps in `tools/xtask`, unify `emmylua_*` dependencies in root `Cargo.toml`, prune obsolete worktrees, and enable fast unit tests in `quick-check.yml`.
+   - Phase 2: Replace DOM-allocating `CanonicalSerializer` and 6x/8x byte-count convergence loops in `wow-core`/`wow-search`, collapse 4x `EmmyLuaAnalysis` passes into 1, delete `replay1..15` / `LegacyGlobalAccessV9`, and stop re-parsing source on SQLite reads (`hydrate_owner`).
+   - Phase 3: Delete 10,335 lines of `#![allow(dead_code)]` in `wow-recognizers` and 7,300+ lines of `*Wire` duplicates in `wow-context`, fix `\u00xx`-escaped Markdown rendering, and move domain algorithms out of `wow-service`.
+   - Phase 4: Provide `.toc` auto-discovery and default budgets in `apps/wow` CLI, and fix JSON-RPC 2.0 / LSP 3.18 / MCP protocol violations and owner integration.
 1. Reconcile the retained W5 repair with the current Service path and exact graph
    readback in [#166](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/166).
 2. Qualify genuine EventRegistry bridge and CVar callback Service positives in

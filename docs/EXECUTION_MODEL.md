@@ -1,16 +1,18 @@
 # Contributor execution and acceptance model
 
-**Status:** normative contributor process. The operational clarification of
-2026-10-11 removes global audit pauses and duplicate work, not product safety or
-acceptance requirements. Read this with `AGENTS.md`; package behavior, source
-safety and admitted compatibility contracts remain in force.
+**Status:** normative contributor process. Read this together with `AGENTS.md` and
+the mandatory remediation audit in [`docs/AUDIT_2026-10-17.md`](AUDIT_2026-10-17.md),
+which prohibits unreleased schema proliferation, multi-pass JSON byte-count loops,
+re-parsing on store reads, `*Wire` duplication, and protocol-breaking LSP/MCP/CLI
+ceremonies.
 
 ## 1. Small context, one current task
 
-Start with `AGENTS.md`, this file, the current body of the canonical Issue, its
-latest claim, and the target owner's instructions/contracts. Read historical
-comments only for the exact evidence needed. Do not reconstruct the queue from
-old PR bodies, every audit or a chronological checkpoint diary.
+Start with `AGENTS.md`, [`docs/AUDIT_2026-10-17.md`](AUDIT_2026-10-17.md), this file,
+the current body of the canonical Issue, its latest claim, and the target owner's
+instructions/contracts. Read historical comments only for the exact evidence needed.
+Do not reconstruct the queue from old PR bodies, every audit or a chronological
+checkpoint diary.
 
 The Issue identifies the goal, current bounded slice, inputs/outputs, owner paths,
 actual dependencies, nonclaims, validation and next code action. A later queue
@@ -89,7 +91,8 @@ require unfinished producers to pass final capacity qualification before coding
 them. Equally, do not close acceptance debt just to resume implementation. Keep
 actual incompatible interfaces blocked; work on independent paths meanwhile.
 
-The active implementation queue is Issue #122; #106 tracks W17 acceptance.
+The active architectural remediation mandate is Issue #191 (`docs/AUDIT_2026-10-17.md`);
+the implementation queue is Issue #122; #106 tracks W17 acceptance.
 The immediate capacity repair is #121; final corpus qualification remains #113.
 Read their current bodies, not copied
 historical SHAs or obsolete ordering in an audit index.

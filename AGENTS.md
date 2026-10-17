@@ -7,18 +7,40 @@ These rules apply to every human or automated contributor.
 Read, in this order:
 
 1. this file;
-2. [`docs/EXECUTION_MODEL.md`](docs/EXECUTION_MODEL.md);
-3. the one canonical active GitHub Issue;
-4. the target owner package instructions and contracts;
-5. only the exact historical/evidence records needed by that Issue.
+2. [`docs/AUDIT_2026-10-17.md`](docs/AUDIT_2026-10-17.md) (normative 2026-10-17 audit and anti-bloat engineering mandate);
+3. [`docs/EXECUTION_MODEL.md`](docs/EXECUTION_MODEL.md);
+4. the one canonical active GitHub Issue;
+5. the target owner package instructions and contracts;
+6. only the exact historical/evidence records needed by that Issue.
 
 Do not use stale PR bodies or long chronological status diaries as the work queue.
 `docs/PROJECT_COMPLETION_MATRIX.md` is the package/launch census, not a task prompt.
 
+## Mandatory anti-bloat and engineering rules (2026-10-17 mandate)
+
+Read [`docs/AUDIT_2026-10-17.md`](docs/AUDIT_2026-10-17.md) before making any change. The following prohibitions are absolute:
+
+1. **No schema/profile version proliferation:** Do NOT mint `/N+1` schema constants (`replay17`, `report11`, `host6`, `graph-build-result/21`, or long capability-combination schema strings) for internal or pre-release changes. Consolidate each owner onto **one** current schema version, delete obsolete intermediate schema tables (`STORAGE_SCHEMAS_V1..V15`, `LegacyGlobalAccessV9`, `host1..4`), and update affected fixtures directly.
+2. **No multi-pass JSON serialization, self-hashing byte counts, or roundtrip `validate()`:**
+   - Never embed serialized JSON byte lengths (`output_bytes`, `delivered_page_bytes`) inside the hashed JSON payload or cursor itself. Delete fixed-point convergence loops (`for _ in 0..8`, `FINALIZATION_PASSES = 6`).
+   - Never call `serde_json::to_writer` or `charge_serialized` inside AST, XML, or graph traversal loops to meter budgets; use `O(1)` integer counters.
+   - Never implement `validate()` by cloning a structure and checking `Self::new(...) == *self` or round-tripping through `serde_json::from_slice(&serde_json::to_vec(...))`.
+3. **Single analyzer pass and true persistence:**
+   - Instantiate `EmmyLuaAnalysis` **once** per project analysis session/generation, not 4 times across separate syntax/call/flow passes.
+   - Never re-parse source files or re-run `EmmyLuaAnalysis` / graph builders when reading a persisted generation from `wow-store` (`hydrate_owner` / `validate_read_pair`). Never serialize an SQLite database file into a BLOB column of another SQLite database.
+4. **Strict crate boundaries and no `*Wire` duplication:**
+   - Keep `wow-service` a thin orchestration facade. Do not put graph-building, XML fingerprinting, Native API joining, Reference Pack building, or LSP AST traversal algorithms inside `wow-service`.
+   - Derive `Serialize` and `Deserialize` on domain DTOs directly instead of duplicating 7,300+ lines of `*Wire` structs in `wow-context`.
+   - Fix `render_context_pack_markdown` to emit real human/LLM-readable Markdown, not `\u00xx`-escaped JSON punctuation.
+5. **Standard-compliant, ergonomic CLI, LSP, and MCP:**
+   - CLI commands (`wow check`, `wow search`, `wow context`, etc.) must provide sensible defaults for all budgets/limits/store paths and auto-discover `.toc` files instead of requiring 25–28 mandatory flags.
+   - `wow lsp` and `wow mcp` must strictly follow JSON-RPC 2.0, LSP 3.18, and MCP 2025-11-25: no top-level `"wow"` fields in JSON-RPC responses, no `-32001` errors on empty definition/reference positions (return `null`/`[]`), no `exit(2)` on standard notifications, no artificial `document_symbol_disclosure` gates, and full integration with Project/Reference/Graph/Rules.
+6. **Plain prose and clean worktrees:** Write issue comments and commit messages in clear prose (never concatenated token gibberish like `Main319ca795/QuickPASS`), and remove merged git worktrees immediately.
+
 ## Current priority
 
-Implement missing functional code first. Preserve existing tests, but do not turn
-an expanding fixture matrix into a prerequisite for writing missing owner and
+Execute the remediation roadmap in [`docs/AUDIT_2026-10-17.md`](docs/AUDIT_2026-10-17.md) and deliver clean, fast, standard-compliant functionality. Preserve real behavioral tests, but do not turn
+an expanding fixture matrix into a prerequisite for writing or simplifying owner and
 application paths. During active implementation use the bounded functional gate;
 run the heavyweight campaign only at a coherent acceptance milestone.
 

@@ -5,9 +5,18 @@ description: Research, implement, debug and review World of Warcraft addons usin
 
 # WoW development workflow
 
-Read `AGENTS.md`, `docs/EXECUTION_MODEL.md`, the one canonical active Issue, and
-the target package instructions before changing code. Do not reconstruct the work
-queue from old PRs or chronological checkpoint diaries.
+Read `AGENTS.md`, `docs/AUDIT_2026-10-17.md`, `docs/EXECUTION_MODEL.md`, the one
+canonical active Issue, and the target package instructions before changing code.
+Do not reconstruct the work queue from old PRs or chronological checkpoint diaries.
+
+## Mandatory anti-bloat rules (2026-10-17 audit)
+
+Follow all engineering rules in `docs/AUDIT_2026-10-17.md`:
+- **No schema/profile proliferation:** Keep one current schema per owner; never add `replay17`, `report11`, `host6`, or capability-combination schema strings to preserve intermediate unreleased formats. Delete obsolete legacy schema tables and update fixtures directly.
+- **No multi-pass JSON / self-hashing / roundtrip validation:** Never embed serialized byte counts (`output_bytes`, `delivered_page_bytes`) inside hashed payloads or cursors (no `for _ in 0..8` or 6-pass convergence loops). Never call `serde_json::to_writer` / `charge_serialized` inside AST/XML/graph loops. Never implement `validate()` via `Self::new(...) == *self` or JSON roundtrips.
+- **Single analyzer pass & real persistence:** Run one `EmmyLuaAnalysis` instance per project generation (not 4). Never re-parse source files or re-run EmmyLua/graph builders when reading from `wow-store` (`hydrate_owner`).
+- **Thin `wow-service` & no `*Wire` duplication:** Keep domain algorithms in owning crates, derive `Serialize`/`Deserialize` directly without duplicated `*Wire` structs, emit real readable Markdown in `wow-context` (never `\u00xx`-escaped JSON), and keep CLI/LSP/MCP strictly standard-compliant and ergonomic (auto-discover `.toc`, provide defaults for all limits, no top-level `"wow"` field in JSON-RPC responses, no `-32001` on empty positions, no `document_symbol_disclosure` gates).
+- **Plain prose & clean worktrees:** Never write concatenated shorthand (`Main319ca795/QuickPASS`) in Issues or `.codex/`, and prune merged worktrees immediately.
 
 ## One manager and one bounded claim
 
