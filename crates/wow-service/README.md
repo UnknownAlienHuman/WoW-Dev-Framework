@@ -11,8 +11,12 @@ by the application; Service is not a required forwarding layer.
 ## Where to look
 
 - Public API: [`src/lib.rs`](src/lib.rs)
-- Local analyzer/project composition: [`src/local/`](src/local/),
-  `src/local/input.rs`, `src/local/platform_input.rs`
+- Local setup/check: `src/local/{disk_input,native_input,input,backend}.rs`;
+  generated Lua already enters as Library files.
+- Graph-only Library regeneration: `src/local/native_library_input.rs`; replace
+  its `rebuild_for_project` callers with the existing Library and needed origins.
+- Status/check result construction: `src/service.rs` (`derive_status` and
+  `CheckResult`); #194 removes the wrapper while keeping useful output.
 - Project publication/update: [`src/live_project/`](src/live_project/)
 - Graph and search use cases: `src/graph/`, `src/search.rs`
 - Older annotation/reference pack administration: `src/annotation_admin.rs`,
@@ -36,7 +40,7 @@ indexes from retained source/configuration rather than migrating old derived
 formats.
 
 For active scope and order, see root [`AGENTS.md`](../../AGENTS.md),
-[architecture](../../docs/ARCHITECTURE.md), and
+[implementation](../../docs/IMPLEMENTATION.md), and
 [reduction queue](../../docs/REFACTOR_QUEUE.md). Read only the implementation
 and actual callers for the selected operation; legacy E0–E7 routes are not
 acceptance requirements for the current product.

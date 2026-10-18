@@ -49,7 +49,9 @@ exports prepared bytes and is not a source-to-library generation command.
    execute donor Lua or invent another source evaluator.
 3. Call `wow-annotations/src/native.rs::project_with_alias_catalogs_and_literal_bridge`
    and the existing emitter. Produce ordinary `.lua` files and a small readable
-   source/partial-result report. Document the consumer's library-directory setup.
+   source/partial-result report. Share this producer with local native input;
+   keep needed source maps as typed data instead of reconstructing the library
+   to recover them. Document the consumer's library-directory setup.
 4. Remove displaced pack requests/administration in the builder and affected
    `wow-service/src/{reference_pack,reference_pack_admin,reference_admin,annotation_admin}.rs`
    callers. Native generation must not require a pack registry or signed report.
@@ -63,19 +65,36 @@ corrections, literals and source maps; reuse its existing consumer probes.
 
 ## Addon configuration and Emmy analysis
 
-**#200 connects ordinary roots/flavor/TOC/library settings; #193 removes repeated
-analysis.** Existing composition starts in `wow-service/src/local/{input,native_input}.rs`;
-`native_library_input.rs::rebuild_for_project` already prepares a native library.
-Reuse that work and `wow-project`'s source loading instead of adding another host
-schema or generation path. #201 connects the final CLI workflow.
+**#200 supplies normal configuration; #193 fixes the analysis/diagnostic path.**
+`wow-service/src/local/disk_input.rs::DiskInput.library` already accepts a root
+and declared Lua files through Project's `read_lua_inventory`. Build that bounded
+inventory from the configured library directory. Remove user-supplied probe,
+contract and digest fields; do not require native source to use generated Lua.
 
-`wow-emmy/src/session.rs::AnalyzerSession` currently owns two analyses: `syntax`
-and `semantic`. Consolidate the actual registrations and collectors into one
-upstream `EmmyLuaAnalysis` for the same Main/Library inputs. Adding a wrapper
-around the current session does not achieve this. Inspect callers in
-`wow-project/src/snapshot.rs`; retain diagnostics, symbol/call information,
-document versions and add/change/remove behavior. Read queries from the result
-or index, without creating a fresh analyzer.
+`local/native_input.rs::from_native_manifest` generates Lua and passes it to
+`local/input.rs::assemble_with_load_plan` as Library files. Ordinary checks reuse
+that Library. By contrast, `local/native_library_input.rs::rebuild_for_project`
+re-ingests and re-renders retained inputs for `graph/build/native_api.rs::publish`
+and `LiveProjectRead::requalify_native_library`; `verify_library_files` builds
+another snapshot for identity comparison. #196/#107 reuse the produced Library
+and needed callable-origin mappings, then remove that duplicate producer. Do not
+make requalification the new check/load path.
+
+`wow-emmy/src/session.rs::AnalyzerSession` owns `syntax` (Main only, diagnostics
+enabled) and `semantic` (Main + Library, diagnostics disabled for physical input).
+`reports().syntax` supplies Project diagnostics. Moreover,
+`syntax/analyzer.rs::accepted_code` passes only syntax/doc-syntax and assignment
+type errors; it drops upstream `param-type-mismatch`. #193 must register the
+selected inputs once, collect Main diagnostics and semantic facts from the same
+`EmmyLuaAnalysis`, and pass the useful upstream diagnostic codes through. Reuse
+upstream checking, not a new type checker or diagnostic approval registry.
+
+Trace `wow-project/src/{analyzer,snapshot}.rs`, including its separate TOC/XML
+cold branch. Preserve Main/Library roles, virtual spans, cancellation and
+add/change/remove behavior. An annotation-defined bad argument must reach the
+ordinary addon check at its Main location; a valid call stays clean. Reuse a
+small existing fixture shape, not the external-consumer campaign. Queries read
+the produced facts or index without creating an analyzer.
 
 Use upstream's public engine APIs through `wow-emmy`. Standard Lua editor
 features use its existing `emmylua_ls` server: its `handlers` module is private,
@@ -83,10 +102,19 @@ not an SDK to import or copy. [EmmyLua guide](EMMYLUA_UPSTREAM.md) owns this bou
 
 ## Blizzard UI index, search and context
 
-**Start #131 at `wow-project/src/replay/publication.rs`; #169 owns direct SQLite
-search; #106 connects the real source workflow.** Today's `acquire` path calls
-`hydrate_owner` and rebuilds analysis. Persist the reader-ready facts required by
-the selected query and open them directly in a later process.
+**#131 replaces the Project read boundary; #169 implements direct SQLite search;
+#106 connects the user workflow.** `wow-project/src/replay/publication.rs` reads
+through `AcquiredProjectPair::read` → `hydrate_owner`, rebuilding analysis and
+recapturing the replay for equality. Even `wow-store/src/project/read.rs` opens
+a read by loading every partition and decoding/re-encoding/hashing its JSON;
+`record` reads the requested partition again. Bypassing Emmy alone is insufficient.
+
+Start #131 with stored file paths/text and the selected source/flavor: open in a
+later process and read a file without source/analyzer callbacks or a whole-index
+payload validation pass. Use ordinary SQLite rows/transactions in `wow-store`;
+do not serialize another snapshot framework. #169 adds name/span and FTS queries
+to this same index. Existing in-memory Project updates can stay while their
+readers move; updating source and reading facts have different work to do.
 
 Current CLI search is `apps/wow/src/search.rs` → `wow-service/src/search.rs` →
 `wow-search` / `wow-store/src/search/mod.rs`. The ProjectFile shard stores `document_id` and
@@ -94,10 +122,11 @@ Current CLI search is `apps/wow/src/search.rs` → `wow-service/src/search.rs` �
 It serializes an inner SQLite image as hex/JSON into Store. Moving only those
 metadata rows does not implement source-text search.
 
-`wow-service/src/search/source_observations.rs` already queries recorded native
-names across processes. Reuse those facts and `wow-search/src/source_observations.rs`
-for symbol work; its FTS covers names, not arbitrary source text. Remove its
-unneeded shard/proof wrapping as the same facts move into the current index.
+`wow-service/src/search/source_observations.rs::execute` already queries stored
+native names without Project hydration. Its separate `acquire_bound` federation
+path and the shard builder do hydrate Project. Reuse the facts and name lookup
+in `wow-search/src/source_observations.rs`; remove unneeded shard/proof wrapping
+as they move into the current index. Do not claim every existing query analyzes.
 
 - Store current file paths/text and available symbol names/spans in the ordinary
   local index; reuse the selected Project/Emmy facts. Keep only TOC/XML links

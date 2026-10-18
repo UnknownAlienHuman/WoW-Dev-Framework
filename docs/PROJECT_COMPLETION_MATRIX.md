@@ -10,7 +10,7 @@ in [IMPLEMENTATION.md](IMPLEMENTATION.md).
 | Workflow | Existing code | Remaining product work |
 | --- | --- | --- |
 | Native Ketho annotations | Restricted native source loader, emitter, aliases, selected corrections/inheritance, literals, maps and consumer probes. | #196 simple supported generation; #203 native-only path; close actual semantic gaps against the selected Ketho/Blizzard input (#125). |
-| EmmyLua addon analysis | Pinned upstream engine, Main/Library registration, diagnostics, source/overlay analysis. | #193 one analysis; #200 normal root/TOC/library configuration; #201 real addon flow. |
+| EmmyLua addon analysis | Pinned engine and Main/Library semantic facts; generic diagnostics currently use a separate Main-only analysis and a three-code filter. | #193 one analysis with Library-aware diagnostics; #200 normal root/TOC/library configuration; #201 real addon flow. |
 | Blizzard UI search | Source/TOC/XML owners and native graphs; FTS over file labels/recorded names; separate source-excerpt reader. | #131 reader-ready index, #169 source-content/FTS tables, #106 real body/symbol search, #117 XML links, #122 hit-to-excerpt handoff. |
 | Updating source | Project update and removal paths exist. | #109 prove useful final results on one changed addon without legacy epochs. |
 | Editor/agent access | Selected stdio LSP/MCP, overlay, definition/reference/symbol/context routes exist. | #198/#199 standards fixes; #125 useful Search exposure and upstream Emmy setup. No required reimplementation of all Lua language features. |
@@ -26,7 +26,9 @@ do not recreate them from stale owner status text.
 - Generate a library from the selected source/flavor and verify the relevant
   annotation semantics in a real consumer using existing representative probes.
 - Configure a real addon once and obtain actual Emmy/WoW diagnostics with correct
-  locations; a deliberate bad call must not pass as clean.
+  locations. A call violating a Library annotation must produce the relevant
+  upstream diagnostic; a valid counterpart stays clean. Generator-only external
+  consumer probes do not establish this production integration.
 - Index the selected Blizzard checkout; find a known symbol/text and source link,
   reopen/query in a later process, and update/remove a file without stale results.
 - State skipped/unsupported source accurately, keep normal limits/cancellation,
