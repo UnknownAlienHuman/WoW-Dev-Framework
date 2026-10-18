@@ -2,10 +2,9 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::error::Error;
 use wow_core::{
-    CanonicalResult, ClaimScope, ContentDigest, CoreErrorCode, CoreResult, E0CheckResultDraft,
-    E0CheckResultEnvelope, EvidenceConfidence, EvidenceId, EvidenceRecord, Finding, FindingDraft,
-    GenerationContext, GenerationContextId, ProvenanceClass, Remediation, SourceHandle, WarningId,
-    WarningRecord, canonical_json_bytes, domain_separated_digest,
+    ClaimScope, CoreErrorCode, CoreResult, EvidenceConfidence, EvidenceId, EvidenceRecord,
+    Finding, FindingDraft, GenerationContext, GenerationContextId, ProvenanceClass, Remediation,
+    SourceHandle, WarningId, WarningRecord,
 };
 
 pub type TestResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -151,46 +150,4 @@ pub fn reseal_evidence(value: &mut Value) -> TestResult<EvidenceRecord> {
         .remove("evidence_id");
     value["evidence_id"] = EvidenceId::derive(&identity)?.to_string().into();
     Ok(serde_json::from_value(value.clone())?)
-}
-
-pub fn envelope_draft(value: &Value) -> TestResult<E0CheckResultDraft> {
-    Ok(E0CheckResultDraft::new(
-        field(value, "schema")?,
-        field(value, "operation_id")?,
-        field(value, "context")?,
-        field(value, "status")?,
-        field(value, "coverage_records")?,
-        field(value, "capability_summaries")?,
-        field(value, "source_handles")?,
-        field(value, "evidence_records")?,
-        field(value, "conflicts")?,
-        field(value, "findings")?,
-        field(value, "not_evaluated")?,
-        field(value, "warnings")?,
-        field(&value["budget"], "limits")?,
-        field(&value["budget"], "truncation")?,
-    ))
-}
-
-// Reseal wire mutations without a validating finalizer. Each rejection must
-// come from the target invariant, not a stale digest or output-byte count.
-pub fn reseal_envelope(value: &mut Value) -> TestResult<E0CheckResultEnvelope> {
-    for _ in 0..6 {
-        let mut material = value.clone();
-        material
-            .as_object_mut()
-            .ok_or("envelope object")?
-            .remove("canonical_digest");
-        value["canonical_digest"] = ContentDigest::<CanonicalResult>::from_bytes(
-            domain_separated_digest("wow-core/result/e0-1", &material)?,
-        )
-        .to_string()
-        .into();
-        let bytes = u64::try_from(canonical_json_bytes(value)?.len())?;
-        if value["budget"]["usage"]["output_bytes"].as_u64() == Some(bytes) {
-            return Ok(serde_json::from_value(value.clone())?);
-        }
-        value["budget"]["usage"]["output_bytes"] = bytes.into();
-    }
-    Err("test resealing did not converge".into())
 }

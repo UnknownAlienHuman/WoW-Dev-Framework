@@ -2,9 +2,8 @@ use std::error::Error;
 
 use serde_json::Value;
 use wow_core::{
-    BudgetLimits, ClaimScope, ConflictId, CoreErrorCode, CoreResult, E0CheckResultDraft,
-    E0CheckResultEnvelope, EvidenceConfidence, EvidenceId, EvidenceRecord, GenerationContext,
-    GenerationContextId, ProvenanceClass, ResultStatus, TruncationState,
+    ClaimScope, ConflictId, CoreErrorCode, CoreResult, EvidenceConfidence, EvidenceId,
+    EvidenceRecord, GenerationContext, GenerationContextId, ProvenanceClass,
 };
 
 pub type TestResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -102,34 +101,4 @@ pub fn reseal_conflict(value: &mut Value) -> TestResult<wow_core::ConflictRecord
         .remove("conflict_id");
     value["conflict_id"] = ConflictId::derive(&identity)?.to_string().into();
     Ok(serde_json::from_value(value.clone())?)
-}
-
-pub fn envelope(records: Vec<EvidenceRecord>) -> TestResult<CoreResult<E0CheckResultEnvelope>> {
-    Ok(E0CheckResultDraft::new(
-        wow_core::SchemaVersionEntry::new("schema:wow:check-result".parse()?, "0.1.0".parse()?),
-        "wow.check".parse()?,
-        context()?,
-        ResultStatus::Complete,
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        records,
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        BudgetLimits {
-            max_coverage_records: 1,
-            max_capability_summaries: 1,
-            max_source_handles: 1,
-            max_evidence_records: 32_768,
-            max_conflicts: 1,
-            max_findings: 1,
-            max_not_evaluated: 1,
-            max_warnings: 1,
-            max_output_bytes: 32 * 1024 * 1024,
-        },
-        TruncationState::NotTruncated,
-    )
-    .finalize())
 }

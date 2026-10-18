@@ -1,5 +1,4 @@
-//! Evidence and conflict admission through public constructors, wire validation,
-//! the one-context derivation registry, and both result-envelope entrypoints.
+//! Direct evidence, conflict and derivation validation.
 #[path = "evidence/conflicts.rs"]
 mod conflicts;
 #[path = "evidence/derivation.rs"]

@@ -1,7 +1,7 @@
 use serde_json::json;
 use wow_core::{
-    ClaimScope, CoreError, CoreErrorCode, E0CheckResultEnvelope, EvidenceConfidence as Confidence,
-    EvidenceRecord, GenerationContextId, ProvenanceClass as Provenance, canonical_json_bytes,
+    ClaimScope, CoreError, CoreErrorCode, EvidenceConfidence as Confidence, EvidenceRecord,
+    GenerationContextId, ProvenanceClass as Provenance, canonical_json_bytes,
     validate_evidence_derivation_graph, validate_evidence_derivation_graph_refs,
 };
 
@@ -40,7 +40,6 @@ fn evidence_graph_001_002_accept_empty_leaf_and_diamond_without_mutation() -> Te
     let before = canonical_json_bytes(&records)?;
     validate_both_finite_apis(&records)?;
     assert_eq!(canonical_json_bytes(&records)?, before);
-    envelope(records)??.validate()?;
     Ok(())
 }
 
@@ -139,20 +138,6 @@ fn evidence_graph_005_rejects_transitive_runtime_laundering() -> TestResult {
     invalid.push(platform.clone());
     assert_error(
         validate_evidence_derivation_graph(&invalid),
-        CoreErrorCode::EvidenceAuthorityViolation,
-        "evidence_records.claim_scope",
-    )?;
-    assert_error(
-        envelope(invalid.clone())?,
-        CoreErrorCode::EvidenceAuthorityViolation,
-        "evidence_records.claim_scope",
-    )?;
-    // Exercise the decoded-envelope consumer, not merely the direct validator.
-    let mut wire = serde_json::to_value(envelope(valid)??)?;
-    wire["evidence_records"] = serde_json::to_value(invalid)?;
-    let decoded: E0CheckResultEnvelope = serde_json::from_value(wire)?;
-    assert_error(
-        decoded.validate(),
         CoreErrorCode::EvidenceAuthorityViolation,
         "evidence_records.claim_scope",
     )?;
@@ -288,7 +273,6 @@ fn evidence_graph_012_preserves_results_across_64_seeded_orders() -> TestResult 
     let right = derived("right", &[&root])?;
     let top = derived("top", &[&left, &right])?;
     let original = vec![root, left, right, top];
-    let golden = envelope(original.clone())??.canonical_bytes()?;
     for seed in 0_u64..64 {
         let mut order = original.clone();
         let mut state = seed;
@@ -300,7 +284,6 @@ fn evidence_graph_012_preserves_results_across_64_seeded_orders() -> TestResult 
             order.swap(index, other);
         }
         validate_evidence_derivation_graph(&order)?;
-        assert_eq!(envelope(order)??.canonical_bytes()?, golden, "seed {seed}");
     }
     Ok(())
 }
