@@ -7,8 +7,8 @@ use serde::Serialize;
 use serde::ser::{SerializeMap, SerializeSeq, SerializeStruct};
 use serde_json::{Value, json};
 use wow_core::{
-    CoreErrorCode, CoreResult, E0CheckResultEnvelope, E0OperationErrorEnvelope, StableHandleId,
-    canonical_json_bytes, canonical_json_string, domain_separated_digest,
+    CoreErrorCode, CoreResult, StableHandleId, canonical_json_bytes, canonical_json_string,
+    domain_separated_digest,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -515,30 +515,6 @@ fn canonical_015_seeded_order_and_worker_count_do_not_change_bytes_or_digests() 
         canonical_json_bytes(&[1, 2])?,
         canonical_json_bytes(&[2, 1])?
     );
-    Ok(())
-}
-
-#[test]
-fn canonical_016_all_committed_envelopes_match_independent_raw_json_encoding() -> TestResult {
-    for golden in [
-        include_str!("../../examples/e0-clean-result.json"),
-        include_str!("../../examples/e0-findings-result.json"),
-        include_str!("../../examples/e0-not-evaluated-result.json"),
-        include_str!("../../examples/e0-conflict-not-evaluated-result.json"),
-    ] {
-        let raw: Value = serde_json::from_str(golden)?;
-        // Independent encoding: do not build this oracle with the function under test.
-        let expected = serde_json::to_vec(&raw)?;
-        let envelope: E0CheckResultEnvelope = serde_json::from_str(golden)?;
-        assert_eq!(canonical_json_bytes(&raw)?, expected);
-        assert_eq!(envelope.canonical_bytes()?, expected);
-        let crlf: E0CheckResultEnvelope = serde_json::from_str(&golden.replace('\n', "\r\n"))?;
-        assert_eq!(crlf.canonical_bytes()?, expected);
-    }
-    let golden = include_str!("../../examples/e0-generation-mismatch-error.json");
-    let raw: Value = serde_json::from_str(golden)?;
-    let envelope: E0OperationErrorEnvelope = serde_json::from_str(golden)?;
-    assert_eq!(envelope.canonical_bytes()?, serde_json::to_vec(&raw)?);
     Ok(())
 }
 

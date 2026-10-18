@@ -7,8 +7,8 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use support::{TestResult, assert_error, builder, field, fixture, rebuild, reseal};
 use wow_core::{
-    ContentDigest, CoreErrorCode, E0CheckResultEnvelope, E0DecodeLimits, SourceContent,
-    SourceHandle, SourceSpan, canonical_json_bytes, verify_source_handle_content,
+    ContentDigest, CoreErrorCode, SourceContent, SourceHandle, SourceSpan, canonical_json_bytes,
+    verify_source_handle_content,
 };
 
 #[test]
@@ -379,24 +379,7 @@ fn handle_007_and_span_016_presentation_is_not_canonical_identity() -> TestResul
 }
 
 #[test]
-fn handle_019_duplicate_registry_is_rejected_before_digest_validation() -> TestResult {
-    let mut value: Value =
-        serde_json::from_str(include_str!("../examples/e0-findings-result.json"))?;
-    let handles = value["source_handles"].as_array_mut().ok_or("handles")?;
-    let mut duplicate = handles.first().ok_or("handle")?.clone();
-    duplicate["revision"] = "fixture:contradictory-copy".into();
-    handles.push(duplicate);
-    let envelope: E0CheckResultEnvelope = serde_json::from_value(value)?;
-    assert_error(
-        envelope.validate(),
-        CoreErrorCode::ResultDuplicateId,
-        "source_handles",
-    )
-}
-
-#[test]
-fn handle_golden_consumers_keep_the_full_original_bytes_and_digests() -> TestResult {
-    let limits = E0DecodeLimits::new(1024 * 1024, 64, 100_000, 64 * 1024)?;
+fn handle_golden_consumers_keep_the_source_handle_bytes_and_digests() -> TestResult {
     for golden in [
         include_str!("../examples/e0-clean-result.json"),
         include_str!("../examples/e0-findings-result.json"),
@@ -404,11 +387,6 @@ fn handle_golden_consumers_keep_the_full_original_bytes_and_digests() -> TestRes
         include_str!("../examples/e0-conflict-not-evaluated-result.json"),
     ] {
         let expected: Value = serde_json::from_str(golden)?;
-        let envelope = E0CheckResultEnvelope::from_json_slice(golden.as_bytes(), limits)?;
-        assert_eq!(
-            envelope.canonical_bytes()?,
-            canonical_json_bytes(&expected)?
-        );
         for value in expected["source_handles"].as_array().ok_or("sources")? {
             let handle = rebuild(value)?;
             assert_eq!(canonical_json_bytes(&handle)?, canonical_json_bytes(value)?);

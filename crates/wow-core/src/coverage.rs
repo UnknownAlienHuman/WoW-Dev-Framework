@@ -12,7 +12,6 @@ use crate::ids::{
 use crate::integrity;
 
 mod admission;
-pub(crate) use admission::{validate_evaluation, validate_retained_inputs};
 
 /// Exact coverage state for one capability partition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

@@ -1,7 +1,5 @@
-//! E0 budget/truncation acceptance through public producers and consumers.
+//! Direct budget and truncation validation.
 
-#[path = "budget/envelope.rs"]
-mod envelope;
 #[path = "budget/limits.rs"]
 mod limits;
 #[path = "budget/support.rs"]

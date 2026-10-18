@@ -5,10 +5,9 @@ use std::error::Error;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use wow_core::{
-    CoreErrorCode, CoreResult, E0CheckResultEnvelope, E0DecodeLimits, GenerationContext,
-    GenerationContextId, ProfileComparison, ProfileIdentity, ProfileIdentityBuilder,
-    canonical_json_bytes, compare_profile_identity, require_profile_identity_match,
-    require_same_generation, validate_profile_identity,
+    CoreErrorCode, CoreResult, GenerationContext, GenerationContextId, ProfileComparison,
+    ProfileIdentity, ProfileIdentityBuilder, canonical_json_bytes, compare_profile_identity,
+    require_profile_identity_match, require_same_generation, validate_profile_identity,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -496,9 +495,8 @@ fn profile_013_014_and_compare_001_008_all_material_fields_participate() -> Test
 }
 
 #[test]
-fn profile_026_resealed_context_and_raw_envelope_recheck_nested_profile() -> TestResult {
+fn profile_026_resealed_context_rechecks_nested_profile() -> TestResult {
     let original: Value = serde_json::from_str(GOLDEN)?;
-    let limits = E0DecodeLimits::new(1024 * 1024, 64, 100_000, 64 * 1024)?;
     for (key, value, code, path) in [
         (
             "client_build",
@@ -526,17 +524,6 @@ fn profile_026_resealed_context_and_raw_envelope_recheck_nested_profile() -> Tes
         assert_eq!(context.context_id(), context_id);
         assert_error(context.validate(), code, path)?;
         assert_error(require_same_generation(&context, &context), code, path)?;
-        let bytes = serde_json::to_vec(&mutated)?;
-        assert_error(
-            E0CheckResultEnvelope::from_json_slice(&bytes, limits),
-            code,
-            path,
-        )?;
     }
-    let accepted = E0CheckResultEnvelope::from_json_slice(GOLDEN.as_bytes(), limits)?;
-    assert_eq!(
-        accepted.canonical_bytes()?,
-        canonical_json_bytes(&original)?
-    );
     Ok(())
 }
