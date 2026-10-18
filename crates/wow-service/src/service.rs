@@ -7,11 +7,10 @@ use serde::Serialize;
 use crate::backend::ServiceBackendStatus;
 use crate::configuration::{RESULT_SCHEMA, SERVICE_SCHEMA, SERVICE_VERSION};
 use crate::identity::canonical_digest;
-use crate::operation::{CompletedResult, OperationKind, OperationRegistry, RegistryDecision};
 use crate::presentation;
 use crate::{
     CapabilityState, CheckContext, CheckRequest, CheckScope, ComponentHealth, ComponentSnapshot,
-    ContextIdentity, DeferredOperation, GenerationSelector, OperationId, OperationRegistrySnapshot,
+    ContextIdentity, DeferredOperation, GenerationSelector, OperationId,
     PresentationGraph, RawFinding, RuleEvaluation, RuleEvaluationState, ServiceBackend,
     ServiceConfiguration, ServiceError, ServiceErrorCode, ServiceResult, ServiceSemanticStatus,
     StatusRequest,
@@ -141,7 +140,6 @@ pub enum ServiceResultEnvelope {
 pub struct Service<B: ServiceBackend> {
     configuration: Arc<ServiceConfiguration>,
     backend: Arc<B>,
-    operations: OperationRegistry,
 }
 
 impl<B: ServiceBackend> Service<B> {
@@ -149,7 +147,6 @@ impl<B: ServiceBackend> Service<B> {
         let service = Self {
             configuration: Arc::new(configuration),
             backend: Arc::new(backend),
-            operations: OperationRegistry::default(),
         };
         let status = service.backend.status()?;
         service.validate_backend_status(&status)?;
@@ -165,109 +162,25 @@ impl<B: ServiceBackend> Service<B> {
         &self,
         request: &StatusRequest,
         cancelled: &AtomicBool,
-    ) -> ServiceResult<Arc<StatusResult>> {
+    ) -> ServiceResult<StatusResult> {
         let request_digest = canonical_digest(
             "service-request:sha256:",
             &(self.configuration.configuration_id(), request),
         )?;
-        match self.operations.begin(
-            request.operation_id(),
-            &request_digest,
-            OperationKind::Status,
-        )? {
-            RegistryDecision::Replay(CompletedResult::Status(result)) => return Ok(result),
-            RegistryDecision::Replay(CompletedResult::Check(_)) => {
-                return Err(ServiceError::for_operation(
-                    ServiceErrorCode::InternalContractViolation,
-                    "status operation replay resolved to a check result",
-                    request.operation_id().as_str(),
-                ));
-            }
-            RegistryDecision::Replay(CompletedResult::Search(_)) => {
-                return Err(ServiceError::for_operation(
-                    ServiceErrorCode::InternalContractViolation,
-                    "status operation replay resolved to a search result",
-                    request.operation_id().as_str(),
-                ));
-            }
-            RegistryDecision::Started => {}
-        }
-        let result = self.build_status(request, &request_digest, cancelled);
-        match result {
-            Ok(result) => {
-                let result = Arc::new(result);
-                self.operations.complete(
-                    request.operation_id(),
-                    &request_digest,
-                    OperationKind::Status,
-                    CompletedResult::Status(result.clone()),
-                )?;
-                Ok(result)
-            }
-            Err(error) => {
-                self.operations.abandon(
-                    request.operation_id(),
-                    &request_digest,
-                    OperationKind::Status,
-                );
-                Err(error)
-            }
-        }
+        self.build_status(request, &request_digest, cancelled)
     }
 
     pub fn check(
         &self,
         request: &CheckRequest,
         cancelled: &AtomicBool,
-    ) -> ServiceResult<Arc<CheckResult>> {
+    ) -> ServiceResult<CheckResult> {
         self.validate_scope(request.scope())?;
         let request_digest = canonical_digest(
             "service-request:sha256:",
             &(self.configuration.configuration_id(), request),
         )?;
-        match self.operations.begin(
-            request.operation_id(),
-            &request_digest,
-            OperationKind::Check,
-        )? {
-            RegistryDecision::Replay(CompletedResult::Check(result)) => return Ok(result),
-            RegistryDecision::Replay(CompletedResult::Status(_)) => {
-                return Err(ServiceError::for_operation(
-                    ServiceErrorCode::InternalContractViolation,
-                    "check operation replay resolved to a status result",
-                    request.operation_id().as_str(),
-                ));
-            }
-            RegistryDecision::Replay(CompletedResult::Search(_)) => {
-                return Err(ServiceError::for_operation(
-                    ServiceErrorCode::InternalContractViolation,
-                    "check operation replay resolved to a search result",
-                    request.operation_id().as_str(),
-                ));
-            }
-            RegistryDecision::Started => {}
-        }
-        let result = self.build_check(request, &request_digest, cancelled);
-        match result {
-            Ok(result) => {
-                let result = Arc::new(result);
-                self.operations.complete(
-                    request.operation_id(),
-                    &request_digest,
-                    OperationKind::Check,
-                    CompletedResult::Check(result.clone()),
-                )?;
-                Ok(result)
-            }
-            Err(error) => {
-                self.operations.abandon(
-                    request.operation_id(),
-                    &request_digest,
-                    OperationKind::Check,
-                );
-                Err(error)
-            }
-        }
+        self.build_check(request, &request_digest, cancelled)
     }
 
     pub fn deferred(&self, operation: DeferredOperation) -> ServiceResult<()> {
@@ -285,10 +198,6 @@ impl<B: ServiceBackend> Service<B> {
             ServiceErrorCode::OperationNotImplementedForMilestone,
             format!("{operation:?} is deferred for the E0 milestone"),
         ))
-    }
-
-    pub fn operation_registry(&self) -> ServiceResult<OperationRegistrySnapshot> {
-        self.operations.snapshot()
     }
 
     fn build_status(

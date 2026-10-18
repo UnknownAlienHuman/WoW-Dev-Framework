@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use wow_service::{
@@ -332,7 +331,7 @@ fn status_reports_exact_state_without_claiming_a_check_passed() -> TestResult {
             .project_generation_id(),
         "project-generation:g1"
     );
-    let json = serde_json::to_string(&*result)?;
+    let json = serde_json::to_string(&result)?;
     assert!(!json.contains("tests_passed"));
     assert!(!json.contains("clean"));
     Ok(())
@@ -367,35 +366,6 @@ fn full_check_preserves_all_raw_findings_and_structured_folding() -> TestResult 
             .iter()
             .any(|evaluation| !evaluation.clean_records().is_empty())
     );
-    Ok(())
-}
-
-#[test]
-fn same_operation_replays_exact_result_and_digest_conflict_fails() -> TestResult {
-    let configuration = configuration()?;
-    let context = full_context(&configuration, false)?;
-    let service = service_with_context(configuration, context)?;
-    let operation_id = OperationId::new("operation:check:replay")?;
-    let request = CheckRequest::new(
-        operation_id.clone(),
-        GenerationSelector::exact("project-generation:g1")?,
-        CheckScope::WholeProject,
-    );
-    let first = service.check(&request, &AtomicBool::new(false))?;
-    let second = service.check(&request, &AtomicBool::new(false))?;
-    assert!(Arc::ptr_eq(&first, &second));
-    assert_eq!(service.operation_registry()?.records().len(), 1);
-
-    let conflict = CheckRequest::new(
-        operation_id,
-        GenerationSelector::exact("project-generation:other")?,
-        CheckScope::WholeProject,
-    );
-    let error = service
-        .check(&conflict, &AtomicBool::new(false))
-        .err()
-        .ok_or("expected operation conflict")?;
-    assert_eq!(error.code(), ServiceErrorCode::OperationConflict);
     Ok(())
 }
 
@@ -474,7 +444,7 @@ fn clean_requires_explicit_clean_authority() -> TestResult {
 }
 
 #[test]
-fn cancellation_does_not_publish_or_poison_operation_id() -> TestResult {
+fn cancellation_leaves_service_usable() -> TestResult {
     let configuration = configuration()?;
     let context = full_context(&configuration, false)?;
     let service = service_with_context(configuration, context)?;
@@ -488,7 +458,7 @@ fn cancellation_does_not_publish_or_poison_operation_id() -> TestResult {
         .err()
         .ok_or("expected cancellation")?;
     assert_eq!(error.code(), ServiceErrorCode::Cancelled);
-    assert!(service.operation_registry()?.records().is_empty());
+
     let result = service.check(&request, &AtomicBool::new(false))?;
     assert_eq!(result.semantic_status(), ServiceSemanticStatus::Findings);
     Ok(())

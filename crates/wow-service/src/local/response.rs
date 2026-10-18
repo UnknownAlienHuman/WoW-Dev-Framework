@@ -245,10 +245,10 @@ pub fn execute_local(
         match command {
             LocalCommand::Status { request, .. } => service
                 .status(request, stop)
-                .map(|result| LocalOperationResult::Status(Box::new((*result).clone()))),
+                .map(|result| LocalOperationResult::Status(Box::new(result))),
             LocalCommand::Check { request, .. } => service
                 .check(request, stop)
-                .map(|result| LocalOperationResult::Check(Box::new((*result).clone()))),
+                .map(|result| LocalOperationResult::Check(Box::new(result))),
         }
     }
     match run(input, command, stop) {
