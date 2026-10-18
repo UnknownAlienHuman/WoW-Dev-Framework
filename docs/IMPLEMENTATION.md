@@ -79,7 +79,8 @@ catalog tree between existing validators.
 `wow-service/src/local/disk_input.rs::DiskInput.library` already accepts a root
 and declared Lua files through Project's `read_lua_inventory`. Build that bounded
 inventory from the configured library directory. Remove user-supplied probe,
-contract and digest fields; do not require native source to use generated Lua.
+contract and digest fields; existing Lua files are enough to implement #200
+before #196. The generation-to-check integration belongs to #201.
 
 `local/native_input.rs::from_native_manifest` generates Lua and passes it to
 `local/input.rs::assemble_with_load_plan` as Library files. Ordinary checks reuse
@@ -101,10 +102,18 @@ upstream checking, not a new type checker or diagnostic approval registry.
 
 Trace `wow-project/src/{analyzer,snapshot}.rs`, including its separate TOC/XML
 cold branch. Preserve Main/Library roles, virtual spans, cancellation and
-add/change/remove behavior. An annotation-defined bad argument must reach the
+add/change/remove behavior. Follow the [engine setup](EMMYLUA_UPSTREAM.md#engine-setup)
+for Lua 5.1 and standard declarations. An annotation-defined bad argument must reach the
 ordinary addon check at its Main location; a valid call stays clean. Reuse a
 small existing fixture shape, not the external-consumer campaign. Queries read
 the produced facts or index without creating an analyzer.
+
+`session.rs::apply_delta` keeps unchanged syntax trees but clears and rebuilds
+all retained semantic indexes, currently in both engines. `reused_files` counts
+unchanged Main inputs, not saved semantic work. #193 removes the duplicate engine;
+#109 preserves final results through the [current update route](../crates/wow-project/UPDATE_MODEL.md).
+Do not replace this rebuild with changed-only upstream calls on assumption:
+the pinned bulk updater does not schedule unchanged global/type consumers.
 
 Use upstream's public engine APIs through `wow-emmy`. Standard Lua editor
 features use its existing `emmylua_ls` server: its `handlers` module is private,

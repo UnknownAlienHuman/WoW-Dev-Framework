@@ -1,142 +1,58 @@
-# Executable local status/check
+# Materialized local check input
 
-```text
-cargo build -p wow-cli --bin wow
-wow status --config project-input.json --format text --detail capabilities
-wow check --config project-input.json --project my-addon --format json
-wow check --config project-input.json --project my-addon --file project-file:main/init.lua
-```
-
-`apps/wow` depends on `wow-service`, JSON output and Ctrl-C handling only. Unknown
-commands/options and duplicate scalar options are errors; no daemon, source
-scan, stdin source, include/interpolation, shell, apply or source-write mode exists.
-`--config` is mandatory and explicit. `--help` and `--version` require no config.
+`wow status --config <file>` and `wow check --config <file> --project <id>`
+currently accept `wow-service/local-project-input/1`. This is a materialized
+input format for the existing reader, not the intended ordinary project setup
+configuration tracked by #200. The #200 path should resolve root, flavor, TOC
+and Library inputs from real project/source data; it should not fabricate a
+`ReferenceView` to satisfy this format.
 
 ## Input: `wow-service/local-project-input/1`
 
-The configuration is a **materialized input package**, not saved diagnostic output.
-It contains these exact fields; unknown fields reject:
+The inline schema requires
+`schema`, `project_id`, `workspace_id`, `source_origin_id`, `logical_root`,
+`profile`, `reference_view`, `analyzer`, `main_files` and `library_files`.
+Unknown fields reject. The project/workspace/origin identifiers and logical
+root are owner values, not host paths. `profile` is a `ProfileIdentity`, and
+`reference_view` is a validated `ReferenceView`.
 
-| Field | Value |
-|---|---|
-| `schema` | `wow-service/local-project-input/1` |
-| `project_id` | Existing `wow-project::ProjectId` spelling, e.g. `my-addon` |
-| `workspace_id` | Exact `workspace:...` identity |
-| `source_origin_id` | Exact `project-origin:...` identity |
-| `logical_root` | Canonical relative logical root, never a host directory |
-| `profile` | Full existing `ProfileIdentity` object |
-| `reference_view` | Full existing `ReferenceView`, including its verified self-digest |
-| `analyzer` | Declaration below |
-| `main_files` | Nonempty explicit source array |
-| `library_files` | Nonempty explicit annotation Library array |
+Each Main or Library source record contains `path`, `text`,
+`content_digest` and `byte_length`; the digest and length describe the UTF-8
+bytes of `text`. Each inventory contains 1–1,024 Lua files, up to 1 MiB per
+file and 16 MiB total. Main and Library keep their distinct project roles in
+the same existing analysis flow. `--file` selects a logical
+`project-file:<path>` ID.
 
-Each source record has `path`, `text`, `content_digest` (`sha256:...`) and
-`byte_length`. `text` is the exact UTF-8 file content encoded as a JSON string;
-length and digest refer to its **decoded UTF-8 bytes**, not the JSON escape spelling.
-Paths are logical owner paths; `--file` accepts the resulting `project-file:<path>`
-ID, not a host path or glob. Main and Library remain separate analyzer universes.
+The required `analyzer` fields are `compatibility_report_json`,
+`accepted_pin_id`, `configuration_digest`, `contract_id`,
+`fixture_contract_id` and `library_contract_id`. The current reader validates
+the report against the compiled EmmyLua backend and passes the binding to
+`wow-project`. `compatibility_report_json` holds the full report as a JSON string. They are current input requirements; #200 should derive the
+needed analyzer binding from actual inputs and the compiled owner, without
+inventing a Reference view or asking users to supply fake evidence.
 
-`analyzer` has `compatibility_report_json` (the original complete report as a JSON
-string), `accepted_pin_id`, `configuration_digest`, `contract_id`,
-`fixture_contract_id` and `library_contract_id`. The existing analyzer importer
-verifies the supplied report; the project owner rejects a different compiled
-revision/tree. No compatibility digest, profile, reference record or source is
-invented by the CLI. Embedders may instead use `LocalProjectInput::new` with
-existing `ProjectInputBundle` and `ReferenceView` owners.
+For current disk transports, see [FILES_INPUT.md](FILES_INPUT.md); for the
+source-to-Reference/annotation input, see [NATIVE_INPUT.md](NATIVE_INPUT.md).
+Both converge on the same project/analyzer composition. Input is read as data;
+analysis does not execute or modify source files.
 
-For disk files, use the [explicit file manifest](FILES_INPUT.md). For a pinned
-generated-API corpus without a prebuilt ReferenceView or annotation Library, use
-the [native documentation input](NATIVE_INPUT.md). This inline
-schema remains supported for embedders. Neither mode infers inputs from cwd,
-editor configuration, addon folders or a client installation.
+## Execution and output
 
-## Selected XML graph observation
+`status` reports configuration/components without running addon diagnostics;
+its project state is partial until analysis produces a view. `check` publishes
+the supplied input in memory, runs Project/Emmy and the selected rule owner, and
+returns findings. It writes no source or persistent current publication.
+Inline/file inputs still use fixture-only WoW rules; other profiles get Emmy
+diagnostics with unsupported rules marked `NotEvaluated`/partial. The native
+input has its own selected source-backed rules.
 
-The `wow graph build --xml-fingerprints <selection.json>` query reuses
-the [manifest-bound platform input](PLATFORM_INPUT.md), its selected native XML
-classification and exact `direct_capabilities_v1` set containing
-`xml_schema_classification_v1`. Inline Main/Library input or decoded
-classification output cannot replace that native owner.
+JSON output is the Service result plus one LF; text shows findings, locations,
+component state and blockers. Exit codes: `0` available/clean, `1` findings,
+`2` partial, `3` unavailable/request failure, `4` internal/output failure,
+`64` argument/configuration failure, `130` cancellation. `--help`/`--version`
+need no config; duplicate scalar or unknown options reject.
 
-This query does not alter the materialized input schema or select source, schema
-or profile data. It remains Partial and adds no replay/catalog version. See [query shape and bounds](GRAPH_BUILD.md)
-and [the finite proof recipe](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
-
-## Execution
-
-The separate `wow-service/local-project-native/1` input accepts optional
-`"library_witnesses": "matcher_v1"`. This selects W6 library matcher receipts and
-Graph derivation records through the same `wow graph build` and `wow project
-publish` Service route. Omission preserves the legacy producer and bytes; null,
-unknown values and a request/configuration mismatch are rejected.
-
-Each retained match contains its original matcher identity, rule/version,
-bindings/captures, decisive facts and source/evidence/coverage references. One
-major-keyed library entity retains all its relation witnesses; each relation
-keeps its independent confidence. Graph Explain follows original assertion
-addresses and reports any upstream missing derivation conservatively. This
-metadata establishes static recognition only, without runtime load or ownership
-claims. Retained native reopen recomputes the selected W6 batch from the original
-held source recipe before accepting it.
-
-The profile bounds witness metadata at 16 MiB and the derivation fan-in at 64
-witnesses per library. Exceeding either refuses the selected projection rather
-than keeping a successful prefix. Other owner/Graph/output limits still apply.
-
-The independent `"signal_witnesses": "matcher_v1"` selector retains original
-W1 native-event, W3 custom-signal and W4 CVar matcher outputs, rule outcome state,
-blockers and truncation, and their Graph derivations. It composes with the Library
-selector; omission preserves successful legacy artifacts and retained recipes.
-Ordinary selected source graphs register the existing W3 source-function
-emitter/subscription definitions under `source-signals-1` (or
-`native-api-source-signals-1` when the independent API-use component is selected).
-Direct platform capability selection stays independent.
-
-Every W3 corroborating producer is retained. A dependent subscription inherits
-the weakest producer confidence; `confirmed` means compatible producer presence,
-not a confidence upgrade. Missing producers stay Possible with an explicit
-derivation boundary. Selected W3 relation IDs bind the original matcher proposal;
-unselected W3 preserves its historical call-derived IDs. Missing CVar callbacks
-are omitted instead of producing an unencodable JSON null. No callback endpoint,
-runtime event, authoritative absence, or loaded-state claim is inferred.
-
-The three selected signal owners use the same 16 MiB per-owner witness bound and
-64-input Graph derivation/fan-in limits. Native retained admission recomputes each
-selected producer before success. Ordinary bundle reads accept only the exact
-closed selector/projection combination and retain imported-artifact boundaries.
-
-`status` validates input/configuration and reports components without running the
-analyzer. Until a check materializes a snapshot, project state is partial and
-`current_context` is absent. It does not claim an on-disk published generation.
-
-`check` registers one service request, publishes the supplied project **in memory**
-through `ProjectPublisher`, runs the existing Emmy analyzer and E0 rule owner,
-and returns the normal service findings/presentation plus exact owner receipts.
-No input source or persistent current pointer is written. `current` refers only
-to this explicitly supplied one-shot input publication. An exact generation is
-checked against its derived target and never substituted. File/rule selection is
-service-owned. The complete generic owner report is labeled `whole_project`;
-service raw findings and rule evaluation presentation follow the requested scope.
-The rule receipt retains the complete E0 provider report for the selected files.
-
-E0 rules remain fixture-profile-only. Repository profiles can obtain actual
-analyzer diagnostics, but unsupported WoW rules are explicit `NotEvaluated` and
-make the result partial. No fixture semantics are promoted to live-client truth.
-
-## Output and bounds
-
-JSON is service bytes plus one LF. Text preserves identities, component state,
-raw findings, display-root count, evaluations/blockers and deferred operations.
-Exit codes: `0` available/clean, `1` findings, `2` partial, `3` unavailable/request
-failure, `4` internal/output failure, `64` argument/configuration failure,
-`130` cancellation. No parser/source diagnostic prose is echoed on failure.
-
-Acquisition reads at most 32 MiB + 1, independent of metadata. Each Main/Library
-inventory allows at most 1,024 files, 1 MiB per file and 16 MiB total. JSON output
-is capped at 32 MiB before writing. Ctrl-C requests cooperative cancellation;
-checks run around project analysis and within the rule owner. The current analyzer
-call cannot be preempted mid-call. Once output writing begins, it is never replaced
-by a second result. A broken pipe never repeats the service call.
-
-This is executable E0 code, not full E0-F/R0, source-provenance, performance or
-supported-release acceptance. No new test suite is part of this checkpoint.
+Config and output are each limited to 32 MiB. Ctrl-C requests cooperative
+cancellation; checks run between files and analysis stages. One synchronous
+upstream file diagnostic is not forcibly preemptible. Once output starts, an
+output failure or broken pipe never repeats the operation.

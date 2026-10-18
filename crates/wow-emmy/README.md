@@ -24,8 +24,12 @@ language server in this crate. See [upstream boundary](../../docs/EMMYLUA_UPSTRE
   outlines from a caller-provided snapshot.
 - `SourceFunctionFact::binding_name()` exposes supported local/global and
   static dot/colon declaration names with their exact source spans.
-- `references`, `function_calls`, `local_references`, and `flow` expose the
-  normalized semantic slices required by current project and recognizer callers.
+- `references`, `function_calls`, `global_access`, and `flow` expose selected
+  calls, declarations, global accesses and local flow for Project/recognizers.
+- `bindings` resolves selected global/member paths across Main and Library;
+  `navigation` and `local_references` provide same-file lexical operations.
+- `virtual_syntax` and `virtual_semantics` map Project's generated TOC/XML Lua
+  units; overlays have a [limited current path](E7_A_OVERLAY_ANALYSIS.md).
 
 Keep public spans as UTF-8 byte half-open ranges. Preserve file identity,
 generation, analyzer snapshot identity, coverage, cancellation and typed

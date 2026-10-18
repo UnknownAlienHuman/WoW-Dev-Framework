@@ -22,10 +22,10 @@ matching recipe for its exact inputs: [local check](LOCAL_INPUT.md),
 [context build](CONTEXT_BUILD.md). Subcommands provide their own `--help` where
 implemented.
 
-The current local `status`/`check` route requires `--config` with a materialized
-`wow-service/local-project-input/1` package. A normal reusable project
-configuration is missing and remains tracked by issue #200; do not present the
-materialized input schema as that finished user configuration.
+Current `status`/`check` requires `--config`; the reader accepts inline, disk,
+native and selected TOC inputs described above. These are current input formats.
+#200 replaces their required host reports/IDs with ordinary root/TOC/library
+configuration; an existing Lua library is sufficient to implement that setup.
 
 ## LSP and MCP
 

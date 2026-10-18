@@ -51,7 +51,7 @@ checks remain. No replacement certification/checksum framework is planned.
 
 | Task | Result / real dependency |
 | --- | --- |
-| [#200 — configuration](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/200) | Root/flavor/TOC/library paths instead of evidence-heavy host inputs; uses #196. |
+| [#200 — configuration](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/200) | Root/flavor/TOC/library paths instead of evidence-heavy host inputs; existing Lua files suffice, independent of #196. |
 | [#197 — defaults](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/197) | Search works without repeated internal budget flags; coordinate #200. |
 | [#122 — context](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122) | Connect search hits to existing source-excerpt reading; plain located output. Rendering now, index via #131/#169. |
 | [#106 — Blizzard UI](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106) | Real symbol/text/source-navigation CLI workflow using #200/#169. |
