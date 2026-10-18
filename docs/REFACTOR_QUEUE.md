@@ -15,8 +15,10 @@ named owner/caller contracts and audit section. Follow
 checks and publication. Historical read-all lists do not expand the selected task;
 unique invariants of touched owners still apply.
 
-Trace the existing path, identify what will be removed, implement one complete
-replacement and exercise its actual consumer. No new crate, parser, cache,
+Trace the existing path, name the redundant construction/conversion/reader to
+remove, implement one complete replacement and exercise its actual consumer.
+Moving a function between crates fixes ownership but is not a code-size result.
+No new crate, parser, cache,
 framework, format combination or fixture factory without a concrete requirement.
 Keep source/generation/coverage, boundedness, cancellation and durable readers.
 A necessary byte-contract change needs an explicit reader/migration decision.
@@ -36,6 +38,7 @@ tracker for a responsibility already listed here.
 | Order | Task and first replacement | Done / real dependency |
 | --- | --- | --- |
 | 1 | [#193 — one Emmy analysis](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/193): remove repeated registration and syntax/member/flow constructions. | One analysis for the ordinary cold input set. Existing AnalyzerSession still owns two; wrapping it is insufficient. |
+| Independent | [#202 — one catalog parse](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/202): share one Emmy tree across existing statement-resource validators. | Three parses → one for GlobalColors; same admission, errors, spans and inert output. Comment-group isolation remains. |
 | 2 | [#194 — Core delivery](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194): remove success-finalize/reorder size fixed points, then one Search paginator. | Bounded final output with an explicit digest/reader contract. Error finalization has no such loop. |
 | 3 | [#195 — W1 recognizers](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/195): replace pack encode/parse/match roundtrip with typed facts. | Same facts and witness/partition support. Full mutation acceptance stays #103. |
 | 4 | [#196 — Reference ownership](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/196): move ReferencePack store-member construction from Service into Reference. | One existing-owner operation; old Service algorithm removed. |
@@ -48,7 +51,7 @@ tracker for a responsibility already listed here.
 | 11 | [#200 — addon configuration](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/200): add the missing Service-backed TOC configuration preparation command. | Existing admitted target/Library artifacts produce reusable status/check input; no fabricated identities. |
 | 12 | [#201 — local workflow](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/201): real publication → Context host registration, then check/context/search quick-start. | Supported addon sequence and later-process query work. Needs selected #200/#197/#122 handoffs, not all performance refactors. |
 | Alongside | [#120 — evidence checks](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/120): verify a real frozen receipt's bytes, then one mapped lifecycle pair. | Wrong bytes/state fail; hashes/Quick never auto-accept packages. No global implementation gate. |
-| With touched owner | [#112 — concise docs/versions](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112): retained reader inventory and remaining historical-doc cleanup. | Each old variant has a reader or explicit disposition; no repository-wide deletion sweep. |
+| With touched owner | [#112 — concise docs/versions](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112): continue reader inventory from replay `/13`, LSP host `/1`–`/5` and annotation reports. | Each old variant has a reader or explicit disposition; historical matrix/donor routing is compacted, broader inventory remains. |
 
 ## Finish the planned product
 
@@ -83,7 +86,7 @@ Moving source selectors are resolved only when the task needs current semantics.
 | Responsibility | Read / reuse | Do not add |
 | --- | --- | --- |
 | Lua analysis | [EMMYLUA_UPSTREAM.md](EMMYLUA_UPSTREAM.md), existing wow-emmy adapter and [pinned upstream analysis API](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/lib.rs). Registration/update and compilation/semantic-model access already exist. | A second parser, analyzer session layer or upstream upgrade merely to unify calls. |
-| Annotation/type normalization | [KETHO_RUST_PORT.md](KETHO_RUST_PORT.md); [reviewed Ketho emitter](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/luasrc/annotate/init.lua) → wow-reference/wow-annotations native owners. That SHA is review evidence, not permanent latest. | Lua/Node/VS Code runtime, second importer or automatic fixture blessing. |
+| Annotation/type normalization | [KETHO_RUST_PORT.md](KETHO_RUST_PORT.md): actual emitter, typed catalogs, guarded corrections, navigation and consumer-probe routes. One shared native composition path already handles optional catalogs/corrections/literals. | Recreating those features, Lua/Node/VS Code runtime, second importer or a pipeline/schema per feature combination. |
 | Search persistence | [Store](../crates/wow-store/README.md), current Cargo.lock/rusqlite and [SQLite FTS5](https://www.sqlite.org/fts5.html); transactions, leases and GC already exist. | Another database image inside the Store, search engine or retention framework. |
 | LSP / MCP | Existing app transports plus [LSP 3.18](../crates/wow-service/e7/LSP_3_18_PROFILE.md) and [MCP 2025-11-25](../crates/wow-service/e7/MCP_2025_11_25_PROFILE.md); compare corrections with the linked official specifications. | SDK rewrites, implicit daemon coupling or a profile per feature combination. |
 | Addon loading | [TOC_INPUT.md](../apps/wow/TOC_INPUT.md), existing Project load/XML/disk capture through Service. | New parser, unbounded discovery or trusted identity inferred from a path. |

@@ -1,721 +1,152 @@
 # Project completion matrix
 
-**Audited:** 2026-09-19 America/New_York. Inventory refreshed 2026-10-15 for the
-selected native source/graph/candidate, context, and search service/CLI paths.
-W17 evidence is tracked in [Issue #106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106);
-context implementation and bounded verification in
-[Issue #122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
-This is a capability and acceptance census, not a task queue. Choose active work
-from [`REFACTOR_QUEUE.md`](REFACTOR_QUEUE.md) and the selected Issue; read only
-the owner contract and evidence relevant to that slice. The
-[I0–I7 handoff](IMPLEMENTATION_HANDOFF.md) and [historical audit](AUDIT_2026-09-19.md)
-retain plan and evidence; they are not a read-all startup sequence. Do not
-restart historical bootstrap steps.
+**Audited:** 2026-10-17. This is a concise capability and acceptance census,
+not a task queue. Choose work from [`REFACTOR_QUEUE.md`](REFACTOR_QUEUE.md) and
+the selected canonical Issue; read only the relevant owner contract and evidence.
+The complete checkpoint ledger at this exact source revision is preserved as
+[immutable history](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/888fd087f9ede57afed02fae34e4fe99c716a1cb/docs/PROJECT_COMPLETION_MATRIX.md).
+It is historical evidence, not current availability or a work queue.
 
 ## State vocabulary
 
-- **Partial executable:** real Rust implementation exists; this is not full package acceptance.
+- **Partial executable:** real implementation exists for a selected slice; package acceptance is incomplete.
 - **Inactive code:** source exists outside the tested workspace; no build or acceptance claim.
 - **Not started:** no Rust owner implementation for the named scope.
-- **Implemented:** every required operation, fixture, checksum and acceptance gate for the named package passes.
+- **Implemented:** every required operation, fixture, checksum and acceptance gate for that named package passes.
 - **LaunchGateComplete:** all evidence for the selected launch scope passes independently of ordinary workspace CI.
 
-The audit advances no full package or launch gate to Implemented/Complete. Existing
-code already crossed several historical pre-implementation fixture-freeze gates;
-recording that code honestly does not waive those gates or populate missing evidence.
+No full package or launch gate is established as Implemented/Complete by this census.
+Functional or verified slices do not waive missing acceptance evidence.
 
 ## Executable inventory
 
-The root [Cargo.toml](../Cargo.toml) activates **18 members**, including the internal Reference Pack builder, `wow-context` and the selected `wow-search` owner.
+The root workspace has 18 active members, including `wow-context`, `wow-search`
+and the internal Reference Pack builder. `bridges/literal-host` is a separate
+Cargo workspace. `wow-cbm` and `tools/wow-release` have no Rust implementation;
+their documentation is not a binary.
 
-| Component | Observed executable slice | Remaining acceptance boundary |
+| Owner | Selected executable capability | Boundary / remaining acceptance |
 |---|---|---|
-| `wow-core` | Typed identities, canonical JSON, evidence, coverage, results and operation primitives | Reconcile the complete E0-A contract/test matrix; compilation is not the acceptance ledger |
-| `wow-emmy` | Real pinned analyzer adapter, explicit Main/Library workspaces, same-session XML virtual units, syntax/semantic diagnostics, direct member calls and scoped local-flow facts | E0-C fixture/pin/checksum closure; additional semantic operations and update probes are not inferred from parser compatibility |
-| `wow-project` | Explicit inventories, bounded TOC/XML/package receipts, analyzer bindings, immutable generations, exact source artifacts/handles, guarded updates, publication, native replay and a separate native four-stage platform direct plan with exact evidence closure | E0-D fixture identity closure; effective XML receiver/load semantics, full load acceptance, overlays, missing direct roles and full durable project publication |
-| `wow-rules` | `wow.api.exists@1` over physical Main and exact-static XML inline facts; `wow.secret.local_operation@1` over its bounded physical flow slice | E0-E normative fixtures, exact prerequisite identities and complete capability/negative-authority cases; no inferred XML receiver/runtime authority |
-| `wow-service` | E0 status/check and ReferenceView administration/publication; native Project/Graph publication/replay and guarded source-authority export; selected XML/function fingerprints, candidate-qualified Skeleton and native Primary/platform/combined context orchestration; first immutable frontend registry and process-local MCP status/session lifecycle | E0-F end-to-end fixture/CLI closure; full Reference Pack, source/context acceptance, broader E7-A frontend conformance and later public operation families |
-| `wow-store` | Typed SQLite objects, catalogs/CAS, journal, leases, GC and integrity; manifested recovery, native backup, isolated restore, same-epoch replacement, whole-instance quarantine/guarded restore, portable holds and inactive physical v1/v2 to v3 migration with guarded staging, target export, private immutable mapped-root/Current preparation and portable original-epoch selector/hold authority | Full E1-A/E2-D acceptance; live cross-epoch selection/reconciliation, original source SQL/history hydration, portable full migration history, payload/runtime migration, domain quarantine, interrupted-write/power-loss and cleanup faults remain open |
-| `wow-reference` | Native source/model/corrections/aliases, compatibility imports, persistent ReferenceView and publication | E0-B/E1-B normative fixture and full Reference Pack/coverage acceptance |
-| `wow-annotations` | Native Ketho-derived library projection, alias/type/catalog/inheritance/navigation slices, plus bounded emitted callable type-token/input-atom capture and selected projected alias dependency handoff and used native declaration/name links | Full composite/alias/type inventory, E1-C contract/corpus parity, and Tier A/X and consumer-semantic acceptance; this selected capture is not universal semantic certification |
-| `wow-graph` | Immutable snapshots, proposals/registries, neighbors, producer partitions, exact native Producer proposal/accepted-receipt lookup, bounded queries, exact retained derivation/conflict records, evidence resolution and v1/v2 persistence | Complete producer-chain coverage and automatic conflict assessment, normative fixtures and coherent E2-D publication |
-| `wow-context` | Partial executable routes include Primary/combined maps and L0/L1, explicit progressive batches, candidate-qualified platform map/inspect, and Service/CLI Inspect/Build for selected callable, XML handler/declaration/reference metadata and typed Reference roots. XML/reference resolution and scoped producer proposals survive packing; coverage remains Partial/Truncated where applicable, with no complete-load, absence, inheritance, negative, or runtime authority. One Primary `EntityV1` L1 exact-source excerpt Build is functionally qualified on selected native input and Windows CLI. `local-project-source` grants local-use permission only; it is not a license/external-transmission attestation or secret detection. Selected corrected callable overlays, alias dependencies, declaration links, and default Primary L0 `StructuralOnly` validation have bounded local routes. StructuralOnly requires complete local chains/declaration joins; missing, conflicting, incomplete, cyclic, or cross-partition proof remains NotEvaluated. Owner-generation, producer/catalog, source/runtime authority remain NotEvaluated. This does not accept full E3. | Broader facets/automatic expansion, composite/alias/type closure, combined recipes/links, excerpt selection/privacy/tokens/continuation, full fixtures, Tier A/X, runtime, and launch acceptance remain open in [Issue #122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122); see [selected contracts](../crates/wow-context/README.md), [Primary/combined routes](../crates/wow-context/e3/NATIVE_COMBINED_MAP.md), [source excerpts](../crates/wow-context/e3/SOURCE_EXCERPTS_AND_PROMPT_BOUNDARIES.md), [Reference facts](../crates/wow-context/e3/NATIVE_PRIMARY_REFERENCE_FACTS.md), and [pack validation](../crates/wow-context/e3/README.md) |
-| `wow-recognizers` | Structured facts, pack parser/compiler, bounded matcher and selected E2-B rule families through Service partitions; 26 declared core capability identities include the deferred embed capability, while 25 rules remain in the executable shared pack. An opt-in AceAddon local-result recipe provides a separate structural embed adapter | Default core embed remains NotEvaluated; full rule-specific fixtures/checksum freeze, public CLI/real-addon graph-build acceptance and E5 governance remain separate in #103/#120 |
-| `wow-search` | Immutable exact ProjectFile metadata shard, exact ID/owner-label lookups and Candidate-only literal FTS through native Service/CLI; selected durable build/query/retire/GC with instance-bound source-generation holds and native GC receipt replay | Additional documents/lanes, ranking, misses, continuation, full durability/fault qualification and E4 acceptance remain in [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169) |
-| `wow-render-contract`, `wow-ketho-literals`, `modules/ketho-literals` | Typed literal wire contract, native renderer and Wasm guest | Scoped algorithm implementation, not public application/release acceptance |
-| `tools/xtask` | Native policy/source/manifest/library checks, guarded exact fast-forward, managed checkout materialization and checkout-free exact GitHub API/blob snapshots under explicit `auto`/`prompt`/`never` policy with durable replay | Lower-layer hostile-network qualification, background scheduling, live platform/fault acceptance and full schema/fixture closure remain incomplete |
+| `wow-core` | Typed identities, canonical JSON, evidence, coverage, results, cancellation, budgets and operation primitives | Full E0-A contract, fixtures and checksums remain open; compilation is not acceptance. |
+| `wow-emmy` | Pinned analyzer adapter, explicit Main/Library workspaces, same-session XML units, diagnostics, member/call and scoped flow facts | E0-C pin/fixture/checksum closure and further semantic/update probes; computed or aliased values are not guessed. |
+| `wow-project` | Explicit inventory/configuration, immutable generations, source/package admission, native graph proposals, physical updates and replay; selected four-stage platform plan | E0-D identity closure; effective XML/load semantics, missing direct roles, overlays, full durable publication and E3 source/update closure remain open (#106, #113–#119). |
+| `wow-reference`, `wow-annotations` | Native Reference models/corrections/aliases, persistent views; Ketho-derived projections and selected emitted callable/name handoffs | E0-B/E1-B/E1-C fixtures and full Pack/type/consumer coverage, current-source parity and Tier A/X remain open; selected type capture is not universal certification. |
+| `wow-rules` | `wow.api.exists@1` over exact-static physical/XML facts; bounded `wow.secret.local_operation@1` | E0-E normative fixtures, prerequisite identity/checksum and negative-authority coverage remain open; no runtime/XML receiver inference. |
+| `wow-graph` | Immutable snapshots, proposals/registries, producer partitions, bounded queries, evidence and v1/v2 retained records | Complete producer-chain coverage, automatic conflict assessment, normative fixtures and coherent E2-D publication remain open. |
+| `wow-recognizers` | Structured facts, bounded matcher and selected W11/TOC/XML/state/signal/hook/library producers; 26 declared core capability identities, 25 executable shared-pack rules, plus an opt-in AceAddon local-result adapter | The declared LibStub embed identity is deferred and remains NotEvaluated; the opt-in adapter is separate. Full mutation/rule fixtures and public pipeline acceptance remain #103/#120; EventRegistry/CVar #161/#162, secure-hook #166, AceAddon custody #159. |
+| `wow-store` | Typed SQLite objects/catalogs/CAS, journal, holds/leases, GC, recovery/backup/restore, replacement and selected inactive migration/READY/cross-epoch preparation | Full E1-A/E2-D acceptance; portable full history, original SQL/history hydration, payload/runtime migration, domain quarantine, interrupted-write/power-loss/cleanup faults remain open (#108–#111). |
+| `wow-context` | Selected Primary/combined maps, L0/L1, progressive batches, candidate-qualified platform inspect, sealed packs and Service/CLI Inspect/Build; one exact-source excerpt; selected Reference/callable/XML metadata | Full E3 remains unaccepted. Partial/truncated coverage grants no complete-load, absence, inheritance, negative or runtime authority. Local-source permission is not a license/transmission attestation or secret detection. Broader facets, type closure, links, privacy/tokens/continuation and Tier A/X remain #122; see [contract router](../crates/wow-context/README.md). |
+| `wow-search` | Exact ProjectFile metadata shard, ID/label and Candidate-only literal FTS; selected durable build/query/retire/GC with source holds | Full E4-A/E4-C lanes, ranking, misses, continuation, store durability/faults and acceptance remain #169; see [E4 contract](../crates/wow-search/e4/README.md). Similarity never creates intent or lineage authority. |
+| `wow-service` | Owner composition, publication/update/recovery, Reference administration, graph/context/Search and first frontend registry/session | E0-F end-to-end closure and broader frontend operations remain open; Service orchestrates owners and does not duplicate their algorithms. |
+| `apps/wow`, `apps/wow-reference-builder` | One-shot inline/disk-manifest CLI, selected context/Search and manifest-bound platform graph build; MCP stdio plus private-overlay LSP 3.18 stdio with explicitly selected local navigation, outline and owned-read profiles; confined internal Reference builder | Thin `status`/`check`, whole-command limits and exits, external Pack evidence, Windows/process-loss acceptance and broader protocol/release gates remain open (#120/#125). Frontends add no semantic authority. |
+| `tools/xtask`, literal crates | Native policy/source checks and guarded materialization/update; typed literal wire contract, renderer and Wasm guest | Network/fault/schema acceptance remains incomplete. Scoped algorithm implementation is not public application or release acceptance. |
 
-`bridges/literal-host` is an intentionally separate Cargo workspace with its own
-CI lane. It is not a root member.
-
-`apps/wow-reference-builder` is now an active root member and a service-only internal
-frontend for build, validate and rebuild-compare. It performs confined staging,
-independent read-back, durable filesystem-effect reconciliation and guarded atomic
-finalization. This executable slice is not full E1-D acceptance: real external
-evidence, Windows/process-loss acceptance and the remaining Reference Pack gates stay open.
-
-`apps/wow` now provides a one-shot CLI over inline inputs or an explicit
-[disk file manifest](../apps/wow/FILES_INPUT.md); see
-[LOCAL_INPUT.md](../apps/wow/LOCAL_INPUT.md). The bounded primary
-[context status](../apps/wow/CONTEXT_STATUS.md), [map](../apps/wow/CONTEXT_MAP.md), [inspection](../apps/wow/CONTEXT_INSPECT.md)
-and [pack/render build](../apps/wow/CONTEXT_BUILD.md) are executable. The selected
-[search build/query route](../apps/wow/SEARCH_BUILD_QUERY.md) is also executable.
-`wow-cbm` and `tools/wow-release` have no Rust implementation in the audited source.
-Their documentation is not a binary.
-
-The selected native corrections route now adds Reference-owned exact atomic
-structure/enum/ScriptObject name associations to callable argument/return
-observations. Original signature bytes remain visible; the default producer
-keeps its identities. Library producer-input/2 reopens the selected overlay from
-retained source/corrections, while /1 retains its legacy reconstruction. The
-synthetic source-absent Primary ReferenceFacts Inspect/Build witness and actual
-Windows CLI preserve the owner data in JSON/Markdown and retain Partial/closed,
-budget refusal and cancellation. See the
-[selected type contract](../crates/wow-reference/NATIVE_CALLABLE_TYPE_RESOLUTION.md).
-The selected alias handoff does not qualify complete composite/alias type inventory, consumer semantics, current-source parity or full E3.
+The builder's confined staging, read-back, durable filesystem reconciliation and
+atomic finalization do not establish `ValidatedLocal`; real external evidence,
+license/parity, Windows/process-loss and complete E1-D acceptance remain open.
 
 ## Work-package ledger
 
-| Packages | Actual state | Next requirement |
+Issues own detailed scope and acceptance evidence. The routes below preserve the
+distinction between a delivered slice and an accepted package; a named Issue is
+not a claim that its requirements have passed.
+
+| Package | Current state | Unclosed requirements and canonical route |
 |---|---|---|
-| E0-A–E0-E | Partial executable | Close exact normative fixtures and prerequisite identity/checksum chains, one owner at a time |
-| E0-F | Partial service and inline/disk-input public CLI | Thin `wow status`/`wow check`, owner-composed fixture, output/exit/cancellation/resource gates |
-| E1-A–E1-C | Partial executable | Finish only verified missing contract/acceptance slices; do not recreate existing store/reference/annotation implementations |
-| E1-D | Partial executable Reference Pack service and active internal builder with durable materialization/finalization | Close external parity/license/rebuild evidence, Windows/process-loss acceptance and complete package gates; code presence is not `ValidatedLocal` |
-| E2-A–E2-B | Partial executable, with declared capabilities distinct from runtime availability | Selected W11, TOC, XML and state families are Service-published; the named AceAddon local-result adapter is separate from the default core embed capability, which remains NotEvaluated. Close public CLI/full-pipeline fixtures and package acceptance in #103/#120 without inferring them from the capability census |
-| E2-C–E2-D | Partial source index, manifested store, native live pair service/CLI, cancellable updates, exact Library/fact-profile binding, retained physical parser updates and durable physical update/removal publication; bounded retention/GC, recovery/replacement, inactive migration/READY preparation, portable source authority and guarded cross-epoch selection/reconciliation | Dependency-specific fact reuse, standalone/package durable updates, portable full migration history and complete E2 acceptance remain open; see [REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md) |
-| E3-A | Partial exact raw/package admission and native Main/package graph; selected XML classification, native function/XML shape and fixed comparison components; exact candidate/Skeleton publication, query/update/removal and source-absent replay through service/CLI (#116–#118) | Broader XML/value/signature semantics and mutation freeze (#118), complete candidate/Skeleton authority (#116), source update/removal closure and full composed corpus/capacity/persistence qualification (#113) remain open |
-| E3-B–E3-C | Partial executable: selected Primary/combined map, L0/L1, progressive, platform, XML/reference metadata and typed Reference-root Service/CLI routes; XML resolution/proposals remain scoped and load coverage Partial. One Primary EntityV1 L1 exact-source-excerpt Build is functionally qualified on selected native input and Windows CLI. Selected callable/alias declaration handoffs and StructuralOnly pack validation are bounded routes; authority and full E3 remain unaccepted. | Broader facets/automatic expansion, correction/type closure, combined links, excerpt privacy/selection/continuation, fixtures and Tier A/X remain open in [Issue #122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122); see [selected contracts](../crates/wow-context/README.md) |
-| E4-A–E4-C | Partial selected exact ProjectFile/entity, native Reference and Source Search with durable lifecycle and explicit selection. Reference-document selection reaches its original accepted native API projection and existing ReferenceFacts L1 Inspect/Build/render. Selected E4-B ordinary Project exact-source-span Candidate producer/buckets/components and retained inactive/readback/sealed snapshots reach `wow lineage build/compare/retire/abandon` (#178) and exact leased status/selected validation/entity compare/whole proposal-component explain with captured replay (#179), using the genuine borrowed native pair (#177), independent source holds and exact durable replay; selected genuine two-revision Blizzard UI Source pair/producer and separately retained Source Candidate build/query/replay/lifecycle use explicit Source schemas/profile (#180); accepted assertions remain zero | Complete SearchStore/lane/ranking/miss/continuation, other genuine owner mappings and durability/fault qualification in #169; other lineage producers, authorized review/accepted assertions, migration/static impact and full E4-B remain separate |
-| E5-A–E5-C | Not started | Calibration, independent review/holdout and governed publication lifecycle |
-| E6-A–E6-B | Not started; optional/disabled | External candidates never block the local lane or gain exact/negative authority |
-| E7-A | Partial selected Service registry/session owner and MCP 2025-11-25 stdio frontend: frozen status-only profile (#170) and opt-in registered native `wow.context_inspect` with exact generation/root, unchanged E3 metadata and checked close (#176); exact profile resources | Broader frontend operations, workspace/documents, wire cancellation, daemon/LSP, protocol conformance and E7-A acceptance remain open in #125 |
-| E7-B | Not started | Build/sign/bundle/install/update/rollback/support |
+| E0-A–E0-E | Partial executable | Exact normative fixtures, prerequisite identities/checksums, capability and negative-authority cases (#120; owner contracts). |
+| E0-F | Partial Service/CLI | Thin `wow status`/`wow check`, owner-composed fixtures, canonical output/exit, cancellation/resource and platform path gates (#120). |
+| E1-A–E1-C | Partial Store/Reference/annotation owners | Reconcile only verified gaps; full contracts, fixtures, Reference coverage, type inventory, consumer semantics and Tier A/X parity. Do not recreate implemented owners. |
+| E1-D | Partial Reference Pack and internal builder | Real external parity/license/rebuild evidence, Windows/process-loss and complete acceptance; builder presence is not `ValidatedLocal`. |
+| E2-A–E2-B | Partial graph/recognizers/rules | Selected W11/TOC/XML/state routes exist; close producer/rule fixtures, real-addon graph-build and public CLI acceptance (#103/#120). Keep declared capability separate from runtime availability; E5 governance is separate. |
+| E2-C–E2-D | Partial source index, Store and native Project/Graph Service/CLI | Dependency-specific fact reuse, standalone/package durable update/removal, portable full migration history and complete recovery/fault qualification; W13–W16 are individually tracked by #108–#111. See [replay publication](../crates/wow-project/REPLAY_PUBLICATION.md). |
+| E3-A | Partial manifest-bound source admission and platform graph build; selected raw inventory, four-stage native source composition, spans/structural roles, exact function fingerprint components, retained publish/reopen and bounded `SkeletonInputView` consumed by Context | Full E3-A is still unaccepted: complete store-independent candidate and publication authority (#116), source update/removal and composed corpus/capacity/persistence (#113), broader XML/value/signature semantics and mutation/corpus freeze (#118). Inventory remains Partial and cannot prove root/Git/client/security/license/semantic/runtime authority. Selected fingerprints are component-scoped and overall Partial; selected SkeletonInputView is not complete source/corpus coverage. Direct-role branches and fault/exhaustion still need qualification; real Gethe/Ketho corpus, performance/runtime and full W17 gates remain open (#106, #113–#119). Existing selected source Service/CLI transport is implemented; see [platform input](../apps/wow/PLATFORM_INPUT.md), [direct service](PLATFORM_DIRECT_SERVICE.md), [fingerprint contract](../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md) and [SkeletonInputView](../crates/wow-project/e3/SKELETON_INPUT_VIEW.md). |
+| E3-B–E3-C | Partial selected maps, inspections, packs, progressive/platform and Reference-root routes; one Primary EntityV1 L1 excerpt Build functionally qualified | Full E3 acceptance remains open: broader facets/automatic expansion, correction/composite/alias/type closure, combined links, excerpt selection/privacy/token/continuation, fixtures and Tier A/X/runtime/authority (#122). Contract set: [context router](../crates/wow-context/README.md), [combined map](../crates/wow-context/e3/NATIVE_COMBINED_MAP.md), [source excerpts](../crates/wow-context/e3/SOURCE_EXCERPTS_AND_PROMPT_BOUNDARIES.md), [Reference facts](../crates/wow-context/e3/NATIVE_PRIMARY_REFERENCE_FACTS.md), [pack](../crates/wow-context/e3/README.md). |
+| E4-A–E4-C | Partial exact ProjectFile, Reference and Blizzard UI Source search; selected E4-B lineage Candidate producers and retained lifecycles | #177 supplies a genuine borrowed pair; #178 Project exact-span and #180 two-revision UI Source Candidate paths; #179 leased validation/entity compare/proposal explain. Candidate assertions remain zero accepted. Full E4 still needs SearchStore, all lanes/ranking/miss/continuation and durability (#169), other lineage producers, authorized review/accepted assertions, migration/static impact and fault/corpus qualification. See [Search contract](../crates/wow-search/e4/README.md). |
+| E5-A–E5-C | Not started | Licensed/provenance-grouped corpora and leakage-safe splits; independent labels/reviews/sealed holdout; measured mutation/per-case thresholds; guarded attest/sign/publish/read-back/canary/rollout/LKG/rollback with authorization, response-loss, retention, audit, privacy and license controls (#125). |
+| E6-A–E6-B | Not started; optional and disabled | Reviewed adapter and probes; exact config/session authorization, durable catalogs, mapping/selection and exact-root handoff; Candidate-only results, honest zero, optional degradation, no hidden fallback/leakage; prove task benefit. Never block the local lane (#125). |
+| E7-A | Partial selected Service registry/session and MCP 2025-11-25 stdio (`status`, exact profile resource; opt-in `context_inspect`). LSP 3.18 stdio also has exact private-overlay diagnostics; opt-in same-document lexical definition/references, validated local-file URI projection, allowlisted workspace replacement, native document outline and an owned ticket/worker profile with bounded queue/progress and cooperative cancellation (#183–#190). | Keep those selected paths and their privacy/profile gates. Full #125 E7-A remains open: other owner-backed language operations, wider sessions/workspace/document behavior, broader conformance, additional platforms/editors, reconnect/backpressure and product task acceptance. LSP empty-result/error behavior has a specific remaining framed-wire repair in #198. See [LSP profile](../crates/wow-service/e7/LSP_3_18_PROFILE.md), [app route and host schema](../apps/wow/LSP.md), and [E7-A service gates](../crates/wow-service/e7/TEST_MATRIX.md). |
+| E7-B | Not started | Exact build/sign/bundle/install/update/rollback/support owners and evidence, including supported Windows clean-install/update/rollback (#125). |
+
+## Retained operations and compatibility
+
+W13–W16 have substantial executable slices; the remaining acceptance does not
+mean those implementations are absent. W13 pins the exact Current/Exact pair
+through native replay and retains it across later publication. TOC/XML/package
+replay composition, Library generation binding/incremental reuse, durable update
+closure, crash/retention/backup and runtime acceptance remain open (#108).
+W14 applies exact physical Main deltas and publishes rebuilt producers under
+validated CAS while preserving older readers, exact/historical pairs and NoChange
+identity. Dependency-specific fact reuse, loader/package durable updates and
+retention/recovery qualification remain open (#109). See
+[`REPLAY_PUBLICATION.md`](../crates/wow-project/REPLAY_PUBLICATION.md) and
+[`LIVE_PROJECT.md`](../apps/wow/LIVE_PROJECT.md).
+
+W15 has exact persistent generation holds, operation-release/idempotency records,
+bounded root inventory, stale-plan rejection and transactional generation/
+partition collection with durable receipts. Object/epoch collection, recovery
+and platform faults remain open (#110; Store
+[`PROJECT_RETENTION.md`](../crates/wow-store/PROJECT_RETENTION.md),
+[`PROJECT_GC.md`](../crates/wow-store/PROJECT_GC.md)). W16 has snapshot-bound
+read-only reconciliation, exact backup/isolated restore, typed Current recovery,
+guarded inactive migration/READY preparation and cross-epoch selection. Remaining
+gates include original source SQL/history hydration, portable full migration
+history, payload/old-runtime transformation, fine-grained/domain quarantine,
+arbitrary partial-copy/inside-write/OS-call interruption, power loss, cleanup,
+deletion/platform faults and source/runtime acceptance (#111; Store
+[`PROJECT_RECOVERY.md`](../crates/wow-store/PROJECT_RECOVERY.md),
+[`PROJECT_MIGRATION.md`](../crates/wow-store/PROJECT_MIGRATION.md),
+[`PROJECT_MIGRATION_SELECTION.md`](PROJECT_MIGRATION_SELECTION.md)).
+Old schema/catalog readers and frozen fixtures remain supported; no documentation
+compaction changes retained-data compatibility.
+
+The detailed W21–W25, frontend, calibration and release obligations route through
+[#125](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/125): retain
+real evidence producers before review authority; similarity stays Candidate;
+never auto-promote an evaluated pack; E6 is optional and disabled by default;
+release work requires exact source/build/bundle identity. #125 also carries
+cross-cutting R0/A0/A1/B0/V1 acceptance. The full context and Search scope remain
+in [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122) and
+[#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169),
+respectively; do not reduce either to its next refactoring slice.
 
 ## Execution routing
 
-This matrix reports capability and acceptance state; it does not prescribe task
-order. Select the next slice from [`REFACTOR_QUEUE.md`](REFACTOR_QUEUE.md) and its
-canonical Issue, following [`AGENTS.md`](../AGENTS.md) and
-[`EXECUTION_MODEL.md`](EXECUTION_MODEL.md). The historical
-[audit task table](AUDIT_2026-09-19.md#bounded-follow-up-tasks) and
-[I0–I7 handoff](IMPLEMENTATION_HANDOFF.md) retain evidence and original scope;
-consult only when the selected Issue requires them. Keep functional delivery
-separate from package/launch acceptance and do not infer acceptance from this
-census.
+Select bounded implementation work from [`REFACTOR_QUEUE.md`](REFACTOR_QUEUE.md)
+and the canonical Issue, following [`AGENTS.md`](../AGENTS.md) and
+[`EXECUTION_MODEL.md`](EXECUTION_MODEL.md). This matrix records capability and
+acceptance, not task order. Consult the audit or handoff only when the selected
+Issue names it. Preserve the existing reader/migration path for retained data.
 
 ## Launch gates
 
-| Gate | State | Concrete reason |
+| Gate | State | Acceptance boundary |
 |---|---|---|
-| R0 | Blocked | Materialized-input CLI exists; required E0 fixture/checksum and whole-command acceptance remain open |
-| A0 | Blocked | R0 plus full E1–E3 acceptance and real-addon/profile evaluation |
-| A1 | Blocked | A0, E4 and the selected implemented E7-A frontend |
-| B0 | Blocked | A1 and real E5 governance evidence; E6 remains optional |
-| V1 | Blocked | Selected product scope, full E7-A/E7-B and supported Windows clean-install/update/rollback evidence |
+| R0 | Blocked | E0 normative fixtures/checksums and whole-command CLI/output/exit/resource/platform acceptance (#120). |
+| A0 | Blocked | R0 plus full E1–E3, real Reference Pack/addon/profile evaluation and required source/runtime evidence. |
+| A1 | Blocked | A0 plus full E4 and one complete accepted E7-A frontend; current selected Search/lineage/frontend slices are partial (#125/#169). |
+| B0 | Blocked | A1 plus real E5 governance evidence; E6 remains optional. |
+| V1 | Blocked | Selected product scope, full E7-A/E7-B, supported Windows clean install/update/rollback, packaging, integrity and support evidence (#125). |
+
+No gate passes from compilation, an isolated feature, or a green workspace build.
+`NotEvaluated`, partial, stale, conflicted, truncated, failed or unsupported
+coverage is never a pass or a clean negative. Missing tooling/source/credentials/
+runtime is NotEvaluated.
 
 ## Evidence rules
 
-Baseline `e2c74314bb7ccde4a9b48c049dfeacc157259960` passed
-[CI 34735568141](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/34735568141).
-The duplicate-key implementation is
-[`c10579d`](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/commit/c10579d359b5f0044fc6fcdfef3b353c5caa65dc),
-with exact checks in
-[CI 35487232004](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/35487232004).
-A subsequent documentation commit has a different SHA and its own CI record.
-The W08 managed-source code checkpoint is
-[`a69c685`](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/commit/a69c685315e32d8afde28d758ecf2b495f02a80b),
-validated by focused run
-[36821527175](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/36821527175)
-and exact-tree publication run
-[36821677002](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/36821677002).
-That checkpoint ran formatting, strict `xtask` Clippy and repository policy on Linux;
-tests, Windows, live-source acquisition and process/network fault injection were not run.
-The checkout-free API snapshot checkpoint is
-[`b6ea598`](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/commit/b6ea5981b2372468e332b30c0bdd697ce3b52301),
-checked as tree `312caed69e65a5b907dfa219e2fb3aa739837ece` by focused run
-[36826290606](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/36826290606).
-Formatting, strict `xtask` Clippy and repository policy passed; tests, a live donor
-call, Windows and network/process fault injection were not run.
-
-The W10 XML rule-consumer checkpoint is
-[`260cf430`](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/commit/260cf430a22fdc3f86da33a9c363946cc31aca00),
-checked as tree `df3db6e01a804f44f57cbfe11f1a15cec1face60` by focused run
-[36966297105](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/actions/runs/36966297105).
-Formatting, strict affected-crate Clippy, existing affected-crate tests, `xtask check` and exact
-file-set/tree publication passed on Linux/Rust 1.99.0. The retained artifact tree and SHA-256 files
-were read back. Windows, WoW runtime, real-addon command acceptance and full workspace/package
-gates were not run and remain open.
-
-The audit used that CI's retained source artifact and verified both the archive
-SHA-256 and embedded commit identity. Local Rust execution was unavailable; no
-local cargo, Windows runtime, installation or product acceptance run is claimed.
-Passing code tests are not evidence that dormant apps, placeholder fixture
-manifests, a current WoW profile or later release gates passed.
-
-## Verified code checkpoint
-
-All eight jobs in CI run `35487232004` concluded success for
-`c10579d359b5f0044fc6fcdfef3b353c5caa65dc`: Linux/Windows locked checks,
-strict Clippy, debug/release tests and rustdoc; updated dependencies; rolling
-parser; Linux/Windows semantic consumers; Linux/Windows Wasm swap/rollback.
-This is code-checkpoint evidence, not a full package or public launch certificate.
-
-## XML inline semantic implementation
-
-TOC/XML source capture, syntax indexing and inline extraction now feed a bounded,
-generation-bound EmmyLua semantic pass in the same physical Main/Library session. Mapped
-syntax/semantic diagnostics and direct member/call facts participate in normal local-check
-selection. `wow.api.exists@1` consumes only exact-static facts backed by captured XML source,
-exact mappings and complete unit coverage. See [XML_ANALYSIS.md](../apps/wow/XML_ANALYSIS.md).
-This advances functional code, not the existing E2/R0 acceptance gates. Effective callback
-receiver/inheritance/dispatch semantics, richer value flow, XSD validation and runtime remain
-open. XML parent/inheritance references still retain explicit conflicts, order and cycles; see
-[XML_REFERENCES.md](../apps/wow/XML_REFERENCES.md).
-
-## Retained graph application route
-
-The exact-entity, direct-neighbor, bounded subgraph, axis, explanation and path owners have one-shot service/CLI
-routing over explicit retained partition artifacts; see
-[GRAPH_INPUT.md](../apps/wow/GRAPH_INPUT.md). Coherent ProjectStore acquisition and full package acceptance stay open.
-
-## Source graph artifact path
-
-`wow graph build` produces the first-party file/direct-load partition artifact
-accepted by the graph-read CLI, from the existing local project materialization
-path. It retains exact source/evidence and consumer node IDs without a second
-Emmy session or persistent graph/project publication. The result remains Partial;
-other recognizer families, dependency graph coverage and coherent ProjectStore remain
-open. See [GRAPH_BUILD.md](../apps/wow/GRAPH_BUILD.md).
-
-
-The source graph also exports XML declarations, source ownership, admitted local
-inheritance and uniquely resolved Main mixin declaration links. The original XML
-binding report and skipped outcomes remain in provenance. Inheritance-axis queries
-are available for this source slice; runtime mixin behavior is not certified.
-
-The callable pipeline exports Main chunk/closure nodes plus the existing direct-call
-recognizer's independently owned `Calls` partition. It reuses the semantic session
-and retains unresolved/Library/self-recursion outcomes, exact evidence and final
-function/edge maps. Call-axis and multi-hop reads operate on the exported snapshot;
-this does not close dynamic dispatch, non-call families, persistence or E2 acceptance.
-
-The XML handler pipeline adds source inline-handler nodes and independent
-`SetsScript` recognizer proposals. Exact Emmy signatures connect named handlers to
-the existing function/call graph; method and inherited associations retain Possible
-confidence. Direct/inherited site receipts preserve skipped queries and unresolved
-dispatch ordering. Existing inline syntax units are reused, not semantically
-recompiled. The v5 export rebinds all node/edge maps after both recognizer partitions.
-Other recognizer families, virtual-unit semantics and full E2 acceptance remain open.
-
-## Source read-back checkpoint
-
-The graph bundle explanation has an explicit local source-root route: admitted
-manifest/catalog binding, whole-file read-back, exact UTF-8 excerpts, bounded
-work/output and drift/unsafe-source outcomes. It reuses existing graph and disk
-owners without source execution or reindexing; metadata-only modes are unchanged.
-See [GRAPH_EVIDENCE.md](../apps/wow/GRAPH_EVIDENCE.md). This advances the source
-read seam, not full E2/E3 acceptance, authentication or persistent publication.
-
-## Retained manifested publication checkpoint
-
-Explicit graph publish/reconcile and current/exact stored reads use immutable
-partition versions, complete generation membership, read-back owner validation
-and current-record CAS. See [GRAPH_STORE.md](../apps/wow/GRAPH_STORE.md). Retained
-graph/project evidence is not a rehydrated live ProjectView. No acceptance,
-crash/power-loss, GC, backup/restore, runtime or release gate is closed by this code.
-
-## W12 retained assertion records checkpoint
-
-Exact derivation and reported conflict records are now validated at graph
-publication. Explanations traverse actual supporting/rebutting assertions, retain
-both conflict participants and report missing or truncated chains explicitly.
-Source graph and state producers preserve exact prerequisites through captured
-files; other producer chains and complete automatic conflict assessment remain
-open. Legacy record-free identities and stored v1 graphs remain readable;
-record-bearing batches/snapshots and explanation payloads use explicit v2 schemas.
-
-Fresh workspace checks on 2026-10-09 passed: native policy, fmt, check, strict
-Clippy, tests (842 passed, 1 ignored, 103 targets), rustdoc and build. This is a
-functional W12 checkpoint, not full E2-A/E2-D acceptance or a live ProjectView.
-
-## W13 physical-input live pair checkpoint
-
-An owned archive now reconstructs a real physical-input ProjectView through the
-existing native publisher. Project/graph source coherence and complete logical
-membership are validated before store activation. Service acquisition pins one
-Current/Exact transaction and generation lease through native replay and owner
-checks; the actual immutable pair survives later current advancement.
-
-Fresh workspace policy, fmt, check, strict Clippy, tests (844 passed, 1 ignored,
-103 targets), rustdoc and build passed on 2026-10-09. TOC/XML/package replay and
-public CLI wiring remain open, as do full W13/E2, crash, incremental, retention,
-backup and runtime acceptance. See
-[REPLAY_PUBLICATION.md](../crates/wow-project/REPLAY_PUBLICATION.md).
-
-The later physical-input CLI/service checkpoint passes the complete producer
-chain, publication/read-back, public read/reconciliation projections and stale
-CAS rejection. Canonical pack repairs version bridge4/hooks5/library3. W14 caller
-cancellation and typed Library intent are executable; current E0 policy rejects
-Clear/empty replacement. Full Library generation binding and incremental reuse
-are not implemented. Fresh workspace gates passed on 2026-10-09 (847 tests,
-1 ignored, 103 targets). See [LIVE_PROJECT.md](../apps/wow/LIVE_PROJECT.md).
-
-Standalone TOC/XML replay now reuses the same loader over captured documents and
-selection context. Exact plan and project/analyzer IDs reproduce after source
-removal; full service composition and stored Exact reopen pass. Physical v1 bytes
-and legacy epoch catalogs remain compatible; loader replay uses explicit v2 and a
-new store catalog. Workspace policy, fmt, check, strict Clippy, tests (849 passed,
-1 ignored, 103 targets), rustdoc and build passed on 2026-10-09. Multi-package replay,
-generation Library binding and full E2 acceptance remain open.
-
-Declared-package replay now captures the complete selected corpus and all variant
-TOC bytes, including unreachable Lua outside analyzer Main. Native/storage v3
-rebuilds the real package closure and namespaced Main with exact original IDs.
-V1/V2 epochs retain their exact catalogs. The service source-edge crosswalk now
-rebinds endpoints to the final generation before returning edge IDs. Full service
-publication and Exact reopen after source removal pass, as do corpus/variant/root
-substitution guards. Workspace policy, fmt, check, strict Clippy, tests (850 passed,
-1 ignored, 103 targets), rustdoc and build passed on 2026-10-09. Full W13/E2,
-generation Library binding, incremental, retention/recovery and source/runtime
-acceptance remain open.
-
-Generation recipe v2 now binds exact sorted Library snapshot IDs and the owned
-function-call-facts profile. Replacement changes the generation while retaining
-Main bytes; source handles rebind correctly. New native replay v4 covers all three
-input profiles. Frozen old v1/v2/v3 archives reproduce original IDs and reopen
-under exact V1/V2/V3 catalogs; v4 writes preserve current and epoch on rejection.
-Workspace policy, fmt, check, strict Clippy, tests (852 passed, 1 ignored,
-103 targets), rustdoc and build passed on 2026-10-09. Analyzer batches, reuse,
-durable updates/removal closure and full W14/E2 acceptance remain open.
-
-Physical W14 updates now apply exact Main deltas to retained native syntax and
-semantic engines. Unchanged green allocations survive; removals drop URI mappings
-and exact symbol declarations. Complete semantic reindexing and fresh target
-report extraction match independent cold final-state builds, including optional
-function facts and same-session remove/readd. Library/configuration replacement
-and standalone/package/virtual inputs use cold owners. Failure poisons/discards
-the mutable cache, preserving current; NoChange keeps its exact Arc. Frozen
-legacy replay IDs still match. Workspace policy, fmt, check, strict Clippy,
-tests (859 passed, 1 ignored, 104 targets), rustdoc and build passed on 2026-10-09;
-the strengthened declaration-removal regression also passed separately.
-Dependency-specific fact reuse, durable updates/removal closure and full W14/E2
-acceptance remain open.
-
-Durable W14 physical updates now retain the native owner from exact original
-publication acquisition and rebuild every graph producer before validated
-current CAS. Independent cold full-graph equality verifies Add/Update/Remove;
-older leased readers and Exact/historical pairs remain intact. NoChange validates
-the requested project/generation without consuming an operation ID. Retried
-operations keep their original base and receipt after later activation, while
-target substitution conflicts. The public CLI requires explicit Library intent.
-Source-function-calls v2 repairs the typed source-support/observation handoff.
-Workspace policy, fmt, check, strict Clippy, tests (860 passed, 1 ignored,
-104 targets), rustdoc and build passed on 2026-10-09; an additional focused Library
-intent test and CLI guards passed separately. Dependency-specific fact reuse,
-loader/package durable updates, retention/recovery and full W14/E2 acceptance
-remain open. Publication does not close the Gethe/Ketho or named-client gates.
-
-W15 now has persistent exact generation holds under a separately selected physical
-v2 profile. SQL roots retain canonical identity, attributable holder, finite kind
-and exact epoch/generation. Put is idempotent only for the complete original root;
-removal checks its digest. Real store and native service reopen regressions pass;
-v1 physical epochs and frozen owner catalogs remain readable without migration.
-Unresolved transactions cannot prove durable commit success. No generation or
-partition deletion is implemented here. Final workspace policy, fmt, check, strict
-Clippy, tests (864 passed, 1 ignored, 105 targets), rustdoc and build passed on
-2026-10-09. Operation release/idempotency tombstones,
-complete root/shared-data closure, stale-plan rejection, GC/recovery and full W15
-acceptance remain open; see
-[PROJECT_RETENTION.md](../crates/wow-store/PROJECT_RETENTION.md).
-
-The subsequent W15 v3 slice implements explicit operation release, persisted
-policy CAS, bounded complete inline root inventory, stale-plan rejection and
-transactional generation/partition collection with durable receipts. Released IDs
-stay reserved and original activation evidence survives. Store and native service
-lifecycles verify actual reclamation plus shared/current/pin/lease preservation and
-reopen. Final workspace policy, fmt, check, strict Clippy, tests (866 passed,
-1 ignored, 106 targets), rustdoc and build passed on 2026-10-09. Object/epoch collection, recovery and
-platform faults remain open, so full W15/E2 remains unaccepted. See
-[PROJECT_GC.md](../crates/wow-store/PROJECT_GC.md).
-
-W16 adds executable read-only reconciliation under one admitted SQLite snapshot,
-complete manifest/seal descriptors, canonical receipts and explicit invalid/
-incomplete/not-applicable coverage. Activation acknowledgment stays unknown.
-Verified native SQLite backup includes committed WAL and independently preserves
-the exact inline snapshot and body identities. Restoration to a new private path
-requires actual owner capabilities for every retained generation before registry
-publication; native service replay checks all Project/Graph pairs and preserves
-source current and older readers. See
-[PROJECT_RECOVERY.md](../crates/wow-store/PROJECT_RECOVERY.md).
-
-Workspace policy, fmt, check, strict Clippy, tests (877 passed, 1 ignored,
-106 targets), rustdoc and build passed on 2026-10-09.
-Quarantine, same-root epoch selection, supported migrations, process termination,
-power loss and sharing/cleanup faults remain open. Full W16/E2 is unaccepted.
-
-Subsequent selector and quarantine checkpoints preserve exact semantic IDs while
-selecting confined physical instances and explicit schema-3 holds. Quarantine
-binds the preceding normal selector, raw Current and immutable recovery evidence;
-normal new reads/publication/activation/GC/backup refuse, existing leased pairs
-remain coherent. A separate readonly inspection can hold damaged SQL without a
-normal writable open. Exact selected receipts reconcile without redispatch.
-Seven store regressions and one native service lifecycle pass, including actual
-Windows sharing refusal and selected-instance scope with absent Current. Final
-workspace policy, fmt, check, strict Clippy, tests (895 passed, 1 ignored,
-107 targets), rustdoc and build pass. Guarded restore, fine-grained/domain
-quarantine, supported migrations, interruption inside writes/OS calls, power
-loss, cleanup and Gethe/Ketho/runtime remain separate open gates.
-
-The subsequent guarded-restore and inactive-migration slices retain portable
-source hold authority and independently replay native Project/Graph owners.
-Supported physical v1/v2 to v3 migration preserves the original catalog/payload
-identities and source history in an independent archive, records all generation
-aliases, and stops at validated inactive state without target Current or registry.
-Partial-state and final-record preflight precede resume effects; both epoch
-manifests are rechecked before validation writes. Workspace policy, fmt, check,
-strict Clippy, tests (906 passed, 1 ignored, 107 targets), strict rustdoc and build
-pass on 2026-10-09. Cross-epoch selection/mapped roots,
-payload/old-runtime transformation, pre-intent staging recovery and full W16/E2 or
-platform/source/runtime acceptance stay open. See
-[PROJECT_MIGRATION.md](../crates/wow-store/PROJECT_MIGRATION.md).
-
-Typed Current-domain recovery is now executable beside the unchanged physical
-report. Native owners replay its exact retained publication under a held read and
-return actual pair IDs or phased Failed/Incomplete/Cancelled outcomes. Corrupt or
-Unverified physical Current never becomes Absent. Explicit CLI `--domain-current`
-dispatches one service operation and retains completed physical evidence on replay
-cancellation. It grants no repair/activation authority or all-generation verdict.
-Three native cases and workspace policy, fmt, check, strict Clippy, tests
-(909 passed, 1 ignored, 107 targets), strict rustdoc and build pass on 2026-10-09.
-CLI help/strict-option/missing-root checks pass; positive published-root CLI smoke,
-injected availability/late cancellation and full W16/E2/source/runtime acceptance
-remain separate open gates. See
-[PROJECT_CURRENT_RECOVERY.md](../crates/wow-service/PROJECT_CURRENT_RECOVERY.md).
-
-Guarded inactive staging now binds the complete live source snapshot, including pins
-and freshly admitted holds, alongside exact selector/Current/epoch guards. Completed
-migrations can export an independently verified target-only backup without changing
-the baseline or its source archive. Native service replay validates every exported
-pair. Six store migration cases and an extended native service lifecycle pass;
-workspace policy, fmt, check, strict Clippy, tests (911 passed, 1 ignored,
-107 targets), strict rustdoc and build pass on 2026-10-09. Automatic mapped roots and
-activation-ready preparation, exact cross-epoch selection/retry and portable entire
-migration history remain open; full W16/E2 acceptance is not advanced. See
-[PROJECT_MIGRATION.md](../crates/wow-store/PROJECT_MIGRATION.md).
-
-Private immutable migration preparation now reconstructs the complete source pin
-set and target-local Current in a separate copy. A durable exact intent precedes
-handoff; closed inventory admits only planned root subsets and one exact activation.
-Fresh owners validate every retained generation. Completed output/record admission
-precedes resumed effects, and no partial native copy is recopied or overwritten.
-Three native store cases and the extended actual Project/Graph service lifecycle
-pass, preserving baseline/source evidence, live Current and old readers. Workspace
-policy, fmt, check, strict Clippy, tests (914 passed, 1 ignored, 107 targets), strict
-rustdoc and build pass on 2026-10-09. Live cross-epoch selection, portable entire
-migration history, interrupted-copy/power-loss and full W16/E2/source/runtime gates
-remain open. See [PROJECT_MIGRATION_READY.md](../crates/wow-store/PROJECT_MIGRATION_READY.md).
-
-Guarded READY-target export now carries independently admitted original-epoch
-selector/hold evidence through backup, isolated restore, replacement and quarantine.
-Source/live and immutable migration/READY evidence stays unchanged. Complete flat
-dependency admission, canonical digest/length checks, inherited reference subsets
-and combined aggregate limits precede staging effects. Source holds remain separate
-from target holds. Three native store cases and the extended native Project/Graph
-service lifecycle pass; workspace policy, fmt, check, strict Clippy, tests
-(917 passed, 1 ignored, 107 targets), strict rustdoc and build pass on 2026-10-09.
-See [PROJECT_SOURCE_AUTHORITY.md](PROJECT_SOURCE_AUTHORITY.md).
-
-Live cross-epoch selection/reconciliation, original source SQL/history hydration,
-portable full migration history, payload/runtime transformation, domain quarantine,
-arbitrary interrupted-copy/inside-write/power-loss/deletion/platform and full
-W16/E2/source/runtime acceptance remain open. W17-W26 are unchanged.
-
-Guarded cross-epoch selection now installs the independently admitted READY target
-under the original selector, optional Current and full source snapshot guards.
-A durable ledger, complete native copy and exact Working handoff precede compiled
-owner replay of every target generation and one outer schema-6 selector rename.
-Exact staged/selected reconciliation preserves old readers, staged target leases,
-writer locks and shared reader admissions. Source holds remain original-epoch
-archives; lost-response acknowledgment remains Unknown. Historical receipts survive
-later legitimate publication and reject quarantined roots.
-
-Two native store cases and the extended native service lifecycle pass. Workspace
-policy, fmt, check, strict Clippy, tests (919 passed, 1 ignored, 107 targets), strict
-rustdoc and build pass on 2026-10-09. See
-[PROJECT_MIGRATION_SELECTION.md](PROJECT_MIGRATION_SELECTION.md).
-Portable entire migration history, arbitrary partial-copy/inside-write/power-loss/
-deletion/platform, payload/runtime transformation, domain quarantine and full
-W16/E2/source/runtime acceptance remain open. W17 source profile/inventory admission
-is the next functional owner; W18-W26 remain open.
-
-The first W17 source owner now validates a typed exact profile and the entire
-declared inventory before confined member reads. Included raw byte digests/lengths
-are mandatory; unknown or undecodable data is retained unchanged. Explicit exclusions,
-special/external/conflict/failed records, materializer/build/license assertions and
-per-root accounting survive in the serialize-only receipt. Reordered inputs and
-host-directory/provider-display changes preserve the scoped content/snapshot
-identities; full evidence has a separate digest. Inventory stays Partial, and root
-completeness, Git/client/security/license and semantic/runtime authority remain
-unevaluated. There is no source acquisition or parsing in this owner.
-
-Two native cases pass, covering immutable retained bytes, independent-copy/order
-identity, exact binding/accounting refusal, mutation/missing content, LFS, budgets
-and cancellation. Workspace policy, fmt, check, strict Clippy, tests (921 passed,
-1 ignored, 108 targets), strict rustdoc and build pass on 2026-10-09. See
-[PLATFORM_SOURCE_ADMISSION.md](PLATFORM_SOURCE_ADMISSION.md).
-Platform package/load/project/analyzer/graph/publication and SkeletonInputView,
-real mirror/performance/runtime and full W17 acceptance remain open. Next is a
-retained-byte package/load adapter with exact source binding; W18-W26 remain open.
-
-The retained-byte package adapter now reuses the existing TOC/XML/package owners
-and Main namespace without a second parser or disk fallback. Native declaration
-preflight and exact selected-TOC equality precede parsing; every variant is pinned
-to observed admitted content. Only demanded bytes are decoded. Requested inventory
-omissions retain typed refusal/logical paths; unrelated unknown/binary records remain
-on the held source. A sealed exact source/load/Main binding and original source Arc
-survive. Existing native bounds and strict replay closure remain unchanged.
-
-Three focused native cases and workspace policy, fmt, check, strict Clippy, tests
-(922 passed, 1 ignored, 108 targets), strict rustdoc and build pass on 2026-10-10.
-The new lifecycle loads TOC/XML/Main after physical source removal and checks pin,
-cancel and declared omission refusal. See
-[PLATFORM_SOURCE_PACKAGES.md](PLATFORM_SOURCE_PACKAGES.md).
-At this package-admission predecessor, exact platform configuration/project/analyzer/graph, native replay/publication,
-SkeletonInputView, real mirror/performance/runtime and full W17 acceptance remain
-open. W18-W26 remain open; Gethe materialization stays deferred.
-
-The platform configuration checkpoint now retains the genuine source/package
-specialization and validates exact Reference profile/generation plus native load/Main
-plans. A distinct ProjectKind and additive BlizzardUiMain physical/XML class preserve
-Main/Library separation. Registry, view and graph source handles bind the exact
-source snapshot; source graph definitions select its exact platform universe class.
-Old configuration/generation/registry recipes and replay identities remain unchanged.
-
-Four native cases and workspace policy, fmt, check, strict Clippy, tests (923 passed,
-1 ignored, 108 targets), strict rustdoc and build pass on 2026-10-10. One disk-absent
-lifecycle verifies native Main/XML/source-graph materialization, owner/plan/Library
-refusal, exact source handles, and real guarded generation advancement for an
-inventory-only byte change with unchanged parsed inputs and a valid old snapshot.
-See [PLATFORM_SOURCE_CONFIGURATION.md](PLATFORM_SOURCE_CONFIGURATION.md).
-
-Genuine platform replay now retains the original profile, complete inventory,
-Included binary members and explicit package/root/variant/pin/context request.
-Hydration re-admits source and package owners, restores exact platform configuration,
-rebuilds native Main/Library analysis and compares IDs plus full recapture. Native
-store publication/readback uses the additive v5 schema; ordinary v1-v4 recipes
-remain unchanged. Exact old V4 catalogs reopen and refuse v5 before Current changes.
-See [PLATFORM_SOURCE_REPLAY.md](PLATFORM_SOURCE_REPLAY.md).
-
-Fresh workspace policy, fmt, check, strict Clippy, tests (925 passed, 1 ignored,
-108 targets), strict rustdoc and build pass on 2026-10-10. At that replay
-predecessor, stable logical namespace publication was still pending. Platform partitions/fingerprints,
-SkeletonInputView, service/CLI source transport, real mirror/performance/runtime
-and full W17/E3 acceptance remain open. Admission inventory remains Partial;
-consumed-file checks do not prove source/Git/root/license/API/runtime authority.
-W18-W26 remain open; Gethe materialization remains deferred.
-
-The stable namespace checkpoint adds a real typed ProjectStoreId and new-only
-namespace epoch with compiled catalog/runtime/schema/canonicalization/security
-bindings. Native source/project/graph owners reconstruct the complete selected
-generation bindings. Two source snapshots advance one Current without changing
-the store identity; old held readers remain coherent. Existing graph-owned epoch,
-catalog, semantic member and publication-set recipes remain unchanged.
-Selected one-shot service publication composes the actual graph producers and
-returns admitted namespace metadata. See
-[PLATFORM_STORE_NAMESPACE.md](PLATFORM_STORE_NAMESPACE.md).
-
-Two core cases and two native service cases pass. Workspace policy, fmt, check,
-strict Clippy, tests (929 passed, 1 ignored, 109 targets), strict rustdoc and build
-pass on 2026-10-10. Platform partitions/fingerprints, SkeletonInputView and source
-service/CLI transport remain open. This is not full W17/E3 or package acceptance;
-real Gethe/Ketho corpus, performance and WoW runtime checks remain NotEvaluated.
-
-The native producer lookup checkpoint joins original proposals and accepted input
-receipts over one validated immutable owner. Calls/construction/mixin, signal,
-event bridge, CVar, hook and library analyzer endpoint joins use this bridge.
-Exact scope/batch/kind and input membership remain required; adapters retain
-their separate fact/support checks. Library caller proposal keys now agree and
-foreign callable permutations refuse. CVar cancellation/budget codes propagate.
-Successful canonical recipes and serialized schemas remain unchanged; see
-[producer lookup usage](../crates/wow-graph/PARTITION_USAGE.md).
-
-Workspace policy, fmt, check, strict Clippy, tests (932 passed, 1 ignored,
-110 targets), strict rustdoc and build pass on 2026-10-10. Native two-producer
-lookup/refusal, W4 typed error lowering and full service/store LibStub
-publication/readback cover the bounded bridge. Package XML/state graph projection,
-complete raw-member graph projection, independent platform partitions/fingerprints,
-SkeletonInputView and source transport remain open. No package or E2/E3 acceptance
-state advances; real corpus/performance/runtime remain NotEvaluated.
-
-The native raw inventory cursor borrows every verified Included member from the
-genuine immutable source owner, including opaque bytes, with canonical order and
-exact original metadata. Checked traversal uses inherited limits; cancellation
-is terminal for that cursor. Omissions, Partial inventory coverage and all
-source/admission/replay identity recipes remain unchanged. See
-[source admission](PLATFORM_SOURCE_ADMISSION.md).
-
-One native disk-absent binary/omission/cancellation case and workspace policy,
-fmt, check, strict Clippy, tests (933 passed, 1 ignored, 110 targets), strict
-rustdoc and build pass on 2026-10-10. Raw graph entity/read binding, package
-XML/state projection, independent platform producers, fingerprints,
-SkeletonInputView and source service/CLI transport remain open. This adds no
-E0/E2/E3 acceptance or real corpus/performance/runtime result.
-
-The explicitly selected same-session package XML binding owner now retains
-package-local documents/rows/receiver sources and one original union lookup from
-the existing Main/Library session. Scoped addresses preserve repeated local XML
-IDs and shared Lua ambiguity. The selector participates in configuration/analyzer
-identity; selected /6 replay re-enters the genuine native owners without disk.
-Old v1-v5 recipes/catalogs remain exact and refuse a misrouted new publication.
-See [package XML bindings](PLATFORM_PACKAGE_XML_BINDINGS.md).
-
-Two project cases and one native namespace/store case pass. Workspace policy,
-fmt, check, strict Clippy, tests (936 passed, 1 ignored, 111 targets), strict
-rustdoc and build pass on 2026-10-10. That binding checkpoint did not add package graph projection
-or runtime authority; full W17/E3, corpus/performance/runtime and later W18-W26
-acceptance remain open.
-
-The selected package graph route now requires
-`PlatformGraphProfile::PackageProjectionV1` plus genuine same-session package XML
-bindings. It borrows exact native plans/Main receipts, preserves local XML IDs
-through scoped proposal addresses, and projects XML, source-only handlers and
-SavedVariables with shared ambiguity and aggregate bounds. Cross-package local
-ordinals do not prove Lua load order. Source `/20`, native replay `/7` and storage
-v7 are explicit new channels; default `/19`, published `/6` and frozen catalogs
-remain exact. See [selected package graph](PLATFORM_PACKAGE_GRAPH.md).
-
-Two native synthetic cases pass: disk-absent project hydration with exact graph
-evidence, and composed service namespace publication/Current reopen plus frozen
-V6 refusal without effects. Unreachable top-level chunk receipts now preserve
-reachability and missing-owner blockers together, with the final omission regression
-passing. Final workspace policy, fmt, all-target/all-feature check, strict Clippy,
-tests (938 passed, 0 failed, 1 ignored, 111 targets), strict rustdoc and
-all-target/all-feature build pass, completed 2026-10-10 07:18:40 UTC. This records
-local verification without advancing full acceptance or asserting remote publication.
-That package-only checkpoint retained the monolithic direct source producer.
-
-The separate selected raw recipe now projects every declared Included member,
-including opaque and unconsumed files, into a native inventory partition.
-Exact accepted Producer references bind local borrowed byte ranges to the held
-source. Original inventory omissions, Partial coverage and origin/license
-assertions are preserved; serialize-only metadata grants neither native read
-authority nor redistribution permission. Source `/21`, registry 16, native replay
-`/8`/storage v8 and service request `/11`/result `/18` are explicit new channels;
-`/19`, `/20` and older replay/catalog identities remain unchanged. See
-[raw inventory graph and native reads](PLATFORM_RAW_INVENTORY_GRAPH.md).
-
-The disk-absent native lifecycle passes Included-member/omission accounting,
-exact opaque byte borrowing, address/budget refusals, namespace Current reopen
-and frozen V7 refusal without effects. Workspace policy, fmt,
-all-target/all-feature check, strict Clippy, tests (939 passed, 0 failed, 1 ignored,
-111 targets), strict rustdoc and all-target/all-feature build pass, completed
-2026-10-10 07:48:26 UTC. These are local scoped results, not remote publication
-or full acceptance evidence.
-
-At this raw application checkpoint the TOC/XML/analyzer direct producer remained
-shared; its new inventory partition did not complete the four-way E3 split or
-its full relation model.
-Fingerprints, bounded SkeletonInputView and source service/CLI transport remain
-open. Full W17/E3, real corpus/performance/runtime, native fault/exhaustion and
-W18-W26 acceptance remain NotEvaluated. Gethe acquisition/materialization stays
-deferred.
-
-The separate native library profile `wow-project/platform-direct-producers/1`
-now builds Inventory, TocLoad, AnalyzerStructure and XmlStructure stages for
-ordered native graph admission, with the original raw prelude when selected. Finish requires
-the exact actual partition set, native accepted receipts and held-source evidence;
-it returns a borrowed assertion-address/catalog capability. One common projection
-preserves existing source `/19`–`/21` builders. Configuration, service,
-recognizer, replay and storage/catalog/epoch recipes remain unchanged.
-
-The single native two-package case passes with disk absent, four-stage and
-raw-plus-four-stage finish/catalog checks, exact native endpoints/derivations,
-scope/order/pending/version/overlay/surplus refusals, `/6` and `/7` hydration,
-unchanged `/8` capture and existing monolithic payloads. Final workspace policy,
-fmt, all-target/all-feature check, strict Clippy, tests (940 passed, 0 failed,
-1 ignored, 112 targets), strict rustdoc under `RUSTDOCFLAGS=-D warnings` and
-all-target/all-feature build pass, completed 2026-10-10 08:35:50 UTC. These are
-local scoped results, not remote publication or full acceptance evidence. See
-[native direct producer plan](PLATFORM_DIRECT_PRODUCERS.md).
-
-Published application routes retain their monolithic captured producer. Split
-application integration, missing selected-TOC/variant/load-unit, inventory/
-source-span and XML object/region/parent/span roles, fingerprints, bounded
-SkeletonInputView and source service/CLI transport remain open. Full W17/E3,
-real corpus/performance/runtime, native fault/exhaustion and W18-W26 acceptance
-remain NotEvaluated. Gethe materialization stays deferred.
-
-Native assertion adapters now compose TOC/XML/scripts/state access and core
-Read/Write over the exact direct graph. Separate state/script recognition
-envelopes retain scope/endpoints; existing matcher families and entry points
-remain. One disk-absent native scenario passes with 12 accesses, one script
-assignment, 17 XML results and six reads/six writes, exact support/input and
-core prerequisite checks, genuine substitution refusal and pre-set cancellation.
-Final local workspace gates/build pass, completed 2026-10-10 09:19:03 UTC:
-941 passed, 0 failed, 1 ignored, 112 targets. See
-[native recognizer assertions](PLATFORM_RECOGNIZER_ASSERTIONS.md).
-
-This is native caller composition. Configuration/service/replay/CLI routes and
-catalogs remain unchanged; selection of the split and other recognizer routes
-remain open. Missing direct roles, fingerprints, SkeletonInputView, source
-transport, full W17/E3, real Gethe/Ketho corpus/performance/runtime and native
-fault/exhaustion acceptance remain open. Gethe materialization stays deferred;
-W18-W26 are unchanged.
-
-The selected direct service/replay checkpoint now admits raw inventory and
-four native source stages before the existing recognizer chain. Source /22,
-request12/result19 and native replay/storage v9 are explicit; older recipes and
-exact catalogs remain selected separately. The disk-absent lifecycle verifies
-complete selected partition membership, nonempty scripts/state/core/library,
-actual final topology IDs, exact v9 reopen and frozen v8 refusal with unchanged
-Current/epoch/members. Shared metadata accounting and final cancellation checks
-apply to native publication and artifact paths; two helper regressions pass.
-
-Final workspace policy, fmt, all-target/all-feature check, strict Clippy, tests
-(944 passed, 0 failed, 1 ignored, 112 targets), strict rustdoc and build pass,
-completed 2026-10-10 10:08:49 UTC. See
-[selected direct service](PLATFORM_DIRECT_SERVICE.md). Missing direct roles,
-fingerprints, SkeletonInputView and source transport still precede full W17/E3
-and later context work. Real corpus/performance/runtime and native fault timing
-remain NotEvaluated; Gethe materialization stays deferred. No full package gate
-advances from this scoped checkpoint.
-
-The additive native /2 Inventory span entry selects registry17 before input/raw
-construction and emits one exact captured span and file containment per known
-native handle. Unknown spans retain counted omissions; Contains stays Partial.
-The existing disk-absent lifecycle covers native handle/evidence/catalog closure,
-accepted assertion addresses, wrong-version/foreign-registry refusal and original
-/1 preservation. Source /22, service and replay/storage v9 remain on native /1.
-All workspace gates/build pass, completed 2026-10-10 10:31:01 UTC: 944 passed,
-0 failed, 1 ignored, 112 targets. See [Inventory spans](PLATFORM_INVENTORY_SPANS.md).
-Remaining direct roles, fingerprints, SkeletonInputView/source transport and full
-W17/E3 remain open. Real corpus/performance/runtime and W18-W26 are NotEvaluated;
-Gethe preparation remains deferred until product implementation/build.
-
-The additive native /3 library entry now selects registry18/stage version3 and
-projects retained project/raw membership, selected TOC manifest/variant/load
-occurrence/policy and lexical XML document/occurrence/script/load/parent-reference
-roles. Project identity binds original roots/variants/context together with the
-genuine native package binding. Raw relation endpoints use exact earlier Producer
-receipts; captured support, omissions and source outcomes remain unchanged.
-Contains, Defines and LoadsBefore remain Partial without negative authority.
-
-The same disk-absent lifecycle verifies exact new roles, native catalog/endpoint
-closure, old /1-/2 proposals/source21/replay8 preservation and registry/version
-refusal. Full local workspace gates/build pass, completed 2026-10-10 11:07:55 UTC:
-944 passed, 0 failed, 1 ignored, 112 targets. See
-[native structural roles](PLATFORM_STRUCTURAL_ROLES.md). Load-policy, explicit
-parent-reference and XML load-site/target branches are not exercised by that
-fixture; root substitution and fault/exhaustion cases remain NotEvaluated.
-
-This is a native library checkpoint, without a new configuration/service/CLI/
-replay selection. XML object/region classification, virtual-Lua source mapping,
-fingerprints, SkeletonInputView and source transport still precede full W17/E3.
-Real Gethe/Ketho corpus, performance, runtime, full package acceptance and W18-W26
-remain open; Gethe preparation stays deferred until product implementation/build.
-
-The selected [schema component owner](PLATFORM_XML_SCHEMA_COMPONENTS.md) adds a
-source-bound library prerequisite. Application classification remains open;
-no package or launch gate advances. Canonical Issue #106 tracks the current
-#113-#119 blockers and exact-head verification without another per-slice test census.
+Keep `functional`, `verified`, `accepted`, `closed` and `launch-ready` distinct.
+Use the selected Issue and exact-head Quick; run bounded Tier S for a coherent
+functional slice and Tier A at a ready acceptance milestone. Fresh Gethe/Ketho/
+WoW API parity and named-client runtime checks are separate Tier X obligations.
+Preserve exact source/generation/flavor/selector/revision, path/digest, producer
+and configuration version, coverage, omissions, conflicts and runtime dependency.
+Static structure does not prove runtime execution, loaded state, protected/Secret
+behavior, combat or taint safety.
+
+Inputs remain data: use existing materializers and explicit `auto`/`prompt`/`never`
+update policy; preserve foreign/interrupted checkout state. See
+[`KETHO_RUST_PORT.md`](KETHO_RUST_PORT.md) and [`WASM_BRIDGES.md`](WASM_BRIDGES.md).
+The complete prior command census, measurements, version chronology and checkpoint
+evidence remain in the immutable history link above. Comprehensive retained-reader
+and version inventory remains open in [#112](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112);
+this compaction neither removes readers nor resolves their disposition.

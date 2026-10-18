@@ -1,380 +1,186 @@
 # Ketho annotation service: Rust port
 
-Ketho/vscode-wow-api is the primary implementation donor, not just an oracle.
-The task is to port its useful WoW annotation-service behavior into the existing
-Rust owners, not to invent a parallel extractor or rewrite a language
-server. Gethe remains the current Blizzard data source. EmmyLua/LuaLS consume
-annotation libraries; the framework's semantic analyzer remains behind wow-emmy.
+Ketho/vscode-wow-api is the implementation and output donor. Gethe supplies
+Blizzard source; `wow-reference` admits and normalizes it, `wow-annotations`
+projects inert annotations, and `wow-emmy` owns semantic analysis. Reuse these
+owners. No second extractor, Lua runtime, Node dependency or language server.
+
+This is the current route, checked against code on 2026-10-17. Earlier port
+checkpoints remain in [Git history](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/888fd087f9ede57afed02fae34e4fe99c716a1cb/docs/KETHO_RUST_PORT.md).
+Choose work from [the queue](REFACTOR_QUEUE.md); read the matching row and owner
+contract below.
 
 ## Implementation map
 
-| Donor surface | Rust responsibility | Current scope |
-|---|---|---|
-| `luasrc/annotate/init.lua` | `wow-annotations`: GetType, GetField, GetFunction, GetTable, GetCallbackType, GetSystem | Pure emitter implemented |
-| `wowdoc/init.lua`: GetBaseName/GetArguments/GetFullName | `wow-annotations`: globals, namespaces, ScriptObject receivers and varargs | Implemented with explicitly supplied widget alias; native class/local binding and source-name alias connected |
-| `wowdoc/loader/init.lua` | `wow-reference`: selected TOC corpus, documentation systems, separate ScriptObject output, correction dispatch | Native declarative input, typed normalization and emitter integration implemented; source-guarded Type/Nilable and widget receiver corrections connected |
-| `wowdoc/loader/doc_widgets.lua`, `patches.lua`, `TypeDocumentation.lua`, `luasrc/custom_doc` | reference-owned type/widget mapping and reviewed corrections | Reviewed Type/Nilable/receiver pack application implemented; full type/widget inventory and inheritance remain pending |
-| `luasrc/annotate/literals.lua` and the enum/event/CVar paths invoked by `luasrc/init.lua` | typed enum/event/CVar data and annotation projection | Native event/enum/constant projection connected; external CVar/resource acquisition pending |
-| `luasrc/WikiParser`, `wowdoc` resource acquisition, TypeScript resource export | explicit enrichment and equivalent native query data where required | Port/select by feature parity, not a mandatory extra runtime |
-| VS Code activation and LuaLS configuration | thin host adapter over an editor-independent Rust service | Port behavior, not an extension/Node dependency |
+The reviewed donor is [`d0b5b51fac4c52c493371b9b18e66ce604ea4326`](https://github.com/Ketho/vscode-wow-api/tree/d0b5b51fac4c52c493371b9b18e66ce604ea4326).
+It identifies comparison evidence, not permanent current WoW truth. Resolve the
+donor again for source-sensitive porting; internal refactors use selected pins
+and retained inputs. Preserve [third-party notices](../crates/wow-annotations/THIRD_PARTY_NOTICES.md).
 
-The reviewed donor revision is `d0b5b51fac4c52c493371b9b18e66ce604ea4326`.
-It identifies this port's evidence only. Re-resolve the donor branch before the
-next porting task, and revalidate patch-sensitive mappings against current Gethe.
+| Donor surface | Existing Rust path | Current boundary |
+|---|---|---|
+| `luasrc/annotate/init.lua`, `wowdoc/init.lua` helpers | `wow-annotations/src/ketho.rs`, `ketho/callbacks.rs` | Typed emitter, receiver naming and richer native callback signatures exist. |
+| `wowdoc/loader/init.lua`, `patches.lua`, `doc_widgets.lua` | `wow-reference/src/native{,_model,_corrections}.rs` | Restricted input, normalization, guarded Type/Nilable/receiver and selected single-base correction exist; full resource/correction parity remains open. |
+| `luasrc/annotate/literals.lua` | `wow-annotations/src/literals.rs` | Native event/CVar aliases and enum/constants from explicit typed data; external CVar/resource acquisition remains separate. |
+| `Annotations/Core/Type/{BlizzardType,StringEnum,EmoteToken,UnitToken}.lua` | `wow-reference/src/native_aliases{,/catalog,/open_strings}.rs`; `wow-annotations/src/aliases.rs` | Named/primitive, closed-string and open-string aliases; cross-file resolution and explicit losses exist. |
+| `Annotations/Core/Type/{Structure,Mixin,Namespace,FunctionContainer,GlobalColors}.lua` | Matching `native_aliases/` and `aliases/` modules | Selected structures, namespace bindings, static empty methods and color declarations exist. Full arbitrary mixin/method semantics do not. |
+| `Annotations/Core/Widget/...` class/local binding | `wow-annotations/src/native.rs`; `wow-reference/src/native_corrections/inheritance.rs` | Source-bound class/alias and guarded single-parent projection; no inferred donor-folder hierarchy or runtime method copying. |
+| Generated maps and semantic consumers | [Annotation owner](../crates/wow-annotations/README.md#generated-to-source-navigation), [consumer probes](ANNOTATION_CONSUMER_PROBES.md) | Bidirectional/range/buffer navigation and two synthetic dual-consumer semantic slices exist; whole-corpus/editor certification remains open. |
+| Wiki/resources, VS Code activation/settings | Select a concrete remaining feature through existing owners | Wiki tables are not annotation contracts. No hidden network acquisition, extension installation or diagnostic suppression. |
 
 ## Executable emitter slice
 
-The library consumes an ordered `System` with explicit `Owner`, `Function`,
-`Table` and `Field` data. No raw Lua, JSON interpretation, reference lookup or
-source acquisition occurs in the renderer. It emits inert Lua annotation stubs.
-The current public model is the renderer input slice, not the complete E1
-AnnotationSemanticModel or a replacement for the ReferenceView boundary.
+The emitter consumes ordered typed systems, owners, functions, tables and fields.
+It does not parse Lua/JSON, acquire source or infer Reference authority. Preserve
+bool/cstring/luaIndex aliases, caller-supplied enum membership, InnerType arrays,
+nilability and present defaults (including false/zero), positional arguments and
+multiple returns, terminal StrideIndex, namespace/colon receivers, documentation
+ordering and analysis-only meta output.
 
-Preserved donor behavior:
+The original `Table::Callback` remains argument-only donor compatibility;
+`CallbackSignature` supports ordered returns, arrays and terminal argument packs.
+Both share bounded lowering. Preserve tuple/union/nullable precedence;
+unsupported variadic returns/defaults reject explicitly. Read
+[callback cases](../crates/wow-annotations/tests/callback_signatures.rs) and
+[type lowering](../crates/wow-annotations/e1/TYPE_LOWERING.md) for that change.
 
-- bool/cstring/luaIndex type aliases; explicit enum membership becomes Enum.Name;
-- InnerType arrays, Nilable and present default values (including false and zero);
-- positional parameters and multiple returns; terminal StrideIndex varargs;
-- separate namespace functions and colon-receiver ScriptObject methods;
-- structure fields and argument-only FunctionContainer callback aliases;
-- documentation ordering, wiki links, and the analysis-only meta header.
-
-Two committed output vectors were compared with the actual reviewed Ketho emitter
-(blob `1f0b902a809472c30b28a0e220b70235b29235b8`) in an isolated local Lua probe:
-a namespace system and a widget system. Only the reviewed emitter and a donor-derived pure helper harness
-ran, with synthetic inputs; the network loader and generated stubs were not run.
-Rust tests compare these bytes without requiring an external interpreter.
-This is scoped donor parity, not full Ketho parity or an EmmyLua/LuaLS load test.
-
-The renderer deliberately rejects duplicate names, nonterminal varargs, unsafe
-identifiers, control-bearing/directive-like documentation, unsupported type
-expressions rather than copying malformed or lossy output. The original
-`Table::Callback` donor profile remains argument-only and rejects callback arrays.
-The native adapter selects `Table::CallbackSignature` for ordered returns,
-array arguments/returns and terminal argument packs. Both paths share bounded
-type lowering; return-tuple parentheses retain union, array and nullable
-precedence. Declaration maps and original fields remain source-bound. Variadic
-return packs and variadic defaults still reject explicitly, without discarding
-valid neighboring callbacks. See `crates/wow-annotations/tests/callback_signatures.rs`.
-This extension does not claim donor byte parity for the additional shapes or
-semantic analyzer certification from syntax checks. Restriction metadata remains
-an explicit sidecar; the full E1 loss contract is still required.
-Input counts/text lengths and total emitted bytes are bounded. Errors return no
-artifact. Widget/enum inventories are caller-supplied, never global static truth.
+Invalid identifiers, duplicate names, unsafe directives and unrepresentable types
+must not silently widen to `any`. Pure-renderer failure yields no artifact; native
+composition records per-declaration failure and preserves independent valid data.
+The original emitter/literal vectors have [golden provenance](../crates/wow-annotations/tests/golden/README.md).
+They prove scoped donor output, not full E1 acceptance.
 
 ## Migration order
 
-1. Extend the Rust reference input path using the donor loader/correction model;
-   keep system/namespace/ScriptObject ownership and exact source provenance.
-2. Connect that typed reference input to the Rust emitter with source maps and
-   explicit projection loss. Port literals and the remaining useful Ketho output.
-3. Validate the resulting libraries in both current compatible EmmyLua and LuaLS.
-4. The interpreter-based source producers and tests have been removed by owner
-   direction. Maintain the native Ketho path and Rust-only maintenance/CI. Legacy
-   v1 wire readers remain for existing artifacts; full native XML/TOC production
-   remains a documented gap, not a hidden fallback.
-5. Expose the native service through the planned CLI and agent/editor adapters.
+1. Trace the current native owner and real consumer before adding a port.
+2. Replace duplicated parsing, lowering or representation in that path; remove
+   the old implementation in the same slice.
+3. For a missing source/type feature, reuse the resource parser, normalization and
+   emitter; retain exact maps, losses and authority boundaries.
+4. Use one existing reproduction after the change works. Current-source and
+   dual-consumer campaigns belong to their selected acceptance gate.
 
-Do not replace the pipeline with another custom Lua parser. Use the selected
-upstream Rust Lua frontend behind its owner adapter. Loading arbitrary source via
-Lua `loadfile` is not carried over from the donor. The end-user product must not
-require an external interpreter, Node, a VS Code installation, or a Lua runtime to generate its
-annotations. No full service, complete E1-C, or public release is claimed yet.
+Legacy wire readers remain until their consumer/migration decision is recorded.
+Retired interpreter producers are not a fallback. Native XML/TOC and remaining
+E1 work follow their owner contracts, not a new parser.
 
 ## Literal-generator port
 
-`wow-annotations::literals` ports Ketho's `GetEventLiterals`, `GetCVarLiterals`
-and `GetEnumTable` output from caller-supplied typed data. Event payload display
-text is supplied by the reference owner; this emitter does not infer payload
-signatures. The donor's open `FrameEvent string` and `CVar string` aliases are
-preserved, not turned into exhaustive runtime whitelists. Enums and Constants
-stay separate and fields preserve boolean, integer, finite-number or string
-identity. Wide numeric-looking enum strings are not parsed or reformatted.
+`GetEventLiterals`, `GetCVarLiterals` and `GetEnumTable` consume supplied data.
+FrameEvent/CVar stay open string aliases. Enum/Constant identity, booleans,
+integers, finite numbers, strings and raw numeric lexemes remain distinct.
+Format/order are explicit policies, never name/build heuristics.
 
-`IntegerFormat` and `MemberOrder` make presentation choices explicit. The Rust
-renderer contains no special case for any Blizzard enum/constant name, no static
-inventory, source repository, flavor, build or Interface value. Data acquisition
-(including donor resource sources beyond Gethe) remains outside this library and
-is not silently enabled by porting the renderer.
-
-Three additional golden files were produced by the exact reviewed donor literal
-module, blob `1c79f0e9c92a9836218938a34244540db2a999e6`, with isolated synthetic
-inputs corresponding to `tests/literals.rs`. Network/resource loading was
-replaced by an in-memory test harness; only reviewed pure rendering ran. Rust
-tests now compare those committed event, CVar and enum/constant bytes offline.
-These are scoped donor-output probes, not live-source or language-server probes.
-See `crates/wow-annotations/tests/golden/README.md` for identities and differences.
-
-Explicit differences from donor rendering:
-
-- equal boolean values use a stable member-name tie-breaker;
-- every string literal is escaped; non-ASCII/control UTF-8 bytes use Lua 5.1
-  decimal escapes, preventing strings from creating physical annotation lines;
-- unsafe event payload comments and duplicate names reject the whole result;
-- decimal/hex and constant-group ordering are caller policies, not known-name
-  heuristics; a negative or boolean member never changes later numeric formatting;
-- integral scalar inputs outside the conservative Lua 5.1 exact-integer interval
-  reject instead of rounding or being silently converted to string;
-- finite fractional constants are supported; nonfinite values and unprobed
-  fractional enum declarations reject explicitly;
-- input and output size bounds apply before successful artifact return.
-
-The pure emitter alone does not provide the full E1 artifact contract. The native
-connection below now adds source links and raw/metadata sidecars; full E1 fine-grained
-maps and semantic consumer compatibility remain incomplete.
-Unsupported input fails with no output; the future reference adapter must turn
-that failure into its explicit projection status, not drop a field or use `any`.
-
+Strings are escaped; equal booleans use stable name ordering. Duplicate members
+and unsafe payload text reject; absence never becomes a runtime whitelist.
+Integral values outside ±(2^53−1), nonfinite values and unsupported fractional
+Enums reject; finite fractional Constants are allowed. Do not parse
+numeric-looking strings or invent missing event payload signatures.
 
 ## Native source-to-library path
 
-The restricted evaluator and typed loader model are implemented in
-`wow-reference/src/native.rs` and `native_model.rs`; the in-memory projection is
-`wow-annotations/src/native.rs`. This follows the documented E1-B/E1-C owner
-split: the external EmmyLua Rust parser is used by the reference owner, not a
-second lexer/parser or a Lua runtime. The separate semantic analyzer adapter is
-not claimed implemented by using its upstream syntax frontend.
-
-```text
-exact selected Git revision + documentation TOC
--> EmmyLua Lua 5.1 syntax + restricted declarative evaluator
--> raw ordered fields, literals, symbolic references and UTF-8 byte spans
--> typed systems/owners, callables, tables classified by Type, events
--> Ketho Rust callable/structure/callback/literal emitters
--> annotation files, source mappings and raw/metadata/error report
-```
-
-Run the native development driver (Git and the compiled Rust executable only):
-
-```sh
-cargo run -p wow-annotations --example native_library -- \
-  /path/to/wow-ui-source HEAD \
-  Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc \
-  Mainline /path/to/new-output
-```
-
-The output directory must not exist. Exit 0 means selected declarations projected
-with explicit sidecars, 3 means partial input/projection with a report, and 2 is
-an operation failure. Neither 0 nor 3 certifies reference completeness or consumer
-compatibility. `source-report.json` is written last; failed filesystem writes can
-leave an incomplete directory and never constitute successful publication.
-This development driver is not the service-owned public `wow` CLI or the full
-persistent ReferenceView implementation.
-
-The caller selects the flavor, ref, TOC and environment. The driver resolves the
-ref once, reads Git blobs from that revision rather than dirty files, and records
-`not_network_verified` freshness. Materialize a partial clone's missing objects
-explicitly before using it. It never auto-fetches, executes Lua, follows XML load
-entries as Lua, mutates a checkout, or enables additional resource providers.
-
-Functions preserve namespace/ScriptObject ownership; enum/constant kinds are
-selected from the source Type, including entries inside Tables. Duplicate exact
-callable/type/event identities are excluded as conflicts, never first/last-wins.
-One corpus-wide literal file per lane avoids redefining FrameEvent or enum roots
-for every source document. Enum membership is read from this input, not compiled
-into a list. Constants are read from Blizzard's `Values` collection, not enum
-`Fields`. Their descriptor `Type` distinguishes an enum member label from an
-ordinary string. The reference-owned scalar catalog resolves unique transitive
-Enum/Constants references and additive integer expressions from this same selected
-corpus, independently of document order. Unknown metadata, raw numeric lexemes,
-explicit nil, unresolved names and original expressions remain in raw sidecars.
-Unrendered source fields have
-individual metadata links; unsupported constructs have explicit error records.
-The evaluator profile is `ketho-apidoc-declarative/2`; the native library report
-is `wow-native-annotation-library/3`. `scalar_resolutions` links every requested
-constant/default resolution to its source value and, on success, every transitive
-value used. Conflicts, cycles, absent references, cancellation and limits have
-separate error classes. Bare unknown names in data are captured, never looked up
-in a host environment or substituted with nil/zero. Invalid registration roots
-and executable expressions still fail admission.
-
-Only `+` and `-` are admitted beyond the previous declarative subset, using the
-existing Emmy AST. Arithmetic requires exact integer operands and intermediate
-results within ±(2^53−1); string coercion, fractional arithmetic and signed-zero
-arithmetic are rejected rather than rounded. Direct scalar number lexemes remain
-unchanged. Raw data, including the expression, is not overwritten by resolution.
-
-A failed constant is reported at its own value span and does not erase other
-members. A failed callable/structure is excluded individually before final mapped
-rendering, preserving valid neighbors. The report stays partial; a missing value
-is not a claim that the API or constant does not exist. Numeric results are never
-borrowed from another flavor, an installed extension or a runtime global cache.
-Resolution depth, steps, declaration count and accumulated evidence are bounded.
-No negative/absence or runtime-safety authority is issued by this path.
-
-Declaration maps bind final generated byte ranges and file hashes to exact source
-ranges/hashes. Literal maps are explicitly whole-file mappings, not fine-grained
-member maps. The Ketho nilability/default convention is preserved while raw fields
-remain distinguishable. Numeric defaults retain the source lexeme in comments;
-unsupported literal numeric forms are reported rather than rounded.
-
-Deliberately unsupported in this bounded evaluator/projection: general Lua code,
-mutation/control flow/helper execution, computed keys, numeric/hex/Unicode string
-escapes requiring byte-string semantics, CR-bearing long-string normalization,
-variadic callback return packs, and unrepresentable numbers/types. Restriction metadata remains advisory sidecar data, not invented
-runtime wrapper types. Reviewed widget receiver aliases can be supplied through the correction pack. Named-type closure and widget inheritance still need
-the Ketho type-resource port. No generated body is executable addon logic.
-
-Rust tests exercise the actual source-to-renderer connection, source identity,
-raw metadata, enum ownership, duplicate conflicts, UTF-8 ranges, bounded input,
-malicious source rejection, cancellation, deterministic ordering, local Git/TOC
-reading and no-clobber output. Parsing a generated fixture with EmmyLua is a
-syntax check only. Real EmmyLua/LuaLS semantic consumer probes remain required.
-
-The reconciled native adapter records collision-checked reserved return labels in
-`name_projections` (source path/hash/span, original, rendered, rule). Original
-labels and order remain in raw source; executable parameter identifiers remain
-strict. Duplicate labels are rejected before renaming. These records are emitted
-only for admitted callables, never for declarations rejected by the renderer.
-The report is version 3; it preserves the version-2 `scalar_resolutions` field.
-
-Control characters in source prose become visible escapes on one inert comment
-line, with a `Documentation:escaped_control_characters` metadata link. Both input
-and expanded text are bounded. Annotation directives on any source line remain
-rejected; this is an explicit safety/consumer projection, not a Blizzard fact.
-
-Enum/constant groups are validated independently before aggregation. Duplicate
-members produce per-member conflict issues and do not erase valid siblings.
-Malformed groups cannot abort unrelated valid groups. Enumeration `Values` and
-mixed `Fields`/`Values` forms fail normalization rather than producing empty enums;
-Constants still require the existing `Values` shape. These are regressions in
-`wow-annotations/tests/native.rs` and `wow-reference/tests/native.rs`.
-
-Next: port the remaining type resources, widget inheritance and consumer-specific
-type losses, then run real dual-consumer probes. Runtime-only global defaults and
-unsupported numeric/type expressions remain explicit unresolved cases.
-The old source producer scripts are retired. Native source/manifest and skill
-checks are used in CI. Retained v1 JSON compatibility is covered by Rust CLI
-fixtures, not a subprocess bridge to an interpreter. See the implementation
-ledger for capabilities still awaiting native replacement.
-
-## Reviewed correction connection
-
-The native driver accepts an explicit `--corrections` data pack. The reference
-owner ports Ketho's name-addressed Type/Nilable patching and widget receiver
-mapping with exact source/value guards, review evidence and collision detection.
-No automatic source-digest refresh or compiled widget inventory is introduced.
-The optional v4 report retains the full canonical set and all applied/expired/
-rejected/conflict/not-applicable outcomes; unconfigured generation stays v3.
-See [native correction usage and limits](KETHO_NATIVE_CORRECTIONS.md).
-
-## ScriptObject class binding
-
-The native source-to-library path now uses the class/local binding pattern from
-Ketho's `Annotations/Core/Widget/Frame/Frame.lua` (reviewed donor blob
-`330d65b107817f0bd0914692e8d9f461285240fc`). It combines that declaration with the
-existing generated methods in one file, instead of depending on an undeclared
-receiver. The input is the selected ScriptObject fact, not a filename heuristic:
-
-```lua
----@class ExactSourceObjectAPI
-local ExactSourceObjectAPI = {}
-
-function ExactSourceObjectAPI:Show() end
-```
-
-With an explicit guarded owner rename, the class and local binding use the
-corrected name and a type alias preserves the exact original system name. Raw
-member type tokens are not rewritten, allowing exact original-name references
-to resolve through that alias. This does not infer that `SimpleX`, `X` and
-`SimpleXAPI` are equivalent. No automatic case aliases are copied from Ketho.
-
-The combined profile is `Renderer::render_library_mapped`; the standalone
-`render_mapped`/`render` profile remains byte-compatible with its original
-committed donor vectors. Both use the same renderer implementation. The native
-report's wire shape stays v3/v4; changed output is identified by final file hashes.
-Receiver ranges cover the class/local-binding/optional-alias block and map to
-the exact source registration; methods retain separate source ranges. Review
-records remain in the existing correction report.
-
-Before rendering, original and corrected type identities are checked across the
-selected corpus. Duplicate owners with even disjoint methods, alias collisions,
-primitive/emitter-alias names, structures/callbacks, namespaces/globals, enum type
-tokens and active literal-root collisions cannot become merged classes. Their
-methods are omitted with `script_object_name_conflict`; independent table/event
-lanes survive. A valid empty source ScriptObject still declares its type. Invalid
-individual methods do not invent members or erase the class declaration.
-
-No inheritance is inferred from donor folder structure, class names, overlapping
-methods or unimplemented source metadata. The reviewed donor's base-class list
-and handwritten methods are not copied as current platform truth. General
-Remaining custom type resources, explicit proven inheritance, full type closure
-and semantic EmmyLua/LuaLS probes remain unimplemented. Receiver regressions cover
-exact bytes, original-name aliases, source ranges, deterministic order, bounds,
-conflicts and real native Git-driver output; parser acceptance is syntax only.
-
-## Alias resource connection
-
-The executable type slice consumes an explicitly selected annotation resource,
-not the wiki-oriented `wowdoc/loader/TypeDocumentation.lua` table. The reviewed
-Ketho resource is `Annotations/Core/Type/BlizzardType.lua` (blob
-`be1d04ece7d93840e485d6ab57f6e77f0beef4ba` at the donor revision recorded above).
-For example, the wiki table says `LuaValueVariant: any`, while the annotation
-resource says `LuaValueVariant: table`. Wiki replacements and descriptions are
-not annotation contracts.
-
-`wow-reference::native_aliases` uses Emmy AST nodes to retain names, primitive/
-named union terms and original byte ranges without executing Lua.
-`wow-annotations::native::project_with_alias_catalog` projects this resource as an
-**external annotation overlay**, not source-confirmed Blizzard facts or a new
-ReferenceView authority. No donor inventory is embedded in the binary. Ordinary
-generation and existing correction guards are unchanged.
+The Git driver reads one resolved commit and TOC, then uses Emmy Lua 5.1 syntax,
+Reference's restricted evaluator/typed facts, and the existing emitter. It keeps
+raw fields, expressions, unknowns, revisions, hashes and UTF-8 spans. No source,
+loader hook or generated stub executes.
 
 ```sh
 cargo run --locked -p wow-annotations --example native_library -- \
-  /path/to/wow-ui-source live \
+  /path/to/wow-ui-source <resolved-ref> \
   Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc \
-  Mainline /new/output \
-  --alias-catalog /path/to/vscode-wow-api HEAD Annotations/Core/Type/BlizzardType.lua
+  Mainline /path/to/new-output \
+  --corrections /path/to/reviewed-pack.json \
+  --alias-catalog /path/to/ketho <resolved-donor-ref> Annotations/Core/Type/BlizzardType.lua
 ```
 
-Both refs resolve independently. The driver reads committed regular Git blobs,
-not dirty files, symlinks or submodules; it never fetches or mutates checkouts.
-Select a reviewed resource appropriate to the chosen flavor. Its exact revision
-proves identity, not freshness or semantic validity. Only provide redistributable
-resources. Generated derivative Ketho aliases retain the existing MIT notice;
-this does not license unrelated inputs.
+The last two options are independent and optional; `--alias-catalog` is repeatable.
+Refs resolve once; only committed regular blobs are read. No auto-fetch, dirty
+file/symlink/submodule fallback or current-build inference. Materialize missing
+Git objects explicitly. Output must be new. Exit 0 means projected with sidecars,
+3 partial, 2 failure; none certifies consumer compatibility. `source-report.json`
+is written last; an incomplete directory is not publication. This development
+driver is separate from the Service-owned public CLI/builder.
 
-This first profile supports primitive/named unions, inert comments and anonymous
-meta headers. Descriptions remain raw, not rendered. Arrays, generics, function
-signatures and other unsupported alias forms have explicit per-alias outcomes.
-Lua statements, diagnostic suppression, namespace/module changes, non-alias tags
-and multiline unions reject the resource. Input bytes, line complexity, alias
-count and term count are bounded before/after upstream parsing as appropriate.
-Each lexer-delimited short comment is parsed independently. A syntax error in a
-named alias excludes that entire declaration as `alias_syntax_error`; it never
-repairs its type or consumes neighboring declarations. Unowned syntax errors
-reject the resource. This handles the donor's ambiguous `[0.0 - 1.0]` suffix
-without treating the descriptive interval as a valid Emmy type.
+Constants use source `Values`, enums their declared `Fields`; duplicate identities
+remain conflicts. Scalar resolution follows selected-corpus references and
+bounded exact integer `+`/`-`, preserving transitive evidence. Cycles, absence,
+unresolved names, cancellation and limits remain distinct; no host globals,
+string coercion or nil/zero substitution. General Lua, computed keys, unsupported
+byte-string escapes/long-string normalization and arbitrary arithmetic remain
+outside this evaluator. One failed member does not erase independent declarations.
 
-Aliases cannot override source identities, including declarations excluded for
-normalization/projection errors. Dependencies must resolve to builtins, actually
-emitted native types, or admitted aliases; merely mentioned types and namespaces
-are not definitions. Iterative graph resolution never expands alias chains into
-signatures. Duplicates, cycles and missing dependencies exclude affected aliases
-while preserving independent entries and marking the result partial. There is
-no implicit `any` fallback.
+Final declaration and ordered-member maps bind generated/source ranges and hashes;
+literal maps remain file-level. Original return names, collision-safe projections,
+raw restrictions and escaped-control evidence survive. Source prose directives
+reject. Full E1 map/type closure and runtime authority are not implied.
 
-Catalog-enabled reports use `wow-native-annotation-library/5`, retaining optional
-corrections, raw catalog text/hash/revision, one outcome per alias and mappings
-with `source.scope=annotation_alias_catalog`. Source universes stay separate even
-when relative paths coincide. Without a catalog, v3/v4 serialization is unchanged.
-`cargo xtask verify-library` validates identities, outcomes, final declarations
-and blockers, not language-server semantics. The existing source CI checks plain
-Gethe generation and a separate explicit current Ketho catalog run against the
-same resolved Gethe revision.
+## Reviewed correction connection
 
-This closes primitive/named-union catalog ingestion and projection, not all Ketho
-custom resources. Widget mappings/inheritance, string-enum resources, mixin
-classes, timer/custom signatures and real EmmyLua/LuaLS semantic probes remain.
+[Correction usage and schema](KETHO_NATIVE_CORRECTIONS.md) own Type/Nilable,
+receiver and selected `widget_base` behavior. Guards include exact source/raw
+value and original before-state; mismatches never auto-refresh. Raw observations
+stay unchanged; applied/expired/rejected/conflict/not-applicable outcomes survive.
+Review strings record supplied evidence, not authenticated review authority.
+
+## ScriptObject class binding
+
+Native projection combines a source class, local receiver and methods. A guarded
+rename adds an alias for the original type name. Original/corrected names are
+collision-checked across the corpus; invalid receivers do not erase independent
+tables/events. Empty valid objects still declare their type.
+
+`render_library_mapped` and standalone `render_mapped` share the emitter. The
+standalone donor vectors retain their bytes. Explicit single-parent corrections
+exist; complete widget inventory and runtime inheritance do not. No shortening
+by convention, inferred aliases, copied transitive methods or donor-folder
+identity. See [receiver](../crates/wow-annotations/tests/receivers.rs) and
+[inheritance cases](../crates/wow-annotations/tests/inheritance.rs).
+
+## Alias resource connection
+
+Use `ingest_alias_catalog` → `project_with_alias_catalogs` through the shared
+Git driver. `ingest_aliases` is the retained narrower single-comment reader.
+External catalogs remain annotation overlays with independent scope/revision;
+they cannot overwrite Blizzard facts or borrow authority from rejected types.
+
+Current forms include named/primitive unions, closed literal unions, open strings
+with hints, selected structure fields, exact empty `C_*` bindings, static
+FunctionContainer declarations and `CreateColor` declarations without execution.
+Unsupported declarations retain outcomes. Contiguous comments may form catalog
+unions; malformed syntax cannot consume independent siblings. Bounded dependency
+resolution retains duplicates/cycles/missing types and never expands alias chains
+into copied signatures or defaults to `any`. The wiki `TypeDocumentation.lua`
+replacement table is a different input from annotation resources.
+
+All resources share one exact donor revision and distinct paths; order does not
+change output. Bounds are 32 files, 2 MiB aggregate, 4,096 declarations and 256 KiB
+per resource, plus per-shape/output limits. Derivatives keep the MIT notice.
+Read [combined catalog scope](../crates/wow-annotations/KETHO_TYPE_CATALOG.md),
+[inventory drift](../crates/wow-annotations/KETHO_TYPE_INVENTORY.md) and
+[GlobalColors](../crates/wow-annotations/GLOBAL_COLORS.md) for those tasks.
+The source workflow already composes the reviewed type directory; do not recreate
+it from older checkpoints.
+
+Native reports stay `/3` plain, `/4` corrections, `/5` catalogs, `/6` selected
+literal bridge. Optional features already compose through one
+`project_with_alias_catalogs_and_literal_bridge`; do not add a pipeline or report
+variant for every combination. Resource/projection schemas and verifier checks
+need an explicit reader decision before consolidation (#112).
 
 ## Selected Wasm literals
 
-The same native source/correction/alias pipeline can now invoke a retained literal
-Wasm module through `project_with_literal_bridge`. The shared development driver
-is split into acquisition/composition/tests and reused by the isolated host's
-`source_library` example; no VM enters the stable owner dependency graph.
-See [commands and failure/identity contract](WASM_BRIDGES.md#source-library-composition).
-This connects the existing literal port, not a new algorithm or a claim of
-consumer certification. Version-6 reports retain all existing source evidence
-and add module/call/final-file bindings. No module failure falls back to native.
+Native literals are the default. The optional retained `LiteralBridge` shares
+the normalization/correction/catalog path and adds module/call/final-file
+bindings. Failure does not fall back. No VM enters the stable owner dependency
+graph. [Wasm commands and contract](WASM_BRIDGES.md#source-library-composition)
+own this lane; its existence does not imply per-annotation VM cost.
+
+## Remaining completion work
+
+Full E1 requires remaining source/type/custom-signature closure, maps/losses,
+complete ReferenceView integration, current-source parity and full consumer
+qualification. Existing [dual-consumer probes](ANNOTATION_CONSUMER_PROBES.md)
+exercise synthetic signatures and closed string enums with negative/mutation
+controls. They do not certify the whole corpus, addons, runtime or editors.
+Existing bidirectional navigation is not complete LSP integration. Keep these
+boundaries in [the completion matrix](PROJECT_COMPLETION_MATRIX.md).
