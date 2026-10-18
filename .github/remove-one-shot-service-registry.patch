@@ -1,0 +1,371 @@
+diff --git a/crates/wow-service/src/local/response.rs b/crates/wow-service/src/local/response.rs
+index b7f9e84..01207e5 100644
+--- a/crates/wow-service/src/local/response.rs
++++ b/crates/wow-service/src/local/response.rs
+@@ -245,10 +245,10 @@ fn run(
+         match command {
+             LocalCommand::Status { request, .. } => service
+                 .status(request, stop)
+-                .map(|result| LocalOperationResult::Status(Box::new((*result).clone()))),
++                .map(|result| LocalOperationResult::Status(Box::new(result))),
+             LocalCommand::Check { request, .. } => service
+                 .check(request, stop)
+-                .map(|result| LocalOperationResult::Check(Box::new((*result).clone()))),
++                .map(|result| LocalOperationResult::Check(Box::new(result))),
+         }
+     }
+     match run(input, command, stop) {
+diff --git a/crates/wow-service/src/operation.rs b/crates/wow-service/src/operation.rs
+index 384efff..6a2d849 100644
+--- a/crates/wow-service/src/operation.rs
++++ b/crates/wow-service/src/operation.rs
+@@ -5,7 +5,7 @@
+ 
+ use crate::identity::validate_identifier;
+ use crate::search::SearchBuildQueryResult;
+-use crate::{CheckResult, ServiceError, ServiceErrorCode, ServiceResult, StatusResult};
++use crate::{ServiceError, ServiceErrorCode, ServiceResult};
+ 
+ #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+ #[serde(transparent)]
+@@ -27,15 +27,11 @@ pub fn as_str(&self) -> &str {
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+ #[serde(rename_all = "snake_case")]
+ pub(crate) enum OperationKind {
+-    Status,
+-    Check,
+     Search,
+ }
+ 
+ #[derive(Debug, Clone)]
+ pub(crate) enum CompletedResult {
+-    Status(Arc<StatusResult>),
+-    Check(Arc<CheckResult>),
+     Search(Arc<SearchBuildQueryResult>),
+ }
+ 
+@@ -48,7 +44,6 @@ enum RegistryState {
+ #[derive(Debug, Clone)]
+ struct RegistryEntry {
+     request_digest: Box<str>,
+-    kind: OperationKind,
+     state: RegistryState,
+ }
+ 
+@@ -63,7 +58,6 @@ pub(crate) enum RegistryDecision {
+ pub struct OperationRegistryRecord {
+     operation_id: Box<str>,
+     request_digest: Box<str>,
+-    kind: OperationKind,
+     state: &'static str,
+     result_id: Option<Box<str>>,
+ }
+@@ -94,9 +88,10 @@ pub fn begin(
+         request_digest: &str,
+         kind: OperationKind,
+     ) -> ServiceResult<RegistryDecision> {
++        debug_assert_eq!(kind, OperationKind::Search);
+         let mut entries = self.lock()?;
+         if let Some(entry) = entries.get(operation_id.as_str()) {
+-            if entry.request_digest.as_ref() != request_digest || entry.kind != kind {
++            if entry.request_digest.as_ref() != request_digest {
+                 return Err(ServiceError::for_operation(
+                     ServiceErrorCode::OperationConflict,
+                     "operation ID is already bound to a different canonical request",
+@@ -116,7 +111,6 @@ pub fn begin(
+             operation_id.as_str().into(),
+             RegistryEntry {
+                 request_digest: request_digest.into(),
+-                kind,
+                 state: RegistryState::InProgress,
+             },
+         );
+@@ -130,6 +124,7 @@ pub fn complete(
+         kind: OperationKind,
+         result: CompletedResult,
+     ) -> ServiceResult<()> {
++        debug_assert_eq!(kind, OperationKind::Search);
+         let mut entries = self.lock()?;
+         let entry = entries.get_mut(operation_id.as_str()).ok_or_else(|| {
+             ServiceError::for_operation(
+@@ -139,7 +134,6 @@ pub fn complete(
+             )
+         })?;
+         if entry.request_digest.as_ref() != request_digest
+-            || entry.kind != kind
+             || !matches!(entry.state, RegistryState::InProgress)
+         {
+             return Err(ServiceError::for_operation(
+@@ -153,12 +147,12 @@ pub fn complete(
+     }
+ 
+     pub fn abandon(&self, operation_id: &OperationId, request_digest: &str, kind: OperationKind) {
++        debug_assert_eq!(kind, OperationKind::Search);
+         let Ok(mut entries) = self.entries.lock() else {
+             return;
+         };
+         if entries.get(operation_id.as_str()).is_some_and(|entry| {
+             entry.request_digest.as_ref() == request_digest
+-                && entry.kind == kind
+                 && matches!(entry.state, RegistryState::InProgress)
+         }) {
+             entries.remove(operation_id.as_str());
+@@ -172,12 +166,6 @@ pub fn snapshot(&self) -> ServiceResult<OperationRegistrySnapshot> {
+             .map(|(operation_id, entry)| {
+                 let (state, result_id) = match &entry.state {
+                     RegistryState::InProgress => ("in_progress", None),
+-                    RegistryState::Completed(CompletedResult::Status(result)) => {
+-                        ("completed", Some(result.result_id().into()))
+-                    }
+-                    RegistryState::Completed(CompletedResult::Check(result)) => {
+-                        ("completed", Some(result.result_id().into()))
+-                    }
+                     RegistryState::Completed(CompletedResult::Search(result)) => {
+                         ("completed", Some(result.result_id().into()))
+                     }
+@@ -185,14 +173,13 @@ pub fn snapshot(&self) -> ServiceResult<OperationRegistrySnapshot> {
+                 OperationRegistryRecord {
+                     operation_id: operation_id.clone(),
+                     request_digest: entry.request_digest.clone(),
+-                    kind: entry.kind,
+                     state,
+                     result_id,
+                 }
+             })
+             .collect();
+         Ok(OperationRegistrySnapshot {
+-            schema: "wow-service/operation-registry/1",
++            schema: "wow-service/search-operation-registry/1",
+             records,
+         })
+     }
+diff --git a/crates/wow-service/src/service.rs b/crates/wow-service/src/service.rs
+index eb867ce..9bbc37a 100644
+--- a/crates/wow-service/src/service.rs
++++ b/crates/wow-service/src/service.rs
+@@ -7,11 +7,10 @@
+ use crate::backend::ServiceBackendStatus;
+ use crate::configuration::{RESULT_SCHEMA, SERVICE_SCHEMA, SERVICE_VERSION};
+ use crate::identity::canonical_digest;
+-use crate::operation::{CompletedResult, OperationKind, OperationRegistry, RegistryDecision};
+ use crate::presentation;
+ use crate::{
+     CapabilityState, CheckContext, CheckRequest, CheckScope, ComponentHealth, ComponentSnapshot,
+-    ContextIdentity, DeferredOperation, GenerationSelector, OperationId, OperationRegistrySnapshot,
++    ContextIdentity, DeferredOperation, GenerationSelector, OperationId,
+     PresentationGraph, RawFinding, RuleEvaluation, RuleEvaluationState, ServiceBackend,
+     ServiceConfiguration, ServiceError, ServiceErrorCode, ServiceResult, ServiceSemanticStatus,
+     StatusRequest,
+@@ -141,7 +140,6 @@ pub enum ServiceResultEnvelope {
+ pub struct Service<B: ServiceBackend> {
+     configuration: Arc<ServiceConfiguration>,
+     backend: Arc<B>,
+-    operations: OperationRegistry,
+ }
+ 
+ impl<B: ServiceBackend> Service<B> {
+@@ -149,7 +147,6 @@ pub fn new(configuration: ServiceConfiguration, backend: B) -> ServiceResult<Sel
+         let service = Self {
+             configuration: Arc::new(configuration),
+             backend: Arc::new(backend),
+-            operations: OperationRegistry::default(),
+         };
+         let status = service.backend.status()?;
+         service.validate_backend_status(&status)?;
+@@ -165,109 +162,25 @@ pub fn status(
+         &self,
+         request: &StatusRequest,
+         cancelled: &AtomicBool,
+-    ) -> ServiceResult<Arc<StatusResult>> {
++    ) -> ServiceResult<StatusResult> {
+         let request_digest = canonical_digest(
+             "service-request:sha256:",
+             &(self.configuration.configuration_id(), request),
+         )?;
+-        match self.operations.begin(
+-            request.operation_id(),
+-            &request_digest,
+-            OperationKind::Status,
+-        )? {
+-            RegistryDecision::Replay(CompletedResult::Status(result)) => return Ok(result),
+-            RegistryDecision::Replay(CompletedResult::Check(_)) => {
+-                return Err(ServiceError::for_operation(
+-                    ServiceErrorCode::InternalContractViolation,
+-                    "status operation replay resolved to a check result",
+-                    request.operation_id().as_str(),
+-                ));
+-            }
+-            RegistryDecision::Replay(CompletedResult::Search(_)) => {
+-                return Err(ServiceError::for_operation(
+-                    ServiceErrorCode::InternalContractViolation,
+-                    "status operation replay resolved to a search result",
+-                    request.operation_id().as_str(),
+-                ));
+-            }
+-            RegistryDecision::Started => {}
+-        }
+-        let result = self.build_status(request, &request_digest, cancelled);
+-        match result {
+-            Ok(result) => {
+-                let result = Arc::new(result);
+-                self.operations.complete(
+-                    request.operation_id(),
+-                    &request_digest,
+-                    OperationKind::Status,
+-                    CompletedResult::Status(result.clone()),
+-                )?;
+-                Ok(result)
+-            }
+-            Err(error) => {
+-                self.operations.abandon(
+-                    request.operation_id(),
+-                    &request_digest,
+-                    OperationKind::Status,
+-                );
+-                Err(error)
+-            }
+-        }
++        self.build_status(request, &request_digest, cancelled)
+     }
+ 
+     pub fn check(
+         &self,
+         request: &CheckRequest,
+         cancelled: &AtomicBool,
+-    ) -> ServiceResult<Arc<CheckResult>> {
++    ) -> ServiceResult<CheckResult> {
+         self.validate_scope(request.scope())?;
+         let request_digest = canonical_digest(
+             "service-request:sha256:",
+             &(self.configuration.configuration_id(), request),
+         )?;
+-        match self.operations.begin(
+-            request.operation_id(),
+-            &request_digest,
+-            OperationKind::Check,
+-        )? {
+-            RegistryDecision::Replay(CompletedResult::Check(result)) => return Ok(result),
+-            RegistryDecision::Replay(CompletedResult::Status(_)) => {
+-                return Err(ServiceError::for_operation(
+-                    ServiceErrorCode::InternalContractViolation,
+-                    "check operation replay resolved to a status result",
+-                    request.operation_id().as_str(),
+-                ));
+-            }
+-            RegistryDecision::Replay(CompletedResult::Search(_)) => {
+-                return Err(ServiceError::for_operation(
+-                    ServiceErrorCode::InternalContractViolation,
+-                    "check operation replay resolved to a search result",
+-                    request.operation_id().as_str(),
+-                ));
+-            }
+-            RegistryDecision::Started => {}
+-        }
+-        let result = self.build_check(request, &request_digest, cancelled);
+-        match result {
+-            Ok(result) => {
+-                let result = Arc::new(result);
+-                self.operations.complete(
+-                    request.operation_id(),
+-                    &request_digest,
+-                    OperationKind::Check,
+-                    CompletedResult::Check(result.clone()),
+-                )?;
+-                Ok(result)
+-            }
+-            Err(error) => {
+-                self.operations.abandon(
+-                    request.operation_id(),
+-                    &request_digest,
+-                    OperationKind::Check,
+-                );
+-                Err(error)
+-            }
+-        }
++        self.build_check(request, &request_digest, cancelled)
+     }
+ 
+     pub fn deferred(&self, operation: DeferredOperation) -> ServiceResult<()> {
+@@ -287,10 +200,6 @@ pub fn deferred(&self, operation: DeferredOperation) -> ServiceResult<()> {
+         ))
+     }
+ 
+-    pub fn operation_registry(&self) -> ServiceResult<OperationRegistrySnapshot> {
+-        self.operations.snapshot()
+-    }
+-
+     fn build_status(
+         &self,
+         request: &StatusRequest,
+diff --git a/crates/wow-service/tests/e0_service.rs b/crates/wow-service/tests/e0_service.rs
+index e3d0858..a9dc2c9 100644
+--- a/crates/wow-service/tests/e0_service.rs
++++ b/crates/wow-service/tests/e0_service.rs
+@@ -1,4 +1,3 @@
+-use std::sync::Arc;
+ use std::sync::atomic::AtomicBool;
+ 
+ use wow_service::{
+@@ -332,7 +331,7 @@ fn status_reports_exact_state_without_claiming_a_check_passed() -> TestResult {
+             .project_generation_id(),
+         "project-generation:g1"
+     );
+-    let json = serde_json::to_string(&*result)?;
++    let json = serde_json::to_string(&result)?;
+     assert!(!json.contains("tests_passed"));
+     assert!(!json.contains("clean"));
+     Ok(())
+@@ -370,35 +369,6 @@ fn full_check_preserves_all_raw_findings_and_structured_folding() -> TestResult
+     Ok(())
+ }
+ 
+-#[test]
+-fn same_operation_replays_exact_result_and_digest_conflict_fails() -> TestResult {
+-    let configuration = configuration()?;
+-    let context = full_context(&configuration, false)?;
+-    let service = service_with_context(configuration, context)?;
+-    let operation_id = OperationId::new("operation:check:replay")?;
+-    let request = CheckRequest::new(
+-        operation_id.clone(),
+-        GenerationSelector::exact("project-generation:g1")?,
+-        CheckScope::WholeProject,
+-    );
+-    let first = service.check(&request, &AtomicBool::new(false))?;
+-    let second = service.check(&request, &AtomicBool::new(false))?;
+-    assert!(Arc::ptr_eq(&first, &second));
+-    assert_eq!(service.operation_registry()?.records().len(), 1);
+-
+-    let conflict = CheckRequest::new(
+-        operation_id,
+-        GenerationSelector::exact("project-generation:other")?,
+-        CheckScope::WholeProject,
+-    );
+-    let error = service
+-        .check(&conflict, &AtomicBool::new(false))
+-        .err()
+-        .ok_or("expected operation conflict")?;
+-    assert_eq!(error.code(), ServiceErrorCode::OperationConflict);
+-    Ok(())
+-}
+-
+ #[test]
+ fn partial_result_retains_findings_and_not_evaluated_state() -> TestResult {
+     let configuration = configuration()?;
+@@ -474,7 +444,7 @@ fn clean_requires_explicit_clean_authority() -> TestResult {
+ }
+ 
+ #[test]
+-fn cancellation_does_not_publish_or_poison_operation_id() -> TestResult {
++fn cancellation_leaves_service_usable() -> TestResult {
+     let configuration = configuration()?;
+     let context = full_context(&configuration, false)?;
+     let service = service_with_context(configuration, context)?;
+@@ -488,7 +458,7 @@ fn cancellation_does_not_publish_or_poison_operation_id() -> TestResult {
+         .err()
+         .ok_or("expected cancellation")?;
+     assert_eq!(error.code(), ServiceErrorCode::Cancelled);
+-    assert!(service.operation_registry()?.records().is_empty());
++
+     let result = service.check(&request, &AtomicBool::new(false))?;
+     assert_eq!(result.semantic_status(), ServiceSemanticStatus::Findings);
+     Ok(())
