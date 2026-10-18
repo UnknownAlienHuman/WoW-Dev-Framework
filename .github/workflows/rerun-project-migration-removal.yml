@@ -45,10 +45,10 @@ jobs:
               else:
                   raise SystemExit(f'unexpected YAML after shell block: {line!r}')
           script = '\n'.join(lines) + '\n'
-          old = '            .github/workflows/apply-project-migration-removal.yml'
+          old = '.github/workflows/apply-project-migration-removal.yml'
           new = (
-              '            .github/workflows/apply-project-migration-removal.yml \\\n'
-              '            .github/workflows/rerun-project-migration-removal.yml'
+              '.github/workflows/apply-project-migration-removal.yml \\\n'
+              '  .github/workflows/rerun-project-migration-removal.yml'
           )
           if script.count(old) != 1:
               raise SystemExit('apply workflow deletion entry not found')
