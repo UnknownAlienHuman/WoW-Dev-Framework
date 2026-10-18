@@ -3,7 +3,7 @@
 //! Transport-neutral E0 orchestration for exact World of Warcraft analysis contexts.
 //!
 //! The service owns request validation, exact context acquisition, operation
-//! idempotency, conservative status derivation, deterministic presentation, and
+//! identity, conservative status derivation, deterministic presentation, and
 //! canonical result envelopes. It does not parse source, execute Lua, select a
 //! replacement generation, or reproduce lower-owner semantic algorithms.
 
@@ -44,7 +44,7 @@ pub use model::{
     PresentationNodeKind, PresentationRelation, PresentationRelationKind, RawFinding, RuleBlocker,
     RuleEvaluation, RuleEvaluationState, RuleFinding, ServiceSemanticStatus, StatusRequest,
 };
-pub use operation::{OperationId, OperationRegistrySnapshot};
+pub use operation::OperationId;
 pub use service::{CheckResult, Service, ServiceResultEnvelope, StatusResult};
 
 pub use local::{

@@ -35,10 +35,7 @@ pub use source_observations::{
 use std::{
     num::NonZeroU64,
     path::PathBuf,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use serde::Serialize;
@@ -65,9 +62,7 @@ pub use wow_search::{LocalMetadataPermission, SearchBounds};
 pub use wow_store::StoreLimits as SearchStoreLimits;
 
 use crate::{
-    OperationId, ServiceError, ServiceErrorCode, ServiceResult,
-    identity::canonical_digest,
-    operation::{CompletedResult, OperationKind, OperationRegistry, RegistryDecision},
+    OperationId, ServiceError, ServiceErrorCode, ServiceResult, identity::canonical_digest,
 };
 
 const SEARCH_RESULT_SCHEMA: &str = "wow-service/search-result-envelope/1";
@@ -467,9 +462,7 @@ impl SearchBuildQueryResult {
 }
 
 #[derive(Debug, Default)]
-pub struct SearchOperationService {
-    operations: OperationRegistry,
-}
+pub struct SearchOperationService;
 
 impl SearchOperationService {
     pub fn platform_context_for_selection(
@@ -661,15 +654,11 @@ impl SearchOperationService {
         Self::default()
     }
 
-    pub fn operation_registry(&self) -> ServiceResult<crate::OperationRegistrySnapshot> {
-        self.operations.snapshot()
-    }
-
     pub fn build_query(
         &self,
         request: &SearchBuildQueryRequest,
         stop: &AtomicBool,
-    ) -> ServiceResult<Arc<SearchBuildQueryResult>> {
+    ) -> ServiceResult<SearchBuildQueryResult> {
         check_cancelled(stop)?;
         let profile = SearchBuildProfile::new(request.bounds).map_err(map_search_error)?;
         let request_digest = if let Some((selection, selected_profile)) = &request.file_set {
@@ -690,45 +679,19 @@ impl SearchOperationService {
                 },
             )?
         };
-        match self.operations.begin(
-            &request.operation_id,
-            &request_digest,
-            OperationKind::Search,
-        )? {
-            RegistryDecision::Replay(CompletedResult::Search(result)) => return Ok(result),
-            RegistryDecision::Started => {}
-        }
-
         let outcome = match &request.file_set {
             Some((selection, selected_profile)) => {
                 file_set::execute(request, selection, selected_profile, &request_digest, stop)
             }
             None => execute_build_query(request, &profile, &request_digest, stop),
         };
-        match outcome {
-            Ok(result) => {
-                let result = Arc::new(result);
-                self.operations.complete(
-                    &request.operation_id,
-                    &request_digest,
-                    OperationKind::Search,
-                    CompletedResult::Search(result.clone()),
-                )?;
-                Ok(result)
-            }
-            Err(error) => {
-                self.operations.abandon(
-                    &request.operation_id,
-                    &request_digest,
-                    OperationKind::Search,
-                );
-                Err(ServiceError::for_operation(
-                    error.code(),
-                    error.message().to_owned(),
-                    request.operation_id.as_str(),
-                ))
-            }
-        }
+        outcome.map_err(|error| {
+            ServiceError::for_operation(
+                error.code(),
+                error.message().to_owned(),
+                request.operation_id.as_str(),
+            )
+        })
     }
 
     pub fn build_shard(
