@@ -91,10 +91,10 @@ jobs:
 
           cargo fmt --all
           rm .github/workflows/apply-source-compare-removal.yml
+          git add -A
           cargo xtask check
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
           git commit -m "refactor: remove source comparison and E4 lineage plans"
           git push origin HEAD:refactor/remove-source-compare-2026-10-18
