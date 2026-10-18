@@ -107,6 +107,16 @@ pub fn reseal_evaluation(value: &mut Value) -> TestResult<NotEvaluatedRecord> {
     Ok(serde_json::from_value(value.clone())?)
 }
 
+pub fn assert_error<T>(result: CoreResult<T>, code: CoreErrorCode, path: &str) -> TestResult {
+    let Err(error) = result else {
+        return Err(format!("expected {code:?} at {path}").into());
+    };
+    assert_eq!(error.code(), code);
+    assert_eq!(error.field_path(), Some(path));
+    error.validate()?;
+    Ok(())
+}
+
 pub fn negative(
     value: &Value,
     evaluation: &NotEvaluatedRecord,
