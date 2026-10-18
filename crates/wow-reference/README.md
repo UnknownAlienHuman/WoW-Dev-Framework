@@ -36,13 +36,13 @@ behavior.
 
 ## Reading by task
 
-Begin with [`AGENTS.md`](AGENTS.md) and the selected owner contract/code. For
+Begin with [`AGENTS.md`](AGENTS.md), the selected Issue and actual owner/callers. For
 annotation semantics and source-to-library flow, use the [Ketho map](../../docs/KETHO_RUST_PORT.md).
 For callable type overlays, see [native callable type resolution](NATIVE_CALLABLE_TYPE_RESOLUTION.md).
 For alias input behavior, see the [catalog scope](../wow-annotations/KETHO_TYPE_CATALOG.md).
 For current Rust string handling, see `tests/native_string_forms.rs` and the
-focused implementation in `src/native/strings.rs`. The [architecture decision](../../docs/ARCHITECTURE.md)
-states the current project scope.
+focused implementation in `src/native/strings.rs`. The [native model](e1/DATA_MODEL.md)
+maps raw and typed inputs; the [manifesto](../../docs/ARCHITECTURE.md) defines scope.
 
 Run a focused owner-chain check for the changed behavior. Use representative
 positive and negative cases when semantics change; full-source campaigns are

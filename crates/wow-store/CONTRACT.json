@@ -12,12 +12,6 @@
       "crate": "wow-core",
       "required_contract": "wow-core/e0-a/1",
       "implementation_and_fixture_freeze_required_before_code": true
-    },
-    {
-      "crate": "wow-reference",
-      "required_contract": "wow-reference/e1-persistent-schema-and-build-plan",
-      "implementation_required_before_full_reference_integration": false,
-      "detailed_schema_operation_and_validation_bundle_required_before_full_reference_integration": true
     }
   ],
   "active_store_kinds": [

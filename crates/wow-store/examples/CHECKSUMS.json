@@ -10,13 +10,6 @@
       "contract_id": "wow-core/e0-a/1",
       "implementation_identity": null,
       "fixture_bundle_sha256": null
-    },
-    {
-      "contract_id": "wow-reference/e1-persistent-schema-and-build-plan",
-      "schema_bundle_id": null,
-      "prepared_operation_catalog_id": null,
-      "validation_catalog_id": null,
-      "bundle_sha256": null
     }
   ],
   "runtime_vectors": {

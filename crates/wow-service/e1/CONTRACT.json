@@ -41,14 +41,6 @@
     {
       "contract_id": "wow-store/e1-a/sqlite-persistence",
       "implementation_and_fixture_freeze_required": true
-    },
-    {
-      "contract_id": "wow-reference/e1-persistent-schema-and-build-plan",
-      "implementation_and_fixture_freeze_required": true
-    },
-    {
-      "contract_id": "wow-annotations/e1-projection-and-parity",
-      "implementation_and_fixture_freeze_required": true
     }
   ],
   "operations": [

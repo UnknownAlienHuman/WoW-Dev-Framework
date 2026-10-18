@@ -10,6 +10,7 @@ implementation; it does not claim that the replacements already work.
 Routes: [annotations](#native-annotation-generation),
 [addon analysis](#addon-configuration-and-emmy-analysis),
 [Blizzard search/context](#blizzard-ui-index-search-and-context),
+[source relationships](#typed-source-relationships),
 [results/interfaces](#results-and-interfaces), [donors](#sources-and-donors).
 
 ## Code ownership
@@ -56,10 +57,19 @@ exports prepared bytes and is not a source-to-library generation command.
    `wow-service/src/{reference_pack,reference_pack_admin,reference_admin,annotation_admin}.rs`
    callers. Native generation must not require a pack registry or signed report.
 
+`local/native_input.rs` also copies generated Lua into `NativeAnnotationFile`;
+only `reference_pack.rs` consumes that retained copy. Remove the type, field and
+accessor with the pack path. The analyzer already receives `library.files`;
+this deletion needs no shared-buffer framework or Project input API change.
+
 The [Ketho map](KETHO_RUST_PORT.md) owns semantic details and a runnable current
 driver command. Preserve aliases, defaults, arrays, receivers, callbacks,
 corrections, literals and source maps; reuse its existing consumer probes.
-#202 shares a parsed catalog tree between existing validators.
+#204 removes discarded trial renders in `native.rs`: reuse emission helpers
+and retain their text/ranges for assembly. Reject only the invalid declaration
+or group while keeping independent valid output; preserve aggregate limits.
+Do not duplicate rendering rules in a new validator. #202 shares a parsed
+catalog tree between existing validators.
 #203 keeps `wow-ketho-literals` callable natively, then removes
 `modules/ketho-literals`, `bridges/literal-host`, exclusive options and CI.
 
@@ -148,14 +158,34 @@ are absent, report the rebuild requirement. #111 removes historical epochs,
 backup/quarantine/migration/retention administration once normal reads and
 rebuilds replace it. No compatibility reader or new lifecycle subsystem.
 
+## Typed source relationships
+
+**Start #195 with `wow-recognizers/src/source_state_core/project.rs::execute`
+and Service's `graph/build/recognizer_handoff.rs`.** Typed state accesses and
+root/caller/target bindings already exist. The adapter creates generic facts,
+fixed packs and matcher output; Service reconstructs the four read/write ×
+root/path packs and plans to project those results into the graph again.
+
+Map the admitted typed facts directly to the consumed relationships. Keep
+root versus literal-path targets, account/character scope, source locations,
+ambiguity and incomplete-input results. Remove `evaluations`, pack/plan digests
+and the repeated handoff; they are not a required result DTO. Reuse the positive
+and unresolved-path behavior in `graph/build/state_core_tests.rs`. Strip matcher
+assertions from the handoff test while retaining its useful `execute_graph_build`
+check in the existing suite; direct adapter tests alone do not exercise Service.
+
+Trace the other live `src/source_*` adapters through their actual callers and
+remove the same redundant conversions where present. #103 removes unconsumed
+capabilities; a lint annotation alone
+does not prove one unused. #107/#118 remove graph proof/lineage machinery.
+No replacement rule compiler, plugin registry or proof-receipt framework.
+
 ## Results and interfaces
 
 #194 starts at `wow-core/src/{envelope,canonical}.rs` and actual Service callers:
 plain typed values internally, one serialization at CLI/protocol output, bounds
 outside payload identity. Delete self-hashes, size fixed-point loops and durable
-read-operation journals with their callers. #195 passes existing recognizer facts
-directly; #107/#118 remove graph proof/lineage machinery without rebuilding useful
-source relationships.
+read-operation journals with their callers.
 
 CLI, LSP and MCP consume the same operation result. Keep framing and position
 conversion in `apps/wow`, not copies of analysis/search algorithms. #197 supplies

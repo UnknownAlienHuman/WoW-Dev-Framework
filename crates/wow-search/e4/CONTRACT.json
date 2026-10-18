@@ -39,10 +39,6 @@
       "implementation_and_fixture_freeze_required": true
     },
     {
-      "contract_id": "wow-reference/e1-persistent-schema-and-build-plan",
-      "implementation_and_fixture_freeze_required": true
-    },
-    {
       "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
       "implementation_and_fixture_freeze_required": true
     },

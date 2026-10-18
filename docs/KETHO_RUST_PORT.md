@@ -35,7 +35,7 @@ The existing Git driver reads committed regular blobs from one resolved source
 revision and the selected TOC/flavor, then uses EmmyLua Lua 5.1 syntax,
 `wow-reference`'s restricted evaluator and typed facts, and the shared
 `wow-annotations` emitter. It retains raw expressions/unknowns, revision and
-hash provenance, UTF-8 spans, source maps, and losses. Source, hooks, and
+source paths, UTF-8 spans, source maps, and losses. Source, hooks, and
 generated stubs are never executed. Current source/API meaning must be checked
 against the selected Blizzard revision; do not hard-code a moving build or
 assume Mainline data covers another flavor.
@@ -58,9 +58,12 @@ directory must be new. Exit 0 is projected, 3 partial, 2 failure;
 `source-report.json` is written last. A partial report remains useful evidence,
 but does not prove unsupported or missing declarations absent. The example is
 development tooling; #196 exposes this same generation through a supported
-CLI/builder command. Reuse the native flow instead of adding another writer. Generate the current library once; regenerate
-derived files when source, corrections, catalogs, or projection semantics
-change.
+CLI/builder command. Reuse the native flow instead of adding another writer.
+Generate the library once; regenerate derived files when source, corrections,
+catalogs or projection semantics change. #204 removes the native adapter's
+discarded declaration/registration trial renders by retaining emitter output
+and ranges. Independent valid declarations must survive a rejected neighbor;
+do not introduce a second validator or type model.
 
 ## Semantics worth preserving
 
@@ -79,7 +82,10 @@ not silently widen to `any`. Pure rendering fails without an artifact; native
 composition reports a declaration-level failure while retaining independent
 valid declarations. Unsupported forms remain visible in the report. See
 [callback cases](../crates/wow-annotations/tests/callback_signatures.rs) and
-[type lowering](../crates/wow-annotations/e1/TYPE_LOWERING.md).
+[type lowering](../crates/wow-annotations/TYPE_LOWERING.md). The
+[map guide](../crates/wow-annotations/SOURCE_MAPS.md) distinguishes member,
+declaration and coarse literal mappings; unprojected raw metadata already remains
+in the native result.
 
 Literal generation consumes supplied data: FrameEvent/CVar remain open string
 aliases; Enum/Constant identity, booleans, integers, finite numbers, strings,
