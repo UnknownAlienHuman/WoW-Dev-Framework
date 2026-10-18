@@ -494,8 +494,8 @@ fn canonical_result_is_invariant_to_owner_input_order() -> TestResult {
     )?;
     assert_eq!(left_result.result_id(), right_result.result_id());
     assert_eq!(
-        serde_json::to_vec(&*left_result)?,
-        serde_json::to_vec(&*right_result)?
+        serde_json::to_vec(&left_result)?,
+        serde_json::to_vec(&right_result)?
     );
     Ok(())
 }
