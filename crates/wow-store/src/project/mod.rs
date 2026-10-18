@@ -4,7 +4,6 @@
 mod backup;
 mod database;
 mod gc;
-mod migration;
 mod model;
 mod namespace;
 mod publication;
@@ -20,11 +19,6 @@ use crate::{OperationId, StoreError, StoreResult};
 pub use backup::{BackupManifest, VerifiedBackup};
 use database::Database;
 pub use gc::{ProjectGcPlan, ProjectGcPolicy, ProjectGcReceipt, ProjectGcReport};
-pub use migration::{
-    MappedMigrationRoot, MigrationCandidate, MigrationCurrentMapping, MigrationMapping,
-    MigrationPreparation, MigrationReadyReceipt, MigrationReceipt, MigrationSelectionCandidate,
-    MigrationSelectionReceipt, ReadyMigration, ValidatedMigration,
-};
 pub use model::{
     CurrentPublication, CurrentRecordId, EpochId, EpochManifest, GC_PHYSICAL_PROFILE,
     GenerationManifest, MAX_RECORD_BYTES, NAMESPACE_EPOCH_SCHEMA, PHYSICAL_PROFILE,

@@ -22,9 +22,10 @@ Project indexes are derived from source and configuration, so one current format
 can be rebuilt. On unsupported/corrupt derived state, give a clear rebuild/error
 path; never delete or rewrite user source/configuration.
 
-The older backup/quarantine/epoch-migration and generic retention machinery
-still exists. [#111](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111)
-tracks its removal after the current index path in [#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131).
+The physical epoch-migration/selection platform has been removed. Older
+backup, quarantine, recovery and generic retention machinery remains for the
+bounded reductions in [#111](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111)
+after the current index path in [#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131).
 Search's direct SQLite/FTS integration is tracked by
 [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169).
 These are queued reductions, not completed runtime behavior.

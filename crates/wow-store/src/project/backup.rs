@@ -66,15 +66,6 @@ impl ProjectStore {
         self.backup_to_new_with_context(root.as_ref(), operation_id, &archives, &sources, stop)
     }
 
-    pub(super) fn backup_to_new_with_archives(
-        &self,
-        root: &Path,
-        operation_id: &OperationId,
-        archives: &ArchiveSet,
-        stop: &AtomicBool,
-    ) -> StoreResult<VerifiedBackup> {
-        self.backup_to_new_with_context(root, operation_id, archives, &AuthoritySet::empty(), stop)
-    }
     pub(super) fn backup_to_new_with_context(
         &self,
         root: &Path,
@@ -343,24 +334,6 @@ impl VerifiedBackup {
             additional,
             stop,
             |_| Ok(()),
-        )
-    }
-    pub(super) fn restore_to_new_with_boundary<F>(
-        &self,
-        root: &Path,
-        operation_id: &OperationId,
-        stop: &AtomicBool,
-        after_archive: F,
-    ) -> StoreResult<Self>
-    where
-        F: FnOnce(&VerifiedBackup) -> StoreResult<()>,
-    {
-        self.restore_to_new_with_authorities_at_boundary(
-            root,
-            operation_id,
-            AuthoritySet::empty(),
-            stop,
-            after_archive,
         )
     }
     fn restore_to_new_with_authorities_at_boundary<F>(

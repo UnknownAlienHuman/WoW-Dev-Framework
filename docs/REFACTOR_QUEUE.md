@@ -3,11 +3,10 @@
 **Default next code task: [#193](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/193).**
 The [manifesto](ARCHITECTURE.md) defines purpose and scope;
 [implementation](IMPLEMENTATION.md) maps code, replacements and donors.
-[ADR-058](DECISIONS.md) retires the broader platform
-plan. Preparation is [PR #192](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/192);
-use its branch until integration. [#191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191)
-is the reduction tracker; [#125](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/125)
-tracks completion of this narrowed product.
+[ADR-058](DECISIONS.md) retires the broader platform plan. `main` is the
+source of truth; [#191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191)
+tracks reduction and [#125](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/125)
+tracks completion of the narrowed product.
 
 ## Take one task
 
@@ -31,15 +30,15 @@ a dependency names required replacement behavior, not a whole package gate.
 | 1 | [#193 — Emmy analysis](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/193) | One analysis; Main diagnostics see Library types and retain useful upstream errors. Current engines/config/filter split that behavior. |
 | Independent | [#202 — catalog parsing](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/202) | Share one Emmy tree across existing validators; keep comment-group isolation. |
 | Independent | [#204 — single emission](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/204) | Retain emitted text/maps instead of trial rendering; keep valid neighbors and aggregate bounds. |
-| 2 | [#194 — result envelopes](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194) | Plain typed results, one output serialization; remove self-hashes/size loops/read journals. |
+| 2 | [#194 — result envelopes](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194) | Core E0 envelopes and one-shot registries are removed; finish plain typed output and delete remaining self-hash/size/read journals. |
 | 3 | [#131 — current index](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131) | Reopen stored file/text facts without rehydration or all-partition decode/hash passes. Coordinate #194. |
 | 4 | [#169 — SQLite search](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169) | Direct source-content/FTS tables in #131's index; current FTS covers file labels/recorded names. Remove nested SQLite/hex/JSON. |
-| 5 | [#111 — storage lifecycle](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111) | After #131, remove backup/quarantine/epoch migration, generic retention/GC/journals. |
+| 5 | [#111 — storage lifecycle](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111) | Physical epoch migration is removed; after #131 delete remaining backup/quarantine/recovery and generic retention/GC/journals. |
 | Native path | [#196 — annotation delivery](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/196) | Supported native generation; remove pack administration and its exclusive retained Lua copy. Coordinate #194; no index prerequisite. |
 | Independent | [#203 — Wasm removal](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/203) | Keep literal algorithm natively; remove guest/host, options, dependencies and exclusive CI. |
 | Next graph cut | [#195 — typed recognizers](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/195) | Start with typed State Core and remove its repeated pack handoff; continue through live adapters. |
 | With #131/#196 | [#107 — useful relationships](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/107) | Direct records; reuse Library/callable origins instead of regenerating them for graph proofs. |
-| Coordinate #107 | [#118 — removed product routes](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118) | Delete lineage/promotion/migration-impact/fingerprint routes and exclusive internals. |
+| Coordinate #107 | [#118 — removed product routes](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118) | Source comparison and Graph lineage are removed; delete only remaining promotion/fingerprint machinery proven exclusive. |
 | With #195/#107 | [#103 — recognizer scope](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | Remove unconsumed/default placeholder capabilities; keep actionable rules. |
 | With touched owner | [#112 — legacy formats/docs](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112) | One current format and regeneration; remove old readers and duplicated requirements. |
 

@@ -13,11 +13,6 @@ pub use generation_pair::{
     PROJECT_GENERATION_PAIR_MAX_OUTPUT_BYTES, ProjectGenerationPairRequest,
     ProjectGenerationPairResult, read_live_project_generation_pair,
 };
-mod migration;
-pub use migration::{
-    export_live_project_migration, migrate_live_project_to_new, prepare_live_project_migration,
-    resume_live_project_migration, resume_live_project_migration_preparation,
-};
 mod namespace;
 pub use namespace::PlatformStoreSelection;
 mod operations;

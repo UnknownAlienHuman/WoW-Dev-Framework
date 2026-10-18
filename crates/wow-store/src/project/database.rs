@@ -139,18 +139,6 @@ impl Database {
         )?;
         Self::select_initial(Self::create_unselected_epoch(root, epoch)?)
     }
-    pub(super) fn create_inactive_with_gc(
-        root: &Path,
-        owner: &str,
-        catalog: RecordCatalog,
-    ) -> StoreResult<Self> {
-        let db = Self::create_unselected_profile(root, owner, catalog, GC_PHYSICAL_PROFILE)?;
-        write_epoch_file(
-            &db.root.join("epoch-manifest.json"),
-            &encode(&db.epoch, 65536)?,
-        )?;
-        Ok(db)
-    }
     fn create_profile(
         root: &Path,
         owner: &str,
@@ -303,47 +291,6 @@ impl Database {
                 custody: std::sync::Arc::new(()),
                 _lock: Rc::new(lock),
                 _instance_lock: instance_lock,
-                leases: RefCell::new(BTreeMap::new()),
-                lease_revision: Cell::new(0),
-                reader_admissions: Rc::new(Cell::new(0)),
-            }),
-        })
-    }
-    pub(super) fn open_inactive(root: &Path, epoch: &EpochManifest) -> StoreResult<Self> {
-        let root = admitted_root(root)?;
-        let lock_path = root.join("writer.lock");
-        regular(&lock_path, 0)?;
-        let lock = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(lock_path)
-            .map_err(|_| failure(StoreErrorCode::DatabaseUnavailable))?;
-        lock.try_lock()
-            .map_err(|_| failure(StoreErrorCode::WriterBusy))?;
-        match fs::symlink_metadata(root.join(registry::REGISTRY_FILE)) {
-            Ok(_) => return Err(invalid()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => return Err(invalid()),
-        }
-        let bytes = read_epoch_file(&root.join("epoch-manifest.json"))?;
-        let admitted = admit_epoch(&bytes, &epoch.catalog)?;
-        if &admitted != epoch {
-            return Err(invalid());
-        }
-        directory(&root.join("epochs"))?;
-        let dir = epoch_directory(&root, &admitted)?;
-        directory(&dir)?;
-        let (connection, path) = Self::open_epoch(&dir, &admitted)?;
-        Ok(Self {
-            connection,
-            path,
-            epoch: admitted,
-            root,
-            selection: None,
-            life: Rc::new(Lifetime {
-                custody: std::sync::Arc::new(()),
-                _lock: Rc::new(lock),
-                _instance_lock: None,
                 leases: RefCell::new(BTreeMap::new()),
                 lease_revision: Cell::new(0),
                 reader_admissions: Rc::new(Cell::new(0)),
