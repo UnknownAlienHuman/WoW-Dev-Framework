@@ -40,7 +40,10 @@ support.write_text(text)
 
 evaluations = Path("crates/wow-core/tests/coverage_join/evaluations.rs")
 text = evaluations.read_text()
-text = replace_once(text, "    draft(&value)?.finalize()?.validate()?;\n", "", "join 002 envelope")
+first_envelope_check = "    draft(&value)?.finalize()?.validate()?;\n"
+if first_envelope_check not in text:
+    raise SystemExit("join 002 envelope check not found")
+text = text.replace(first_envelope_check, "", 1)
 for label, old in [
     (
         "join 003 envelope",
