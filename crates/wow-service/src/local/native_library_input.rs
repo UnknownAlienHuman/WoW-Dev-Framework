@@ -25,8 +25,8 @@ use super::cancelled;
 use super::input::invalid;
 use super::native_input::{NativeFileIdentity, report_bytes_with_limit};
 use super::native_reference::{
-    InputFailure, NativeProfile, NativeReferenceBuild, NativeReferenceTarget,
-    project_native_reference, project_native_reference_with_type_resolution,
+    InputFailure, NativeProfile, NativeReferenceBuild, project_native_reference,
+    project_native_reference_with_type_resolution,
 };
 use super::native_resources::{NativeAnnotationResources, present};
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
