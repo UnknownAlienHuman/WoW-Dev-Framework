@@ -38,6 +38,20 @@ jobs:
           remove_once("crates/wow-graph/src/lib.rs", "pub mod lineage;\n")
           remove_once("crates/wow-project/src/graph.rs", "pub mod lineage_input;\n")
           remove_once("crates/wow-service/src/live_project/tests.rs", "mod lineage_input;\n")
+          remove_once(
+              "crates/wow-project/src/replay/publication.rs",
+              "    pub(crate) fn read_identity(&self) -> (&EpochId, &StoreGenerationId) {\n"
+              "        (&self.read_epoch_id, &self.read_generation_id)\n"
+              "    }\n",
+          )
+          remove_once(
+              "crates/wow-graph/src/error.rs",
+              "    LineageProfileInvalid,\n"
+              "    LineageInputInvalid,\n"
+              "    LineageSnapshotInvalid,\n"
+              "    LineageQueryInvalid,\n"
+              "    LineageReadCloseFailed,\n",
+          )
           PY
 
           git rm -r \
@@ -52,7 +66,7 @@ jobs:
           cargo +stable xtask check
           cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
 
-          if rg -n "wow_graph::lineage|wow-graph::lineage|graph::lineage_input|mod lineage_input|pub mod lineage" --glob '!target/**' .; then
+          if rg -n "wow_graph::lineage|wow-graph::lineage|graph::lineage_input|mod lineage_input|pub mod lineage|Lineage(Profile|Input|Snapshot|Query|ReadClose)" --glob '!target/**' .; then
             echo "stale graph lineage reference remains" >&2
             exit 1
           fi
