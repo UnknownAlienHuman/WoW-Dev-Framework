@@ -651,7 +651,7 @@ impl SearchOperationService {
     }
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 
     pub fn build_query(
