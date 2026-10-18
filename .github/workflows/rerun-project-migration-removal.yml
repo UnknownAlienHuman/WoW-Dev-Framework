@@ -42,27 +42,29 @@ jobs:
                   raise SystemExit(f'unexpected YAML after shell block: {line!r}')
           script = '\n'.join(lines) + '\n'
 
-          old_none = '''none_count = text.count("            migration: None,\\n")
-if none_count < 3:
-    raise SystemExit(f"expected migration None initializers, found {none_count}")
-text = text.replace("            migration: None,\\n", "")'''
-          new_none = '''text, none_count = re.subn(
-    r"^\\s*migration: None,\\n",
-    "",
-    text,
-    flags=re.M,
-)
-if none_count != 3:
-    raise SystemExit(f"expected exactly three migration None initializers, found {none_count}")'''
+          old_none = '\n'.join([
+              'none_count = text.count("            migration: None,\\n")',
+              'if none_count < 3:',
+              '    raise SystemExit(f"expected migration None initializers, found {none_count}")',
+              'text = text.replace("            migration: None,\\n", "")',
+          ])
+          new_none = '\n'.join([
+              'text, none_count = re.subn(',
+              '    r"^\\s*migration: None,\\n",',
+              '    "",',
+              '    text,',
+              '    flags=re.M,',
+              ')',
+              'if none_count != 3:',
+              '    raise SystemExit(f"expected exactly three migration None initializers, found {none_count}")',
+          ])
           if script.count(old_none) != 1:
               raise SystemExit('migration initializer block not found')
           script = script.replace(old_none, new_none)
 
           old = '.github/workflows/apply-project-migration-removal.yml'
-          new = (
-              '.github/workflows/apply-project-migration-removal.yml \\\n'
-              '  .github/workflows/rerun-project-migration-removal.yml'
-          )
+          rerun = '.github/workflows/rerun-project-migration-removal.yml'
+          new = old + ' ' + chr(92) + '\n  ' + rerun
           if script.count(old) != 1:
               raise SystemExit('apply workflow deletion entry not found')
           script = script.replace(old, new)
