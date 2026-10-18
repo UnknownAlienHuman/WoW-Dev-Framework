@@ -2,7 +2,7 @@
 mod io;
 mod model;
 use super::{
-    model::{checkpoint, failure, invalid},
+    model::{failure, invalid},
     quarantine::archives::{self, ArchiveSet, QuarantineReference},
     registry::{self, AdmittedRegistry},
 };
@@ -33,34 +33,6 @@ pub(in crate::project) struct AuthoritySet {
     entries: Vec<AuthorityEntry>,
 }
 impl AuthoritySet {
-    pub fn origin_reference(
-        &self,
-        epoch: &super::EpochManifest,
-        selection: &registry::RegistrySelection,
-        snapshot: &str,
-    ) -> StoreResult<SourceAuthorityReference> {
-        self.entries
-            .iter()
-            .find(|entry| {
-                &entry.manifest.epoch == epoch
-                    && &entry.manifest.selection == selection
-                    && entry.manifest.source_snapshot == snapshot
-            })
-            .map(|entry| entry.reference.clone())
-            .ok_or_else(invalid)
-    }
-    pub fn require_origin(
-        &self,
-        reference: &SourceAuthorityReference,
-        epoch: &super::EpochManifest,
-        selection: &registry::RegistrySelection,
-        snapshot: &str,
-    ) -> StoreResult<()> {
-        if self.origin_reference(epoch, selection, snapshot)? != *reference {
-            return Err(invalid());
-        }
-        Ok(())
-    }
     pub fn empty() -> Self {
         Self {
             references: Vec::new(),
@@ -307,64 +279,4 @@ pub(in crate::project) fn preflight_transport(
         stop,
     )?)?;
     sources.admit_selected(&closure)
-}
-/// Capture exact original selector/holds only after the caller's native live-source guard.
-pub(in crate::project) fn capture_source(
-    root: &Path,
-    admitted: &AdmittedRegistry,
-    snapshot: &str,
-    stop: &AtomicBool,
-) -> StoreResult<AuthoritySet> {
-    checkpoint(stop)?;
-    if admitted.quarantine.is_some() {
-        return Err(failure(StoreErrorCode::Quarantined));
-    }
-    let inherited = read(root, &admitted.source_authorities, stop)?;
-    let selection =
-        registry::read_file(&root.join(registry::REGISTRY_FILE), registry::MAX_REGISTRY)?;
-    let actual = registry::read_normal_shallow(&admitted.epoch.catalog, &selection)?;
-    if actual.selection != admitted.selection
-        || actual.epoch != admitted.epoch
-        || actual.retained_quarantines != admitted.retained_quarantines
-        || actual.source_authorities != admitted.source_authorities
-    {
-        return Err(failure(StoreErrorCode::CurrentConflict));
-    }
-    let archives = archives::read(
-        root,
-        &admitted.epoch.catalog,
-        &admitted.retained_quarantines,
-        stop,
-    )?;
-    archives.validate_epoch(&admitted.epoch)?;
-    inherited.admit_selected(&archives)?;
-    let mut dependencies = admitted.source_authorities.clone();
-    dependencies.extend(archives.required_authorities()?);
-    dependencies.sort();
-    dependencies.dedup();
-    let manifest = SourceAuthorityManifest {
-        schema: "wow-store/project-source-authority/1".into(),
-        epoch: admitted.epoch.clone(),
-        selection: admitted.selection.clone(),
-        selection_length: selection.len(),
-        source_snapshot: snapshot.to_owned(),
-        retained_quarantines: admitted.retained_quarantines.clone(),
-        dependencies,
-    };
-    let reference = SourceAuthorityReference::from_bytes(&manifest.bytes()?)?;
-    let mut entries = inherited.entries;
-    entries.push(AuthorityEntry {
-        reference,
-        manifest,
-        selection,
-        archives,
-    });
-    entries.sort_by(|a, b| a.reference.cmp(&b.reference));
-    let result = AuthoritySet {
-        references: entries.iter().map(|e| e.reference.clone()).collect(),
-        entries,
-    };
-    result.validate_closure()?;
-    checkpoint(stop)?;
-    Ok(result)
 }
