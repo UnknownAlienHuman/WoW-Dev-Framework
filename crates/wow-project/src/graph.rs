@@ -17,7 +17,6 @@ pub mod fingerprints;
 mod functions;
 mod inventory_project;
 mod inventory_roles;
-pub mod lineage_input;
 mod load_inputs;
 mod packages;
 mod platform_producers;
