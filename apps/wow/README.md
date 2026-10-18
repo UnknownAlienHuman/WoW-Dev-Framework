@@ -15,12 +15,11 @@ cargo run -p wow-cli --bin wow -- --help
 ```
 
 Help includes `status`, `check`, `graph`, `search`, `context`, `project`,
-`native`, `source`, `overlay`, `lineage`, `lsp`, and `mcp` routes. Use the
-matching recipe for its exact inputs: [local check](LOCAL_INPUT.md),
-[explicit files](FILES_INPUT.md), [native API input](NATIVE_INPUT.md),
-[graph build](GRAPH_BUILD.md), [search build/query](SEARCH_BUILD_QUERY.md), and
-[context build](CONTEXT_BUILD.md). Subcommands provide their own `--help` where
-implemented.
+`native`, `source`, `overlay`, `lsp`, and `mcp` routes. Use the matching recipe
+for its exact inputs: [local check](LOCAL_INPUT.md), [explicit files](FILES_INPUT.md),
+[native API input](NATIVE_INPUT.md), [graph build](GRAPH_BUILD.md),
+[search build/query](SEARCH_BUILD_QUERY.md), and [context build](CONTEXT_BUILD.md).
+Subcommands provide their own `--help` where implemented.
 
 Current `status`/`check` requires `--config`; the reader accepts inline, disk,
 native and selected TOC inputs described above. These are current input formats.

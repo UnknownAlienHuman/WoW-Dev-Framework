@@ -5,7 +5,6 @@ mod graph;
 mod graph_build;
 mod graph_store;
 mod json;
-mod lineage;
 mod lsp;
 mod mcp;
 mod native;
@@ -61,9 +60,6 @@ fn run() -> u8 {
     }
     if arguments.first().is_some_and(|value| value == "search") {
         return search::run(arguments);
-    }
-    if arguments.first().is_some_and(|value| value == "lineage") {
-        return lineage::run(arguments);
     }
     if arguments.first().is_some_and(|value| value == "mcp") {
         return mcp::run(arguments);
