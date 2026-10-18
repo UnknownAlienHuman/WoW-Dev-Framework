@@ -89,4 +89,4 @@ acceptance have not been run by this checkpoint.
 
 See [platform replay](PLATFORM_SOURCE_REPLAY.md),
 [native publication](../crates/wow-project/REPLAY_PUBLICATION.md) and the
-[current work map](PROJECT_WORK_MAP.md).
+[current work queue](REFACTOR_QUEUE.md).

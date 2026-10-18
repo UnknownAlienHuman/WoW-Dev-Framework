@@ -3,7 +3,7 @@
 This is the evidence record for the semantic-repair checkpoint below. The later
 TOC slice publishes all five `core.toc.*` families through the service and raises
 the functional census to 19/26. Continue from current `main` using
-[PROJECT_WORK_MAP.md](PROJECT_WORK_MAP.md); the 14/26 census and starting SHA in
+[REFACTOR_QUEUE.md](REFACTOR_QUEUE.md); the 14/26 census and starting SHA in
 this historical record describe the earlier checkpoint.
 
 ## 1. Точная точка старта
@@ -146,7 +146,7 @@ core.state.* — 3
 ```text
 AGENTS.md
 .agents/skills/wow-dev/SKILL.md
-docs/IMPLEMENTATION_STATUS.md
+docs/IMPLEMENTATION.md
 docs/PROJECT_COMPLETION_MATRIX.md
 this document
 crates/wow-recognizers/e2/README.md

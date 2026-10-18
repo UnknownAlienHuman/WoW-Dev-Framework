@@ -1,8 +1,9 @@
 # Implementation and reduction queue
 
 **Default next code task: [#193](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/193).**
-The current [architecture](ARCHITECTURE.md) is EmmyLua + native Ketho + practical
-Blizzard/addon development. [ADR-058](DECISIONS.md) retires the broader platform
+The [manifesto](ARCHITECTURE.md) defines purpose and scope;
+[implementation](IMPLEMENTATION.md) maps code, replacements and donors.
+[ADR-058](DECISIONS.md) retires the broader platform
 plan. Preparation is [PR #192](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/192);
 use its branch until integration. [#191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191)
 is the reduction tracker; [#125](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/125)
@@ -10,8 +11,8 @@ tracks completion of this narrowed product.
 
 ## Take one task
 
-Read root [AGENTS.md](../AGENTS.md), the Issue/current claim, then its named
-implementation and donor. Issues contain the concrete change and check; this
+Read root [AGENTS.md](../AGENTS.md) and the whole manifesto, then the Issue/current
+claim and selected implementation route. Issues contain the change and check; this
 file only orders work. Use one manager/worktree and nonoverlapping small tasks.
 Do not reload historical package specifications or invent a parallel tracker.
 
@@ -31,7 +32,7 @@ a dependency names required replacement behavior, not a whole package gate.
 | Independent | [#202 — catalog parsing](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/202) | Share one Emmy tree across existing validators; keep comment-group isolation. |
 | 2 | [#194 — result envelopes](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194) | Plain typed results, one output serialization; remove self-hashes/size loops/read journals. |
 | 3 | [#131 — current index](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131) | Store reader-ready facts; remove source rehydration and old replay formats. Coordinate #194. |
-| 4 | [#169 — SQLite search](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169) | Direct FTS/content tables in #131's index; remove nested SQLite/hex/JSON. |
+| 4 | [#169 — SQLite search](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169) | Direct source-content/FTS tables in #131's index; current FTS covers file labels/recorded names. Remove nested SQLite/hex/JSON. |
 | 5 | [#111 — storage lifecycle](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111) | After #131, remove backup/quarantine/epoch migration, generic retention/GC/journals. |
 | Native path | [#196 — annotation delivery](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/196) | Supported native generation to a directory; remove pack administration. Coordinate #194; no index prerequisite. |
 | Independent | [#203 — Wasm removal](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/203) | Keep literal algorithm natively; remove guest/host, options, dependencies and exclusive CI. |
@@ -51,7 +52,7 @@ checks remain. No replacement certification/checksum framework is planned.
 | --- | --- |
 | [#200 — configuration](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/200) | Root/flavor/TOC/library paths instead of evidence-heavy host inputs; uses #196. |
 | [#197 — defaults](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/197) | Search works without repeated internal budget flags; coordinate #200. |
-| [#122 — context](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122) | Readable located snippets, shared DTO; remove semantic-pack ceremony. Rendering now, index via #131/#169. |
+| [#122 — context](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122) | Connect search hits to existing source-excerpt reading; plain located output. Rendering now, index via #131/#169. |
 | [#106 — Blizzard UI](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106) | Real symbol/text/source-navigation CLI workflow using #200/#169. |
 | [#117 — TOC/XML](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117) | Actual load/template/script links needed by #106; no classification/fingerprint platform. |
 | [#109 — source updates](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/109) | Changes/removals update useful results; compare one final state with cold indexing. Needs #131/#193. |

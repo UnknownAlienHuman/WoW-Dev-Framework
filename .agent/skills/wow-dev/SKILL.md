@@ -5,10 +5,11 @@ description: Implement, debug and review WoW addons and the WoW Dev Framework us
 
 # WoW development
 
-Follow root `AGENTS.md`, `docs/ARCHITECTURE.md` and the selected Issue from
-`docs/REFACTOR_QUEUE.md`. Read its code and callers; do not load every package
-contract, old audit or acceptance matrix. Use `docs/EXECUTION_MODEL.md` for
-coordination and proportional checks.
+Read root `AGENTS.md` and all of `docs/ARCHITECTURE.md`; keep the manifesto in
+the developer's working context. Select an Issue from `docs/REFACTOR_QUEUE.md`,
+then use its route in `docs/IMPLEMENTATION.md` to inspect actual code and donors.
+Do not load every package contract or historical matrix. Use
+`docs/EXECUTION_MODEL.md` for coordination and proportional checks.
 
 ## Implement one useful path
 

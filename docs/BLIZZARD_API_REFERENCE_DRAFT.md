@@ -10,4 +10,5 @@ Source wire JSON permits null, signed and decimal values. The dedicated
 `wow-reference::wire_json` profile retains numeric lexemes during digest checks;
 it does not relax the stricter core-ID canonicalization contract. Rust unit and
 CLI fixtures exercise this compatibility boundary with no external interpreter.
-See [implementation status](IMPLEMENTATION_STATUS.md) for the remaining scope.
+See [implementation](IMPLEMENTATION.md) and [completion](PROJECT_COMPLETION_MATRIX.md)
+for current code and remaining scope.

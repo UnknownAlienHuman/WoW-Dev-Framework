@@ -2,7 +2,8 @@
 
 Current scope: [ARCHITECTURE.md](ARCHITECTURE.md), accepted 2026-10-18. This page
 records useful capability, not E0–E7 certification. Implementation tasks live
-in [REFACTOR_QUEUE.md](REFACTOR_QUEUE.md) and their Issues.
+in [REFACTOR_QUEUE.md](REFACTOR_QUEUE.md) and their Issues; code/donor routes are
+in [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 ## What exists and what must become usable
 
@@ -10,7 +11,7 @@ in [REFACTOR_QUEUE.md](REFACTOR_QUEUE.md) and their Issues.
 | --- | --- | --- |
 | Native Ketho annotations | Restricted native source loader, emitter, aliases, selected corrections/inheritance, literals, maps and consumer probes. | #196 simple supported generation; #203 native-only path; close actual semantic gaps against the selected Ketho/Blizzard input (#125). |
 | EmmyLua addon analysis | Pinned upstream engine, Main/Library registration, diagnostics, source/overlay analysis. | #193 one analysis; #200 normal root/TOC/library configuration; #201 real addon flow. |
-| Blizzard UI search | Source/TOC/XML owners, native graphs and Search/FTS/Context implementations. | #131 current reader-ready index, #169 direct FTS, #106 usable search, #117 relevant XML links, #122 readable context. |
+| Blizzard UI search | Source/TOC/XML owners and native graphs; FTS over file labels/recorded names; separate source-excerpt reader. | #131 reader-ready index, #169 source-content/FTS tables, #106 real body/symbol search, #117 XML links, #122 hit-to-excerpt handoff. |
 | Updating source | Project update and removal paths exist. | #109 prove useful final results on one changed addon without legacy epochs. |
 | Editor/agent access | Selected stdio LSP/MCP, overlay, definition/reference/symbol/context routes exist. | #198/#199 standards fixes; #125 useful Search exposure and upstream Emmy setup. No required reimplementation of all Lua language features. |
 | Build/distribution | Cargo workspace and CI exist. | A normal build and real workflow on each advertised platform; ordinary artifact/notices. No custom release engine. |
