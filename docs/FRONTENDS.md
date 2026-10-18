@@ -2,7 +2,8 @@
 
 CLI is the primary complete user path. Current commands are in
 [apps/wow](../apps/wow/README.md); normal root/TOC/library configuration remains
-#200. The three useful workflows are in [architecture](ARCHITECTURE.md#1-the-product).
+#200. The workflows are in the [manifesto](ARCHITECTURE.md#what-the-product-must-deliver);
+their code routes are in [implementation](IMPLEMENTATION.md).
 
 ## EmmyLua
 

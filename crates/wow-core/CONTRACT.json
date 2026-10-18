@@ -26,14 +26,12 @@
   "digest_algorithm": "sha256",
   "normative_documents": [
     "README.md",
-    "DECISIONS.md",
     "DATA_MODEL.md",
     "OPERATIONS.md",
     "CANONICALIZATION.md",
     "ERROR_MODEL.md",
     "TEST_MATRIX.md",
     "CONSUMER_GUIDE.md",
-    "IMPLEMENTATION_PLAN.md",
     "COVERAGE_CONSUMERS.md",
     "JSON_ADMISSION.md"
   ],
@@ -43,12 +41,10 @@
     "../../docs/ARCHITECTURE.md",
     "../../docs/SECURITY_MODEL.md",
     "../../docs/TEST_STRATEGY.md",
-    "../DEPENDENCY_GRAPH.md",
-    "../WORKSTREAMS.md"
+    "../../docs/IMPLEMENTATION.md"
   ],
   "external_routes": [
-    "docs/IMPLEMENTATION_STATUS.md#optional-context",
-    "docs/IMPLEMENTATION_STATUS.md#optional-context"
+    "docs/IMPLEMENTATION.md#sources-and-donors"
   ],
   "decisions": [
     "CORE-001",

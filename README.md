@@ -14,7 +14,8 @@ requiring VS Code.
 - Provide a usable CLI and focused stdio LSP/MCP integrations. General Lua editor
   features use EmmyLua's existing engine/server.
 
-[Architecture](docs/ARCHITECTURE.md) is the current scope.
+[Architecture](docs/ARCHITECTURE.md) is the product manifesto.
+[Implementation](docs/IMPLEMENTATION.md) maps the existing code, replacements and donors.
 [Refactoring queue](docs/REFACTOR_QUEUE.md) contains concrete work in order.
 [Current state](docs/PROJECT_COMPLETION_MATRIX.md) separates existing code from
 remaining user workflows. This is an active refactor, not a finished release.
@@ -48,8 +49,8 @@ configuration are preserved. Remove redundant code and feature-only tests/docs
 with each refactor. The old governance, cryptographic envelope, compatibility,
 provider, Wasm plugin and custom release/updater plans are retired.
 
-Contributors start with [AGENTS.md](AGENTS.md), the selected Issue and its few
-named implementation/donor paths. See [docs/README.md](docs/README.md) for routes.
+Contributors read [AGENTS.md](AGENTS.md) and the whole manifesto, then the selected
+Issue and implementation route. See [docs/README.md](docs/README.md) for details.
 
 ## License
 

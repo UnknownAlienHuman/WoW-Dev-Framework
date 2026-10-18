@@ -1,22 +1,19 @@
 # Documentation
 
-Read [AGENTS.md](../AGENTS.md), select a task from
-[REFACTOR_QUEUE.md](REFACTOR_QUEUE.md), then inspect its named code and callers.
-The current product scope is [ARCHITECTURE.md](ARCHITECTURE.md); older package
-contracts are implementation reference, not a second roadmap.
+Start with root [AGENTS.md](../AGENTS.md) and read the complete product manifesto.
+Then select one task and read only its implementation route, code and donor.
 
-| Need | Read |
+| Question | Document |
 | --- | --- |
-| Scope and removed features | [Architecture](ARCHITECTURE.md), [decision](DECISIONS.md) |
-| Next work and dependencies | [Queue](REFACTOR_QUEUE.md), linked GitHub Issue |
-| What works / what remains | [Completion](PROJECT_COMPLETION_MATRIX.md) |
-| Contributor coordination | [Execution](EXECUTION_MODEL.md) |
-| Checks | [Test strategy](TEST_STRATEGY.md), [commands](CONFORMANCE_COMMANDS.md) |
-| Annotation implementation | [Ketho map](KETHO_RUST_PORT.md), [corrections](KETHO_NATIVE_CORRECTIONS.md) |
-| Engine and editor reuse | [EmmyLua](EMMYLUA_UPSTREAM.md) |
-| Reviewed defects | [Audit](AUDIT_2026-10-17.md) |
-| Current CLI input/transport recipes | [apps/wow](../apps/wow/README.md) |
+| Why does the product exist, what must it do, what is out of scope? | [Architecture manifesto](ARCHITECTURE.md) |
+| What code exists, how should it change, what comes from donors? | [Implementation](IMPLEMENTATION.md) |
+| What should be done next? | [Queue](REFACTOR_QUEUE.md), selected GitHub Issue |
+| What works and what is still missing? | [Completion](PROJECT_COMPLETION_MATRIX.md) |
+| How do contributors coordinate, check and publish? | [Execution](EXECUTION_MODEL.md) |
+| Which annotation behavior matters? | [Ketho map](KETHO_RUST_PORT.md), [corrections](KETHO_NATIVE_CORRECTIONS.md) |
+| How is the Lua engine/server reused? | [EmmyLua](EMMYLUA_UPSTREAM.md) |
+| Which defects were verified? | [Audit](AUDIT_2026-10-17.md) |
+| Which commands currently run? | [CLI](../apps/wow/README.md), [stdio](FRONTENDS.md) |
 
-Read a detailed owner document only when changing that behavior. Old package
-labels, status matrices and fixture inventories do not mandate compatibility,
-proof artifacts or removed features. Git history retains superseded plans.
+Detailed owner documents describe their current code. They cannot restore
+removed scope or require historical package/certification matrices.
