@@ -211,8 +211,6 @@ pub(super) fn capture(
 pub struct RequalifiedNativeLibrary {
     pub(super) project_snapshot_id: Box<str>,
     pub(super) profile: ProfileIdentity,
-    environment: Box<str>,
-    reference_target: Option<NativeReferenceTarget>,
     pub(super) reference: NativeViewProjection,
     pub(super) source_files: Vec<NativeFileIdentity>,
     pub(super) input_failures: Vec<InputFailure>,
@@ -225,12 +223,6 @@ pub struct RequalifiedNativeLibrary {
 }
 
 impl RequalifiedNativeLibrary {
-    pub(crate) fn environment(&self) -> &str {
-        &self.environment
-    }
-    pub(crate) fn reference_target(&self) -> Option<&NativeReferenceTarget> {
-        self.reference_target.as_ref()
-    }
     #[must_use]
     pub fn project_snapshot_id(&self) -> &str {
         &self.project_snapshot_id
@@ -449,8 +441,6 @@ pub(crate) fn rebuild_for_project(
     Ok(RequalifiedNativeLibrary {
         project_snapshot_id: project.snapshot_id().into(),
         profile,
-        environment: decoded.profile.environment.into(),
-        reference_target: decoded.profile.reference_target,
         reference,
         source_files,
         input_failures: failures,

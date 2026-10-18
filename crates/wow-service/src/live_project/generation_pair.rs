@@ -132,17 +132,6 @@ pub(crate) fn with_pair_in_owner<T>(
         pair_reads(store, None, request, stop, closure, build)
     }
 }
-pub(crate) fn with_source_pair_in_owner<T>(
-    store: &LiveProjectStore,
-    selection: &PlatformStoreSelection,
-    request: &ProjectGenerationPairRequest,
-    stop: &AtomicBool,
-    closure: &Cell<&'static str>,
-    build: impl FnOnce(&LiveProjectRead, &LiveProjectRead) -> ServiceResult<T>,
-) -> ServiceResult<T> {
-    store.require_namespace(selection)?;
-    pair_reads(store, Some(selection), request, stop, closure, build)
-}
 fn pair_reads<T>(
     store: &LiveProjectStore,
     selection: Option<&PlatformStoreSelection>,
