@@ -1,0 +1,159 @@
+name: Apply exact lineage cleanup
+
+on:
+  push:
+    branches:
+      - refactor/remove-service-lineage-2026-10-18
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: refactor/remove-service-lineage-2026-10-18
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Remove lineage-only helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str = "") -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one exact match, found {count}")
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "crates/wow-service/src/live_project.rs",
+              "pub(crate) use generation_pair::with_pair_in_owner as with_native_generation_pair;\n"
+              "pub(crate) use generation_pair::with_source_pair_in_owner as with_native_source_generation_pair;\n",
+          )
+          replace_once(
+              "crates/wow-service/src/live_project.rs",
+              "    pub(crate) fn custody(&self) -> wow_store::project::ReadSnapshotCustody<'_> {\n"
+              "        self.read.custody()\n"
+              "    }\n",
+          )
+          replace_once(
+              "crates/wow-service/src/live_project.rs",
+              "    pub(crate) fn retained_owner(&self) -> &ProjectStore {\n"
+              "        &self.store\n"
+              "    }\n"
+              "    pub(crate) fn retained_owner_mut(&mut self) -> &mut ProjectStore {\n"
+              "        &mut self.store\n"
+              "    }\n",
+          )
+          replace_once(
+              "crates/wow-service/src/live_project/generation_pair.rs",
+              "pub(crate) fn with_source_pair_in_owner<T>(\n"
+              "    store: &LiveProjectStore,\n"
+              "    selection: &PlatformStoreSelection,\n"
+              "    request: &ProjectGenerationPairRequest,\n"
+              "    stop: &AtomicBool,\n"
+              "    closure: &Cell<&'static str>,\n"
+              "    build: impl FnOnce(&LiveProjectRead, &LiveProjectRead) -> ServiceResult<T>,\n"
+              ") -> ServiceResult<T> {\n"
+              "    store.require_namespace(selection)?;\n"
+              "    pair_reads(store, Some(selection), request, stop, closure, build)\n"
+              "}\n",
+          )
+          replace_once(
+              "crates/wow-service/src/graph/build/native_api.rs",
+              "/// Borrowed original support for an accepted local projection. This is data for\n"
+              "/// independent Graph validation, not an accepted cross-generation relation.\n"
+              "pub(crate) struct NativeApiLineageOrigin<'a> {\n"
+              "    pub(crate) node: wow_graph::GraphNode,\n"
+              "    pub(crate) source_assertion: GraphAssertionRef,\n"
+              "    pub(crate) source_handle: &'a SourceHandle,\n"
+              "    pub(crate) evidence: &'a EvidenceRecord,\n"
+              "}\n\n",
+          )
+          replace_once(
+              "crates/wow-service/src/graph/build/native_api.rs",
+              "    pub(crate) fn original_reference_library(&self) -> &RequalifiedNativeLibrary {\n"
+              "        &self.library\n"
+              "    }\n\n"
+              "    pub(crate) fn reference_lineage_origin<'a>(\n"
+              "        &'a self,\n"
+              "        graph: &wow_graph::GraphPartitionRead<'_>,\n"
+              "        record_key: &str,\n"
+              "        record_digest: &str,\n"
+              "        stop: &AtomicBool,\n"
+              "    ) -> ServiceResult<Option<NativeApiLineageOrigin<'a>>> {\n"
+              "        let Some((endpoint, node)) =\n"
+              "            self.reference_endpoint(graph, record_key, record_digest, stop)?\n"
+              "        else {\n"
+              "            return Ok(None);\n"
+              "        };\n"
+              "        let source_handle = self\n"
+              "            .source_handles\n"
+              "            .get(&endpoint.source_handle_id)\n"
+              "            .ok_or_else(incompatible)?;\n"
+              "        let evidence = self\n"
+              "            .evidence\n"
+              "            .get(&endpoint.evidence_id)\n"
+              "            .ok_or_else(incompatible)?;\n"
+              "        if source_handle.handle_id() != endpoint.source_handle_id\n"
+              "            || evidence.evidence_id() != endpoint.evidence_id\n"
+              "            || evidence.context_id() != self.context.context_id()\n"
+              "            || !evidence\n"
+              "                .source_handle_ids()\n"
+              "                .contains(&endpoint.source_handle_id)\n"
+              "        {\n"
+              "            return Err(incompatible());\n"
+              "        }\n"
+              "        Ok(Some(NativeApiLineageOrigin {\n"
+              "            node,\n"
+              "            source_assertion: endpoint.assertion.clone(),\n"
+              "            source_handle,\n"
+              "            evidence,\n"
+              "        }))\n"
+              "    }\n",
+          )
+          replace_once(
+              "crates/wow-service/src/local/native_library_input.rs",
+              "    environment: Box<str>,\n"
+              "    reference_target: Option<NativeReferenceTarget>,\n",
+          )
+          replace_once(
+              "crates/wow-service/src/local/native_library_input.rs",
+              "    pub(crate) fn environment(&self) -> &str {\n"
+              "        &self.environment\n"
+              "    }\n"
+              "    pub(crate) fn reference_target(&self) -> Option<&NativeReferenceTarget> {\n"
+              "        self.reference_target.as_ref()\n"
+              "    }\n",
+          )
+          replace_once(
+              "crates/wow-service/src/local/native_library_input.rs",
+              "        environment: decoded.profile.environment.into(),\n"
+              "        reference_target: decoded.profile.reference_target,\n",
+          )
+          replace_once(
+              "crates/wow-service/src/local/native_reference.rs",
+              "    pub fn product(&self) -> &str {\n"
+              "        &self.product\n"
+              "    }\n"
+              "    pub fn channel(&self) -> &str {\n"
+              "        &self.channel\n"
+              "    }\n",
+          )
+          PY
+          cargo fmt --all
+          rm .github/workflows/apply-lineage-cleanup.yml
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor(service): remove lineage-only helpers"
+          git push origin HEAD:refactor/remove-service-lineage-2026-10-18
