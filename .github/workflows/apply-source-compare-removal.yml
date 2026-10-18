@@ -1,0 +1,144 @@
+name: Apply source comparison removal
+
+on:
+  push:
+    branches:
+      - refactor/remove-source-compare-current-2026-10-18
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out refactor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Remove comparison product and orphan plans
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement, found {count}")
+              file.write_text(text.replace(old, new))
+
+          compare_help = (
+              "wow source reference-compare --before-config <before.json> "
+              "--after-config <after.json> --request <compare.json> [--format json|text]\\n"
+          )
+          replace_once("apps/wow/src/args.rs", compare_help, "")
+          replace_once("apps/wow/src/source.rs", compare_help, "")
+          replace_once("apps/wow/src/main.rs", "mod source_compare;\n", "")
+          replace_once(
+              "apps/wow/src/source.rs",
+              "    if values\n"
+              "        .get(1)\n"
+              "        .is_some_and(|value| value == \"reference-compare\")\n"
+              "    {\n"
+              "        return crate::source_compare::run(values);\n"
+              "    }\n",
+              "",
+          )
+          replace_once(
+              "crates/wow-reference/src/native_view.rs",
+              "pub mod comparison;\n",
+              "",
+          )
+          replace_once(
+              "crates/wow-service/src/lib.rs",
+              "pub mod source_reference_compare;\n",
+              "",
+          )
+          replace_once(
+              "crates/wow-service/src/local/mod.rs",
+              "pub use native_reference::{\n"
+              "    SOURCE_REFERENCE_INPUT_SCHEMA, SourceReferenceComparisonResult, SourceReferenceResult,\n"
+              "    compare_local_source_references, read_local_source_reference,\n"
+              "};",
+              "pub use native_reference::{\n"
+              "    SOURCE_REFERENCE_INPUT_SCHEMA, SourceReferenceResult, read_local_source_reference,\n"
+              "};",
+          )
+          replace_once(
+              "crates/wow-service/src/local/native_reference.rs",
+              "mod comparison;\n"
+              "pub use comparison::{SourceReferenceComparisonResult, compare_local_source_references};\n",
+              "",
+          )
+          replace_once(
+              "crates/wow-reference/src/native_view/signatures.rs",
+              "\n    pub(super) fn raw_default(&self) -> Option<&RawValue> {\n"
+              "        self.default.as_ref()\n"
+              "    }\n"
+              "\n    pub(super) fn raw_stride_index(&self) -> Option<&RawValue> {\n"
+              "        self.stride_index.as_ref()\n"
+              "    }\n",
+              "\n",
+          )
+          replace_once(
+              "crates/wow-reference/src/native_view/signatures.rs",
+              "\n    pub(super) fn require_view(\n"
+              "        &self,\n"
+              "        projection_profile: &str,\n"
+              "        view: &ReferenceView,\n"
+              "        stop: &AtomicBool,\n"
+              "    ) -> Result<(), NativeError> {\n"
+              "        checkpoint(stop)?;\n"
+              "        if self.projection_profile != projection_profile\n"
+              "            || self.generation != view.generation_id()\n"
+              "            || self.view_digest != view.self_digest()\n"
+              "        {\n"
+              "            return Err(error(NativeErrorCode::InvalidIdentity));\n"
+              "        }\n"
+              "        Ok(())\n"
+              "    }\n",
+              "",
+          )
+          PY
+
+          git rm -r --ignore-unmatch \
+            apps/wow/LINEAGE_CANDIDATES.md \
+            apps/wow/REFERENCE_LINEAGE.md \
+            apps/wow/SOURCE_LINEAGE.md \
+            apps/wow/SOURCE_REFERENCE_COMPARISON.md \
+            apps/wow/e4 \
+            apps/wow/src/source_compare.rs \
+            crates/wow-graph/e4 \
+            crates/wow-project/E4_B_LINEAGE_INPUTS.md \
+            crates/wow-reference/E4_B_TRANSITION_EVIDENCE.md \
+            crates/wow-reference/src/native_view/comparison.rs \
+            crates/wow-reference/src/native_view/comparison/tests.rs \
+            crates/wow-search/e4 \
+            crates/wow-service/e4 \
+            crates/wow-service/src/local/native_reference/comparison.rs \
+            crates/wow-service/src/local/native_reference/comparison/tests.rs \
+            crates/wow-service/src/source_reference_compare.rs \
+            .github/workflows/apply-source-compare-removal.yml
+
+          cargo +stable fmt --all
+          cargo +stable xtask check
+          cargo +stable clippy --locked -p wow-reference -p wow-service -p wow-cli --all-targets --all-features -- -D warnings
+
+          if rg -n "reference-compare|SourceReferenceComparisonResult|compare_local_source_references|source_reference_compare|native_view::comparison" --glob '!target/**' .; then
+            echo "stale source comparison reference remains" >&2
+            exit 1
+          fi
+          git diff --check
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor: remove source comparison and E4 lineage plans"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
