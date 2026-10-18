@@ -20,7 +20,6 @@ mod durable;
 mod gc;
 mod generation_pair;
 mod library_modes;
-mod lineage_input;
 #[path = "migration_tests.rs"]
 mod migration;
 mod namespaces;

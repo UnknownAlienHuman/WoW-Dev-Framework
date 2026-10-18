@@ -483,9 +483,6 @@ pub struct AcquiredProjectPair {
     publication_set_id: String,
 }
 impl AcquiredProjectPair {
-    pub(crate) fn read_identity(&self) -> (&EpochId, &StoreGenerationId) {
-        (&self.read_epoch_id, &self.read_generation_id)
-    }
     /// Match the original exact retained owner read without reconstructing its
     /// proof from a serialized publication or caller-supplied identity.
     pub fn is_bound_to_read(&self, read: &ReadSnapshot) -> bool {

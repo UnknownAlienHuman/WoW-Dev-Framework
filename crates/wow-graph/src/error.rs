@@ -38,11 +38,6 @@ pub enum GraphErrorCode {
     ArtifactDecodeFailed,
     StoreFailure,
     StoreReadUnavailable,
-    LineageProfileInvalid,
-    LineageInputInvalid,
-    LineageSnapshotInvalid,
-    LineageQueryInvalid,
-    LineageReadCloseFailed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
