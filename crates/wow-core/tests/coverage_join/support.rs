@@ -2,9 +2,9 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::error::Error;
 use wow_core::{
-    CapabilitySummary, CoreErrorCode, CoreResult, CoverageId, CoverageRecord, CoverageStatus,
+    CapabilitySummary, CoreErrorCode, CoreResult, CoverageRecord, CoverageStatus,
     GenerationContext, NegativeAuthorityDecision, NotEvaluatedId, NotEvaluatedRecord,
-    TruncationState, combine_coverage, evaluate_negative_authority,
+    TruncationState, evaluate_negative_authority,
 };
 
 pub type TestResult<T = ()> = Result<T, Box<dyn Error>>;
@@ -60,40 +60,6 @@ pub fn append_record(value: &mut Value, record: &CoverageRecord) -> TestResult {
         .as_array_mut()
         .ok_or("coverage array")?
         .push(serde_json::to_value(record)?);
-    Ok(())
-}
-
-pub fn refresh_summaries(value: &mut Value) -> TestResult {
-    let records: Vec<CoverageRecord> = field(value, "coverage_records")?;
-    let summaries: Vec<CapabilitySummary> = field(value, "capability_summaries")?;
-    let fresh = summaries
-        .iter()
-        .map(|summary| {
-            let selected = records
-                .iter()
-                .filter(|record| record.capability_id() == summary.capability_id())
-                .cloned()
-                .collect::<Vec<_>>();
-            combine_coverage(
-                summary.context_id(),
-                summary.capability_id().clone(),
-                summary.producer_id().clone(),
-                summary.producer_version().clone(),
-                &selected,
-            )
-        })
-        .collect::<CoreResult<Vec<_>>>()?;
-    value["capability_summaries"] = serde_json::to_value(fresh)?;
-    Ok(())
-}
-
-pub fn reseal_record(value: &mut Value) -> TestResult {
-    let mut material = value.clone();
-    material
-        .as_object_mut()
-        .ok_or("coverage object")?
-        .remove("coverage_id");
-    value["coverage_id"] = CoverageId::derive(&material)?.to_string().into();
     Ok(())
 }
 

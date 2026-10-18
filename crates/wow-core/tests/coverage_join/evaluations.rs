@@ -144,7 +144,7 @@ fn not_evaluated_join_006_blocker_capability_cannot_be_outside_declared_set() ->
 
 #[test]
 fn not_evaluated_join_007_nonblocking_complete_partition_cannot_fake_a_blocker() -> TestResult {
-    let mut value = fixture(0)?;
+    let value = fixture(0)?;
     let coverage: CoverageRecord = serde_json::from_value(value["coverage_records"][3].clone())?;
     let evaluation = NotEvaluatedRecord::new(
         coverage.context_id(),
