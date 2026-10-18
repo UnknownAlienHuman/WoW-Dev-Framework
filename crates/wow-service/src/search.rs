@@ -696,13 +696,6 @@ impl SearchOperationService {
             OperationKind::Search,
         )? {
             RegistryDecision::Replay(CompletedResult::Search(result)) => return Ok(result),
-            RegistryDecision::Replay(_) => {
-                return Err(ServiceError::for_operation(
-                    ServiceErrorCode::InternalContractViolation,
-                    "search operation replay resolved to another result type",
-                    request.operation_id.as_str(),
-                ));
-            }
             RegistryDecision::Started => {}
         }
 

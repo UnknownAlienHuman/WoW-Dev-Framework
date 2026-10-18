@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::identity::validate_identifier;
 use crate::search::SearchBuildQueryResult;
-use crate::{CheckResult, ServiceError, ServiceErrorCode, ServiceResult, StatusResult};
+use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
@@ -27,15 +27,11 @@ impl OperationId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum OperationKind {
-    Status,
-    Check,
     Search,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum CompletedResult {
-    Status(Arc<StatusResult>),
-    Check(Arc<CheckResult>),
     Search(Arc<SearchBuildQueryResult>),
 }
 
@@ -48,7 +44,6 @@ enum RegistryState {
 #[derive(Debug, Clone)]
 struct RegistryEntry {
     request_digest: Box<str>,
-    kind: OperationKind,
     state: RegistryState,
 }
 
@@ -63,7 +58,6 @@ pub(crate) enum RegistryDecision {
 pub struct OperationRegistryRecord {
     operation_id: Box<str>,
     request_digest: Box<str>,
-    kind: OperationKind,
     state: &'static str,
     result_id: Option<Box<str>>,
 }
@@ -94,9 +88,10 @@ impl OperationRegistry {
         request_digest: &str,
         kind: OperationKind,
     ) -> ServiceResult<RegistryDecision> {
+        debug_assert_eq!(kind, OperationKind::Search);
         let mut entries = self.lock()?;
         if let Some(entry) = entries.get(operation_id.as_str()) {
-            if entry.request_digest.as_ref() != request_digest || entry.kind != kind {
+            if entry.request_digest.as_ref() != request_digest {
                 return Err(ServiceError::for_operation(
                     ServiceErrorCode::OperationConflict,
                     "operation ID is already bound to a different canonical request",
@@ -116,7 +111,6 @@ impl OperationRegistry {
             operation_id.as_str().into(),
             RegistryEntry {
                 request_digest: request_digest.into(),
-                kind,
                 state: RegistryState::InProgress,
             },
         );
@@ -130,6 +124,7 @@ impl OperationRegistry {
         kind: OperationKind,
         result: CompletedResult,
     ) -> ServiceResult<()> {
+        debug_assert_eq!(kind, OperationKind::Search);
         let mut entries = self.lock()?;
         let entry = entries.get_mut(operation_id.as_str()).ok_or_else(|| {
             ServiceError::for_operation(
@@ -139,7 +134,6 @@ impl OperationRegistry {
             )
         })?;
         if entry.request_digest.as_ref() != request_digest
-            || entry.kind != kind
             || !matches!(entry.state, RegistryState::InProgress)
         {
             return Err(ServiceError::for_operation(
@@ -153,12 +147,12 @@ impl OperationRegistry {
     }
 
     pub fn abandon(&self, operation_id: &OperationId, request_digest: &str, kind: OperationKind) {
+        debug_assert_eq!(kind, OperationKind::Search);
         let Ok(mut entries) = self.entries.lock() else {
             return;
         };
         if entries.get(operation_id.as_str()).is_some_and(|entry| {
             entry.request_digest.as_ref() == request_digest
-                && entry.kind == kind
                 && matches!(entry.state, RegistryState::InProgress)
         }) {
             entries.remove(operation_id.as_str());
@@ -172,12 +166,6 @@ impl OperationRegistry {
             .map(|(operation_id, entry)| {
                 let (state, result_id) = match &entry.state {
                     RegistryState::InProgress => ("in_progress", None),
-                    RegistryState::Completed(CompletedResult::Status(result)) => {
-                        ("completed", Some(result.result_id().into()))
-                    }
-                    RegistryState::Completed(CompletedResult::Check(result)) => {
-                        ("completed", Some(result.result_id().into()))
-                    }
                     RegistryState::Completed(CompletedResult::Search(result)) => {
                         ("completed", Some(result.result_id().into()))
                     }
@@ -185,14 +173,13 @@ impl OperationRegistry {
                 OperationRegistryRecord {
                     operation_id: operation_id.clone(),
                     request_digest: entry.request_digest.clone(),
-                    kind: entry.kind,
                     state,
                     result_id,
                 }
             })
             .collect();
         Ok(OperationRegistrySnapshot {
-            schema: "wow-service/operation-registry/1",
+            schema: "wow-service/search-operation-registry/1",
             records,
         })
     }
