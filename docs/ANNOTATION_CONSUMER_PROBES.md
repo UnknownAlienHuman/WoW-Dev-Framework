@@ -69,4 +69,4 @@ analyzer/service integration, or runtime Secret/combat behavior. For a bounded
 semantic change, run one relevant positive and negative consumer case. Broader
 consumer qualification is needed when claiming broader coverage, not as a
 prerequisite for every patch. Keep the detailed annotation semantics in the
-[Ketho port map](KETHO_RUST_PORT.md) and [type-lowering guide](../crates/wow-annotations/e1/TYPE_LOWERING.md).
+[Ketho port map](KETHO_RUST_PORT.md) and [type-lowering guide](../crates/wow-annotations/TYPE_LOWERING.md).

@@ -63,11 +63,6 @@
       "relationship": "required for Blizzard UI source lineage comparisons"
     },
     {
-      "contract_id": "wow-reference/e1-persistent-schema-and-build-plan",
-      "implementation_and_fixture_freeze_required": true,
-      "relationship": "required for Reference lineage/transition comparisons"
-    },
-    {
       "contract_id": "wow-search/e4-a/exact-generation-retrieval-core",
       "implementation_and_fixture_freeze_required": true,
       "relationship": "required only for search-derived Candidate proposal lanes"

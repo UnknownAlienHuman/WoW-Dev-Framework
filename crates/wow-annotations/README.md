@@ -15,8 +15,9 @@ projects explicit typed event/CVar/enum/constant data. The native connection in
 `src/native.rs` composes Reference's restricted evaluator and normalization with
 these emitters. The development example is
 `examples/native_library.rs`; #196 will expose that native path through a
-supported command. The existing builder still has pack-oriented commands. Select the exact source revision and client
-flavor, and retain partial/unsupported outcomes. Regenerate derived libraries
+supported command. The existing builder still has pack-oriented commands. Select
+the exact source revision and client flavor; retain partial/unsupported outcomes.
+Regenerate derived libraries
 and reports when their source or projection inputs change.
 
 The Rust projection preserves donor-specific type and signature behavior,
@@ -24,14 +25,14 @@ including callback argument/return shapes, nilability, defaults, aliases, and
 explicit receiver names. Invalid or unsupported declarations stay reported;
 they are not silently widened to `any`. The complete type/signature inventory
 and known losses are documented in the [Ketho port map](../../docs/KETHO_RUST_PORT.md)
-and [type lowering guide](e1/TYPE_LOWERING.md).
+and [type lowering guide](TYPE_LOWERING.md).
 
 ## Navigation and consumer checks
 
 The `navigation` module provides `source_at`, `source_at_position`,
 `source_for_range`, `NavigationIndex::new`, `generated_for`, and `bind_source`
 for point/range, reverse, and source-buffer lookups. See the public API docs and
-`e1/SOURCE_MAP_AND_LOSS.md` for map semantics and known losses.
+[source maps](SOURCE_MAPS.md) for precision and incomplete-result behavior.
 Consumer checks in [`docs/ANNOTATION_CONSUMER_PROBES.md`](../../docs/ANNOTATION_CONSUMER_PROBES.md)
 exercise signature and closed-string-enum feedback in EmmyLua and LuaLS.
 
@@ -42,12 +43,11 @@ coverage. Third-party notices are in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTI
 
 ## Read by task
 
-- Start with [`AGENTS.md`](../../AGENTS.md), the selected owner contract, and changed
+- Start with root [`AGENTS.md`](../../AGENTS.md), the selected Issue and changed
   caller code.
 - Native source, aliases, corrections, class binding, literals: [Ketho map](../../docs/KETHO_RUST_PORT.md).
-- Type model and output layout: [semantic model](e1/SEMANTIC_MODEL.md),
-  [type lowering](e1/TYPE_LOWERING.md), [layout](e1/LAYOUT_AND_RENDERING.md).
-- Maps and losses: [source-map contract](e1/SOURCE_MAP_AND_LOSS.md).
+- Types, signatures and output: [lowering notes](TYPE_LOWERING.md).
+- Maps and navigation: [source maps](SOURCE_MAPS.md).
 - Consumer parity: [focused probes](../../docs/ANNOTATION_CONSUMER_PROBES.md).
 
 Keep unknowns, conflicts, source identities, and coverage visible. Do not add

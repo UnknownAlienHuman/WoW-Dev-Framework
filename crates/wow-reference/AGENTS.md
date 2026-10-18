@@ -1,7 +1,7 @@
 # `wow-reference` contribution rules
 
 Follow the root [`AGENTS.md`](../../AGENTS.md), selected Issue or queue entry,
-and the specific Reference contract/data model and caller paths touched. Read
+and the actual Reference owner/model and caller paths touched. Read
 [`KETHO_RUST_PORT.md`](../../docs/KETHO_RUST_PORT.md) for annotation/source
 normalization work. Check pinned dependency APIs that the change actually uses.
 

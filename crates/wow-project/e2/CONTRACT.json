@@ -23,10 +23,6 @@
     {
       "contract_id": "wow-graph/e2-a/typed-assertion-partition-query-core",
       "implementation_and_fixture_freeze_required": true
-    },
-    {
-      "contract_id": "wow-recognizers/e2-b/core-structural-rules",
-      "implementation_and_fixture_freeze_required": true
     }
   ],
   "active_scope": [

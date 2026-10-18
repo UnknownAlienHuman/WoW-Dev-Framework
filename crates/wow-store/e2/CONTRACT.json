@@ -56,10 +56,6 @@
       "implementation_and_fixture_freeze_required": true
     },
     {
-      "contract_id": "wow-recognizers/e2-b/core-structural-rules",
-      "implementation_and_fixture_freeze_required": true
-    },
-    {
       "contract_id": "wow-project/e2-c/toc-xml-load-incremental-index",
       "implementation_and_fixture_freeze_required": true
     }

@@ -9,7 +9,7 @@ in [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 | Workflow | Existing code | Remaining product work |
 | --- | --- | --- |
-| Native Ketho annotations | Restricted native source loader, emitter, aliases, selected corrections/inheritance, literals, maps and consumer probes. | #196 simple supported generation; #203 native-only path; close actual semantic gaps against the selected Ketho/Blizzard input (#125). |
+| Native Ketho annotations | Restricted native source loader, emitter, aliases, selected corrections/inheritance, literals, maps and consumer probes. | #196 supported generation; #203 native-only path; #204 emit once; close actual semantic gaps against selected Ketho/Blizzard input (#125). |
 | EmmyLua addon analysis | Pinned engine and Main/Library semantic facts; generic diagnostics currently use a separate Main-only analysis and a three-code filter. | #193 one analysis with Library-aware diagnostics; #200 normal root/TOC/library configuration; #201 real addon flow. |
 | Blizzard UI search | Source/TOC/XML owners and native graphs; FTS over file labels/recorded names; separate source-excerpt reader. | #131 reader-ready index, #169 source-content/FTS tables, #106 real body/symbol search, #117 XML links, #122 hit-to-excerpt handoff. |
 | Updating source | Project update and removal paths exist. | #109 prove useful final results on one changed addon without legacy epochs. |
