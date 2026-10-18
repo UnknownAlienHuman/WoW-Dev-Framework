@@ -107,6 +107,15 @@ Owners never depend on service, applications, or tools. Store never interprets d
 
 Owner-neutral bounded projections cross seams only when a direct dependency would violate ownership. E6 locator mapping, E7-A session overlays, and E7-B generic release storage use this pattern.
 
+Refactor toward fewer implementations: one parse/analysis per admitted input,
+one current owner representation, and explicit adapters at real external or
+retained-data boundaries. A new feature should extend the existing typed path;
+it does not require a new host, schema or pipeline for each feature combination.
+Moving code between crates corrects ownership but does not itself reduce size.
+The selected Issue must name the duplicated construction, conversion or reader
+being removed and its real replacement consumer; do not replace a local duplicate
+with a framework. Keep the protocol/identity distinctions that change behavior.
+
 ## 4. Core identity and result model
 
 `wow-core` owns generic invariants only:

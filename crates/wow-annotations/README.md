@@ -25,35 +25,31 @@ probes. `src/artifact.rs` now owns store-neutral canonical artifact bytes and
 publication selectors; `wow-service::annotation_admin` owns durable object,
 catalog, operation, read-back, lease and GC behavior.
 
-The native report is `wow-native-annotation-library/3`: scalar-resolution evidence
+Native reports use `/3` plain, `/4` with corrections, `/5` with catalogs and
+`/6` with a selected literal bridge, through one composition path. Scalar-resolution evidence
 is retained and reserved return labels have explicit collision-safe name maps.
 Prose controls are escaped with source links; directives remain rejected.
 Invalid literal groups and duplicate members do not erase valid sibling groups.
 These are bounded consumer projections, not changes to Blizzard facts.
 
-```text
-cargo test -p wow-annotations
-cargo clippy -p wow-annotations --all-targets -- -D warnings
-```
-
 `wow-annotations` projects one exact read-only `wow-reference` generation into deterministic, analysis-only LuaCATS/Emmy annotation artifacts. It owns semantic projection, type lowering, versioned layout/rendering, source maps, projection-loss reporting, Ketho semantic parity, and consumer compatibility profiles. It does not own platform truth.
 
 ## Canonical route
 
-Read the E1-C contract package in this order:
+Start with the selected Issue, [owner rules](e1/AGENTS.md) and the relevant row.
+Use the full [E1-C contract](e1/README.md), [manifest](e1/CONTRACT.json),
+[test matrix](e1/TEST_MATRIX.md) and [fixtures](e1/examples/README.md) when closing
+that package, not before each refactor. Checks follow the root execution model.
 
-1. [`e1/README.md`](e1/README.md) — scope, authority, dependency, input/output, and completion contract.
-2. [`e1/AGENTS.md`](e1/AGENTS.md) — mandatory implementation rules.
-3. [`e1/DECISIONS.md`](e1/DECISIONS.md) — accepted annotation-projection decisions.
-4. [`e1/DATA_MODEL.md`](e1/DATA_MODEL.md) and [`e1/SEMANTIC_MODEL.md`](e1/SEMANTIC_MODEL.md).
-5. [`e1/TYPE_LOWERING.md`](e1/TYPE_LOWERING.md).
-6. [`e1/LAYOUT_AND_RENDERING.md`](e1/LAYOUT_AND_RENDERING.md).
-7. [`e1/DIALECT_AND_GLOBALS.md`](e1/DIALECT_AND_GLOBALS.md).
-8. [`e1/SECURITY_AND_SANITIZATION.md`](e1/SECURITY_AND_SANITIZATION.md).
-9. [`e1/SOURCE_MAP_AND_LOSS.md`](e1/SOURCE_MAP_AND_LOSS.md).
-10. [`e1/PARITY_AND_CONSUMER_PROBES.md`](e1/PARITY_AND_CONSUMER_PROBES.md).
-11. [`e1/ERROR_MODEL.md`](e1/ERROR_MODEL.md), [`e1/TEST_MATRIX.md`](e1/TEST_MATRIX.md), and [`e1/IMPLEMENTATION_PLAN.md`](e1/IMPLEMENTATION_PLAN.md).
-12. [`e1/CONTRACT.json`](e1/CONTRACT.json) and the closed [`e1/examples/`](e1/examples/README.md) fixture package.
+| Change | Read |
+|---|---|
+| Native/correction/catalog input | [Current donor map](../../docs/KETHO_RUST_PORT.md), [catalog scope](KETHO_TYPE_CATALOG.md), corresponding Reference reader and consumer. |
+| Type or rendering behavior | [Semantic model](e1/SEMANTIC_MODEL.md), [lowering](e1/TYPE_LOWERING.md), [layout](e1/LAYOUT_AND_RENDERING.md), [dialect](e1/DIALECT_AND_GLOBALS.md). |
+| Maps/navigation/artifacts | [Data model](e1/DATA_MODEL.md), [map/loss contract](e1/SOURCE_MAP_AND_LOSS.md), matching navigation section below. |
+| Admission or consumer qualification | [Sanitization](e1/SECURITY_AND_SANITIZATION.md), [errors](e1/ERROR_MODEL.md), [parity contract](e1/PARITY_AND_CONSUMER_PROBES.md), [existing semantic probes](../../docs/ANNOTATION_CONSUMER_PROBES.md). |
+
+[Decisions](e1/DECISIONS.md) and [implementation plan](e1/IMPLEMENTATION_PLAN.md)
+retain package-wide requirements; selected slices preserve their relevant invariants.
 
 Optional operator context is advisory, disabled by default, and configured outside the repository; current Blizzard source remains authoritative.
 
@@ -102,8 +98,9 @@ parity and consumer probes use reviewed test/tool adapters.
 ## Current implementation state
 
 The pure emitter is a bounded executable slice authorized by revised ADR-004.
-The full E1 examples remain design fixtures and do not certify this slice or
-pretend its source maps, artifact manifests or consumer probes already exist.
+The full E1 examples remain design fixtures and do not certify package acceptance.
+Native maps, artifact identities and selected semantic probes already exist;
+check the current donor map before adding work described as absent in old history.
 The Rust tests verify committed Ketho-derived byte vectors; they never generate
 or rewrite the expected files. Historical donor revisions identify test evidence,
 not a permanent client, dependency, or source-version requirement.
@@ -121,7 +118,9 @@ source/value checks, without mutating raw source. Correction-enabled reports use
 v4 and retain the v3 fields; unconfigured reports stay v3. The renderer now accepts
 bounded named/primitive unions and preserves grouping for array elements.
 See [the correction contract](../../docs/KETHO_NATIVE_CORRECTIONS.md).
-Receiver naming does not implement full widget inheritance or named-type closure.
+Receiver naming alone supplies no base. The explicit `/2` correction profile
+supports guarded single-parent projection; full widget inventory/type closure
+remains open.
 
 ## Source-owned ScriptObject classes
 
@@ -138,9 +137,9 @@ alias chains that collide, reserved type names and cross-kind collisions are
 reported before ambiguous receiver output is emitted. Independent table/event
 lanes remain available. See `tests/receivers.rs` for executable cases.
 
-This is receiver declaration closure only. Gethe system names are not shortened
-by convention. Remaining custom alias/type forms, widget inheritance and
-EmmyLua/LuaLS semantic certification remain incomplete.
+Gethe system names are not shortened by convention. Current external catalog
+forms and guarded single-parent projection are in the donor map; broader type,
+inheritance and full-corpus EmmyLua/LuaLS qualification remain incomplete.
 
 ## Optional external alias resource
 

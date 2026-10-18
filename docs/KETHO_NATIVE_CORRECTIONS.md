@@ -33,6 +33,10 @@ checks set identity and outcome/status consistency, not external review authorit
 - `widget_owner`: replace the normalized ScriptObject receiver name, as in the
   donor's system-name-to-widget-name mapping. It cannot turn a namespace/global
   into a widget or merge distinct source receivers.
+- `widget_base` in `wow-native-corrections/2`: add one explicitly reviewed
+  ScriptObject parent from the same exact source generation. Child and parent
+  source/raw hashes are guarded; competing parents, self-reference, cycles and
+  cycle-dependent edges remain conflicts. No inherited methods are copied.
 
 `Type` changes on a field with `InnerType` reject: compound-shape corrections need
 a separately implemented operation, not an ignored or contradictory replacement.
@@ -43,7 +47,9 @@ emitter profile; this feature does not establish named-type closure.
 
 ## Pack data
 
-`CorrectionSet` is strict JSON (`wow-native-corrections/1`) with these fields:
+`CorrectionSet` is strict JSON: `/1` retains the field/receiver contract; `/2`
+also admits `widget_base`. Both keep these fields and the existing v4 library
+report (catalog/bridge selection still chooses v5/v6):
 
 | Field | Meaning |
 |---|---|
@@ -71,9 +77,16 @@ of the following `projection` objects:
 {"kind":"widget_owner"}
 ```
 
+For `/2`, `widget_base` adds `parent_path`, `parent_registration`,
+`expected_parent_source_sha256` and `expected_parent_raw_sha256` to the projection.
+Its `before` is `absent`; `after` names the parent's **original** ScriptObject
+identity, not a renamed alias. The parent must be unique and selected in the
+same environment. See the exact executable example in
+[`tests/inheritance.rs`](../crates/wow-annotations/tests/inheritance.rs).
+
 Values are tagged data, for example `{"kind":"text","value":"string|number"}`,
 `{"kind":"boolean","value":true}` or `{"kind":"absent"}`. `absent` is allowed
-only as the old nilability state. The donor's string `"true"` patch is not a
+only as the old nilability state or the unassigned `widget_base`. The donor's string `"true"` patch is not a
 Boolean in this contract; a reviewed Boolean replacement must be explicit.
 
 Inspect the normalized target from the validated source document to obtain the
@@ -116,14 +129,14 @@ cancellation; cancelled planning never returns a corrected corpus. Source data
 remains bounded by the native loader. No Lua, donor code, shell, network, editor
 configuration or runtime-global lookup is executed by the correction library.
 
-This is the independent Type/Nilable/widget-receiver subset, not every operation
-of E1-B. Dependency-ordered patches, restriction/deprecation corrections,
-persistent correction-store/generation publication, automatic donor-pack import,
-complete TypeDocumentation/custom annotations and widget inheritance remain
-unimplemented. Receiver naming now feeds native class declarations and an original-name type
-alias in the same file. It does not establish inheritance or general type closure. The current
-emitter still requires real EmmyLua/LuaLS semantic probes; parser acceptance and
-unit/golden tests are not substitutes.
+These field/receiver and single-base operations do not complete E1-B. General
+dependency-ordered patches, restriction/deprecation corrections, persistent
+correction-store/generation publication, automatic donor-pack import and complete
+widget/type coverage remain open. The guarded base reaches the native class
+renderer only when its parent is also projected; otherwise the library retains
+`widget_base_not_projected`. No name/folder heuristic supplies a parent.
+Selected [dual-consumer probes](ANNOTATION_CONSUMER_PROBES.md) already exist;
+full live-corpus semantics and runtime inheritance remain separate gates.
 
 
 The native class profile validates both original and corrected type names. An
