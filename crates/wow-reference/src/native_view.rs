@@ -18,7 +18,6 @@ use crate::{
     ReferenceView, RestrictionFacet, RestrictionState,
 };
 
-pub mod comparison;
 mod declarations;
 mod documentation;
 mod events;

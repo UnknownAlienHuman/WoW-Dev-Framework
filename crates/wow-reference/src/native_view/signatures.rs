@@ -57,14 +57,6 @@ impl NativeCallableField {
     pub const fn source_span(&self) -> Span {
         self.source_span
     }
-
-    pub(super) fn raw_default(&self) -> Option<&RawValue> {
-        self.default.as_ref()
-    }
-
-    pub(super) fn raw_stride_index(&self) -> Option<&RawValue> {
-        self.stride_index.as_ref()
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -260,22 +252,6 @@ impl SignatureCatalog {
             view_digest: view.self_digest().to_owned(),
             rows,
         })
-    }
-
-    pub(super) fn require_view(
-        &self,
-        projection_profile: &str,
-        view: &ReferenceView,
-        stop: &AtomicBool,
-    ) -> Result<(), NativeError> {
-        checkpoint(stop)?;
-        if self.projection_profile != projection_profile
-            || self.generation != view.generation_id()
-            || self.view_digest != view.self_digest()
-        {
-            return Err(error(NativeErrorCode::InvalidIdentity));
-        }
-        Ok(())
     }
 
     pub(super) fn read<'a>(
