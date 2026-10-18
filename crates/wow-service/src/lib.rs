@@ -15,7 +15,6 @@ mod error;
 pub mod frontend;
 pub mod graph;
 mod identity;
-pub mod lineage;
 pub mod live_project;
 pub mod local;
 mod model;

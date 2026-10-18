@@ -34,12 +34,6 @@ pub struct NativeReferenceTarget {
     channel: String,
 }
 impl NativeReferenceTarget {
-    pub fn product(&self) -> &str {
-        &self.product
-    }
-    pub fn channel(&self) -> &str {
-        &self.channel
-    }
     pub(super) fn validate(&self) -> ServiceResult<()> {
         if self.schema != "wow-service/native-reference-target/1" {
             return Err(invalid("unsupported native Reference target schema"));
