@@ -1,56 +1,69 @@
 # EmmyLua engine and server boundary
 
-The workspace pins one compiled EmmyLua analyzer revision in `Cargo.toml` and
+The workspace pins the compiled EmmyLua revision in `Cargo.toml` and
 `Cargo.lock`. `wow-emmy` adapts the public `emmylua_code_analysis` and parser
 APIs. The [analysis route](IMPLEMENTATION.md#addon-configuration-and-emmy-analysis)
-identifies the current duplicate engines and Library/diagnostic gap; #193 joins
-their work in one `EmmyLuaAnalysis`. Keep that upstream engine as the only Lua
-parser/analyzer. Do not add a second parser, interpreter, or analysis
-cache. Ordinary adapter work uses the lockfile pin; change it only for a
-concrete compatibility or current-source task, with the relevant dependency and
-behavior checked.
+identifies the duplicate engines and Library/diagnostic gap; #193 joins their
+work. EmmyLua remains the only Lua parser/analyzer.
+
+## Engine setup
+
+Read the pinned donor's `crates/emmylua_code_analysis/src/lib.rs` and
+`src/resources/mod.rs`. `new()` loads no standard declarations; workspace-root
+registration does not load files. Default runtime is `LuaLatest`, so keep the
+existing explicit `Lua51` configuration before registering/analyzing input.
+Current framework constructors load only their supplied snapshots and do not
+call `init_std_lib`.
+
+For normal addon setup in #200, use the shared engine from #193: apply Lua 5.1
+and the intended diagnostic settings, load upstream declarations once with
+`init_std_lib(None)`, then register/load the selected Main and Library inputs.
+At the compiled pin, `None` loads embedded resources without extracting them to
+disk. This is required setup work, not a claim that the current CLI does it.
+Do not add a standard-library catalog, resource installer or configuration flag.
+
+Upstream STD files are not supplied addon/Library sources. Existing `bindings`,
+`function_calls` and `global_access` adapters require a registered source before
+emitting a target; preserve their missing-target states for STD rather than
+inventing an addon span. Standard Lua declarations do not establish WoW runtime
+availability. Diagnose Main while keeping Library health and virtual-source
+mapping explicit; see [diagnostic normalization](../crates/wow-emmy/DIAGNOSTIC_NORMALIZATION.md).
+
+## File updates
+
+Public `update_files_by_path`/`update_files_by_uri` update supplied files.
+`LuaCompilation::remove_index` removes their index entries; `update_index`
+analyzes the passed file IDs. This path does not schedule unchanged global/type
+consumers. `require()` dependency ordering is not a complete invalidation graph.
+Follow the [Project update notes](../crates/wow-project/UPDATE_MODEL.md) before
+narrowing reindexing; retain the existing cross-file deletion check.
 
 ## Editor features
 
-Upstream's `emmylua_ls` crate contains and registers the LSP request handlers in
-`crates/emmylua_ls/src/handlers/`, including hover, completion, definition,
-references, rename, signature help, document symbols, and diagnostics. These
-handler modules are private to that crate. `emmylua_code_analysis` exposes the
-semantic engine, not a public importable handler SDK. For standard Lua editor
-features, use the upstream `emmylua_ls` server. Do not port or reimplement its
-full LSP handler stack in this framework. Framework-owned LSP operations remain
-limited to their distinct WoW project/reference contracts; add a narrow bridge
-only for a demonstrated missing product operation.
+Use upstream's `emmylua_ls` server for general Lua hover, completion, definition,
+references, rename, signature help, symbols and diagnostics. Its
+`crates/emmylua_ls/src/handlers/` modules are private, not an importable SDK.
+`emmylua_code_analysis` exposes the semantic engine. Do not copy the full handler
+stack; framework LSP operations stay limited to useful WoW project behavior.
 
-## Pin and compatibility checks
+## Pin changes
 
-Use the existing rolling CI parser lane for its scoped upstream-consumer check.
-For a deliberate pin change, read the used public APIs at the selected revision;
-update both workspace Emmy dependencies and the lockfile together. Align the
-compiled identity in `wow-emmy/src/syntax.rs` and affected probe metadata in
-`wow-emmy/src/compatibility/compiled_probe.rs`; preserve license attribution.
-Check the affected Main/Library, diagnostic, coordinate or update behavior with
-existing tests. No all-fixture checksum freeze or new acceptance registry.
-A source freshness check or compile alone does not prove behavioral compatibility.
-The `wow-emmy-probe` backend report is useful when a
-pin/API compatibility question calls for it; generating, hashing, or verifying
-that report is not a prerequisite for ordinary implementation work. Reports
-describe observations for their named inputs and pin; they do not authenticate
-arbitrary reports or certify an entire editor/runtime matrix.
+Ordinary adapter work uses the lockfile pin. For a concrete pin/API change,
+read the used public APIs, update both workspace Emmy dependencies and the
+lockfile, and align `wow-emmy/src/syntax.rs` plus affected
+`compatibility/compiled_probe.rs` metadata. Preserve notices and check the
+changed Main/Library, diagnostic, coordinate or update behavior with existing
+tests. Use the existing rolling parser CI for its scoped check.
 
-For an explicit local upstream checkout, the read-only check is:
+The `wow-emmy-probe` report helps investigate an actual compatibility question;
+it is not a setup prerequisite or certification of arbitrary reports, editors
+or runtimes. No all-fixture checksum freeze or replacement acceptance registry.
+For an explicitly selected local donor checkout, the read-only freshness check is:
 
 ```sh
 cargo xtask check-source /path/to/emmylua-analyzer-rust <branch-or-revision>
 ```
 
-Network failure leaves freshness unverified. Never infer that a floating branch
-is the compiled dependency. Keep Lua input inert; never execute source while
-checking the analyzer.
-
-The pinned public `EmmyLuaAnalysis` exposes `add_main_workspace`,
-`add_library_workspace`, `update_files_by_path` and `diagnose_file`. Use those
-operations for setup and checking. `new()` does not load standard declarations;
-upstream provides separate `init_std_lib` if the selected setup needs them.
-Do not recreate a standard-library catalog or silently change diagnostic settings
-while consolidating sessions.
+A floating branch, successful build or source-freshness check does not prove
+behavioral compatibility. Network failure leaves freshness unverified. Never
+execute Lua source to check the analyzer.

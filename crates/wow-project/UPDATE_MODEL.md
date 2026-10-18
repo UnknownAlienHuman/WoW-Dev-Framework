@@ -1,361 +1,60 @@
-# `wow-project` E0-D update model
-
-**Status:** normative explicit-update contract. E0-D has no filesystem watcher or background scan.
-
-The executable W14 controls now expose `ProjectLibraryOperation::Keep`,
-`Replace(Vec<LuaWorkspaceSnapshot>)` and `Clear`, plus
-`ProjectPublisher::apply_update_cancellable(request, stop)`. The legacy
-`with_target_libraries(Vec)` conversion preserves empty-as-Keep; use
-`with_library_operation` for explicit empty intent. The legacy slice getter
-cannot distinguish Keep/Clear; `library_operation()` can.
-
-The current E0 analyzer policy still requires at least one explicit Library
-snapshot. Clear or an empty replacement reaches that validator and rejects with
-`AnalyzerFailed`, retaining the old publication. It cannot silently become
-NoChange. Nonempty replacement is checked against an independent final-state
-native publication. Cancellation reaches file-operation and analyzer boundaries
-and the final publication boundary; it also applies to NoChange.
-
-New publications use generation recipe v2, binding the exact sorted Library
-snapshot identities and the publisher's function-call-facts profile. A Library
-replacement changes the generation even when Main bytes remain identical;
-generation-bound file records and source handles are rebuilt for that target.
-Independent final-state publication yields the same project/analyzer identities.
-The original `derive` receipt recipe remains v1; new publishers use
-`derive_with_analysis`, while `derive_with_libraries` defaults the fact flag to
-false. Old archives hydrate only through the crate-private legacy publisher.
-
-Physical Lua updates now retain `wow-emmy::session::AnalyzerSession`. An exact
-`AnalyzerUpdateBatch` binds the previous Main snapshot, target generation and
-all added/changed/removed paths. Only changed texts enter the two existing native
-parser lanes; unchanged Main and Library trees stay in VFS. Semantic indexes are
-conservatively rebuilt over the complete retained corpus, and all reports are
-extracted against the target snapshot. Fact/diagnostic reuse is not inferred.
-`last_analyzer_update_work()` reports Main parser work rather than fact reuse.
-
-Library or configuration changes reopen the native owner. Standalone TOC/XML
-and package inputs retain the existing cold path. Precondition checks precede
-mutation; any candidate error or cancellation discards the cache and preserves
-the previous immutable publication. NoChange returns the same snapshot without
-native work. Native failure poisons its mutable session before any further use.
-
-Independent cold parity covers add/update/remove, same-session remove/readd,
-function-call and symbol-query reports, and removal of an exact declaration
-observed before the update. Safe green-node pointer comparisons verify retained
-trees; old replay fixtures retain their original IDs. The service now derives
-explicit final physical inputs against the exact retained publication, advances
-that native owner and rebuilds the entire graph producer chain before validated
-current CAS. Full-graph removal matches independent final-state publication.
-Dependency-specific fact reuse, loader/package durable updates and full W14
-incremental acceptance remain open. See `apps/wow/LIVE_PROJECT.md`.
-
-## 1. Update request
-
-```text
-ProjectUpdateRequest
-    project_id
-    expected_current_project_generation: optional
-    expected_current_project_snapshot_digest: optional
-    target_configuration
-    file_operations[]
-    request_budget
-```
-
-The request describes an intended final logical project state. It does not authorize reading undeclared host files.
-
-## 2. Supported E0 file operations
-
-```text
-Add
-    new ProjectInputFile declaration
-    supplied UTF-8 bytes
-
-Update
-    existing ProjectFileId
-    expected old content digest
-    supplied new UTF-8 bytes/digest/length
-
-Remove
-    existing ProjectFileId
-    expected old content digest
-```
-
-Only first-party Lua files under the configured Main root are supported.
-
-## 3. Unsupported E0 updates
-
-Typed unavailable/rejected:
-
-```text
-add TOC/XML/other language
-change file to Library role
-move outside configured root
-add symlink/submodule/external root
-scan directory automatically
-load installed addon/client files
-mutate editor settings
-run generator/build script
-apply update from floating Git branch
-change profile/reference implicitly
-```
-
-Profile/reference/analyzer pin/config changes require an explicit target `ProjectConfiguration`, not an incidental file update.
-
-## 4. Preconditions
-
-Before deriving target state:
-
-- project ID matches current project;
-- expected current generation matches when supplied/required;
-- expected current snapshot digest matches when supplied;
-- every update/remove expected old file digest matches;
-- add target does not already exist;
-- update/remove target exists;
-- no duplicate/conflicting operations for one file;
-- all paths/types/roles/budgets validate;
-- target configuration is explicit and internally coherent.
-
-A stale precondition aborts before analyzer mutation.
-
-## 5. Conflicting operation rules
-
-Reject a batch containing ambiguous order-dependent operations such as:
-
-```text
-Add + Add same file
-Update + Update same file with different expected bases
-Remove + Update same file
-Add existing file
-Remove missing file
-path collision under normalization/case policy
-```
-
-Do not silently sort and choose a winner.
-
-A multi-step user intent must be normalized by the caller into one unambiguous final-state operation or separate generation transactions.
-
-## 6. Final-state construction
-
-```text
-validate current snapshot and request
--> clone logical configuration/file manifest into candidate builder
--> apply operations to builder only
--> validate final configuration/source registry/file inventory
--> verify supplied bytes/digests/lengths
--> canonicalize final manifest
--> derive target ProjectGenerationCandidate
-```
-
-The current published snapshot remains immutable.
-
-## 7. Analyzer batch construction
-
-Map project operations to `wow-emmy AnalyzerUpdateBatch` using:
-
-```text
-target ProjectGenerationId
-expected previous analyzer snapshot ID
-accepted analyzer configuration digest
-Main workspace declaration
-exact Add/Update/Remove operations
-registered project file/source identities
-```
-
-No upstream analyzer type escapes or enters the project public API.
-
-The analyzer update batch must lead to the exact candidate final file manifest. Extra/missing files are publication errors.
-
-## 8. Analyzer response validation
-
-After analyzer publication, validate:
-
-- exact target project generation;
-- exact selected profile/reference generation;
-- accepted pin/probe/config identity;
-- exact Main workspace/file manifest and content digests;
-- expected add/update/remove effects;
-- no current facts/findings for removed file;
-- source handles resolve against candidate source registry;
-- capability/coverage records present;
-- snapshot itself valid.
-
-Failure aborts project publication.
-
-## 9. Update result
-
-```text
-ProjectUpdateResult
-    Published(ProjectSnapshot)
-    Rejected(ProjectUpdateFailure)
-    Cancelled(ProjectUpdateCancellation)
-```
-
-A rejected result includes:
-
-```text
-candidate generation ID when safely derivable
-failed operation/phase
-expected and observed generation/digest IDs
-file IDs
-capability/partition blockers
-analyzer failure/root-cause reference
-last-known-good snapshot identity when retained
-```
-
-No source contents or host paths in default error output.
-
-## 10. Add semantics
-
-Add validates:
-
-- canonical new file ID/path;
-- path under registered root;
-- role/language allowed;
-- bytes valid UTF-8;
-- digest/length correct;
-- file count/byte budgets;
-- no normalized path collision.
-
-A successful add creates a new project generation and analyzer file. Its facts/findings are available only after full publication.
-
-## 11. Update semantics
-
-Update validates exact logical file identity and expected old digest.
-
-Rules:
-
-- same bytes/digest may become a deterministic no-op result or rejected no-op according to explicit API policy; it must not create an arbitrary different generation;
-- source spans/facts/findings from old content cannot remain current without recomputation/proof;
-- new byte length/digest enter final manifest;
-- analyzer invalidation follows E0-C contract;
-- publication occurs only after snapshot match.
-
-## 12. Remove semantics
-
-Remove validates exact current file/digest.
-
-After successful publication:
-
-- file absent from project/analyzer current manifests;
-- all current source handles/facts/findings for removed content invalid;
-- source registry cannot resolve removed file for current generation;
-- old immutable snapshot may still resolve it under old generation;
-- project capabilities/coverage update accordingly.
-
-## 13. Configuration/analyzer change
-
-An explicit configuration update may change:
-
-```text
-selected profile/reference generation
-accepted analyzer pin/probe identity
-analyzer configuration digest
-capability/budget policy
-logical root/source origin policy
-```
-
-Rules:
-
-- requires a full candidate generation derivation;
-- analyzer must reconfigure/rebuild as probe/adapter requires;
-- all returned state binds to the new generation;
-- no old analyzer snapshot reused without exact compatibility proof;
-- a pin/config update cannot be hidden inside an ordinary file update.
-
-## 14. No-op policy
-
-The E0 implementation must choose and document one deterministic policy:
-
-### Recommended
-
-If target configuration and final canonical file manifest equal current inputs:
-
-```text
-outcome = NoChange
-current ProjectSnapshot returned by identity
-no analyzer mutation
-no new generation ID
-```
-
-NoChange is not a fake update success; it explicitly states no semantic state changed.
-
-## 15. Cancellation
-
-Cancellation before project publication:
-
-- publishes no target project snapshot;
-- does not relabel prior snapshot;
-- if analyzer mutation cannot be safely rolled back, session/snapshot health follows E0-C failure contract and project reports exact state;
-- retry requires the same expected current generation or a fresh request.
-
-No background continuation after cancellation.
-
-## 16. Budget enforcement
-
-Validate before expensive work where possible:
-
-```text
-file operation count
-final file count
-total source bytes
-single-file bytes
-expected analyzer fact/finding/output budgets
-```
-
-Budget exceedance is typed rejection/partial capability only according to explicit policy. It cannot become truncated clean project state accidentally.
-
-## 17. Determinism
-
-Two valid update sequences ending at identical final semantic inputs must yield identical:
-
-```text
-final project configuration/file manifest
-ProjectGenerationId
-analyzer final snapshot identity/output (under deterministic adapter)
-ProjectSnapshot canonical bytes/digest
-```
-
-Tests permute independent operation order. Conflicting operations are rejected instead of canonicalized.
-
-## 18. Required operations
-
-```text
-validate_project_update_request
-validate_project_file_operation
-apply_operations_to_candidate_manifest
-canonicalize_final_project_state
-classify_no_change
-build_analyzer_update_batch
-validate_analyzer_update_effects
-commit_project_publication
-abort_project_publication
-```
-
-## 19. E0 update cases
-
-- baseline initial publish;
-- update `main/generic-error.lua` to clean;
-- update `main/missing-api.lua` to `KnownApi`;
-- remove/add one optional synthetic Main Lua file within budget;
-- stale expected project generation;
-- stale expected file digest;
-- path traversal/role/type violation;
-- conflicting same-file operations;
-- analyzer update failure;
-- analyzer returns wrong generation/file digest;
-- cancellation;
-- deterministic no-op;
-- different valid operation order, same final state.
-
-## 20. Hard stops
-
-- no automatic file watching/scanning;
-- no stale overwrite;
-- no order-dependent conflict resolution;
-- no analyzer mutation before cheap precondition validation;
-- no current pointer change before full publication;
-- no old facts/spans on new content;
-- no removed file retained in current registry;
-- no partial target snapshot combined with last-known-good data;
-- no implicit profile/pin/config update;
-- no arbitrary source execution.
+# Project updates
+
+Current code: `src/{update,publication,analyzer}.rs` and
+[`wow-emmy/src/session.rs`](../wow-emmy/src/session.rs). This describes today's
+update path and the replacement in [#109](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/109),
+not a requirement to retain old generation/receipt formats.
+
+## Current path
+
+`ProjectPublisher::derive_update_request` compares explicitly supplied final
+inputs with the current publication. `apply_update_cancellable` validates the
+expected base and add/update/remove operations before building the candidate.
+It publishes only a successful result; failure/cancellation keeps the previous
+immutable view. Equal configuration, inventory and Library inputs return
+`NoChange` without analysis. No watcher, source scan or source execution occurs.
+
+`ProjectLibraryOperation` expresses `Keep`, `Replace` or `Clear`. The current
+analyzer binding requires a nonempty Library set, so Clear/empty replacement
+rejects. `with_target_libraries([])` instead means Keep and `target_libraries()`
+loses the Keep/Clear distinction: these legacy helpers are removal targets,
+not behavior to reproduce in the replacement.
+
+| Input / stage | Actual work |
+| --- | --- |
+| Physical Main change | `AnalyzerUpdateBatch::between` selects changed text; unchanged VFS syntax trees remain. |
+| Semantic indexing | `session.rs::apply_delta` clears indexes and reindexes all remaining VFS files, currently in separate syntax and semantic engines. It does not reparse every retained text. |
+| Reports | Diagnostics and facts are collected for the target input; `reused_files` counts unchanged Main parser inputs, not reused semantic facts or avoided indexing. |
+| Library/configuration change | The cached owner reopens when inputs are incompatible. |
+| TOC/XML/package input | Project uses its cold analysis branch. Service's `live_project/operations.rs::update` currently rejects selected TOC/package load plans. |
+| Stored publication | Service rebuilds the selected graph before switching current; #131 replaces read-time replay/analysis reconstruction. |
+
+## Replacement
+
+#193 first removes the duplicate engine while preserving Main/Library diagnostics
+and virtual mappings. Keep the conservative semantic rebuild until a narrower
+update demonstrably covers its consumers. At the pinned donor, public bulk
+updates remove touched file indexes and analyze only supplied replacement texts;
+they do not enqueue unchanged consumers of a deleted global/type declaration.
+Do not assume `require()` ordering supplies that dependency closure or build a
+new incremental framework to claim reuse.
+
+#109 connects the current index to add/edit/rename/delete and selected load-plan
+changes. Reload/rebuild when the existing update cannot represent the change;
+a TOC-only change cannot disappear because Lua text stayed equal. Update stored
+facts in an ordinary transaction, remove stale results and switch after success.
+Use one current format; remove displaced replay/version paths, legacy Library
+helpers and their exclusive tests. Preserve user files and coherent results.
+
+## Useful checks
+
+Reuse `wow-emmy/tests/incremental.rs` for final-state comparison, especially
+`removing_a_cross_file_global_definition_matches_cold_parity`. Update its cold
+helper for the shared analyzer rather than retaining obsolete split-engine
+expectations. `tests/project_e0.rs` already covers immutable old views,
+Library replacement, NoChange and cancellation; select the affected behavior.
+
+For #109, compare the relevant diagnostics/search hits from one changed addon
+with a fresh build of the same final source, including its TOC/XML selection.
+Check one failed/cancelled publication. No historical identity matrix, byte-proof
+manifest, power-loss campaign or new benchmark system is needed.

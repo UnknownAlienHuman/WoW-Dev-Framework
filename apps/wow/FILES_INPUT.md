@@ -1,97 +1,47 @@
-# Local files input
+# Explicit files input
 
-```text
-cargo build --locked -p wow-cli --bin wow
-wow status --config workspace/project.json --format text
-wow check --config workspace/project.json --project my-addon --format text
-wow check --config workspace/project.json --project my-addon --file project-file:Init.lua
-```
-
-The original status/check `--config` transports are inline
-`wow-service/local-project-input/1` and disk `wow-service/local-project-files/1`.
-Ordinary project publication also selects the closed
-[Primary callable files family](PRIMARY_CALLABLE_INPUT.md) below. Disk manifests
-read declared files; no source bodies are embedded in configuration. The config's
-explicitly selected parent directory is registered once by `wow-project`. Paths
-are relative to that retained directory, not cwd. Neither CLI nor service opens
-individual source files. No directory scan, TOC/XML interpretation, glob, include
-expansion, environment substitution, URL fetch, source execution or write.
-
-For selected TOC/XML source expansion use the separate [TOC_INPUT.md](TOC_INPUT.md)
-schema; the explicit-file schema below does not change.
+`wow-service/local-project-files/1` is the current disk manifest for explicit
+Main and Library files. It is a reader format, not the ordinary project setup
+configuration tracked by #200. The reader opens only declared files relative
+to the selected configuration directory; it does not scan directories, execute
+source or write files. For the intended setup, #200 should resolve real project
+and library inputs directly.
 
 ## File manifest schema
 
-| Field | Value |
-|---|---|
-| `schema` | `wow-service/local-project-files/1` |
-| `project_id`, `workspace_id`, `source_origin_id`, `logical_root` | Same logical identities as [inline input](LOCAL_INPUT.md); `logical_root` is not a disk path |
-| `profile` | Pinned file reference to the existing `ProfileIdentity` JSON |
-| `reference_view` | Pinned file reference to the existing `ReferenceView` JSON |
-| `analyzer` | Same declaration as inline input, but replace `compatibility_report_json` with a pinned `compatibility_report` file reference |
-| `main` | `{ "root": "addon", "files": [{ "path": "Init.lua" }, { "path": "UI/Frames.lua" }] }` |
-| `library` | `{ "root": "library", "files": [{ "path": "api.lua" }] }` |
+The schema requires `schema`, `project_id`, `workspace_id`, `source_origin_id`,
+`logical_root`, `profile`, `reference_view`, `analyzer`, `main` and `library`.
+The identity fields, profile, ReferenceView and analyzer declaration have the
+meanings described for [materialized input](LOCAL_INPUT.md#input-wow-servicelocal-project-input1).
+For this disk form, `profile` and `reference_view` are pinned JSON artifacts;
+`analyzer` uses a pinned `compatibility_report` file plus the five binding
+identifiers/digest described there.
 
-A **pinned file reference** has `path`, `content_digest` (`sha256:` plus 64 lowercase
-hex digits) and `byte_length`. Hash and length cover the exact file bytes, including
-whitespace and line endings. All three metadata artifacts must be pinned. Their
-existing owner validators still check schema, self-digest, profile/generation and
-compiled analyzer compatibility. No report, profile, source revision or reference
-coverage is invented merely to make the CLI run.
+`main` in `local-project-files/1` has `root` and a nonempty `files` list.
+Selecting `toc` instead requires the separate [TOC schema](TOC_INPUT.md),
+which also permits `load_context`; the files schema accepts neither option.
+`library` has `root` and a nonempty list of declared Lua `files`.
+Main and Library retain distinct project roles in the project/analyzer flow.
 
-Main and Library entries may also carry `content_digest` and `byte_length` as a
-pair. Without them the reader captures current file bytes and computes their exact
-identity; edits are therefore picked up on the next invocation without manually
-rebuilding JSON. With them, changed content fails before project publication.
-`root` is `.` or a canonical subdirectory relative to the config's directory.
-`path` is relative to that inventory root. Logical file IDs exclude both physical
-root paths. Moving an unchanged workspace does not itself change source identities.
+The config's parent directory is the base for physical paths. Inventory roots
+and file paths are canonical relative paths; file paths are relative to their
+inventory root. Source entries may include `content_digest` and `byte_length`
+together to reject changed bytes. Each entry has `path`; a pinned entry adds
+`content_digest` (`sha256:` plus 64 lowercase hex digits) and `byte_length` for
+the exact file bytes. Without the pair, the reader captures current bytes and
+their identity. Metadata artifacts (`profile`, `reference_view` and
+`compatibility_report`) require both fields.
 
-The complete file list must be explicit and nonempty for each role. Only `.lua`
-files enter this E0 acquisition path. Omitted files are outside the supplied
-universe, not proven absent from an addon. Full TOC/XML/load completeness remains
-unavailable. Main and Library are independently admitted and never merged.
+The reader admits 1–1,024 files per inventory, 1 MiB per file and 16 MiB total;
+metadata artifacts are limited to 8 MiB and the config to 32 MiB. Only Lua
+source is admitted for this explicit-file check. Omitted files are outside the
+supplied input, not evidence of absence from the project. Paths are read with
+the existing bounded, no-follow file reader. This route does not establish a
+filesystem-wide snapshot or Git provenance. Command behavior and exit codes
+are in [local checking](LOCAL_INPUT.md#execution-and-output).
 
-## Selected ordinary Primary callables
-
-`wow-service/local-primary-callables-files/1` retains the file layout above and
-adds independent optional physical_function_declarations and
-physical_function_signatures fields. Their only admitted values are respectively
-`wow-emmy/physical-function-declaration-syntax/1` and
-`wow-emmy/physical-function-indexed-types/1`. At least one is present; omit the
-other. Explicit null, unknown/duplicate fields and unsupported recipes refuse.
-
-The family admits only ordinary Fixture/Repository physical Main with an exact
-separate Library. Selected TOC/load context, packages, platform/XML/candidate and
-body-shape selection are outside this route. Original unselected schemas remain
-unchanged. [PRIMARY_CALLABLE_INPUT.md](PRIMARY_CALLABLE_INPUT.md) records its
-bounded implementation status and existing publish/read/context grammar.
-
-## Acquisition and limits
-
-`wow-project::disk::ProjectInputDirectory` owns a private `cap_std::fs::Dir`.
-The only ambient open registers the caller-selected config directory. Every
-subdirectory is opened by handle with `open_dir_nofollow`; every final file is
-opened read-only with no-follow and checked as a regular file. Unix opens are
-nonblocking to reject a racing FIFO replacement. Absolute/traversal paths,
-Windows device names, alternate streams, backslashes, noncanonical spelling and
-case-fold collisions within each declared inventory are rejected.
-
-Limits: config 32 MiB; each metadata artifact 8 MiB; each inventory 1,024 files,
-1 MiB per source, 16 MiB cumulative. Acquisition checks the stream itself, not
-just metadata, and polls cancellation between chunks/files. Detected size or
-modification-time changes during one read reject without retry. Expected digests
-provide stronger frozen-input checks. File and directory handles close before
-analysis begins. Errors use fixed messages, not OS error strings or host paths.
-
-This captures exact **read bytes**, not an atomic filesystem-wide snapshot or a
-Git-revision attestation. Concurrent in-place edits can escape timestamp-based
-change detection; pin every file or use a stable checkout for frozen provenance.
-The caller-selected directory is an explicit capability: its own resolution and
-hard-linked regular files are not a sandbox against a hostile directory owner.
-Network filesystem calls and analyzer calls are not forcibly preemptible.
-
-The original inline/files transports use the same project/analyzer/reference/rule
-composition and existing output/exit semantics. The fixture-only WoW rule
-restriction is unchanged; unsupported live profiles remain `NotEvaluated`.
-Full R0 and host-race acceptance remain separate from selected callable admission.
+`wow-service/local-project-toc/1` changes only the Main selection, while
+`wow-service/local-primary-callables-files/1` adds the separately documented
+[Primary callable recipes](PRIMARY_CALLABLE_INPUT.md). The selected TOC and
+Primary callable variants are distinct current reader formats; #200 is not
+required to preserve this manifest shape.

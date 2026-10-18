@@ -17,7 +17,8 @@ Lua/XML locations, and reader-ready facts for Emmy analysis and useful search.
 - TOC/XML and source graph behavior: `src/load/`, `src/xml_bindings.rs`,
   `src/xml_lua.rs`, `src/graph.rs`
 - In-memory updates: `src/update.rs`, `src/publication.rs`; preserve coherent
-  add/change/remove behavior while stored readers move.
+  add/change/remove behavior while stored readers move. [Update notes](UPDATE_MODEL.md)
+  distinguish retained syntax trees, full semantic reindexing and load-plan limits.
 - Cold read reconstruction: `src/replay/{publication,mod}.rs`; #131 replaces its
   full analyzer/replay rebuild with directly readable file/text facts.
 - Existing behavior checks: [`tests/`](tests/) and `src/platform_source/`.
