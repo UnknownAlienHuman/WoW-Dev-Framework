@@ -1,0 +1,17 @@
+diff --git a/crates/wow-service/src/service.rs b/crates/wow-service/src/service.rs
+--- a/crates/wow-service/src/service.rs
++++ b/crates/wow-service/src/service.rs
+@@ -10,10 +10,9 @@ use crate::identity::canonical_digest;
+ use crate::presentation;
+ use crate::{
+     CapabilityState, CheckContext, CheckRequest, CheckScope, ComponentHealth, ComponentSnapshot,
+-    ContextIdentity, DeferredOperation, GenerationSelector, OperationId,
+-    PresentationGraph, RawFinding, RuleEvaluation, RuleEvaluationState, ServiceBackend,
+-    ServiceConfiguration, ServiceError, ServiceErrorCode, ServiceResult, ServiceSemanticStatus,
+-    StatusRequest,
++    ContextIdentity, DeferredOperation, GenerationSelector, OperationId, PresentationGraph,
++    RawFinding, RuleEvaluation, RuleEvaluationState, ServiceBackend, ServiceConfiguration,
++    ServiceError, ServiceErrorCode, ServiceResult, ServiceSemanticStatus, StatusRequest,
+ };
+ 
+ const REQUIRED_COMPONENTS: [&str; 5] = [
