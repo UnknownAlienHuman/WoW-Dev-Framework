@@ -1,0 +1,32 @@
+name: Apply one-shot service registry compile fix
+
+on:
+  push:
+    branches:
+      - refactor/remove-one-shot-service-registry-2026-10-18
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out refactor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Apply reviewed compile fix and remove bootstrap files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check .github/fix-one-shot-service-registry-compile.patch
+          git apply --index .github/fix-one-shot-service-registry-compile.patch
+          git rm .github/fix-one-shot-service-registry-compile.patch
+          git rm .github/workflows/apply-one-shot-service-registry-compile-fix.yml
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git commit -m "fix: complete Service registry removal"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
