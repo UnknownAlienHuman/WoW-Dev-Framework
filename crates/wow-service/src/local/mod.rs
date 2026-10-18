@@ -36,8 +36,7 @@ pub use native_input::{
 };
 pub use native_library_input::RequalifiedNativeLibrary;
 pub use native_reference::{
-    SOURCE_REFERENCE_INPUT_SCHEMA, SourceReferenceComparisonResult, SourceReferenceResult,
-    compare_local_source_references, read_local_source_reference,
+    SOURCE_REFERENCE_INPUT_SCHEMA, SourceReferenceResult, read_local_source_reference,
 };
 pub use native_resources::{NativeAnnotationInputsReceipt, NativeAnnotationSelection};
 pub use native_target::{
