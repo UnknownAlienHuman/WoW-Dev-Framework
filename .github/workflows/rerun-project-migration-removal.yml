@@ -1,0 +1,67 @@
+name: Build project migration removal result
+
+on:
+  push:
+    branches:
+      - refactor/remove-project-migration-platform-2026-10-18
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out source branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Execute corrected removal script into clean result branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/apply-project-migration-removal.yml').read_text()
+          workflow = workflow.replace(
+              '          if none_count < 3:\n              raise SystemExit(f"expected migration None initializers, found {none_count}")',
+              '          if none_count != 2:\n              raise SystemExit(f"expected exactly two migration None initializers, found {none_count}")',
+          )
+          marker = '        run: |\n'
+          if workflow.count(marker) != 1:
+              raise SystemExit('unexpected apply workflow run block')
+          block = workflow.split(marker, 1)[1]
+          lines = []
+          for line in block.splitlines():
+              if line.startswith('          '):
+                  lines.append(line[10:])
+              elif not line.strip():
+                  lines.append('')
+              else:
+                  raise SystemExit(f'unexpected YAML after shell block: {line!r}')
+          script = '\n'.join(lines) + '\n'
+          old = '            .github/workflows/apply-project-migration-removal.yml'
+          new = (
+              '            .github/workflows/apply-project-migration-removal.yml \\\n'
+              '            .github/workflows/rerun-project-migration-removal.yml'
+          )
+          if script.count(old) != 1:
+              raise SystemExit('apply workflow deletion entry not found')
+          script = script.replace(old, new)
+          old_push = 'git push origin "HEAD:${GITHUB_REF_NAME}"'
+          new_push = (
+              'git push origin '
+              'HEAD:refs/heads/refactor/remove-project-migration-platform-result-2026-10-18'
+          )
+          if script.count(old_push) != 1:
+              raise SystemExit('apply workflow push command not found')
+          script = script.replace(old_push, new_push)
+          Path('/tmp/apply-project-migration-removal.sh').write_text(script)
+          PY
+          bash -n /tmp/apply-project-migration-removal.sh
+          bash /tmp/apply-project-migration-removal.sh
