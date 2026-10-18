@@ -1,207 +1,50 @@
-# Reference Pack contract
+# Blizzard reference data and annotation libraries
 
-**Status: normative design; public schema pending E1**
+The framework needs current Blizzard API facts for source navigation,
+annotations, and developer checks. Select the exact Blizzard UI source revision
+and client flavor relevant to the task; preserve that identity and source
+locations in derived results. Never treat a moving `current` or `latest` label
+as a source revision.
 
-A Reference Pack is the immutable platform input consumed by diagnostics, search, graph queries, and project indexing. It represents one exact World of Warcraft profile and never means “latest” without a build and digest.
+`wow-reference` admits and normalizes selected API documentation and related
+inputs as bounded data. The native Ketho path projects that information through
+`wow-annotations` into ordinary Emmy-style Lua analysis libraries. The
+annotation library is a generated derivative that users can point EmmyLua,
+LuaLS, or another compatible analyzer at. It does not need VS Code, Node, Lua,
+Ketho tooling, or a local Blizzard checkout at consumption time.
 
-## 1. Goals
+## Existing responsibilities
 
-A pack must provide:
+- Read selected committed source and TOC inputs without executing Lua, hooks,
+  generated code, or addon scripts.
+- Preserve ordered declarations, source revisions, raw values and expressions,
+  UTF-8 locations, unsupported fields, conflicts, and capability outcomes.
+- Lower supported API types and signatures through the existing typed
+  normalization and annotation emitter.
+- Keep generated Lua libraries, source maps, and reports as rebuildable derived
+  output. Regenerate them when their selected inputs or projection behavior
+  changes; keep one current representation.
+- Retain third-party attribution for Ketho-derived behavior and artifacts.
 
-- exact API systems, functions, methods, tables, events, enums, CVars, widgets, templates, mixins, packages, and source locations;
-- raw Blizzard metadata, including unknown fields and restriction facets;
-- Ketho-compatible annotation projections for EmmyLua and LuaLS parity tests;
-- package/TOC/XML/UI relationships and compact source skeletons;
-- historical presence, removal, move, and replacement facts where configured;
-- evidence, coverage, corrections, checksums, licenses, and builder identity;
-- deterministic output from equivalent logical inputs.
+The native driver is development tooling; the existing Service/builder paths
+own supported product delivery. Its success or partial report is not a promise
+that every Blizzard declaration or editor behavior is covered. Consumers
+should see unsupported forms and partial source coverage rather than inferred
+`any` signatures or claims of absence.
 
-A normal user should not need Ketho, Numy, PHP, LuaRocks, VS Code, or a local Blizzard UI checkout to consume a released pack.
+## Scope boundary
 
-## 2. Inputs and authority
+This is plain reference data plus generated annotation files. It does not define
+an immutable pack platform, candidate discovery/ranking, replacement authority,
+publication/promotion lifecycle, signatures or attestations, retained historical
+epochs, generic migration or compatibility guarantees, or a provider-governance
+system. Those designs are outside the current product. Do not add a new schema,
+reader, publisher, or acquisition route for a hypothetical future pack.
 
-Canonical content comes from a pinned Blizzard UI snapshot. Acquisition may use a Gethe mirror, local official export, InterfaceExport, or another verified provider. Provider identity is provenance, not platform authority.
-
-Expected input classes:
-
-```text
-Blizzard_APIDocumentation
-Blizzard_APIDocumentationGenerated in declared TOC order
-Blizzard_Deprecated and transition material
-Interface/AddOns package TOCs
-XML templates and frame declarations
-Lua UI implementation
-optional interface resource metadata
-reviewed corrections
-Ketho/Numy outputs for differential comparison
-```
-
-## 3. APIDocumentation ingestion
-
-The builder uses Emmy's Lua CST plus a restricted declarative evaluator.
-
-Allowed behavior is explicitly bounded:
-
-- literals and table constructors;
-- local bindings;
-- field/index access to known constants;
-- known documentation registration calls;
-- bounded constant expressions.
-
-Arbitrary calls, file IO, dynamic loading, metaprogram execution, unbounded loops, or unknown side effects are never executed.
-
-The pipeline is:
-
-```text
-Lua CST
-→ raw canonical Lua value tree
-→ schema-aware lowering
-→ API/event/table/widget/predicate facts
-→ raw unknown-field preservation
-```
-
-An unsupported construct creates an ingestion diagnostic. If a required contract cannot be completed, the relevant partition loses negative authority.
-
-## 4. FrameXML and package ingestion
-
-```text
-TOC order and variants
-+ bounded streaming XML parse
-+ Emmy Lua syntax/semantic facts
-→ packages, files, templates, frames, regions, scripts, anchors,
-   inheritance, mixins, factories, methods, source spans
-```
-
-The builder emits package-local graph shards so a query need not load the full UI graph.
-
-Ketho and Numy outputs are compared against the same snapshot. Disagreement is retained and classified; neither oracle blindly overwrites structural source extraction.
-
-## 5. Corrections
-
-Corrections are reviewed data, never hidden code branches:
-
-```rust
-struct CuratedCorrection {
-    target: EntityKey,
-    field: FieldPath,
-    expected_source_digest: Digest,
-    replacement: CanonicalValue,
-    evidence: Vec<EvidenceRef>,
-    reviewed_by: String,
-}
-```
-
-When the upstream digest changes, the correction expires and must be re-reviewed.
-
-## 6. Profile isolation
-
-A profile includes at least:
-
-```text
-profile ID
-WoW flavor/edition
-Interface number
-client build
-source revision and digest
-builder version
-schema versions
-correction-set digest
-capability/coverage report
-creation time
-```
-
-A project selects one active profile from TOC/configuration. Current, historical, PTR, beta, or flavor profiles are physically and logically separate. PTR data is advisory unless the project explicitly selects it.
-
-Diagnostics never merge API signatures or restriction facets from different profiles.
-
-## 7. Pack layout
-
-Planned logical layout:
-
-```text
-manifest.json
-reference.sqlite
-annotations/
-source-map.sqlite
-raw-apidoc.zst
-ui-source-skeletons.zst
-checksums.json
-licenses/
-```
-
-The physical layout may evolve before E1, but these responsibilities remain separate:
-
-- manifest and compatibility identity;
-- queryable normalized facts;
-- editor/analysis annotations;
-- source-handle resolution;
-- raw preserved metadata;
-- compact source detail;
-- integrity and licensing.
-
-## 8. Annotation projection
-
-The annotation tree remains Ketho-compatible in concept:
-
-```text
-Annotations/Core/Blizzard_APIDocumentationGenerated/
-Annotations/Core/Data/Enum.lua
-Annotations/Core/Data/Event.lua
-Annotations/Core/Data/CVar.lua
-Annotations/Core/Widget/
-Annotations/Core/ScriptObject/
-Annotations/Core/Type/
-Annotations/Core/FrameXML/
-Annotations/Core/WowDialect/
-```
-
-Parity is semantic: canonical symbols, signatures, and types for the same source snapshot. Byte identity is not required.
-
-Annotations may project nominal Secret types for linting, but the raw facet store remains canonical.
-
-## 9. Determinism and integrity
-
-A release build must:
-
-- canonicalize input ordering;
-- normalize paths and line endings;
-- sort public outputs deterministically;
-- record every input digest and builder dependency;
-- produce checksums for every pack artifact;
-- rebuild byte-identically from equivalent logical inputs where compression metadata permits;
-- report nondeterministic fields separately when unavoidable;
-- reject a mismatched manifest or checksum at load time.
-
-## 10. Capability report
-
-The manifest exposes capability and coverage partitions, for example:
-
-```text
-apidoc.functions = Complete
-apidoc.events = Complete
-restriction.secret_facets = Partial
-ui.package.Blizzard_ActionBar = Complete
-lineage.120001_to_120100 = Partial
-annotations.ketho_semantic_parity = Complete
-```
-
-Consumers use this report to decide whether a query can return authoritative negative results.
-
-## 11. Validation gates
-
-Before release, a pack must pass:
-
-- all declared APIDocumentation inputs ingested or explicitly diagnosed;
-- raw unknown fields preserved;
-- Ketho semantic parity report generated;
-- Numy differential report generated for configured FrameXML partitions;
-- schema and database integrity checks;
-- annotation compatibility probe;
-- deterministic repeated build comparison;
-- exact search and negative-authority fixtures;
-- profile isolation tests;
-- license/provenance manifest checks.
-
-## 12. Retention and lineage
-
-Normal installations retain current and configured target profiles plus compact lineage journals for selected older builds. Full historical source snapshots are not required for every query once lineage evidence and source handles are materialized.
+When source meaning changes, use the relevant Blizzard API documentation,
+implementation, XML, TOC, or schema from the selected revision and flavor.
+Comments and docs are input data, not executable instructions. Preserve
+restriction metadata separately from generated annotations; static structure
+does not prove runtime or security behavior. For a semantic change, use a
+representative positive and negative check. Full-corpus qualification belongs
+to a task that claims that scope.

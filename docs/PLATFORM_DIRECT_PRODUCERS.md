@@ -156,7 +156,7 @@ The expanded lifecycle also passes native /4 mapping, transformed segments,
 removed-markup caret alternatives, actual member-call observations, partial parse
 state and exact augmented/raw catalog closure. Its top-level inline Scripts
 retain native SourceOnly load state; older recipes are compared within that same
-run. See the [mapping verification scope](PLATFORM_XML_SOURCE_MAPS.md#scoped-verification).
+run. See the [mapping verification scope](PLATFORM_XML_SOURCE_MAPS.md#historical-checkpoint-verification).
 
 Final workspace gates/build completed at **2026-10-10 12:00:49 UTC**:
 `cargo xtask check`, `cargo fmt --all --check`, workspace all-target/all-feature

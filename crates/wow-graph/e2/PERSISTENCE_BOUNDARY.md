@@ -4,7 +4,7 @@
 
 ## Selected persistence profile
 
-The physical ProjectStore contract is [`../../wow-store/e2/README.md`](../../wow-store/e2/README.md):
+The physical ProjectStore contract is [`../../wow-store/e2/README.md`](../../wow-store/README.md):
 
 ```text
 one SQLite WAL database per compatible ProjectStore epoch

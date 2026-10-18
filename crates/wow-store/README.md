@@ -1,171 +1,36 @@
-# `wow-store` contract router
+# `wow-store`
 
-**Status:** Rust storage and manifested ProjectStore slices are executable. Full
-package acceptance remains open. The later E6/E7 routes below are normative
-contracts, not implementation or release evidence.
+`wow-store` is the local persistence owner. It is an active crate over SQLite;
+`src/store.rs` implements a generic catalog/object/effect store, while
+`src/project/` contains a much larger manifested ProjectStore with WAL,
+retention, GC, backup, quarantine, replacement, and migration machinery. The
+target is a straightforward local SQLite index for reader-ready project/search
+facts, with parameterized queries and transactions that prevent partial writes.
+It is not a general durable-effect or recovery platform.
 
-`wow-store` owns generic physical persistence only. It depends directly on `wow-core` and never imports Reference, project, graph, recognizer, rule, search, context, provider, session, editor, release, installation, or application semantics. Domain owners and service supply registered schemas, canonical logical bytes, prepared operations, validation contracts, and retention edges.
+## Where to look
 
-## Contract routes
+- Public exports and the project module: [`src/lib.rs`](src/lib.rs)
+- Generic database operations: `src/store.rs`
+- Project database owner: `src/project/`
+- Search persistence/query code: [`src/search/`](src/search/)
+- Existing focused coverage: [`tests/`](tests/) and module tests
 
-Generic `Store::open` initializes a missing database in an exclusively created
-private directory beside the requested path. It closes, validates and syncs the
-database before atomic no-replace hard-link publication. An existing winner still
-passes regular-file, physical-schema and configuration admission; unknown empty
-files remain refused. Unsupported hard-link publication returns a typed error.
-An interrupted process can leave its private staging directory; retries create a
-new attempt without adopting or deleting old remnants. This process-interruption
-boundary does not qualify parent-directory durability under power loss.
+Retain ordinary SQLite schema setup, query bounds, and transactional updates.
+Store plain records and FTS rows directly; keep SQL and connections private.
+Project indexes are derived from source and configuration, so one current format
+can be rebuilt. On unsupported/corrupt derived state, give a clear rebuild/error
+path; never delete or rewrite user source/configuration.
 
-### E1-A — storage foundation and immutable ReferenceStore
+The older backup/quarantine/epoch-migration and generic retention machinery
+still exists. [#111](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111)
+tracks its removal after the current index path in [#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131).
+Search's direct SQLite/FTS integration is tracked by
+[#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169).
+These are queued reductions, not completed runtime behavior.
 
-The complete pre-E2 overview is preserved as [`E1_A_OVERVIEW.md`](E1_A_OVERVIEW.md). Its earlier ProjectStore boundary is preserved as [`PROJECT_STORE_PRE_E2_BOUNDARY.md`](PROJECT_STORE_PRE_E2_BOUNDARY.md).
-
-Read the root E1-A package for registered schemas and migrations, immutable objects, publication and read-back, durable effects, leases, retention and GC, backup and restore, corruption handling, and generic store lifecycle.
-
-### E2-D — ProjectStore and coherent project and graph publication
-
-Read [`e2/README.md`](e2/README.md). The selected physical profile is:
-
-```text
-project-store-wal-manifested-partitions-v1
-```
-
-It uses one owned SQLite database per ProjectStore epoch, WAL with one writer, immutable content-addressed partition versions, complete generation membership maps, published-inactive construction, fresh read-back validation, separate current CAS, snapshot-bound readers, and explicit retention and GC.
-
-Executable selected profiles retain frozen v1, add exact generation roots in v2,
-and release/inline GC in v3. New native live-project service stores select v3;
-no existing schema migrates automatically. Current owner routes:
-
-- [Generation retention](PROJECT_RETENTION.md)
-- [Release and guarded inline collection](PROJECT_GC.md)
-- [Recovery, verified native backup and isolated restore](PROJECT_RECOVERY.md)
-- [Guarded physical-instance replacement and exact reconciliation](PROJECT_REGISTRY.md)
-- [Authoritative physical-instance quarantine and read-only recovery](PROJECT_QUARANTINE.md)
-- [Guarded quarantine restore and portable hold authority](PROJECT_QUARANTINE_RESTORE.md)
-- [Verified inactive physical v1/v2 to v3 migration](PROJECT_MIGRATION.md)
-
-### E6-B — external Candidate generic persistence
-
-Read [`E6_B_EXTERNAL_CANDIDATE_STORAGE.md`](E6_B_EXTERNAL_CANDIDATE_STORAGE.md).
-
-The store may persist registered immutable objects and append-only records for provider session references, query and dispatch receipts, bounded raw response objects, E6-A result sets and artifacts, mapping, selection, and context manifests, reconciliation, retention, and audit.
-
-It does not call providers, own credentials or provider sessions, parse results, validate Candidate authority, map locators, choose candidates, build context, or interpret privacy and license semantics. There is no current or default external result pointer.
-
-### E7-A — session and response-journal persistence
-
-Read [`E7_A_SESSION_AND_RESPONSE_JOURNAL.md`](E7_A_SESSION_AND_RESPONSE_JOURNAL.md).
-
-Store provides generic registered object, append-only state, CAS, lease, retention, and audit mechanisms for:
-
-```text
-FrontendOperationRegistry and compatibility manifests
-frontend and service session generations
-explicit workspace, project, and profile binding receipts
-project-owned overlay references and bounded content objects
-operation tickets, request and response journals, replay, and reconciliation
-progress and artifact stream state when the profile retains it
-close, expiry, quarantine, and recovery records
-```
-
-Store does not parse local-daemon, LSP, or MCP frames; patch documents; convert coordinates; authenticate clients; decide session semantics; or turn delivery state into semantic authority.
-
-### E7-B — release, channel, installation, update, and support persistence
-
-Read [`E7_B_RELEASE_STORAGE.md`](E7_B_RELEASE_STORAGE.md).
-
-Store provides generic immutable object, append-only state, expected-current CAS, durable effect, lease, retention, backup and restore, and GC mechanisms for:
-
-```text
-release source, materialization, plan, and build records
-unsigned and signed artifacts and independent-build evidence
-SBOM, provenance, license, notices, checksums, and test reports
-ReleaseBundle, ReleaseSupportMatrix, and ReleaseCandidate
-provider publication, channel, and signed update manifests
-installation, staging, backup, current, and LastKnownRunnable records
-registered store and configuration migration receipts
-update, rollback, revocation, retirement, incident, authorization,
-and reconciliation records
-```
-
-Store does not build, compare, scan, sign, publish, install, migrate, update, roll back, revoke, retire, or decide support and release eligibility.
-
-## Direct dependency
-
-```text
-wow-store -> wow-core
-```
-
-Domain crates and service depend on `wow-store` through narrow contracts. The reverse dependency is forbidden.
-
-## Generic operations
-
-Depending on the active implementation package, the store may expose narrow typed primitives for:
-
-```text
-registered schema and migration validation
-content-addressed immutable object publication and read
-append-only catalog, state, effect, and audit records
-snapshot-bound deterministic lists
-expected-current compare-and-swap
-durable operation reconciliation
-leases and retention edges
-backup, restore, and corruption validation
-reachability-based garbage collection
-```
-
-Physical database, transaction, WAL, table, row, page, object key, and filesystem-layout details remain internal.
-
-## Hard boundaries
-
-- no domain, provider, project, session, release, installation, or support interpretation;
-- no raw SQL, connection, transaction callback, table, row ID, object key, or arbitrary filesystem root exposed to service, applications, or tools;
-- no arbitrary serializer, source parser, process executor, provider client, signer, publisher, installer, or credential access;
-- no source execution or editor document patching;
-- no implicit current, latest, default, LKG, or LKR selection;
-- no physical commit treated as semantic validation;
-- no GC or cleanup from age, name, path, or previous-position inference;
-- no deletion of current, active, supported, rollback, unresolved-effect, incident, or evidence state;
-- no detached background cleanup outside an exact owned operation.
-
-## Publication and read-back
-
-Domain and service owners prepare exact logical objects and transitions. Store validates generic schema, expected-state, digest, and transaction invariants and commits them. Service or the domain owner closes the writer, reacquires a fresh exact read, and validates semantic meaning. A physical commit alone is never complete success.
-
-## Migrations
-
-Migrations are registered, versioned, deterministic owner and store operations with exact source and target schemas, transaction and crash behavior, backup and restore, read-back, and rollback compatibility. No raw SQL or arbitrary script crosses a public seam.
-
-## Response loss
-
-Every write, CAS, backup, restore, publication, or GC effect reconciles by exact
-`OperationId + CanonicalRequestDigest` and target identity. Same operation ID with a
-different digest fails. A possible commit with a lost response remains unknown
-until the exact durable record is reread; no duplicate effect or newest-state
-selection is permitted.
-
-`Store::commit_operation` applies one validated `WriteBatch` and completes its
-matching prepared operation record in the same transaction. A matching completed
-retry returns the durable operation record without replaying catalog
-compare-and-swap mutations. Preparation remains a separate earlier boundary, so
-an interrupted operation can still be Prepared before its batch transaction
-starts.
-
-A WriteBatch may also retarget exact completed operation results as part of
-that same commit_operation transaction. Each retarget is guarded by the target
-OperationId, canonical request digest, and current result ObjectId; the
-replacement ObjectId must exist in the batch or store. The target row remains
-Completed, preserving no-replay behavior, while its former result object stops
-being a generic operation root. Store does not interpret either result body.
-
-## Current implementation state
-
-Rust owners implement the generic immutable store and manifested ProjectStore
-profiles, native live-pair storage, retention/inline GC, physical recovery,
-verified backup, guarded same-epoch replacement and whole-instance quarantine.
-Later E6/E7 seams remain normative future routes. Current executable scope and
-unaccepted gates are recorded in the linked owner contracts and the root
-[implementation status](../../docs/IMPLEMENTATION_STATUS.md).
-
-Directory and seam presence does not bypass prerequisite implementation, fixtures, checksums, crash tests, benchmarks, adapters, clients, platforms, or release evidence.
+Use the root [`AGENTS.md`](../../AGENTS.md), [architecture](../../docs/ARCHITECTURE.md),
+and [reduction queue](../../docs/REFACTOR_QUEUE.md) with the actual consumer and
+schema touched by a change. Follow pinned SQLite behavior when it affects a
+concrete implementation choice; broad crash/platform acceptance campaigns are
+not routine requirements.

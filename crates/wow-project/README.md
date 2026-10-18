@@ -1,102 +1,40 @@
-# `wow-project` contract router
+# `wow-project`
 
-**Status:** E0-D has executable configuration, inventory, analyzer binding, immutable publication/update and explicit [disk acquisition](DISK_INPUTS.md). Full package acceptance and the later E2/E3/E4/E6 seams remain incomplete.
+`wow-project` is the source/project owner for configured addon and Blizzard UI
+roots. Its current implementation includes source inventories, project
+snapshots and updates, disk acquisition, TOC/XML replay, graph proposals,
+overlays, and a large generation/publication model. The target is a practical
+root/flavor/TOC configuration, bounded non-executing source loading, accurate
+Lua/XML locations, and reader-ready facts for Emmy analysis and useful search.
 
-`wow-project` owns exact materialized project/source universes, TOC/XML/load interpretation, analyzer/recognizer orchestration, incremental project generations, project publication semantics, Blizzard UI source indexing, project-owned lineage inputs, and exact mapping of bounded external locators into retained project generations. It does not own graph acceptance, search ranking, external-provider semantics, candidate selection, context orchestration, migration application, static-impact traversal, service orchestration, or storage internals.
+## Where to look
 
-## Canonical routes
+- Public types and modules: [`src/lib.rs`](src/lib.rs)
+- Config and generation inputs: `src/configuration.rs`, `src/generation.rs`
+- Disk and local source acquisition: [`src/disk/`](src/disk/)
+- Source inventory and project view: `src/inventory.rs`, `src/snapshot.rs`,
+  `src/registry.rs`
+- TOC/XML and source graph behavior: `src/load/`, `src/xml_bindings.rs`,
+  `src/xml_lua.rs`, `src/graph.rs`
+- Existing executable behavior: `src/update.rs`, `src/publication.rs`,
+  `src/platform_source/`, and tests under [`tests/`](tests/)
 
-### E7-A — private document overlays
+Current code still has more publication, update, overlay, and exact-generation
+machinery than the target requires. The intended setup/index workflow is tracked
+by [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/200),
+useful TOC/XML relationships by [#117](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117),
+and reader-ready current index by
+[#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131).
+These tasks describe pending replacement work; existing source files are not
+proof that the simplified workflow is complete.
 
-Read [`E7_A_DOCUMENT_OVERLAYS.md`](E7_A_DOCUMENT_OVERLAYS.md). `src/overlay.rs`
-owns explicit nofollow local-root registration and immutable session-private Lua
-snapshots, guarded sequential changes, UTF-8/UTF-16 mapping, leases and checked
-close. Save acknowledgment and explicit disk reconciliation do not publish a
-generation. The selected no-base consumer is
-[`wow overlay check`](../../apps/wow/OVERLAY.md); complete frontend and overlay
-acceptance remain open.
+Use upstream EmmyLua through `wow-emmy`; do not add another Lua parser. Never
+execute addon or repository code. Keep file access within configured roots and
+bound file counts, bytes, parse work, and output. Preserve exact source byte
+spans for diagnostics and navigation. User source and config stay untouched;
+project snapshots and indexes can be regenerated. Report ambiguity and
+unsupported/failed parses honestly.
 
-### E0-D — minimal project generation
-
-Read the root contract package beginning with [`E0_OVERVIEW.md`](E0_OVERVIEW.md), [`CONTRACT.json`](CONTRACT.json), and the root normative documents.
-
-### E2-C — full addon project indexing
-
-Read [`e2/README.md`](e2/README.md). It defines exact source snapshots, TOC/XML/load, physical and virtual Lua units, analyzer/recognizer/graph proposal handoff, incremental invalidation, and immutable project candidates.
-
-### E3-A — Blizzard UI source universe
-
-Read [`e3/README.md`](e3/README.md). It defines a separate exact `blizzard_ui_source` project/graph publication and bounded `SkeletonInputView` for context/search consumers.
-
-### E4-B — lineage producer inputs
-
-Read [`E4_B_LINEAGE_INPUTS.md`](E4_B_LINEAGE_INPUTS.md). It defines:
-
-```text
-project_stable_identity
-project_source_fingerprint
-project_structural_change
-```
-
-These are exact producer partitions acquired and invoked through [`wow-service/e4`](../wow-service/e4/README.md), then submitted to independent `wow-graph` E4-B validation. Fingerprints and structural similarity remain Candidate evidence; project producers do not accept lineage, declare replacement, build migration recipes, authorize reviews, or run static impact.
-
-### E6-B — external locator mapping owner
-
-Read [`E6_B_EXTERNAL_LOCATOR_MAPPING.md`](E6_B_EXTERNAL_LOCATOR_MAPPING.md). It defines exact mapping of an owner-neutral bounded `UnverifiedProviderLocator` projection into one retained project generation.
-
-Mapping returns `ExactMapped`, `MultipleMappings`, `NoMappingWithOwnerAuthority`, `NoMappingPartial`, `Conflict`, `NotEvaluated`, or `Failed`. It validates repository/revision/path/digest/span/symbol/entity fields only through project-owned records. It never follows provider paths, chooses by rank/name/proximity, verifies provider summaries, or depends on `wow-cbm`/`wow-service`.
-
-## E4/E6 service handoff
-
-```text
-E4: exact before/after ProjectPublication selectors
-    -> wow-service acquisition
-    -> project lineage-input producer partitions
-    -> wow-graph validation
-
-E6: exact retained ProjectPublication/Generation
-    + bounded external locator projection
-    -> project-owned identity validation
-    -> zero/one/many exact owner handles + coverage/conflicts
-    -> wow-service mapping record, explicit selection, optional context
-```
-
-`wow-service` cannot alter project facts, mapping results, proof ceilings, or negative authority. `wow-project` never resolves current, calls external providers/search/context/service, or observes credentials.
-
-## Direct dependency boundary
-
-Maximum permitted dependencies:
-
-```text
-wow-core
-wow-store
-wow-emmy
-wow-graph
-wow-recognizers
-```
-
-Active package slices remain narrower. `wow-project` never depends on `wow-search`, `wow-context`, `wow-service`, `wow-cbm`, `wow-rules`, or applications.
-
-## Cross-generation boundary
-
-Generation-local project entities, ProjectSnapshots, GraphSnapshots, and mapping evidence remain exact-generation-bound. E4-B output references exact before/after generations; E6-B mapping references one exact generation. Neither rewrites IDs.
-
-A repository, owner, package, path, name, signature, body digest, fingerprint, provider label, or search rank cannot establish lineage or provider correctness by itself. `Removed`/`Introduced` and clean no-mapping require exact closed owner coverage.
-
-## Current implementation state
-
-```text
-documentation frontier: E6-B project mapping seam
-implementation frontier: partial executable E0-D/E2-C/E3-A; full acceptance remains open
-Cargo.toml: active root workspace member
-Rust source: src/
-CI/workflows: root workspace CI; full package acceptance is separate
-```
-
-Implementation still begins from E0 dependency order; the E6-B seam cannot activate before E2/E3 project publication, exact mapping profiles/fixtures, E6-A, and E6-B service gates are implemented and frozen.
-
-## Selected annotation Library byte handoff
-
-`ProjectLibraryBinding::qualify` admits only the exact analyzer Library snapshot already bound to a Project snapshot and selected profile. It retains bounded file descriptors, not source bodies. `file_view(path, text, stop)` checks exact path membership, UTF-8 byte length and SHA-256 before returning a borrowed `ProjectLibraryFileView`; `slice` exposes exact UTF-8 byte ranges. This proves the supplied bytes match the admitted Library descriptor, not producer custody or Reference authority.
-
-The annotation owner can pass its bounded final-emission callable observation to the existing Context ReferenceFacts route. Context matches the observation to the Reference signature and Project-qualified file, checks emitted type tokens and optional markers against those bytes, and carries the result through the existing Service/CLI output. Producer custody and downstream consumer/runtime semantics remain `NotEvaluated`; this is a selected handoff, not complete type closure or package acceptance.
+Read root [`AGENTS.md`](../../AGENTS.md), [architecture](../../docs/ARCHITECTURE.md),
+and [reduction queue](../../docs/REFACTOR_QUEUE.md), then inspect the concrete
+owner and consumer path being changed.

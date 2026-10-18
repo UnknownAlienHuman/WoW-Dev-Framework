@@ -3,9 +3,6 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
-mod e3;
-mod machine_state;
-
 pub fn forbidden_path(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     let name = lower.rsplit('/').next().unwrap_or("");
@@ -157,9 +154,6 @@ pub fn check(root: &Path) -> Result<()> {
         16 * 1024 * 1024,
     )?;
     let mut count = 0usize;
-    let mut files = BTreeSet::new();
-    let mut e3 = e3::Scope::default();
-    let mut machine_state = machine_state::Scope::default();
     for raw in listing.split(|b| *b == 0).filter(|entry| !entry.is_empty()) {
         let relative = std::str::from_utf8(raw)?;
         crate::manifest::validate_path(relative)?;
@@ -180,22 +174,17 @@ pub fn check(root: &Path) -> Result<()> {
                 return Err(format!("forbidden interpreter invocation: {relative}").into());
             }
             if relative.ends_with(".json") {
-                let value = decode_json(text)
+                validate_json(text)
                     .map_err(|error| format!("invalid JSON in {relative}: {error}"))?;
-                machine_state.observe(relative, &value)?;
-                e3.observe(relative, value)?;
             }
         } else if relative.ends_with(".json") {
             return Err(format!("non-UTF-8 JSON: {relative}").into());
         }
-        files.insert(relative);
         count += 1;
     }
     if count == 0 {
         return Err("empty repository inventory".into());
     }
-    e3.finish(&files)?;
-    machine_state.finish(&files)?;
     println!("Checked {count} distributable files; native-only policy passed");
     Ok(())
 }

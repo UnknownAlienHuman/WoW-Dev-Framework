@@ -1,6 +1,6 @@
 # E4-B Reference transition evidence seam
 
-**Status:** normative supporting contract for [`wow-graph/e4`](../wow-graph/e4/README.md).
+**Status:** normative supporting contract for [`wow-graph/e4`](../wow-graph/README.md).
 The selected original-native callable observation producer is implemented in
 `native_view::comparison` and exposed through
 [`wow source reference-compare`](../../apps/wow/SOURCE_REFERENCE_COMPARISON.md).

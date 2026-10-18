@@ -1,6 +1,6 @@
 # E4-B project lineage input producer seam
 
-**Status:** normative supporting contract for [`wow-graph/e4`](../wow-graph/e4/README.md); selected exact-source-span Candidate producer implemented under #178. Full producer inventory remains pending.
+**Status:** normative supporting contract for [`wow-graph/e4`](../wow-graph/README.md); selected exact-source-span Candidate producer implemented under #178. Full producer inventory remains pending.
 
 The source-fingerprint producer is available for ordinary native pairs through
 [`wow lineage`](../../apps/wow/LINEAGE_CANDIDATES.md). Other producer operations

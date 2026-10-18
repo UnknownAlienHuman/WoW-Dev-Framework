@@ -1,75 +1,45 @@
 ---
 name: wow-dev
-description: Research, implement, debug and review World of Warcraft addons and the WoW Dev Framework using scoped owner contracts and exact source evidence.
+description: Implement, debug and review WoW addons and the WoW Dev Framework using EmmyLua, the native Ketho annotation path, and actual Blizzard source.
 ---
 
-# WoW development workflow
+# WoW development
 
-Follow root `AGENTS.md` and `docs/EXECUTION_MODEL.md`; they own engineering,
-claim, recovery, validation and publication rules. Select one Issue through
-`docs/REFACTOR_QUEUE.md`. Read its named owner/caller contracts and relevant audit
-section, not every audit, package or historical checkpoint.
+Follow root `AGENTS.md`, `docs/ARCHITECTURE.md` and the selected Issue from
+`docs/REFACTOR_QUEUE.md`. Read its code and callers; do not load every package
+contract, old audit or acceptance matrix. Use `docs/EXECUTION_MODEL.md` for
+coordination and proportional checks.
 
-## Implement the selected path
+## Implement one useful path
 
-- Trace the existing producer, consumer and failure before editing. Search the
-  existing owners and queue donor map before adding a helper.
-- Replace the redundant path in the same task. Keep one owner implementation,
-  exact source/generation/coverage binding, bounded work and cancellation.
-- Share payload shapes without removing external admission or identity checks.
-  A lint suppression does not prove dead code; a different request/result label
-  does not prove a format defect. Identify real readers before migration/deletion.
-- Use the smallest applicable Clippy/policy gate. Once the changed function works,
-  use the Issue's bounded reproduction. Do not create a test campaign, new
-  acceptance framework or fixture factory to begin implementation.
-- Record one concise result in the PR and link it from the Issue. A refactor can
-  finish while separately named package/corpus/runtime acceptance remains open.
+Trace the existing behavior first. Reuse upstream EmmyLua and the native Ketho
+pipeline. Keep one current representation and delete the replaced code, options
+and exclusive tests. Derived indexes/annotations can rebuild; source, user
+configuration and unpublished work must survive. Do not preserve legacy readers,
+cryptographic result envelopes, migration frameworks or optional plugin layers.
 
-## Use source evidence when the task needs it
+Read `docs/KETHO_RUST_PORT.md` for source/type/annotation changes and
+`docs/EMMYLUA_UPSTREAM.md` for analyzer/editor work. Do not add a second parser,
+Lua/Node/VS Code runtime or another language-server implementation. Retain donor
+attribution. Keep useful errors, input/output bounds, cancellation and correct
+source spans; do not treat partial data as proof of absence or runtime safety.
 
-Resolve moving Gethe/Ketho/client selectors only for source/API-sensitive work
-or the selected external qualification. Record flavor, selector and exact
-revision once per operation; read relevant docs, implementation, XML and TOC from
-that revision. Re-resolve for a new operation; offline freshness is unverified.
-Generic storage, CI, graph mechanics and documentation need no fresh WoW corpus.
+## Read current source when needed
 
-Use `docs/KETHO_RUST_PORT.md` for annotation/normalization/type-lowering work and
-`docs/EMMYLUA_UPSTREAM.md` for analyzer changes. Extend the existing Rust owners;
-do not add Lua/Node/VS Code to the product runtime or a second parser.
+For source/API-sensitive work, resolve the intended Blizzard/Ketho revision and
+flavor once, then read its actual Lua, docs, XML and TOC. Generic storage, CI and
+documentation changes need no new WoW corpus. Treat source as data; never execute
+repository scripts, hooks, submodules or Lua while indexing. Reuse source
+materializers and respect update mode; preserve dirty/diverged checkouts.
 
-Treat donor/source bytes as data. Do not execute donor scripts, hooks, Lua,
-submodules, generated code or package-manager hooks. Keep donor attribution when
-porting code; a donor is implementation evidence, not target runtime authority.
+The native annotation development driver is:
 
-## Reuse native commands only when applicable
-
-```text
-cargo xtask check
-cargo xtask sync-skill --check
-cargo xtask check-source <checkout> <branch>
-cargo xtask update-source <checkout> <branch> --expected-head <observed-local-SHA>
-cargo xtask manifest <checkout> <resolved-ref> <selector> <new-manifest.json>
-cargo xtask verify-manifest <manifest.json> <checkout> <current-local-ref>
+```sh
+cargo run --locked -p wow-annotations --example native_library --   <checkout> <ref> <TOC> <environment> <new-output>
 ```
 
-For annotation generation or its named parity gate:
-
-```text
-cargo run -p wow-annotations --example native_library -- \
-  <checkout> <ref> <TOC> <environment> <new-output>
-```
-
-Inspect `source-report.json`; exit 3 means partial. Keep native rendering as the
-default; a deliberately selected rejected Wasm guest must not silently fall back.
-Static output and raw metadata do not establish runtime or consumer compatibility.
-
-Honor source update mode: `auto` may clone or fast-forward a clean matching owned
-checkout; `prompt` asks before mutation; `never` reads only. Preserve dirty/private
-work and unexpected branches/origins. Reuse existing materializers and reconcile
-interrupted operations rather than deleting locks or creating a second I/O path.
-
-For the selected semantic acceptance milestone, compare one exact Gethe
-revision/corpus/profile through Ketho and the required WoW API Ketho MCP lane;
-retain discrepancies and named-client runtime evidence where required. Never
-auto-bless fixtures from donor output. Partial/Truncated/NotEvaluated is not proof
-of absence, loaded state, combat safety or a clean result.
+Read `source-report.json`; exit 3 is partial. For a changed semantic, use an
+existing representative positive/negative probe and the relevant donor behavior.
+Do not build a fixture factory or run a whole-corpus/editor/runtime campaign for
+a small internal change. State what was actually checked and any unsupported
+behavior. Never publish private optional context or its location.

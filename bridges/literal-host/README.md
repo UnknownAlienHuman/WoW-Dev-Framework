@@ -21,7 +21,7 @@ only; the host library still depends only on its VM, hash and wire contract.
 retained versions and failure without output; CI runs it explicitly with real
 compiled guests. `tests/real_corpus.rs` is the separately required current-source
 workflow test, never silently skipped in that lane.
-See [usage and limits](../../docs/WASM_BRIDGES.md#source-library-composition).
+See [usage and limits](../../docs/WASM_BRIDGES.md).
 
 Resource policy and observations are separate small modules. Limits default to
 250M fuel per call, with the unchanged 500M/128MiB hard caps. Source composition
