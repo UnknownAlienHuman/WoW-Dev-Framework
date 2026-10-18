@@ -63,7 +63,7 @@ pub(super) fn prepare(source: &Path, native: &Value, root: &Path, stop: &AtomicB
         output()?,
         permission(),
     )?;
-    let result = SearchOperationService::default().build_reference_shard(&request, stop)?;
+    let result = SearchOperationService::new().build_reference_shard(&request, stop)?;
     save(
         root,
         "reference-build.json",
@@ -100,7 +100,7 @@ pub(super) fn verify(
     )?
     .with_pagination_json(&bytes(&policy)?, stop)?;
     let queried: Value = serde_json::from_slice(
-        &SearchOperationService::default().query_reference_shard(&query_request, stop)?,
+        &SearchOperationService::new().query_reference_shard(&query_request, stop)?,
     )?;
     let page = &queried["payload"]["page"];
     let candidates = page["candidates"]
@@ -122,7 +122,7 @@ pub(super) fn verify(
         stop,
     )?;
     let explained: Value = serde_json::from_slice(
-        &SearchOperationService::default().explain_reference_candidate(&explain_request, stop)?,
+        &SearchOperationService::new().explain_reference_candidate(&explain_request, stop)?,
     )?;
     let original = &explained["payload"]["explanation"];
     let selection = json!({"schema":"wow-service/search-selection-input/1",
@@ -141,7 +141,7 @@ pub(super) fn verify(
         stop,
     )?;
     let selected: Value = serde_json::from_slice(
-        &SearchOperationService::default().select_candidate(&selected_request, stop)?,
+        &SearchOperationService::new().select_candidate(&selected_request, stop)?,
     )?;
     let input = json!({"schema":"wow-service/search-context-input/2",
         "selection_operation_id":selected["operation_id"],"selection_request_digest":selected["request_digest"],
@@ -164,7 +164,7 @@ pub(super) fn verify(
         permission(),
         stop,
     )?;
-    let inspected = SearchOperationService::default().context_for_selection(&inspect, stop)?;
+    let inspected = SearchOperationService::new().context_for_selection(&inspect, stop)?;
     let result: Value = serde_json::from_slice(&inspected)?;
     assert_eq!(
         result["payload"]["context_admission"],
@@ -172,7 +172,7 @@ pub(super) fn verify(
     );
     assert_eq!(bytes(&result["payload"]["context"])?, direct_inspect);
     assert_eq!(
-        SearchOperationService::default().context_for_selection(&inspect, stop)?,
+        SearchOperationService::new().context_for_selection(&inspect, stop)?,
         inspected
     );
     let mut build_input = input.clone();
@@ -188,11 +188,11 @@ pub(super) fn verify(
         permission(),
         stop,
     )?;
-    let packed = SearchOperationService::default().build_context_for_selection(&build, stop)?;
+    let packed = SearchOperationService::new().build_context_for_selection(&build, stop)?;
     let packed_value: Value = serde_json::from_slice(&packed)?;
     assert_eq!(bytes(&packed_value["payload"]["context"])?, direct_build);
     assert_eq!(
-        SearchOperationService::default().build_context_for_selection(&build, stop)?,
+        SearchOperationService::new().build_context_for_selection(&build, stop)?,
         packed
     );
     for (name, value) in [
