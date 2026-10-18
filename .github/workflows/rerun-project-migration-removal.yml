@@ -62,6 +62,40 @@ jobs:
               raise SystemExit('migration initializer block not found')
           script = script.replace(old_none, new_none)
 
+          fallout = '\n'.join([
+              "python - <<'PY'",
+              'from pathlib import Path',
+              'import re',
+              '',
+              'def remove_block(path, pattern, label):',
+              '    file = Path(path)',
+              '    text = file.read_text()',
+              '    text, count = re.subn(pattern, "", text, count=1, flags=re.S)',
+              '    if count != 1:',
+              '        raise SystemExit(f"failed to remove {label}")',
+              '    file.write_text(text)',
+              '',
+              "remove_block('crates/wow-store/src/project/backup.rs', r'    pub\\(super\\) fn backup_to_new_with_archives\\(.*?\\n    \\}\\n(?=    pub\\(super\\) fn backup_to_new_with_context)', 'backup_to_new_with_archives')",
+              "remove_block('crates/wow-store/src/project/backup.rs', r'    pub\\(super\\) fn restore_to_new_with_boundary<.*?\\n    \\}\\n(?=    fn restore_to_new_with_authorities_at_boundary)', 'restore_to_new_with_boundary')",
+              "remove_block('crates/wow-store/src/project/database.rs', r'    pub\\(super\\) fn create_inactive_with_gc\\(.*?\\n    \\}\\n(?=    fn create_profile)', 'create_inactive_with_gc')",
+              "remove_block('crates/wow-store/src/project/database.rs', r'    pub\\(super\\) fn open_inactive\\(.*?\\n    \\}\\n(?=    fn open_epoch)', 'open_inactive')",
+              "remove_block('crates/wow-store/src/project/source_authority.rs', r'    pub fn origin_reference\\(.*?\\n    \\}\\n(?=    pub fn empty)', 'origin authority helpers')",
+              "remove_block('crates/wow-store/src/project/source_authority.rs', r'\\n/// Capture exact original selector/holds.*\\Z', 'capture_source')",
+              "authority = Path('crates/wow-store/src/project/source_authority.rs')",
+              "text = authority.read_text()",
+              "old = '    model::{checkpoint, failure, invalid},'",
+              "new = '    model::{failure, invalid},'",
+              "if text.count(old) != 1:",
+              "    raise SystemExit('unexpected source_authority model import')",
+              "authority.write_text(text.replace(old, new))",
+              'PY',
+              '',
+          ]) + '\n'
+          check_marker = 'cargo +stable fmt --all\n'
+          if script.count(check_marker) != 1:
+              raise SystemExit('format marker not found')
+          script = script.replace(check_marker, fallout + check_marker)
+
           old = '.github/workflows/apply-project-migration-removal.yml'
           rerun = '.github/workflows/rerun-project-migration-removal.yml'
           new = old + ' ' + chr(92) + '\n  ' + rerun
