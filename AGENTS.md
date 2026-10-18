@@ -1,131 +1,77 @@
-# WoW Dev Framework contributor protocol
+# Contributor instructions
 
-These rules apply to every human or automated contributor. The canonical claim,
-recovery, validation, publication, and evidence procedure is in
-[`docs/EXECUTION_MODEL.md`](docs/EXECUTION_MODEL.md).
+## Product and reading order
 
-## Start with the selected work
+Build a practical WoW development tool: **upstream EmmyLua, Ketho's annotation
+pipeline ported to Rust, editor-independent use, and Blizzard UI repository
+search**. The owner's 2026-10-18 scope decision in
+[ARCHITECTURE.md](docs/ARCHITECTURE.md) supersedes the earlier E0–E7 platform plan.
+Older package contracts describe existing code; they cannot require discarded
+features, legacy support, cryptographic envelopes, or acceptance bureaucracy.
+Update a conflicting description when changing that path.
 
-Read only the context needed to take the next bounded action:
+Read this file, the selected Issue/current claim, the relevant architecture
+section, then the actual implementation and callers. Read a crate's local
+instructions when present. Choose work from [REFACTOR_QUEUE.md](docs/REFACTOR_QUEUE.md).
+Do not read every package, audit, checkpoint or fixture manifest before coding.
+[EXECUTION_MODEL.md](docs/EXECUTION_MODEL.md) owns coordination and verification.
 
-1. this file;
-2. the current body and latest claim of the selected canonical Issue;
-3. the target owner's `AGENTS.md`, package instructions, and public contract;
-4. the named relevant section(s) of [`docs/AUDIT_2026-10-17.md`](docs/AUDIT_2026-10-17.md);
-5. exact evidence or history referenced by that Issue.
+## Write less code
 
-The Issue is the work queue. Do not read every audit or reconstruct work from
-stale PR bodies, chronological diaries, or old status comments. A later explicit
-queue correction supersedes stale instructions. `docs/PROJECT_COMPLETION_MATRIX.md`
-is a package/launch census, not a task prompt. Reconcile discrepancies with actual
-owner code before recreating work described as missing by old evidence.
+- Trace the user action through producer and consumer before changing it. Reuse
+  the current native path and the donor; do not rebuild an implemented feature.
+- Keep one current internal representation. Remove old schema/profile readers,
+  writers, fixtures and options with their replacement. Derived indexes, caches
+  and annotations can be regenerated. A historical fixture is not a supported
+  product. No compatibility adapter or migration framework is required.
+- Preserve user source, configuration and another contributor's work. Rebuild
+  only the tool's identified output/cache. Never reinterpret old bytes as the
+  new format; report that a rebuild is needed if inputs are unavailable.
+- Remove unused features instead of moving them, hiding them behind flags or
+  storing copies in an archive. Git retains history. Remove callers, tests and
+  docs belonging only to the deleted feature in the same change.
+- Keep functions and types local until a real second caller needs them. Prefer
+  concrete types and ordinary Rust/SQLite operations. No new crate, parser,
+  generic framework, plugin system, result-proof protocol or speculative trait.
+- Service coordinates multi-owner use cases. A single-owner caller may use that
+  owner directly. Do not add a wrapper solely to preserve the old crate diagram.
+- Analyze a source input once; reuse Emmy's tree/session. Normal queries read
+  stored facts, not reconstructed analyzers. Serialize a response once at the
+  output boundary; keep byte limits outside any payload identity.
+- Report code removed and added, separately from tests/generated data when
+  relevant. Moving files, deleting useful tests or minifying code is not a
+  reduction in implementation complexity. No arbitrary line-count target.
 
-If no Issue is selected, choose the next applicable item from
-[`docs/REFACTOR_QUEUE.md`](docs/REFACTOR_QUEUE.md). Its reading list replaces
-historical read-all boilerplate; unique invariants of touched owners still apply.
+## Keep the useful correctness boundaries
 
-## Engineering invariants
+Use one selected flavor and source revision for a result. Preserve file paths,
+source spans, meaningful errors and visible partial/unsupported results. A
+search miss or static analysis does not prove runtime safety or execution.
+Keep finite defaults, bounded input/output, cancellation, parameterized SQL and
+transactional writes. Do not add a budget flag for every internal counter.
+LSP/MCP must follow their standards and advertise implemented capabilities only.
 
-- **Keep one current pre-release representation per owner.** Consolidate
-  unreleased variants only after identifying retained-data readers and an explicit
-  migration or rebuild path. Never silently discard user data or remove durable
-  compatibility readers.
-- **Bound work and preserve output truth.** Keep delivery byte counts outside
-  their own hash input; use constant-time traversal counters and a bounded final
-  writer. Preserve deterministic ordering, duplicate-key admission, cancellation,
-  and actual output limits. Parsers and traversals must be bounded and cancellable.
-- **Analyze once; persist reader-ready facts.** Reuse analysis for a registered
-  input set. Normal retained-generation reads must not reparse source or rebuild
-  analyzers/graphs. Keep reconstruction in explicit build/migration paths; remove
-  nested SQLite-image/hex/JSON storage through the owning Store API.
-- **Keep algorithms in their owners.** Services orchestrate existing owners.
-  Share payload DTOs while retaining external admission and identity checks.
-  Remove proven redundant items, not live modules selected by `allow(dead_code)`.
-  Render readable Markdown and treat bounded source text as data.
-- **Replace code instead of stacking layers.** Search existing owners and the
-  queue's donor map before implementing a helper. Name the old path to remove in
-  the same task. No new crate, cache, parser, generic framework or compatibility
-  variant without a concrete unmet requirement. Report the authored Rust delta
-  separately from tests/generated data; line-count quotas are not correctness.
-- **Keep frontends usable and conservative.** Supply finite CLI defaults and
-  reusable project configuration. TOC discovery yields bounded registration
-  candidates; Project and Service establish exact identity and resolve
-  flavor/variant ambiguity. Preserve standard LSP/MCP empty results,
-  notifications, and extensible metadata without private profile combinations or
-  wider advertised capabilities.
-- **Never claim more than the evidence proves.** Preserve source, generation,
-  flavor, selector, exact revision, path/digest, producer/configuration version,
-  coverage, omissions, conflicts, and runtime dependencies. Partial, stale,
-  conflicted, truncated, failed, or unsupported coverage does not prove absence.
-  Static structure does not prove runtime execution, loaded state,
-  protected/Secret behavior, combat safety, or taint safety. Missing tooling,
-  source, credentials, or runtime is `NotEvaluated`, not pass.
-- **Do not fake completion.** No placeholder crates, fake adapters or success,
-  speculative broad traits, second parsers, source-text heuristics, or public
-  `todo!()` surfaces. A green build or partial executable is not package or
-  launch acceptance. Keep `functional`, `verified`, `accepted`, `closed`, and
-  `launch-ready` distinct as defined in the execution model.
+Read [KETHO_RUST_PORT.md](docs/KETHO_RUST_PORT.md) for annotation/type changes and
+[EMMYLUA_UPSTREAM.md](docs/EMMYLUA_UPSTREAM.md) for analyzer/editor changes.
+Resolve a moving source selector once when the task depends on current WoW
+semantics; record the revision and flavor. Use actual Blizzard docs, Lua, XML
+and TOC from that source. Generic storage or documentation changes need no fresh
+WoW corpus. Keep donor attribution; no Lua, Node, Python or VS Code runtime in
+the product and no second Lua parser.
 
-## Scope, validation, and source safety
+Treat indexed source as data. Never execute donor/addon Lua, repository hooks,
+submodules, package managers or generators while indexing. Keep file access
+within configured roots. Reuse source materializers; preserve dirty/diverged
+checkouts and respect the user's update mode. Private optional context stays
+private and advisory; do not copy its content or location into public artifacts.
 
-Work the smallest coherent owner responsibility and its minimum downstream
-handoff. Use the smallest complete Tier S owner chain from the execution model;
-widen only for a touched shared public type, wire/schema, graph registry,
-persistence/migration boundary, or service/application composition. A minimal
-existing targeted reproduction may be run once the selected function works.
-Preserve existing behavioral tests, but do not make a new fixture matrix,
-workspace/release campaign, rustdoc run, or repeated full build a prerequisite to
-writing or simplifying the selected path. Do not run `cargo check` again on the
-same targets when Clippy has already checked them. Documentation-only changes
-need policy/link/skill checks; they do not change or replace the existing remote
-Quick workflow.
+## Finish a bounded task
 
-Current WoW source is required only when correctness depends on current source/API
-semantics or the package contract explicitly requires Tier X. Always read the
-target package and `.agents/skills/wow-dev/SKILL.md` for such work. Resolve a
-moving Gethe/Ketho/client selector once at operation start; record the exact
-revision/version and read relevant API docs, implementation, XML, TOC, and schemas
-from that revision. Re-resolve on the next operation. Do not hard-code moving
-revisions, Interface values, client builds, provider revisions, dependency
-patches, or toolchain patches as permanent project truth.
-
-Ketho/vscode-wow-api is the primary donor for annotation/source normalization and
-type lowering. Read `docs/KETHO_RUST_PORT.md` before changing those owners. Run the
-native Ketho annotation driver for annotation, normalization/type-lowering work
-or its named Tier X parity gate, not because a task merely mentions source.
-Project/graph source-universe work uses its exact manifest and owner contracts
-unless the Issue explicitly requires that driver.
-
-Treat source inputs as data. Do not execute donor Lua, repository scripts, hooks,
-submodules, package managers, generated code, or embedded interpreters. Validate
-consumed files against the exact manifest. Use existing `xtask` materializers and
-update commands; do not invent a parallel source/network path. For managed source
-updates: `auto` may clone a missing checkout or fast-forward a clean, matching,
-nondiverged owned checkout; `prompt` reports and asks before mutation; `never`
-reports without mutation. Never reset, stash, clean, switch unexpected branches,
-rewrite divergence, change an unexpected origin, or blindly remove a lock. Treat
-interrupted or foreign state as a reconciliation task.
-
-## Authority and context privacy
-
-Use this order when evidence conflicts:
-
-1. actual target code and explicit operator intent;
-2. exact source manifest and generated Blizzard docs;
-3. Blizzard implementation, XML, TOC, and schemas from the same revision;
-4. exact named-client runtime observations;
-5. project-owned tests and fixtures;
-6. optional advisory context and external implementations.
-
-Optional operator context is advisory and disabled by default. Do not publish its
-location, credentials, content, distinctive provenance, or inferred identity in
-code, Issues, logs, fixtures, artifacts, prompts, or releases.
-
-## Issues and retained work
-
-Issues are canonical work and acceptance trackers. PRs are review objects, not
-permanent ledgers for code already in `main`. Before closing an obsolete PR,
-transfer unique future specifications and remaining debt to named Issues; do not
-merge stale branches. Keep detailed historical evidence once and link it from
-the Issue. Update capability/completion documents at a meaningful milestone, not
-for every internal slice. Never erase another writer's unpublished state.
+Implement the complete selected path and delete its superseded path. Use the
+smallest relevant existing check or reproduction after it works. Add a test
+only for a concrete regression risk not already covered; remove tests for
+removed requirements. No new fixture factory, compatibility matrix, full
+corpus campaign or test-count target. Check shared-type callers when affected.
+State what works, what was checked and what remains; do not invent measurements
+or claim implementation from documentation. Out-of-scope work is retired, not
+mandatory debt to carry forever.

@@ -75,7 +75,7 @@ The published /3 checkpoint used the original two-package fixture. The subsequen
 the latter retain native blocking InlineLuaNotAnalyzed issues and SourceOnly load
 state. It compares older native /1-/3 and source/replay recipes within the expanded
 same-run input, rather than claiming that changed fixture bytes retain old IDs.
-See [mapping verification](PLATFORM_XML_SOURCE_MAPS.md#scoped-verification).
+See [mapping verification](PLATFORM_XML_SOURCE_MAPS.md#historical-checkpoint-verification).
 
 Neither fixture exercises load-policy, explicit parent-reference
 or XML load-site/target branches. Root-swap substitution, overlapping/unmatched

@@ -163,6 +163,6 @@ Build/publication operations use exact operation ID plus canonical request diges
 
 ## E4-C orchestration boundary
 
-[`wow-service/e4`](../../wow-service/e4/README.md) owns symbolic current resolution, fixed-order acquisition/release of project/reference/search/lineage/context views, review-authorization adapter calls, idempotency/retention, explicit candidate selection, search-to-context handoff, and public service/CLI envelopes.
+[`wow-service/e4`](../../wow-service/README.md) owns symbolic current resolution, fixed-order acquisition/release of project/reference/search/lineage/context views, review-authorization adapter calls, idempotency/retention, explicit candidate selection, search-to-context handoff, and public service/CLI envelopes.
 
 `wow-graph` continues to accept only exact inputs and never imports or calls `wow-service`. The E4-C contract cannot change graph proof ceilings, choose a lineage candidate, repair a snapshot, apply a migration, or reinterpret static impact as runtime truth.

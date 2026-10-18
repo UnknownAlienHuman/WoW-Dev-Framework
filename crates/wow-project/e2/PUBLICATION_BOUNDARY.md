@@ -10,7 +10,7 @@ A candidate contains exact source, root, universe, package, TOC, XML, load, Lua-
 
 ## Selected E2-D store contract
 
-The persistence side is defined by [`../../wow-store/e2/README.md`](../../wow-store/e2/README.md) and uses:
+The persistence side is defined by [`../../wow-store/e2/README.md`](../../wow-store/README.md) and uses:
 
 ```text
 one owned SQLite WAL database per ProjectStore epoch

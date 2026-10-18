@@ -1,85 +1,36 @@
-# `wow-graph` contract router
+# `wow-graph`
 
-**Status:** E2-A is partially implemented: typed graphs, proposal validation, bounded direct queries and in-memory producer partition replacement are executable. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) and [PARTITION_USAGE.md](PARTITION_USAGE.md). E4-B lineage/migration/static-impact and E4-C orchestration remain contracts, not implemented capabilities.
+`wow-graph` stores and queries useful source relationships for addon and Blizzard
+UI development. Its current core is generation-local: typed entities and relations,
+validated proposals, producer partitions, immutable snapshots, and bounded direct
+queries. It does not parse source or discover current projects; Project, Reference,
+Search, and source producers supply facts through their existing owners.
 
-`wow-graph` owns versioned graph schemas, semantic entity/relation assertions, producer partitions, immutable graph snapshots, bounded graph queries, and E4-B cross-generation lineage/change/impact overlays. It does not parse source, run recognizers/search, infer platform facts, rank candidates, resolve project current publications, authorize reviewers, or expose raw storage internals.
+## Read and change
 
-## E2-A — generation-local typed graph
+Start with the selected task, then inspect the relevant implementation under
+[`src/`](src/lib.rs) and its direct caller. Public query entry points are backed by
+`direct`, `axes`, `paths`, `subgraph`, and `explain`; proposal and partition
+handling lives in `proposal`, `assertion_validation`, and `partition_session`.
+Persistent graph storage is an explicit `wow-store` boundary. Keep graph logic out
+of the CLI and service layers.
 
-Read [`e2/README.md`](e2/README.md) and its complete route.
+For source-to-graph behavior, the executable path is [`wow graph build`](../../apps/wow/GRAPH_BUILD.md).
+It builds bounded graph data through the same Project materialization route used
+by `wow check`. Query a saved snapshot with `wow graph entity`, `neighbors`,
+`subgraph`, `axis`, `explain`, or `path`; the current command forms are listed by
+`wow --help` and `wow graph --help`.
 
-E2-A defines:
+## Boundaries
 
-- entity/relation/attribute/axis registries;
-- generation-scoped semantic keys and assertions;
-- producer partition replacement;
-- conflicts, coverage and provenance;
-- immutable graph publication;
-- bounded exact entity/neighbor/axis/path/subgraph/explanation queries;
-- logical `wow-store` persistence boundary.
+Keep only relationships consumed by search, navigation, or actionable diagnostics.
+Exact graph identity and source locations come from their owners. A static edge,
+match, or path does not prove runtime execution, safety, or API authority. Query
+and traversal work must remain bounded and must preserve incomplete or ambiguous
+input as such.
 
-The current partition session publishes immutable Arc views only. The older standalone snapshot store facade is not a substitute for the selected coherent E2-D ProjectPublicationSet protocol.
-
-## E4-B — cross-generation lineage, migration and static impact
-
-Read [`e4/README.md`](e4/README.md) and its complete route.
-
-E4-B specifies a separate immutable comparison overlay:
-
-```text
-exact before/after owner generations
-+ explicit owner/reference transition evidence
-+ bounded project fingerprints/change facts
-+ Candidate-only search retrieval signals
-+ authorized review decisions under graph proof ceilings
--> producer-separated lineage proposals
--> proof-ceiling and ambiguity validation
--> immutable LineageGraphSnapshot
--> change classification, migration candidates and bounded static impact paths
-```
-
-Generation-local E2 graph identity remains unchanged. Cross-generation relationships are explicit assertions in a separate `LineageGraph`; they never merge or rewrite source entity keys.
-
-## Direct dependency boundary
-
-```text
-wow-core
-wow-store
-```
-
-`wow-project`, `wow-reference`, and `wow-search` produce typed E4-B inputs through their own public contracts. [`wow-service/e4`](../wow-service/e4/README.md) specifies coordination of exact acquisition, producer execution, review authorization, lineage publication/query, migration validation and static-impact use cases. `wow-graph` never depends directly on those higher/domain producers or service.
-
-## E4-C orchestration boundary
-
-```text
-exact before/after selectors and producer profiles
--> wow-service acquires exact project/reference/search views
--> ReviewAuthorizationPort validates review authorization when present
--> wow-graph independently validates proposal/review semantics and proof ceilings
--> immutable LineageGraphSnapshot and exact query results
--> wow-service canonical envelope
--> apps/wow thin CLI
-```
-
-Review authorization does not create lineage proof. Graph validity does not authorize a reviewer. Applying review produces a new immutable snapshot. Search rank cannot be auto-selected as lineage truth. Migration remains advisory and static impact remains static reason-path evidence.
-
-## Authority boundary
-
-- Stable owner identity or explicit transition evidence can support a higher lineage proof ceiling under the exact E4-B profile.
-- Structural fingerprint, same name/path, text/fuzzy/shape/graph proximity, and E4-A rank remain Candidate evidence.
-- Replacement/migration is not the same relation as identity continuity.
-- Missing target entities are not `Removed` without complete relevant before/after coverage.
-- Impact is a bounded reason-path result, not proof of runtime breakage or severity.
-- One-to-many split and many-to-one merge remain explicit; no forced bijection or greedy first match.
-
-## Implementation state
-
-```text
-documentation frontier: E4-B owner contract; E4-C service boundary linked
-implementation frontier: partial E2-A, detailed in IMPLEMENTATION_STATUS.md
-Cargo.toml and Rust source: active workspace member
-CI: Linux/Windows workspace and owner tests
-coherent E2-D publication and E4-B implementation: not implemented
-```
-
-No E4-B Rust work starts before the E2 graph implementation, E4-A search implementation, exact comparison inputs, candidate/proof/review profiles, paired corpora, and all fixture/checksum gates are frozen.
+Cross-generation lineage, migration, and impact code remains excess pending its
+reduction in the refactoring queue; it is not a required framework or acceptance
+system. Do not expand it to satisfy old contracts. The graph crate is active and
+useful today, but its remaining layers are not thereby declared complete or
+already removed.

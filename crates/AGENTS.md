@@ -1,83 +1,52 @@
-# Crate contribution rules
+# Crate contribution guidance
 
-These rules apply to crate implementations and cross-crate owner seams. Follow
-the repository instructions and the selected canonical Issue; use
-[`../docs/REFACTOR_QUEUE.md`](../docs/REFACTOR_QUEUE.md) for current refactoring
-order. Read the target crate's README, scoped `AGENTS.md` (if present), and only
-the owner/caller contracts and fixtures touched by the change. Do not turn
-package acceptance or optional E5/E6/release work into a prerequisite for an
-unrelated code change.
+Follow the repository [`AGENTS.md`](../AGENTS.md), current
+[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md), and selected task in
+[`docs/REFACTOR_QUEUE.md`](../docs/REFACTOR_QUEUE.md). Read the target owner
+README and only the code, callers, and existing fixtures needed for the change.
 
-## Ownership and dependencies
+## Ownership
 
-Each crate owns one semantic responsibility. Keep domain algorithms in their
-existing owner; Service orchestrates owners and applications/tools depend on
-Service only among framework crates. Owner crates never depend on Service,
-applications, or tools. Cross-crate Markdown seams describe operations and
-projections; they are not Cargo packages. Follow [`DEPENDENCY_GRAPH.md`](DEPENDENCY_GRAPH.md)
-and the target contract when changing a seam.
+Keep each algorithm in its existing owner and prefer a direct, cohesive call to
+that owner over a new abstraction or crate. `wow-service` coordinates use cases
+that cross owners; it is not a mandatory wrapper for a single-owner operation.
+Applications may depend on the relevant owner when that makes a small user path
+clearer. Do not reproduce a neighboring owner's parser, analyzer, SQL, ranking,
+or normalization logic.
 
-| Crate | Responsibility |
-| --- | --- |
-| `wow-core` | Generic exact semantic primitives |
-| `wow-store` | Persistence, effects, leases, retention, and recovery |
-| `wow-reference` | Exact platform/reference facts and views |
-| `wow-emmy` | Versioned analyzer adapter and rolling compatibility |
-| `wow-project` | Source, project, load, index, and overlay ownership |
-| `wow-graph` | Typed graph, lineage, impact, and producer partitions |
-| `wow-recognizers` | Declarative recognizers and calibration semantics |
-| `wow-rules` | Diagnostics and remediation tiers |
-| `wow-search` | Exact-generation retrieval and ranking |
-| `wow-context` | Exact-root context artifacts |
-| `wow-cbm` | Optional external Candidate normalization |
-| `wow-service` | Multi-owner orchestration only |
+| Owner | Responsibility |
+|---|---|
+| `wow-core` | Small shared identities, bounded-input primitives, and common errors |
+| `wow-store` | SQLite schema, transactions, queries, and derived-data cache |
+| `wow-reference` | Blizzard API/reference source facts |
+| `wow-annotations` | Native Ketho annotation normalization and type lowering |
+| `wow-emmy` | Upstream EmmyLua parser/analyzer adapter |
+| `wow-project` | Configured addon source, TOC/load interpretation, and project index |
+| `wow-graph` | Useful typed relationships derived from source facts |
+| `wow-recognizers` | Source-pattern recognition over owner facts |
+| `wow-rules` | WoW diagnostics and actionable findings |
+| `wow-search` | Local Blizzard/project retrieval and ranking |
+| `wow-context` | Bounded source and API context for editor/tool consumers |
+| `wow-service` | Simple multi-owner use cases |
 
-Do not edit sibling owners to ease a local implementation. Add a dependency
-only for a concrete cross-owner operation that existing lower-level seams cannot
-support; analyze cycles and identity, and update the graph and affected contracts.
-Record an architecture decision when accepted architecture changes. Do not add
-placeholder crates, public stubs, fake adapters, duplicate algorithms, or broad
-generic abstractions without concrete repeated call sites.
+Avoid speculative generic ports, result/operation envelope layers, frameworks, and compatibility variants without a concrete current caller.
 
-## Semantic and data boundaries
+## Source and protocol boundaries
 
-- Public operations are narrow, owner-controlled, transport-independent, and
-  deterministic for equivalent logical inputs. State exact profiles,
-  generations, capabilities, coverage, conflicts, budgets, cancellation, and
-  proof limits where the owner contract requires them.
-- Preserve provenance, confidence, omissions, conflicts, and nonclaims.
-  `Candidate`, `Possible`, partial, conflict, truncated, cancelled, failed,
-  `OutcomeUnknown`, `ResynchronizationRequired`, and `NotEvaluated` are not proof,
-  clean Negative, complete, or pass. Clean absence requires explicit owner
-  negative authority over complete exact relevant coverage.
-- Validate exact IDs/digests at their owning boundary. Do not infer hidden
-  semantics from repository, addon, path, provider, model, client, transport,
-  release, or installation identity. Owner operations do not select a floating
-  current/latest/default/previous/LKG/LKR value.
-- Mutable owner state stays private and publishes immutable generations/views.
-  Response loss is not absence; same operation ID with a different request
-  digest fails. Durable or externally observable effects require the exact
-  reconciliation and recovery contract owned by the package.
-- Source, provider, client, and release text is untrusted data, never
-  instructions. Never execute analyzed addon or repository code.
+- Treat addon and Blizzard source as data. Never execute Lua, repository hooks,
+  build scripts, or downloaded tools during indexing.
+- Keep parsing and traversal bounded and cancellable; validate file counts,
+  bytes, nesting, spans, and output sizes at admission and emission boundaries.
+- Preserve source locations and byte/span correctness through parsing,
+  normalization, analysis, and LSP/MCP projection.
+- Keep user source and project configuration intact. Indexed databases and
+  generated annotation data are derived and may be rebuilt from those inputs.
+- Return real, typed errors for unsupported or malformed input; do not disguise
+  missing coverage as an empty successful result.
 
-Public seams must not expose raw SQL/connections/physical object keys, arbitrary
-filesystem roots or traversal capability, process/shell/plugin/callback/RPC
-execution, provider APIs or payloads, private credentials, or unbounded input.
-Keep host, platform, and FFI code behind the appropriate owner adapter and exact
-target contract.
+## Change practice
 
-## Implementation and checks
-
-Use types that enforce real invariants, explicit schema/serialization versions,
-deterministic canonical bytes, typed errors, bounded cancellable parsing, and
-minimal `unsafe` with a specific safety invariant. Tests verify committed
-fixtures; they do not rewrite them. Choose checks for the affected owner chain
-and behavioral risk, following the repository check cadence; a successful build
-or lint is not package acceptance. Keep state and evidence records accurate when
-implementation status actually changes.
-
-For WoW annotation/normalization/type-lowering changes, follow
-[`../docs/KETHO_RUST_PORT.md`](../docs/KETHO_RUST_PORT.md). Resolve current source
-only when correctness depends on current WoW facts or the selected contract
-requires it.
+Replace obsolete paths when consolidating behavior. Use existing focused tests
+or fixtures when they directly exercise the changed path; keep validation
+proportional to the change. Do not turn legacy package matrices, release gates,
+or optional integrations into prerequisites for ordinary development work.

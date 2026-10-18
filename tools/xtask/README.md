@@ -1,16 +1,29 @@
 # Native repository maintenance
 
-`xtask` is an internal development utility, not the public `wow` application or
-an alternate analysis/service owner. It has no framework crate dependencies and
-uses the existing dependency closure (`serde_json`, `sha2`) plus fixed Git and curl adapters. It is not
-included in a supported product bundle. No external interpreter is invoked.
+`xtask` is internal Rust development tooling. Product workflows use `wow` or the
+native builder; [architecture](../../docs/ARCHITECTURE.md) sets their scope.
 
-## Commands
+## Routine checks
 
 ```sh
 cargo xtask check
 cargo xtask sync-skill --check
 cargo xtask sync-skill --write
+```
+
+`check` reads tracked/untracked distributable files, checks paths/regular-file
+and size bounds, native-only policy, JSON syntax and duplicate decoded keys,
+and identical skill copies. `check`/`sync-skill` accept `--root DIR`.
+The old E3/seven-owner partial/pending snapshot validators are removed. There is
+no replacement contract, fixture-checksum or package-certification gate.
+
+Skill writes use the existing bounded preflight/lock/replacement path. A failed
+sync is an error; repeat explicit sync after reconciling state. Checks do not
+rewrite expected product fixtures.
+
+## Source and native output tools
+
+```sh
 cargo xtask check-source /path/to/checkout live
 cargo xtask update-source /path/to/checkout live --expected-head <observed-local-SHA>
 cargo xtask materialize-source /path/to/request.json
@@ -20,108 +33,22 @@ cargo xtask verify-manifest /path/to/manifest.json /path/to/wow-ui-source HEAD
 cargo xtask verify-library /path/to/native-output --require-input-complete
 ```
 
-`check` and `sync-skill` accept `--root DIR`; otherwise the framework source root
-is used. Check is read-only. It scans distributable tracked/untracked files for
-forbidden interpreter assets/invocations, validates JSON syntax and rejects
-duplicate decoded object keys at every nesting level, then verifies identical
-skill discovery copies. Independent objects may reuse names; arbitrary-precision
-numbers and normal JSON string/recursion rules remain supported. Duplicate errors
-include the file and UTF-8 byte offset, without echoing key/value contents.
+These are existing developer commands. Use them only for the selected source or
+annotation task; they are not prerequisites for generic code or documentation.
+Read the relevant [checkout update](../../docs/SOURCE_CHECKOUT_UPDATES.md),
+[materialization](../../docs/SOURCE_MATERIALIZATION.md) or
+[API snapshot](../../docs/SOURCE_API_MATERIALIZATION.md) recipe when using that
+operation. Preserve dirty/diverged checkouts and respect auto/prompt/never mode.
+Do not execute indexed source, hooks or repository scripts, or blindly delete an
+interrupted/foreign operation's files.
 
-This is not full JSON-schema, contract-ID, fixture/checksum or dependency-graph
-closure. Those remaining gates are listed in the root completion matrix.
-`check` does not certify every planned conformance gate and
-is not a defense against intentionally obfuscated programs.
+`verify-library` checks the current native artifact/report's recorded files and
+source maps. It does not prove every annotation's meaning in an editor. Use the
+[consumer guide](../../docs/ANNOTATION_CONSUMER_PROBES.md) only for relevant
+semantics. Missing/partial input is not a clean complete library.
 
-Skill writes are explicit, preflight all paths, reject symlinks, use a single
-writer lock and same-directory replacement, then read back. Three target files
-are not one crash-atomic transaction; a partial failure is an error and is repaired
-by a subsequent explicit sync. Tests/checks never rewrite expected fixtures.
-
-`check-source` only checks an explicit checkout and public HTTPS origin. It
-reports both Git revisions, branch and dirty state, never prints the remote URL,
-and never fetches/resets/stashes/switches or changes the checkout. A different SHA
-is not automatically classified as behind: review/fetch and offer a safe update.
-An explicit guarded fast-forward is available through `update-source`, described
-in [the source update contract](../../docs/SOURCE_CHECKOUT_UPDATES.md). It requires
-a matching expected HEAD and branch in an exclusively owned standalone checkout,
-fetches one observed commit and verifies state again before applying. Dirty or
-concealed edits, ignored-file overwrites and divergence never trigger a reset,
-stash, branch switch or retry. A failed apply retains its reconciliation lock.
-Private/SSH authentication and update scheduling remain separate work.
-The same command can inspect a local EmmyLua checkout by passing its branch.
-
-`materialize-source` is the explicit managed-checkout lane. It accepts one strict
-`wow-source-materialization-request/1` JSON request containing an operation ID,
-`auto`/`prompt`/`never` policy, absolute managed root and manifest output, exact
-GitHub HTTPS origin, branch and selector label. A missing managed checkout is
-staged beside its destination from one observed commit, inventory-verified, then
-installed by same-parent rename. Existing checkouts are updated only when they
-carry the matching `.git/wow-source-managed.json` marker; ordinary operator-owned
-checkouts are never fast-forwarded by this command.
-
-`never` performs observation only. `prompt` returns an exact content-addressed
-plan and requires the caller to repeat the same request with its plan ID, before
-revision and selected revision; the moving branch is not resolved again. `auto`
-executes the exact observed plan. Durable operation/checkpoint/receipt files are
-kept in a private same-parent operation directory. An exact completed receipt is
-replayed without Git or filesystem effects. Interrupted clone/install/update
-states are inspected before any retry; a foreign staging root, conflicting output
-or applying update lock becomes exit 5 and `operator_review_before_any_retry`.
-The operation never resets, cleans, stashes, switches an operator branch, deletes
-an uncertain lock, follows redirects, runs hooks/submodules/scripts, or prints the
-origin or host paths. See [managed source materialization](../../docs/SOURCE_MATERIALIZATION.md).
-
-`materialize-source-api` is the explicit checkout-free GitHub fallback. It uses
-the same `auto`/`prompt`/`never` authorization semantics but materializes one
-immutable data-only snapshot from an exact public GitHub commit/tree and its
-selected blobs. Recursive-tree, per-response, request-count and aggregate-body
-budgets are fixed; each blob is length-checked, Git-object rehashed and SHA-256
-bound before same-parent installation. Existing snapshot roots are immutable.
-Optional `WOW_SOURCE_GITHUB_TOKEN` is read only from the environment and is never
-placed in request JSON, process arguments, output or durable records. See
-[API/blob source snapshots](../../docs/SOURCE_API_MATERIALIZATION.md).
-
-`manifest` inventories one exact Git snapshot using raw blobs, per-repository
-Git object hashing and independent SHA-256. Export attributes and dirty files do
-not affect it. Default selected extensions are Lua, XML, TOC and XSD plus required
-`version.txt`. Nonregular entries reject even outside the selected extensions.
-Bounds: 200,000 entries, 32 MiB per file, 256 MiB selected bytes, 64 MiB manifest.
-Verification independently rebuilds the inventory; unknown/changed data fails.
-No host paths, URLs, credentials, timestamps or permanent build IDs enter it.
-
-`verify-library` checks the native build/report schema, selected/admitted/failed
-source counts, file inventory, final bytes/hashes and mapping ranges. With
-`--require-input-complete`, any source admission failure is an error. Projection
-issues still return partial. Source hashes in sidecars identify recorded evidence;
-this validator alone does not independently prove their upstream provenance or
-language-server semantics. The current-source workflow runs the actual loader.
-
-Exit status: 0 verified/materialized; 2 invalid/failed; 3 authorization required,
-drift, differing/stale revision or partial projection; 4 network observation or
-exact acquisition unavailable; 5 interrupted/uncertain source effect requiring
-reconciliation.
-Verification is read-only. Manifest publication is new-only, not crash-durable
-store publication. Git subprocesses have output bounds and deadlines; no shell
-runner, repository hooks or lazy fetching is used for local object reads.
-
-## Retirement boundary
-
-The interpreter-based source producers and tests were removed by explicit owner
-direction, not renamed, archived, wrapped or hidden behind Rust. Existing v1 JSON
-importers remain supported as compatibility readers. Full native topology
-production and the former upstream source-manager/probe command family have not
-been ported wholesale and must not be advertised as implemented.
-
-Native library verification accepts v3 and optional-correction v4. The latter
-checks correction-set digest, per-record outcomes, exact applied before/after
-bindings and partial-state propagation. It does not execute corrections itself,
-authenticate reviewers or certify consumer semantics. An expired/conflicted/
-rejected correction cannot become clean by clearing the ordinary issue list.
-
-For selected literal builds, `verify-library` accepts schema v6 and validates
-`literal_execution`: module identity, call order/results and final literal-file
-bindings. Add `--literal-module sha256:<expected-digest>` to require that exact
-module independently of the report. Downgraded native reports then reject. This
-is artifact consistency, not signature verification or consumer certification;
-correction and external-alias validation still apply to v6.
+Some commands still implement old import/report versions, hashes and VM-specific
+verification. That is existing code awaiting #112/#196/#203, not a compatibility
+or VM support commitment. Remove obsolete validators with their producer/callers;
+do not add another report version or test matrix to preserve them. Native
+literal generation and useful source/output checks remain.

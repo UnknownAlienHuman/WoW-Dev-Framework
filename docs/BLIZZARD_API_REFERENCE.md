@@ -1,7 +1,7 @@
 # Native Blizzard API input and retained wire import
 
 The current source path is the Rust Ketho loader and projection documented in
-[KETHO_RUST_PORT.md](KETHO_RUST_PORT.md#native-source-to-library-path).
+[KETHO_RUST_PORT.md](KETHO_RUST_PORT.md#native-source-to-library-flow).
 It consumes one selected local Git revision and generated-API TOC, evaluates a
 bounded declarative subset through the existing EmmyLua AST without executing
 Lua, and retains raw values, metadata, owners, source spans and projection issues.

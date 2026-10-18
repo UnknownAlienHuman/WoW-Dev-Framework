@@ -1,112 +1,49 @@
-# `wow-reference` contract router
+# `wow-reference`
 
-**Status:** executable E0-B slices and generated API/UI topology import are present. E1-B persistence, E4-B transitions and E6-B locator mapping remain planned contracts. See the [current implementation ledger](../../docs/IMPLEMENTATION_STATUS.md).
+`wow-reference` admits and normalizes selected Blizzard API documentation and
+related source data. It owns raw and typed API/type/event/restriction facts,
+source-bound corrections, coverage, and read-only views consumed by annotation,
+search, and project operations. Source-sensitive work selects one exact
+revision and client flavor. Inputs are parsed through existing bounded,
+nonexecuting owners; source hooks and generated code never run.
 
-`wow-reference` owns exact ReferenceProfiles, source ingestion/evaluation, raw metadata, normalized API/type/event/restriction facts, corrections, coverage/negative authority, immutable ReferenceView records, explicit cross-profile transition evidence, and exact mapping of bounded external locators into retained ReferenceViews. It does not own project-source continuity, external-provider semantics, candidate selection, search ranking, accepted lineage graph publication, migration application, runtime state, context orchestration, or service orchestration.
+The current Ketho annotation route is `wow-reference` normalization followed by
+`wow-annotations` projection. The native library driver and Service/builder
+handoff are described in the [Ketho Rust port map](../../docs/KETHO_RUST_PORT.md).
+This crate does not own annotation rendering, project/addon indexing, search
+ranking, editor settings, or general Lua language-server behavior.
 
-## Canonical routes
+## Useful native APIs
 
-### E0-B — fixture ReferenceView
+- The native APIDocumentation loader and model live in `src/native.rs`,
+  `src/native_model.rs`, and `src/native_corrections.rs`.
+- `src/native_aliases.rs` admits explicit annotation-only alias resources as
+  bounded `AliasDocument` inputs. These overlays do not create Blizzard facts
+  or negative authority.
+- `src/native/strings.rs` extends EmmyLua's token decoding for selected Lua 5.1
+  decimal and long-bracket string forms while preserving original source spans.
+- `NativeViewProjection::callable_signature(record, stop)` provides a bound
+  read of source-normalized callable parameters and returns for Search consumers.
+- `project_callables_with_type_resolution` attaches the explicit exact-name and
+  correction overlay; the original `project_callables` behavior remains its own
+  route.
 
-Read the root package beginning with [`FIXTURE_PROFILE.md`](FIXTURE_PROFILE.md), [`LOOKUP_AND_COVERAGE.md`](LOOKUP_AND_COVERAGE.md), [`OPERATIONS.md`](OPERATIONS.md), and [`CONTRACT.json`](CONTRACT.json).
+Unsupported fields, conflicting declarations, unresolved types and partial
+coverage stay visible. Never coerce unknown input into a successful empty or
+`any` declaration. Keep reference facts bound to the selected profile and
+generation; static source does not establish runtime, Secret, combat, or taint
+behavior.
 
-### E1-B — persistent reference build
+## Reading by task
 
-Read [`e1/README.md`](e1/README.md). It defines exact source snapshots, restricted APIDocumentation evaluation, raw/normalized facts, digest-bound corrections, ReferenceStore plans, coverage/negative authority, and exact read-only ReferenceView.
+Begin with [`AGENTS.md`](AGENTS.md) and the selected owner contract/code. For
+annotation semantics and source-to-library flow, use the [Ketho map](../../docs/KETHO_RUST_PORT.md).
+For callable type overlays, see [native callable type resolution](NATIVE_CALLABLE_TYPE_RESOLUTION.md).
+For alias input behavior, see the [catalog scope](../wow-annotations/KETHO_TYPE_CATALOG.md).
+For current Rust string handling, see `tests/native_string_forms.rs` and the
+focused implementation in `src/native/strings.rs`. The [architecture decision](../../docs/ARCHITECTURE.md)
+states the current project scope.
 
-### E4-B — explicit transition producer
-
-Read [`E4_B_TRANSITION_EVIDENCE.md`](E4_B_TRANSITION_EVIDENCE.md). It defines exact before/after ReferenceView producer partitions for stable identity, explicit transition/rename/move keys, explicit deprecation/replacement, introduced/removed availability, signature/type/restriction changes, and reviewed correction transitions.
-
-Reference transition authority remains scoped to exact compared profiles. Search/source name similarity cannot manufacture aliases, replacements, removal, or platform facts.
-
-### E6-B — external locator mapping owner
-
-Read [`E6_B_EXTERNAL_LOCATOR_MAPPING.md`](E6_B_EXTERNAL_LOCATOR_MAPPING.md). It maps owner-neutral bounded provider locator fields into one exact retained ReferenceView.
-
-Supported identity classes can include API namespace/name, callable/event/CVar/type/enum/restriction stable keys, and exact pinned source artifact/path/span fields. Provider labels, scores, summaries, snippets, and inferred relations never create aliases, replacements, deprecations, or platform facts.
-
-Mapping preserves `ExactMapped`, `MultipleMappings`, `NoMappingWithOwnerAuthority`, `NoMappingPartial`, `Conflict`, `NotEvaluated`, and `Failed`. Clean no-mapping requires complete relevant reference coverage and negative authority.
-
-## Direct dependency boundary
-
-```text
-wow-core
-wow-store when persistent storage is active
-```
-
-`wow-reference` never depends on `wow-annotations`, `wow-project`, `wow-graph`, `wow-search`, `wow-service`, `wow-context`, `wow-cbm`, or applications. E4-C submits transition records to `wow-graph`; E6-B consumes owner-neutral mapping requests through a narrow port.
-
-## Authority boundary
-
-- ReferenceView owns platform-contract facts under exact profiles.
-- Blizzard implementation source is a distinct authority class.
-- Project/source continuity and project locator mapping are owned by `wow-project`.
-- External provider results remain `semantic_candidate + Candidate`.
-- Exact locator mapping proves only identity to one reference record.
-- Search signals remain Candidate lineage evidence.
-- Runtime spell secrecy, taint, combat or hotfix behavior requires exact runtime evidence.
-- Deprecated does not imply a replacement target.
-- Replacement does not imply same lineage or automatic edit compatibility.
-
-## Current implementation state
-
-```text
-documentation frontier: E6-B reference mapping seam
-implementation frontier: partial E0-B plus source-bound JSON imports and development CLIs
-Cargo.toml: active workspace member
-Rust source: src/ and tests/source_bridge.rs
-CI/workflows: repository CI and current-source reference bundle
-```
-
-The E6-B seam cannot activate before the E1-B Reference implementation, exact mapping profiles/fixtures, owner coverage/negative-authority records, E6-A, and E6-B service gates are implemented and verified for their selected inputs.
-## Native annotation resource reader
-
-`src/native_aliases.rs` is the bounded nonexecuting Emmy adapter for explicit
-annotation-only alias resources. `AliasDocument` keeps raw identity/text/spans,
-not current Blizzard facts or negative authority. The optional annotation lane
-consumes it without discovery or IO. See [scope](../../docs/KETHO_RUST_PORT.md#alias-resource-connection).
-
-## Native source strings
-
-[`src/native/strings.rs`](src/native/strings.rs) extends the production
-APIDocumentation loader around Emmy's existing token decoder. Lua 5.1 decimal
-escapes of one to three digits are admitted for bytes 0–127, including embedded
-zero and escaped table keys. Values above 127, overflow, hex/Unicode escapes and
-quoted physical CR sequences remain explicit errors; they are never converted
-lossily into Unicode characters or silently removed.
-
-Long-bracket strings normalize CR, LF, CRLF and LFCR to LF, consuming each pair
-once and omitting the first newline as Lua specifies. Backslashes in these
-strings remain literal. Original file hashes and source byte spans are unchanged.
-Only inputs using expanded forms select `ketho-apidoc-declarative/3`; other
-admitted inputs retain v2 receipts. This does not execute Lua or add a byte-string
-wire type. See [Lua 5.1 lexical rules](https://www.lua.org/manual/5.1/manual.html#2.1)
-and the focused source-owner cases in `tests/native_string_forms.rs`.
-
-## Native callable signature view
-
-`NativeViewProjection::callable_signature(record, stop)` borrows the original
-source-normalized callable captured during `project_callables`. The sealed view
-binds its original Reference generation/view digest, record key/digest and source
-ID. It retains ordered parameters/returns, unresolved source type identities,
-tri-state nilability and raw default/stride values with original member spans.
-No payload parser, correction application or annotation lowering runs in this reader.
-The reachable handle exposes captured name/namespace, and its ordered fields
-expose original name/type/inner-type/nilability alongside source spans. These
-ports feed the [native Search projection](../../apps/wow/SEARCH_REFERENCE.md).
-Unknown fields remain in the original record. Conflicting candidates cannot mint
-this view. The private catalog is skipped by serialization, preserving existing
-Reference and projection bytes. Consumers must validate the complete binding
-against their held universe; replacing a public report does not relabel it.
-`PersistentReferenceStore::prepare_view` prepares the existing immutable view
-object without Store writes, allowing Service to commit its exact dependent
-shard, roots and response in the same owning operation transaction. Its object
-kind, schema and bytes are unchanged. `ReferenceRecord::validate_key` shares the
-existing owner key grammar with strict query consumers.
-See the selected [context consumer](../wow-context/e3/NATIVE_PRIMARY_REFERENCE_FACTS.md).
-
-The explicit `project_callables_with_type_resolution` producer also attaches a
-Reference-owned exact-name/correction overlay, described in
-[native callable type resolution](NATIVE_CALLABLE_TYPE_RESOLUTION.md). The
-original `project_callables` path keeps its original bytes and identities.
+Run a focused owner-chain check for the changed behavior. Use representative
+positive and negative cases when semantics change; full-source campaigns are
+for a task that claims release-wide coverage, not every refactor.
