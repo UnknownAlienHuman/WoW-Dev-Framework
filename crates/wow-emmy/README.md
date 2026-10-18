@@ -15,7 +15,9 @@ language server in this crate. See [upstream boundary](../../docs/EMMYLUA_UPSTRE
 
 ## Main entry points
 
-- `AnalyzerSession` owns the updateable upstream analysis and snapshot boundary.
+- `src/session.rs::AnalyzerSession` owns the updateable analysis boundary. It
+  currently has separate Main-only diagnostics and Main/Library semantic engines;
+  #193 joins them and fixes the diagnostic filter.
 - `analyze_syntax` and `analyze_syntax_with_stop` expose bounded physical or
   virtual syntax analysis and cancellation-aware collection.
 - `document_symbols::document_symbols` builds normalized same-document symbol
@@ -37,10 +39,10 @@ Analyzed Lua and addon repositories are data and are never executed.
 owns project/source registration and generation; `wow-rules` owns WoW-specific
 diagnostic decisions; Service and applications compose user workflows.
 
-Start with [`AGENTS.md`](AGENTS.md), [`CONTRACT.json`](CONTRACT.json), and the
-specific owner/caller code for the change. Use these focused references:
+Start with [`AGENTS.md`](AGENTS.md), the selected
+[implementation route](../../docs/IMPLEMENTATION.md#addon-configuration-and-emmy-analysis)
+and actual owner/caller code. Use only the needed reference:
 
-- [session and snapshots](SESSION_MODEL.md)
 - [fact model](FACT_MODEL.md)
 - [diagnostic normalization](DIAGNOSTIC_NORMALIZATION.md)
 - [source coordinates](SOURCE_COORDINATES.md)
@@ -48,8 +50,7 @@ specific owner/caller code for the change. Use these focused references:
 - [document symbols](DOCUMENT_SYMBOLS.md)
 - [upstream API boundary](../../docs/EMMYLUA_UPSTREAM.md)
 
-Use [`PIN_AND_PROBE.md`](PIN_AND_PROBE.md) only for a concrete dependency-pin or
-compatibility task. For ordinary changes, follow the repository's focused check
-cadence; a full test matrix or editor/client qualification is needed only for a
-task claiming that broader coverage. Runtime integration excess remains tracked
-by Issues #193, #196, and #203.
+For pin changes, use the [upstream guide](../../docs/EMMYLUA_UPSTREAM.md).
+`examples/workspace-fixture.json` retains source read by Project's
+`tests/primary_callable_replay.rs`; it is test data, not a pending byte-freeze
+programme. Ordinary checks use the relevant Rust tests and session helpers.

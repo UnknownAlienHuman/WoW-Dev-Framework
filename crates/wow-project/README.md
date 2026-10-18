@@ -16,8 +16,11 @@ Lua/XML locations, and reader-ready facts for Emmy analysis and useful search.
   `src/registry.rs`
 - TOC/XML and source graph behavior: `src/load/`, `src/xml_bindings.rs`,
   `src/xml_lua.rs`, `src/graph.rs`
-- Existing executable behavior: `src/update.rs`, `src/publication.rs`,
-  `src/platform_source/`, and tests under [`tests/`](tests/)
+- In-memory updates: `src/update.rs`, `src/publication.rs`; preserve coherent
+  add/change/remove behavior while stored readers move.
+- Cold read reconstruction: `src/replay/{publication,mod}.rs`; #131 replaces its
+  full analyzer/replay rebuild with directly readable file/text facts.
+- Existing behavior checks: [`tests/`](tests/) and `src/platform_source/`.
 
 Current code still has more publication, update, overlay, and exact-generation
 machinery than the target requires. The intended setup/index workflow is tracked
@@ -36,5 +39,6 @@ project snapshots and indexes can be regenerated. Report ambiguity and
 unsupported/failed parses honestly.
 
 Read root [`AGENTS.md`](../../AGENTS.md), [architecture](../../docs/ARCHITECTURE.md),
-and [reduction queue](../../docs/REFACTOR_QUEUE.md), then inspect the concrete
-owner and consumer path being changed.
+and the selected [implementation route](../../docs/IMPLEMENTATION.md), then
+inspect the concrete owner and consumer. A current read must not adopt old
+generation/receipt derivations merely to preserve archived bytes.

@@ -319,7 +319,9 @@ raw finding count
 complete budget/scope proof
 ```
 
-Status precedence defined in `RESULT_ENVELOPE.md`.
+Current status precedence is implemented by `src/service.rs::derive_status`.
+[Issue #194](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194)
+replaces the result wrapper; this old type inventory does not require keeping it.
 
 ## 14. Check result envelope
 
