@@ -6,8 +6,8 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use wow_core::{
     CoreErrorCode, CoreResult, GenerationContext, GenerationContextId, ProfileComparison,
-    ProfileIdentity, ProfileIdentityBuilder, compare_profile_identity, require_profile_identity_match,
-    require_same_generation, validate_profile_identity,
+    ProfileIdentity, ProfileIdentityBuilder, compare_profile_identity,
+    require_profile_identity_match, require_same_generation, validate_profile_identity,
 };
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;

@@ -2,8 +2,8 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::error::Error;
 use wow_core::{
-    ClaimScope, CoreErrorCode, CoreResult, EvidenceConfidence, EvidenceId, EvidenceRecord,
-    Finding, FindingDraft, GenerationContext, GenerationContextId, ProvenanceClass, Remediation,
+    ClaimScope, CoreErrorCode, CoreResult, EvidenceConfidence, EvidenceId, EvidenceRecord, Finding,
+    FindingDraft, GenerationContext, GenerationContextId, ProvenanceClass, Remediation,
     SourceHandle, WarningId, WarningRecord,
 };
 
