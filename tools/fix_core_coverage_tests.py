@@ -46,6 +46,17 @@ if first_envelope_check not in text:
 text = text.replace(first_envelope_check, "", 1)
 for label, old in [
     (
+        "join 007 envelope",
+        """    value["not_evaluated"] = json!([evaluation]);
+    value["status"] = json!("partial");
+    reject_envelope(
+        value,
+        CoreErrorCode::CoverageConflict,
+        "evaluation.blocking_partitions",
+    )
+""",
+    ),
+    (
         "join 003 envelope",
         """    reject_envelope(
         value,
@@ -78,17 +89,6 @@ for label, old in [
         value,
         CoreErrorCode::CoverageConflict,
         "blocking_partitions.capability_id",
-    )
-""",
-    ),
-    (
-        "join 007 envelope",
-        """    value["not_evaluated"] = json!([evaluation]);
-    value["status"] = json!("partial");
-    reject_envelope(
-        value,
-        CoreErrorCode::CoverageConflict,
-        "evaluation.blocking_partitions",
     )
 """,
     ),
