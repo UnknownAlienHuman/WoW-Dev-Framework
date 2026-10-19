@@ -241,23 +241,63 @@ fn generate(
         stop,
     )?;
     let partial = !failures.is_empty() || library.projection == "partial";
+    let source_inputs = documents
+        .iter()
+        .map(|document| {
+            serde_json::json!({
+                "path": document.path(),
+                "sha256": document.sha256(),
+                "bytes": document.source_bytes(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let alias_inputs = alias_catalogs
+        .iter()
+        .map(|catalog| {
+            serde_json::json!({
+                "revision": catalog.revision(),
+                "path": catalog.path(),
+                "sha256": catalog.sha256(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let annotation_files = library
+        .files
+        .iter()
+        .map(|file| {
+            serde_json::json!({
+                "path": &file.path,
+                "sha256": &file.sha256,
+                "bytes": file.text.len(),
+                "mappings": &file.mappings,
+            })
+        })
+        .collect::<Vec<_>>();
     let report = serde_json::json!({
-        "schema": "wow-native-source-build/1",
+        "schema": "wow-native-source-build/2",
         "revision": revision,
         "selector": selector,
         "freshness": "not_network_verified",
         "environment": environment,
         "toc": {"path": toc_path, "sha256": source_digest(&toc_bytes)},
         "source_order": &paths,
+        "source_inputs": source_inputs,
+        "alias_inputs": alias_inputs,
         "candidate_files": paths.len(),
         "admitted_files": documents.len(),
         "input_failures": &failures,
         "status": if partial {"partial"} else {"projected_with_sidecars"},
         "negative_authority": false,
-        "library": &library,
+        "annotation_files": annotation_files,
+        "projection_issues": &library.issues,
+        "metadata_sidecars": &library.metadata_sidecars,
+        "scalar_resolutions": &library.scalar_resolutions,
+        "name_projections": &library.name_projections,
+        "corrections": &library.corrections,
+        "limitations": &library.limitations,
     });
     let report_bytes = serde_json::to_vec_pretty(&report)?;
-    if report_bytes.len() > 512 * LIMIT {
+    if report_bytes.len() > TOTAL_LIMIT {
         return Err("report exceeds byte limit".into());
     }
 
