@@ -1,0 +1,59 @@
+name: Apply native reference builder
+
+on:
+  push:
+    branches:
+      - refactor/native-reference-builder-2026-10-19
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out refactor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Promote native generator and validate clean product tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/promote-native-reference-builder.py "$RUNNER_TEMP/promote-native-reference-builder.py"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ['RUNNER_TEMP']) / 'promote-native-reference-builder.py'
+          text = path.read_text()
+          text = text.replace(
+              'Ok(partial) => i32::from(partial) * 3,',
+              'Ok(partial) => if partial { 3 } else { 0 },',
+          )
+          old = '''    "The development example is\\n`examples/native_library.rs`; #196 will expose that native path through a\\nsupported command and remove remaining pack administration.",'''
+          new = '''    "The development example is\\n`examples/native_library.rs`; #196 will expose that native path through a\\nsupported command. The existing builder still has pack-oriented commands. Select\\nthe exact source revision and client flavor; retain partial/unsupported outcomes.\\nRegenerate derived libraries\\nand reports when their source or projection inputs change.",'''
+          if old not in text:
+              raise SystemExit('expected README replacement template not found')
+          path.write_text(text.replace(old, new))
+          PY
+          cp crates/wow-annotations/examples/support/io.rs apps/wow-reference-builder/src/io.rs
+          cp crates/wow-annotations/examples/support/catalogs.rs apps/wow-reference-builder/src/catalogs.rs
+          python "$RUNNER_TEMP/promote-native-reference-builder.py"
+          git rm .github/promote-native-reference-builder.py
+          git rm .github/workflows/apply-native-reference-builder-v6.yml
+          git rm apps/wow-reference-builder/CONTRACT.json
+          git rm -r apps/wow-reference-builder/examples apps/wow-reference-builder/tests
+          git rm crates/wow-annotations/examples/native_library.rs
+          cargo +stable fmt --all
+          cargo +stable check -p wow-reference-builder --all-targets --all-features
+          cargo +stable xtask check
+          cargo +stable clippy --locked -p wow-reference-builder -p wow-annotations -p wow-reference --all-targets --all-features -- -D warnings
+          git diff --check
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor: promote native reference builder"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
