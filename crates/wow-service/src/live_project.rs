@@ -4,14 +4,9 @@
 pub(crate) mod candidate;
 mod current_recovery;
 mod gc;
-mod generation_pair;
 pub use current_recovery::{
     CurrentDomainFailure, CurrentDomainIds, CurrentDomainObservation, CurrentDomainPhase,
     LiveProjectRecoveryObservation, recover_current_live_project,
-};
-pub use generation_pair::{
-    PROJECT_GENERATION_PAIR_MAX_OUTPUT_BYTES, ProjectGenerationPairRequest,
-    ProjectGenerationPairResult, read_live_project_generation_pair,
 };
 mod namespace;
 pub use namespace::PlatformStoreSelection;

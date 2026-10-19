@@ -199,7 +199,6 @@ impl QuarantinedStore {
             root: self.root.clone(),
             selection: Some(observed.selection),
             life: Rc::new(Lifetime {
-                custody: std::sync::Arc::new(()),
                 _lock: Rc::clone(&self.life._lock),
                 _instance_lock: Some(Rc::clone(&candidate.backup.store.db.life._lock)),
                 leases: RefCell::new(BTreeMap::new()),
