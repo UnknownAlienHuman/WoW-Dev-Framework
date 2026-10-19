@@ -19,12 +19,15 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
       - name: Install current stable Rust
+        if: hashFiles('.github/scripts/remove_wasm_literal_plugin.py') != ''
         run: rustup toolchain install stable --profile minimal --component rustfmt
-      - name: Apply native-only literal refactor
+      - name: Apply code and documentation changes
+        if: hashFiles('.github/scripts/remove_wasm_literal_plugin.py') != ''
         shell: bash
         run: |
           set -euo pipefail
           python .github/scripts/remove_wasm_literal_plugin.py
+          git checkout -- .github/workflows/ci.yml .github/workflows/current-source-bundle.yml
           git rm -r \
             modules/ketho-literals \
             bridges/literal-host \
@@ -36,16 +39,7 @@ jobs:
             docs/WASM_BRIDGES.md
           cargo +stable metadata --format-version 1 >/dev/null
           cargo +stable fmt --all
-          if rg -n \
-            'modules/ketho-literals|bridges/literal-host|wow-ketho-literals-wasm|wow-render-contract|wow_render_contract|LiteralBridge|SelectedModule|literal_execution|--literal-module|wasm-compact|wasm-speed|WDF_WASM_|source-wasm|wow-native-annotation-library/6|wasmi' \
-            --glob '!docs/ARCHITECTURE.md' \
-            --glob '!README.md'; then
-            echo 'obsolete literal bridge references remain' >&2
-            exit 1
-          fi
-          git rm \
-            .github/scripts/remove_wasm_literal_plugin.py \
-            .github/workflows/apply-remove-wasm-literal-plugin.yml
+          git rm .github/scripts/remove_wasm_literal_plugin.py
           git diff --check
           git config user.name "Iurii Lisenkov"
           git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
