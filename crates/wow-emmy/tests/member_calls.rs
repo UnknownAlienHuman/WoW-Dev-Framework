@@ -306,7 +306,7 @@ fn selected_member_pair_limit_bounds_physical_virtual_and_combined_reports() -> 
 
     // The cold project consumer uses this same registered analysis and physical
     // member prerequisite; no second default member collector can reimpose65536.
-    let (exact, flow) = analyze_member_call_session_with_local_flow(
+    let (syntax, exact, flow) = analyze_member_call_session_with_local_flow(
         &large,
         &[&library],
         None,
@@ -314,6 +314,7 @@ fn selected_member_pair_limit_bounds_physical_virtual_and_combined_reports() -> 
         false,
         &stop,
     )?;
+    assert_eq!(syntax.workspace_snapshot_id(), large.snapshot_id());
     assert_eq!(exact.member_calls.references().len(), pairs);
     assert_eq!(exact.member_calls.calls().len(), pairs);
     assert!(
@@ -389,7 +390,7 @@ fn selected_member_pair_limit_bounds_physical_virtual_and_combined_reports() -> 
         false,
         &stop,
     )?;
-    let (selected_small, selected_flow) = analyze_member_call_session_with_local_flow(
+    let (_syntax, selected_small, selected_flow) = analyze_member_call_session_with_local_flow(
         &small,
         &[&library],
         None,

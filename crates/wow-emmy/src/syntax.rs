@@ -89,6 +89,7 @@ pub enum EmmySyntaxDiagnosticKind {
     LuaSyntax,
     DocumentationSyntax,
     AssignmentTypeMismatch,
+    ParameterTypeMismatch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]

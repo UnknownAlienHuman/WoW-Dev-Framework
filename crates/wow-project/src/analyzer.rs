@@ -6,7 +6,6 @@ use wow_core::{CanonicalResult, CapabilityId, ContentDigest, ProjectGenerationId
 use wow_emmy::{
     EmmyFactFileStatus, EmmyLocalFlowFileStatus, EmmyLocalFlowReport, EmmyMemberCallReport,
     EmmySyntaxReport, LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
-    analyze_local_flow, analyze_syntax,
 };
 
 use crate::identity::{canonical_id, parse_source_digest};
@@ -530,83 +529,21 @@ pub(crate) fn build_analyzer_binding(
                 reports.local_flow,
             )
         } else {
-            // Loader/virtual shape changes use the existing exact cold owner path.
+            // Loader/virtual shape changes use the same one-analysis cold path.
             *cache = None;
-            let syntax_report = analyze_syntax(&main_workspace).map_err(|source| {
-                ProjectError::new(
-                    ProjectErrorCode::AnalyzerFailed,
-                    ProjectPhase::Analyzer,
-                    format!("syntax analysis failed: {source}"),
-                )
-                .with_candidate_generation(generation.project_generation())
-            })?;
-            checkpoint(stop)?;
-            let (session, local_flow_report) = if native_fact_limit.is_some() {
-                let virtual_units = pending_xml_lua
-                    .as_ref()
-                    .and_then(crate::xml_lua::PreparedProjectXmlLuaAnalysis::virtual_workspace)
-                    .map(|snapshot| (snapshot, generation.project_generation()));
-                wow_emmy::session::analyze_member_call_session_with_local_flow(
-                    &main_workspace,
-                    &library_refs,
-                    virtual_units,
-                    query_profile,
-                    function_calls,
-                    stop,
-                )
-                .map_err(|source| session_error(source, generation.project_generation()))?
-            } else {
-                let session = match pending_xml_lua
-            .as_ref()
-            .and_then(crate::xml_lua::PreparedProjectXmlLuaAnalysis::virtual_workspace)
-        {
-            Some(virtual_workspace) => {
-                wow_emmy::references::analyze_member_call_session_with_virtual_and_callable_queries(
-                    &main_workspace,
-                    &library_refs,
-                    virtual_workspace,
-                    generation.project_generation(),
-                    query_profile,
-                    function_calls,
-                    stop,
-                )
-            }
-            None => wow_emmy::references::analyze_member_call_session_with_callable_queries(
+            let virtual_units = pending_xml_lua
+                .as_ref()
+                .and_then(crate::xml_lua::PreparedProjectXmlLuaAnalysis::virtual_workspace)
+                .map(|snapshot| (snapshot, generation.project_generation()));
+            wow_emmy::session::analyze_member_call_session_with_local_flow(
                 &main_workspace,
                 &library_refs,
+                virtual_units,
                 query_profile,
                 function_calls,
                 stop,
-            ),
-        }
-        .map_err(|source| {
-            let code = match source.code() {
-                wow_emmy::EmmyMemberCallErrorCode::Cancelled => ProjectErrorCode::AnalysisCancelled,
-                wow_emmy::EmmyMemberCallErrorCode::FactBudgetExceeded => {
-                    ProjectErrorCode::SourceBudgetExceeded
-                }
-                _ => ProjectErrorCode::AnalyzerFailed,
-            };
-            ProjectError::new(
-                code,
-                ProjectPhase::Analyzer,
-                format!("member and symbol lookup analysis failed: {source}"),
             )
-            .with_candidate_generation(generation.project_generation())
-        })?;
-                let local_flow_report = analyze_local_flow(&main_workspace, &library_refs)
-                    .map_err(|source| {
-                        ProjectError::new(
-                            ProjectErrorCode::AnalyzerFailed,
-                            ProjectPhase::Analyzer,
-                            format!("local-flow analysis failed: {source}"),
-                        )
-                        .with_candidate_generation(generation.project_generation())
-                    })?;
-                (session, local_flow_report)
-            };
-
-            (syntax_report, session, local_flow_report)
+            .map_err(|source| session_error(source, generation.project_generation()))?
         };
     let wow_emmy::references::MemberCallSession {
         member_calls: member_call_report,
