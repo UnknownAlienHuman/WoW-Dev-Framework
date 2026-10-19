@@ -20,8 +20,6 @@ mod durable;
 mod gc;
 mod library_modes;
 mod namespaces;
-#[path = "quarantine_tests.rs"]
-mod quarantine;
 mod retention;
 mod selected_read_scope;
 
@@ -1223,7 +1221,3 @@ fn missing_or_mutated_replay_and_mixed_project_graph_never_activate() -> TestRes
     std::fs::remove_dir_all(root)?;
     Ok(())
 }
-#[path = "recovery_tests.rs"]
-mod recovery_tests;
-#[path = "replacement_tests.rs"]
-mod replacement_tests;

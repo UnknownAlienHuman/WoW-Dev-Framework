@@ -24,12 +24,8 @@ pub use skeleton::{
     LIVE_SKELETON_REQUEST_MAX_BYTES, LIVE_SKELETON_REQUEST_SCHEMA, LIVE_SKELETON_RESULT_SCHEMA,
     LiveSkeletonReadResult, execute_live_skeleton_read,
 };
-mod quarantine;
-pub use quarantine::{LiveProjectQuarantineInspection, QuarantinedLiveProject};
 mod recovery;
-pub use recovery::{
-    CurrentState, RecoveryReport, ScopeState, recover_live_project, restore_live_project_to_new,
-};
+pub use recovery::{CurrentState, RecoveryReport, ScopeState, recover_live_project};
 mod retention;
 #[cfg(test)]
 pub(crate) mod tests;
