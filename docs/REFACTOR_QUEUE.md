@@ -29,7 +29,7 @@ a dependency names required replacement behavior, not a whole package gate.
 | --- | --- | --- |
 | Completed | [#193 — Emmy analysis](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/193) | One Main + Library analysis now supplies diagnostics, facts and flow; useful parameter-type errors reach Main locations. |
 | Completed | [#202 — catalog parsing](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/202) | One Emmy Lua 5.1 parse now feeds namespace, FunctionContainer and GlobalColors validators. |
-| Independent | [#204 — single emission](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/204) | Literal trial renders are removed; retain mapped function/table output instead of rendering it twice. |
+| Completed | [#204 — single emission](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/204) | Renderer-owned validation admits declarations; final mapped assembly is the only byte emission. |
 | 2 | [#194 — result envelopes](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194) | Core and local Service envelopes/registries are removed; simplify remaining Context/Search/graph self-identities only from real callers. |
 | 3 | [#131 — current index](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131) | Eager all-partition payload reads are removed; store/read file text directly without Project/Emmy rehydration. |
 | 4 | [#169 — SQLite search](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169) | Direct source-content/FTS tables in #131's index; current FTS covers file labels/recorded names. Remove nested SQLite/hex/JSON. |

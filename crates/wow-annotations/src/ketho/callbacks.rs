@@ -1,10 +1,30 @@
 //! Native callback signatures beyond the donor's argument-only byte profile.
 use super::{
     Field, LoweredType, MemberPosition, Output, RenderError, RenderedMember, RenderedTypeToken,
-    Renderer, safe_text, validate_fields,
+    Renderer, validate_fields,
 };
 
 impl Renderer {
+    pub(super) fn validate_callback_signature(
+        &self,
+        arguments: &[Field],
+        returns: &[Field],
+    ) -> Result<(), RenderError> {
+        validate_fields(arguments, true)?;
+        // Variadic return packs are a distinct consumer contract, not a tuple.
+        validate_fields(returns, false)?;
+        for argument in arguments {
+            if argument.variadic && argument.default_text.is_some() {
+                return Err(RenderError::InvalidVariadic);
+            }
+            self.validate_field(argument)?;
+        }
+        for result in returns {
+            self.validate_field(result)?;
+        }
+        Ok(())
+    }
+
     /// The same type lowering serves fields and function-type components.
     /// Parentheses preserve union precedence before arrays and nilability.
     pub(super) fn field_type(&self, field: &Field) -> Result<LoweredType, RenderError> {
@@ -37,23 +57,13 @@ impl Renderer {
         returns: &[Field],
         members: &mut Vec<RenderedMember>,
     ) -> Result<(usize, usize), RenderError> {
-        validate_fields(arguments, true)?;
-        // Variadic return packs are a distinct consumer contract, not a tuple.
-        validate_fields(returns, false)?;
-        for field in arguments.iter().chain(returns) {
-            if let Some(default) = &field.default_text {
-                safe_text(default)?;
-            }
-        }
+        self.validate_callback_signature(arguments, returns)?;
         out.push("---@alias ")?;
         let name_start = out.bytes.len();
         out.push(name)?;
         let name_span = (name_start, out.bytes.len());
         out.push(" FunctionContainer|fun(")?;
         for (index, argument) in arguments.iter().enumerate() {
-            if argument.variadic && argument.default_text.is_some() {
-                return Err(RenderError::InvalidVariadic);
-            }
             if index != 0 {
                 out.push(", ")?;
             }

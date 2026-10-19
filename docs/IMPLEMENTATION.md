@@ -66,12 +66,12 @@ this deletion needs no shared-buffer framework or Project input API change.
 The [Ketho map](KETHO_RUST_PORT.md) owns semantic details and a runnable current
 driver command. Preserve aliases, defaults, arrays, receivers, callbacks,
 corrections, literals and source maps; reuse its existing consumer probes.
-#204 has removed enum/constant/event trial renders: their native owner now
-validates each declaration and final assembly emits the aggregate files once.
-Functions/tables still need retained mapped emission instead of discarded trial
-renders. Reject only the invalid declaration while preserving aggregate limits.
-Do not duplicate rendering rules in a new validator. Statement catalogs now
-parse once and share one Emmy `LuaChunk` across the existing validators.
+Functions, structures/callback tables, enums, constants and events now use
+renderer-owned declaration validation; only the final mapped aggregate render
+emits bytes. Statement catalogs likewise parse once and share one Emmy
+`LuaChunk` across the existing validators. Keep these owner boundaries when
+extending Ketho behavior; do not reintroduce trial artifacts or a second type or
+validation model.
 Literal generation calls `wow-ketho-literals` directly; no guest, host, wire or runtime selection path exists.
 
 ## Addon configuration and Emmy analysis
