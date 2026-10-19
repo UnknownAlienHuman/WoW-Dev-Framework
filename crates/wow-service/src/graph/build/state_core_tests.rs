@@ -520,6 +520,84 @@ fn state_core_pipeline_publishes_roots_and_literal_paths() -> Result<(), Box<dyn
     Ok(())
 }
 
+#[test]
+fn service_graph_build_keeps_direct_state_core_partitions() -> Result<(), Box<dyn Error>> {
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let directory = ProjectInputDirectory::open(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/state-core-pipeline"),
+    )?;
+    let (files, load_plan) = directory
+        .read_toc_project_with_context(
+            ".",
+            &ProjectDiskFile::new("StateCore.toc"),
+            &state_core_profile()?,
+            Some(&TocLoadContext {
+                game_types: std::collections::BTreeMap::from([("retail".into(), true)]),
+                family: None,
+                game: None,
+                text_locale: None,
+                location: None,
+                environment: None,
+            }),
+            &stop,
+        )?
+        .into_parts();
+    let identity = backend()?;
+    let binding = AnalyzerBindingDeclaration::new(
+        "wow-emmy/e0-c/1",
+        format!("emmy-pin:{EMMYLUA_REVISION}"),
+        identity.compatibility_report_sha256().to_owned(),
+        ContentDigest::<CanonicalResult>::from_bytes([3; 32]),
+        "wow-emmy/e0-c/1",
+        "wow-emmy-e0-c-library-v1",
+        identity.clone(),
+    )?;
+    let library = LuaWorkspaceSnapshot::build(
+        identity,
+        LuaWorkspaceUniverse::Fixture,
+        vec![LuaWorkspaceFileInput::new(
+            "library/state_core.lua",
+            "---@meta _\n",
+        )],
+        LuaWorkspaceLimits::new(8, 16_384, 256 * 1024, 512 * 1024)?,
+    )?;
+    let reference_generation = ReferenceGenerationId::derive(&"fixture-state-core-reference")?;
+    let config = ProjectConfigurationBuilder::new(
+        ProjectId::new("fixture-state-core-pipeline")?,
+        ProjectKind::Fixture,
+        state_core_profile()?,
+        reference_generation,
+        binding,
+    )
+    .workspace_id(ProjectWorkspaceId::new("workspace:state-core-pipeline")?)
+    .source_origin_id(ProjectSourceOriginId::new(
+        "project-origin:state-core-pipeline",
+    )?)
+    .logical_root("fixtures/state-core-pipeline")
+    .capability_policy(ProjectCapabilityPolicy::strict_e0()?)
+    .budget_policy(ProjectBudgetPolicy::fixture_e0()?)
+    .load_plan(&load_plan)?
+    .build()?;
+    let bundle = ProjectInputBundle::closed(config, files, vec![library])?;
+    let reference = wow_reference::ReferenceView::new(
+        reference_generation.to_string(),
+        Vec::new(),
+        Vec::new(),
+    )?;
+    let input = LocalProjectInput::new_with_load_plan(bundle, reference, Some(load_plan))?;
+    let request = GraphBuildRequest::new("fixture-state-core-pipeline".into(), "current".into())?;
+    let result = execute_graph_build(input, &request, &stop)?;
+    let snapshot_bytes = result
+        .snapshot_bytes()?
+        .ok_or("Service did not return the final graph snapshot")?;
+    let snapshot: GraphPartitionSnapshot = serde_json::from_slice(&snapshot_bytes)?;
+    snapshot.validate(&stop)?;
+    assert!(snapshot.partition("wow-recognizers.state-read").is_some());
+    assert!(snapshot.partition("wow-recognizers.state-write").is_some());
+    assert!(!snapshot.snapshot().edges().is_empty());
+    Ok(())
+}
+
 fn rejects_changed_access_handles(
     owner: &GraphPartitionSnapshot,
     provenance: &ProjectGraphProvenance,

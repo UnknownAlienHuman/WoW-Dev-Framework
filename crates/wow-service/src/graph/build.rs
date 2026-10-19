@@ -46,7 +46,6 @@ mod native_api;
 mod native_api_reopen;
 pub(crate) use native_api::NativeApiProvenance;
 pub(crate) use native_api_reopen::validate as validate_native_api_reopen;
-mod recognizer_handoff;
 mod scripts;
 mod signals;
 mod source_addresses;
@@ -1192,13 +1191,6 @@ fn compose_backend_diagnosed(
     let (snapshot, state_core_recognition) =
         state_core::publish_bound(&snapshot, &addresses, &state_recognition, stop)
             .map_err(|e| stage_error("state-core", e))?;
-    let snapshot = recognizer_handoff::apply_ready_handoffs(
-        snapshot,
-        addresses.source().context(),
-        &state_core_recognition,
-        stop,
-    )
-    .map_err(|e| stage_error("state-core-generic-handoff", e))?;
     let toc_topology = toc::maps(&snapshot, &addresses, &toc_recognition, stop)
         .map_err(|e| stage_error("toc-crosswalk", e))?;
     let xml_topology = xml::maps(&snapshot, &addresses, &xml_recognition, stop)

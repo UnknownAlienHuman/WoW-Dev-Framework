@@ -165,19 +165,18 @@ rebuilds replace it. No compatibility reader or new lifecycle subsystem.
 
 ## Typed source relationships
 
-**Start #195 with `wow-recognizers/src/source_state_core/project.rs::execute`
-and Service's `graph/build/recognizer_handoff.rs`.** Typed state accesses and
-root/caller/target bindings already exist. The adapter creates generic facts,
-fixed packs and matcher output; Service reconstructs the four read/write ×
-root/path packs and plans to project those results into the graph again.
+**Continue #195 in `wow-recognizers/src/source_state_core/{adapt,project}.rs`.**
+Service's second pack compilation and graph reprojection are removed: the
+recognizer-owned batch is published once and the Service suite checks that final
+path. The recognizer still converts admitted typed accesses into generic facts,
+fixed packs and matcher output before converting them back into graph proposals.
 
-Map the admitted typed facts directly to the consumed relationships. Keep
-root versus literal-path targets, account/character scope, source locations,
-ambiguity and incomplete-input results. Remove `evaluations`, pack/plan digests
-and the repeated handoff; they are not a required result DTO. Reuse the positive
-and unresolved-path behavior in `graph/build/state_core_tests.rs`. Strip matcher
-assertions from the handoff test while retaining its useful `execute_graph_build`
-check in the existing suite; direct adapter tests alone do not exercise Service.
+Map the admitted typed facts directly to the consumed relationships. Keep root
+versus literal-path targets, account/character scope, source locations,
+ambiguity, incomplete-input results and the existing `execute_graph_build`
+check. Remove `evaluations`, pack/plan digests and generic matcher DTOs as their
+last consumers disappear; they are not a required user result. Do not replace
+them with another adapter or proof layer.
 
 Trace the other live `src/source_*` adapters through their actual callers and
 remove the same redundant conversions where present. #103 removes unconsumed
