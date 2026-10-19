@@ -1,0 +1,35 @@
+name: Apply Project replay documentation distillation
+
+on:
+  push:
+    branches:
+      - refactor/remove-project-legacy-catalogs-2026-10-19
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out refactor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Distill current Project publication docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/distill-project-replay-docs.py
+          git rm .github/distill-project-replay-docs.py
+          git rm .github/workflows/apply-project-replay-doc-distillation.yml
+          cargo +stable fmt --all --check
+          cargo +stable xtask check
+          git diff --check
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git add crates/wow-project/REPLAY_PUBLICATION.md docs
+          git commit -m "docs: distill current Project publication"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
