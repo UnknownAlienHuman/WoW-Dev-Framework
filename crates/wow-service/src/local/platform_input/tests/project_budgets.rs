@@ -328,8 +328,7 @@ fn selected_sidecar_budget_binds_native_report_and_replay_without_downgrade() ->
     };
     use wow_emmy::function_calls::{FUNCTION_CALL_BUDGET_PROFILE, FunctionCallBudget};
     use wow_project::ProjectConfigurationBuilder;
-    use wow_project::replay::publication;
-    use wow_store::project::{ProjectStore, PublicationRequest, ReadSelector, RecordCatalog};
+    use wow_store::project::ReadSelector;
 
     let (root, mut config) = fixture()?;
     let path = root.0.join("project.json");

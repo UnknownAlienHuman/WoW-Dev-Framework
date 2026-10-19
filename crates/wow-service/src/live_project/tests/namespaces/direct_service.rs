@@ -1,8 +1,8 @@
 //! One real service lifecycle over the direct layout and an exact frozen catalog.
 use super::{
     LiveProjectPublishRequest, LiveProjectStore, PlatformFixtureSource, PlatformGraphProfile,
-    PlatformStoreSelection, ProjectStore, ReadSelector, ServiceErrorCode, TestResult, catalog_for,
-    platform_bundle_with_profile_source, publication, publish_input_in_namespace, root,
+    PlatformStoreSelection, ReadSelector, ServiceErrorCode, TestResult,
+    platform_bundle_with_profile_source, publish_input_in_namespace, root,
 };
 use std::{collections::BTreeSet, sync::atomic::AtomicBool};
 use wow_graph::{GraphEdge, GraphPartitionSnapshot, GraphRelationKind};
