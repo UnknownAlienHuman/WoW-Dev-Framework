@@ -689,6 +689,17 @@ fn validate_native_parts(
     validate_native_binding(project, graph, native, stop)
 }
 
+fn validate_read_native_parts(
+    project: &ProjectView,
+    graph: &ValidatedGraphPartitionSnapshot,
+    native: &crate::graph::PlatformIndexSourceParts,
+    stop: &AtomicBool,
+) -> ProjectResult<()> {
+    crate::analyzer::checkpoint(stop)?;
+    project.snapshot().validate()?;
+    validate_native_binding(project, graph.as_snapshot(), native, stop)
+}
+
 fn validate_native_binding(
     project: &ProjectView,
     graph: &GraphPartitionSnapshot,
