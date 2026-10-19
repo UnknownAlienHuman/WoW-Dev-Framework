@@ -66,6 +66,26 @@ impl LiteralRenderer {
         Ok(Self { max_output_bytes })
     }
 
+    /// Validate one event declaration without emitting a discarded artifact.
+    pub fn validate_event(event: &EventLiteral) -> Result<(), LiteralError> {
+        literal_name(&event.name)?;
+        event_payload(&event.payload)
+    }
+
+    /// Validate one enum declaration without assembling the aggregate file.
+    pub fn validate_enum(declaration: &EnumDeclaration) -> Result<(), LiteralError> {
+        identifier(&declaration.name)?;
+        members(&declaration.values, MemberOrder::Value, true)?;
+        Ok(())
+    }
+
+    /// Validate one constants group without assembling the aggregate file.
+    pub fn validate_constant_group(group: &ConstantGroup) -> Result<(), LiteralError> {
+        identifier(&group.name)?;
+        members(&group.values, group.order, false)?;
+        Ok(())
+    }
+
     /// Ketho `GetEventLiterals`. Retains the open `string` base of FrameEvent;
     /// this artifact is not an exhaustive runtime event whitelist.
     pub fn render_events(&self, events: &[EventLiteral]) -> Result<String, LiteralError> {
@@ -77,10 +97,7 @@ impl LiteralRenderer {
         for event in sorted {
             literal_name(&event.name)?;
             unique(&mut previous, &event.name)?;
-            safe_text(&event.payload)?;
-            if event.payload.contains('`') {
-                return Err(LiteralError::UnsafeDocumentation);
-            }
+            event_payload(&event.payload)?;
             out.push("---|")?;
             quoted(&mut out, &event.name)?;
             if !event.payload.is_empty() {
@@ -236,6 +253,14 @@ fn literal_name(name: &str) -> Result<(), LiteralError> {
         return Err(LiteralError::InvalidIdentifier);
     }
     safe_text(name)
+}
+
+fn event_payload(payload: &str) -> Result<(), LiteralError> {
+    safe_text(payload)?;
+    if payload.contains('`') {
+        return Err(LiteralError::UnsafeDocumentation);
+    }
+    Ok(())
 }
 
 fn unique<'a>(previous: &mut Option<&'a str>, name: &'a str) -> Result<(), LiteralError> {

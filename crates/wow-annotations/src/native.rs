@@ -591,7 +591,7 @@ pub fn project_with_alias_catalogs<'a>(
                             values: converted,
                             integer_format: IntegerFormat::Decimal,
                         };
-                        match literals.render_enums(std::slice::from_ref(&declaration), &[]) {
+                        match LiteralRenderer::validate_enum(&declaration) {
                             Ok(_) => {
                                 enums.push(declaration);
                                 lowering::reserve_vec(
@@ -634,7 +634,7 @@ pub fn project_with_alias_catalogs<'a>(
                             values: converted,
                             order: MemberOrder::Name,
                         };
-                        match literals.render_enums(&[], std::slice::from_ref(&declaration)) {
+                        match LiteralRenderer::validate_constant_group(&declaration) {
                             Ok(_) => {
                                 constants.push(declaration);
                                 literal_sources.push(link(document, raw));
@@ -675,7 +675,7 @@ pub fn project_with_alias_catalogs<'a>(
                 issues.push(issue(document, event.raw, "duplicate_event"));
                 continue;
             }
-            events.push(EventLiteral {
+            let declaration = EventLiteral {
                 name: event.literal_name.into(),
                 payload: event
                     .payload
@@ -683,8 +683,16 @@ pub fn project_with_alias_catalogs<'a>(
                     .map(|f| f.name)
                     .collect::<Vec<_>>()
                     .join(", "),
-            });
-            event_sources.push(link(document, event.raw));
+            };
+            match LiteralRenderer::validate_event(&declaration) {
+                Ok(()) => {
+                    events.push(declaration);
+                    event_sources.push(link(document, event.raw));
+                }
+                Err(error) => {
+                    issues.push(issue(document, event.raw, format!("renderer_{error:?}")))
+                }
+            }
         }
         if bind_receiver || !input.functions.is_empty() || !input.tables.is_empty() {
             let rendered = if bind_receiver {
@@ -838,34 +846,20 @@ pub fn project_with_alias_catalogs<'a>(
             }
         }
         if !enums.is_empty() || !constants.is_empty() {
-            match literals.render_enums(&enums, &constants) {
-                Ok(text) => {
-                    let _ = text; // validate this registration before aggregation
-                    all_enums.extend(enums);
-                    lowering::reserve_vec(
-                        &mut all_enum_sources,
-                        enum_sources.len(),
-                        &mut lowering_budget,
-                        cancelled,
-                    )?;
-                    all_enum_sources.extend(enum_sources);
-                    all_constants.extend(constants);
-                    all_literal_sources.extend(literal_sources);
-                }
-                Err(error) => {
-                    issues.push(issue(document, system.raw, format!("literals_{error:?}")))
-                }
-            }
+            all_enums.extend(enums);
+            lowering::reserve_vec(
+                &mut all_enum_sources,
+                enum_sources.len(),
+                &mut lowering_budget,
+                cancelled,
+            )?;
+            all_enum_sources.extend(enum_sources);
+            all_constants.extend(constants);
+            all_literal_sources.extend(literal_sources);
         }
         if !events.is_empty() {
-            match literals.render_events(&events) {
-                Ok(text) => {
-                    let _ = text;
-                    all_events.extend(events);
-                    all_event_sources.extend(event_sources);
-                }
-                Err(error) => issues.push(issue(document, system.raw, format!("events_{error:?}"))),
-            }
+            all_events.extend(events);
+            all_event_sources.extend(event_sources);
         }
     }
     if resolution_budget == 0 {
