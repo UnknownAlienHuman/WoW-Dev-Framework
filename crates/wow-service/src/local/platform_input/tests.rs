@@ -1,5 +1,4 @@
 use super::*;
-mod builder_attempts;
 mod empty_packages;
 mod event_registry_cross_registry;
 mod event_registry_custom;

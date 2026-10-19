@@ -5,7 +5,6 @@ mod disk_input;
 mod input;
 pub mod native_artifact;
 mod native_compatibility;
-mod native_distribution;
 mod native_input;
 pub(crate) mod native_library_input;
 mod native_reference;
@@ -29,10 +28,9 @@ pub use disk_input::{
 pub use input::{LOCAL_INPUT_MAX_BYTES, LOCAL_INPUT_SCHEMA, LocalProjectInput};
 pub use native_artifact::NativeArtifactReceipt;
 pub use native_compatibility::{NativeCompatibilitySelection, NativeConsumerProbeIdentity};
-pub use native_distribution::NativeDistributionSelection;
 pub use native_input::{
-    LOCAL_NATIVE_SCHEMA, NativeAnnotationFile, NativeFileIdentity, NativeInputReceipt,
-    NativeManifestIdentity, NativeRestrictionIdentity,
+    LOCAL_NATIVE_SCHEMA, NativeFileIdentity, NativeInputReceipt, NativeManifestIdentity,
+    NativeRestrictionIdentity,
 };
 pub use native_library_input::RequalifiedNativeLibrary;
 pub use native_reference::{

@@ -65,7 +65,6 @@ nulls reject.
 | `library_witnesses` | `matcher_v1`; retains selected Library matcher witnesses for graph publication. |
 | `signal_witnesses` | `matcher_v1`; retains selected event, custom-signal and CVar matcher witnesses for graph publication. |
 | `compatibility_evidence` | `parity_report` plus 1–8 `consumer_probe_results`, each a pinned JSON file. The annotation compatibility owner validates the reports; this is optional evidence, not an ordinary check prerequisite. |
-| `distribution_evidence` | A pinned `manifest` JSON file validated by the [distribution/license owner](../../crates/wow-service/src/reference_pack_license.rs). It records the selected distribution evidence; it is not required to analyze addon Lua. |
 
 Corrections are limited to 2 MiB; catalogs to 32 files, 256 KiB each, 2 MiB
 and 4,096 aggregate admission units. Use the [Ketho port map](../../docs/KETHO_RUST_PORT.md)
@@ -75,8 +74,8 @@ declarations remain visible while independent valid entries can be emitted.
 
 The regular check consumes the produced Library through existing Main/Library
 roles. A second native-library rebuild is unnecessary for this check.
-`native_api_uses`/`state_projection` select static facts; witness and evidence
-fields are current optional machinery targeted by #195/#196/#118, not setup
+`native_api_uses`/`state_projection` select static facts; witness and
+compatibility fields are optional machinery tracked by #195/#118, not setup
 requirements to carry into #200.
 
 ## Manifested TOC input
