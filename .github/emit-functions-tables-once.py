@@ -263,17 +263,19 @@ replace(
 
 replace(
     "docs/IMPLEMENTATION.md",
-    '''#204 removes discarded trial renders in `native.rs`: reuse emission helpers
-and retain their text/ranges for assembly. Reject only the invalid declaration
-or group while keeping independent valid output; preserve aggregate limits.
-Do not duplicate rendering rules in a new validator. #202 shares a parsed
-catalog tree between existing validators.
+    '''#204 has removed enum/constant/event trial renders: their native owner now
+validates each declaration and final assembly emits the aggregate files once.
+Functions/tables still need retained mapped emission instead of discarded trial
+renders. Reject only the invalid declaration while preserving aggregate limits.
+Do not duplicate rendering rules in a new validator. Statement catalogs now
+parse once and share one Emmy `LuaChunk` across the existing validators.
 ''',
     '''Functions, structures/callback tables, enums, constants and events now use
 renderer-owned declaration validation; only the final mapped aggregate render
-emits bytes. #202 likewise shares one parsed catalog tree between validators.
-Keep these owner boundaries when extending Ketho behavior; do not reintroduce
-trial artifacts or a second type/validation model.
+emits bytes. Statement catalogs likewise parse once and share one Emmy
+`LuaChunk` across the existing validators. Keep these owner boundaries when
+extending Ketho behavior; do not reintroduce trial artifacts or a second type or
+validation model.
 ''',
 )
 
