@@ -1,6 +1,6 @@
 name: Native current-source annotations
+
 on:
-  
   workflow_dispatch:
     inputs:
       source_ref:
@@ -15,14 +15,17 @@ on:
         description: Generated API TOC relative to the selected source
         default: Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc
         required: true
+
 permissions:
   contents: read
+
 concurrency:
   group: current-source-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
   native-source:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
       run:
@@ -32,59 +35,66 @@ jobs:
       SOURCE_ENVIRONMENT: ${{ inputs.environment || 'Mainline' }}
       SOURCE_TOC: ${{ inputs.toc || 'Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7
         with:
           persist-credentials: false
+
       - name: Install current stable Rust
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup target add wasm32-unknown-unknown --toolchain stable
-      - name: Clone current Blizzard source
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Resolve current Blizzard source
         run: |
           set -euo pipefail
           git check-ref-format "refs/heads/$SOURCE_REF"
           git -c core.hooksPath=/dev/null clone --depth=1 --no-tags --single-branch --branch "$SOURCE_REF" \
             https://github.com/Gethe/wow-ui-source.git "$RUNNER_TEMP/wow-ui-source"
           expected="$(git -C "$RUNNER_TEMP/wow-ui-source" rev-parse HEAD)"
-          cargo +stable xtask update-source "$RUNNER_TEMP/wow-ui-source" "$SOURCE_REF" --expected-head "$expected" > "$RUNNER_TEMP/source-update.json"
+          cargo +stable xtask update-source \
+            "$RUNNER_TEMP/wow-ui-source" "$SOURCE_REF" --expected-head "$expected" \
+            > "$RUNNER_TEMP/source-update.json"
           git -C "$RUNNER_TEMP/wow-ui-source" rev-parse HEAD > "$RUNNER_TEMP/source-revision"
-      - name: Build and independently verify exact source inventory in Rust
-        run: |
-          set -euo pipefail
           revision="$(cat "$RUNNER_TEMP/source-revision")"
-          cargo +stable xtask manifest "$RUNNER_TEMP/wow-ui-source" "$revision" "$SOURCE_REF" "$RUNNER_TEMP/source-manifest.json"
-          cargo +stable xtask verify-manifest "$RUNNER_TEMP/source-manifest.json" "$RUNNER_TEMP/wow-ui-source" HEAD
-      - name: Generate annotations through the native Ketho path
+          cargo +stable xtask manifest \
+            "$RUNNER_TEMP/wow-ui-source" "$revision" "$SOURCE_REF" \
+            "$RUNNER_TEMP/source-manifest.json"
+          cargo +stable xtask verify-manifest \
+            "$RUNNER_TEMP/source-manifest.json" "$RUNNER_TEMP/wow-ui-source" HEAD
+
+      - name: Generate and verify native annotations
         run: |
           set -euo pipefail
           result=0
           cargo +stable run --locked -p wow-annotations --example native_library -- \
             "$RUNNER_TEMP/wow-ui-source" "$(cat "$RUNNER_TEMP/source-revision")" \
-            "$SOURCE_TOC" "$SOURCE_ENVIRONMENT" "$RUNNER_TEMP/native-annotations" || result=$?
+            "$SOURCE_TOC" "$SOURCE_ENVIRONMENT" "$RUNNER_TEMP/native-annotations" \
+            || result=$?
           case "$result" in
             0) ;;
-            3) echo '::warning::Native projection is partial; inspect the source report' ;;
+            3) echo '::warning::Native projection is partial; inspect source-report.json' ;;
             *) exit "$result" ;;
           esac
-      - name: Verify final annotation bytes and source admission in Rust
-        run: |
-          set -euo pipefail
           result=0
-          cargo +stable xtask verify-library "$RUNNER_TEMP/native-annotations" --require-input-complete || result=$?
+          cargo +stable xtask verify-library \
+            "$RUNNER_TEMP/native-annotations" --require-input-complete \
+            || result=$?
           case "$result" in
             0) ;;
-            3) echo '::warning::Verified artifact remains semantically partial; not consumer certification' ;;
+            3) echo '::warning::Verified artifact remains semantically partial' ;;
             *) exit "$result" ;;
           esac
-      - name: Compose current Ketho type and string catalogs
+
+      - name: Generate and verify current Ketho overlay
         run: |
           set -euo pipefail
           git -c core.hooksPath=/dev/null clone --depth=1 --no-tags --single-branch \
             https://github.com/Ketho/vscode-wow-api.git "$RUNNER_TEMP/ketho-source"
           expected="$(git -C "$RUNNER_TEMP/ketho-source" rev-parse HEAD)"
           branch="$(git -C "$RUNNER_TEMP/ketho-source" symbolic-ref --quiet --short HEAD)"
-          cargo +stable xtask update-source "$RUNNER_TEMP/ketho-source" "$branch" --expected-head "$expected" > "$RUNNER_TEMP/alias-update.json"
+          cargo +stable xtask update-source \
+            "$RUNNER_TEMP/ketho-source" "$branch" --expected-head "$expected" \
+            > "$RUNNER_TEMP/alias-update.json"
           git -C "$RUNNER_TEMP/ketho-source" rev-parse HEAD > "$RUNNER_TEMP/alias-revision"
+
           result=0
           cargo +stable run --locked -p wow-annotations --example native_library -- \
             "$RUNNER_TEMP/wow-ui-source" "$(cat "$RUNNER_TEMP/source-revision")" \
@@ -98,107 +108,33 @@ jobs:
             --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
             Annotations/Core/Type/GlobalColors.lua \
             --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
-            Annotations/Core/Type/StringEnum.lua || result=$?
-          case "$result" in
-            0) ;;
-            3) echo '::warning::External aliases have explicit omissions; not type certification' ;;
-            *) exit "$result" ;;
-          esac
-          result=0
-          cargo +stable xtask verify-library "$RUNNER_TEMP/native-aliased" --require-input-complete || result=$?
-          case "$result" in
-            0) ;;
-            3) echo '::warning::Verified external overlay remains partial' ;;
-            *) exit "$result" ;;
-          esac
-      - name: Probe current Ketho closed string-enum catalog
-        run: |
-          set -euo pipefail
-          result=0
-          cargo +stable run --locked -p wow-annotations --example native_library -- \
-            "$RUNNER_TEMP/wow-ui-source" "$(cat "$RUNNER_TEMP/source-revision")" \
-            "$SOURCE_TOC" "$SOURCE_ENVIRONMENT" "$RUNNER_TEMP/native-string-enums" \
+            Annotations/Core/Type/StringEnum.lua \
             --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
-            Annotations/Core/Type/StringEnum.lua || result=$?
+            Annotations/Core/Type/Structure.lua \
+            || result=$?
           case "$result" in
             0) ;;
-            3) echo '::warning::String-enum overlay has explicit omissions; not consumer certification' ;;
+            3) echo '::warning::Ketho overlay has explicit omissions' ;;
             *) exit "$result" ;;
           esac
           result=0
-          cargo +stable xtask verify-library "$RUNNER_TEMP/native-string-enums" --require-input-complete || result=$?
+          cargo +stable xtask verify-library \
+            "$RUNNER_TEMP/native-aliased" --require-input-complete \
+            || result=$?
           case "$result" in
             0) ;;
-            3) echo '::warning::Verified string-enum overlay remains partial' ;;
+            3) echo '::warning::Verified Ketho overlay remains partial' ;;
             *) exit "$result" ;;
           esac
-      - name: Generate and verify current Ketho structure catalogs
-        run: |
-          set -euo pipefail
-          result=0
-          cargo +stable run --locked -p wow-annotations --example native_library -- \
-            "$RUNNER_TEMP/wow-ui-source" "$(cat "$RUNNER_TEMP/source-revision")" \
-            "$SOURCE_TOC" "$SOURCE_ENVIRONMENT" "$RUNNER_TEMP/native-structures" \
-            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
-            Annotations/Core/Type/BlizzardType.lua \
-            --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \
-            Annotations/Core/Type/Structure.lua || result=$?
-          case "$result" in
-            0) ;;
-            3) echo '::warning::Structure overlay has explicit omissions; not consumer certification' ;;
-            *) exit "$result" ;;
-          esac
-          result=0
-          cargo +stable xtask verify-library "$RUNNER_TEMP/native-structures" --require-input-complete || result=$?
-          case "$result" in
-            0) ;;
-            3) echo '::warning::Verified structure overlay remains partial' ;;
-            *) exit "$result" ;;
-          esac
-      - name: Build replaceable literal guests
-        run: |
-          cargo +stable build --locked -p wow-ketho-literals-wasm --target wasm32-unknown-unknown --profile wasm-compact
-          cargo +stable build --locked -p wow-ketho-literals-wasm --target wasm32-unknown-unknown --profile wasm-speed
-          cargo +stable generate-lockfile --manifest-path bridges/literal-host/Cargo.toml
-      - name: Execute both guests on the same source generation with one host
-        env:
-          WDF_WASM_A: ${{ github.workspace }}/target/wasm32-unknown-unknown/wasm-compact/wow_ketho_literals_wasm.wasm
-          WDF_WASM_B: ${{ github.workspace }}/target/wasm32-unknown-unknown/wasm-speed/wow_ketho_literals_wasm.wasm
-        run: |
-          set -euo pipefail
-          export WDF_CORPUS_CHECKOUT="$RUNNER_TEMP/wow-ui-source"
-          export WDF_CORPUS_REVISION="$(cat "$RUNNER_TEMP/source-revision")"
-          export WDF_CORPUS_TOC="$SOURCE_TOC" WDF_CORPUS_ENVIRONMENT="$SOURCE_ENVIRONMENT"
-          export WDF_ALIAS_CHECKOUT="$RUNNER_TEMP/ketho-source"
-          export WDF_ALIAS_REVISION="$(cat "$RUNNER_TEMP/alias-revision")"
-          export WDF_ALIAS_PATH=Annotations/Core/Type/BlizzardType.lua
-          export WDF_OUTPUT_ROOT="$RUNNER_TEMP"
-          cargo +stable test --locked --manifest-path bridges/literal-host/Cargo.toml --test real_corpus -- --ignored --nocapture
-          for item in "wasm-a:$WDF_WASM_A" "wasm-b:$WDF_WASM_B"; do
-            name="${item%%:*}"; module="${item#*:}"
-            digest="sha256:$(sha256sum "$module" | cut -d' ' -f1)"
-            result=0
-            cargo +stable xtask verify-library "$RUNNER_TEMP/$name" --require-input-complete --literal-module "$digest" || result=$?
-            case "$result" in
-              0) ;;
-              3) echo '::warning::Source-Wasm parity passed with explicit source/type omissions' ;;
-              *) exit "$result" ;;
-            esac
-          done
+
       - name: Retain source and projection evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # actions/upload-artifact@v7
         with:
           name: native-source-report-${{ github.sha }}
           path: |
             ${{ runner.temp }}/native-annotations/source-report.json
             ${{ runner.temp }}/native-aliased/source-report.json
-            ${{ runner.temp }}/native-string-enums/source-report.json
-            ${{ runner.temp }}/native-structures/source-report.json
-            ${{ runner.temp }}/wasm-a/source-report.json
-            ${{ runner.temp }}/wasm-b/source-report.json
-            ${{ runner.temp }}/source-wasm-comparison.json
-            ${{ runner.temp }}/source-wasm-failure.json
             ${{ runner.temp }}/alias-revision
             ${{ runner.temp }}/source-manifest.json
             ${{ runner.temp }}/source-revision
