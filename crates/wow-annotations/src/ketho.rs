@@ -245,6 +245,69 @@ impl Renderer {
         }
     }
 
+    /// Validate one callable with the renderer's own declaration rules,
+    /// without constructing and discarding a candidate output file.
+    pub(crate) fn validate_function(
+        &self,
+        owner: &Owner,
+        function: &Function,
+    ) -> Result<(), RenderError> {
+        validate_owner(owner)?;
+        identifier(&function.name)?;
+        validate_fields(&function.arguments, true)?;
+        validate_fields(&function.returns, true)?;
+        if let Some(documentation) = &function.documentation {
+            if documentation.len() > MAX_ITEMS {
+                return Err(RenderError::InputLimit);
+            }
+            for text in documentation {
+                safe_text(text)?;
+                if text.trim_start().starts_with('@') {
+                    return Err(RenderError::UnsafeDocumentation);
+                }
+            }
+        }
+        for field in function.arguments.iter().chain(&function.returns) {
+            self.validate_field(field)?;
+        }
+        Ok(())
+    }
+
+    /// Validate one structure/callback declaration with the same helpers used
+    /// by final mapped emission. Aggregate ordering and byte limits stay final.
+    pub(crate) fn validate_table(&self, table: &Table) -> Result<(), RenderError> {
+        identifier(table.name())?;
+        match table {
+            Table::Structure { fields, .. } => {
+                validate_fields(fields, false)?;
+                for field in fields {
+                    self.validate_field(field)?;
+                }
+            }
+            Table::Callback { arguments, .. } => {
+                validate_fields(arguments, false)?;
+                for argument in arguments {
+                    if argument.inner_type.is_some() {
+                        return Err(RenderError::UnsupportedType);
+                    }
+                    self.validate_field(argument)?;
+                }
+            }
+            Table::CallbackSignature {
+                arguments, returns, ..
+            } => self.validate_callback_signature(arguments, returns)?,
+        }
+        Ok(())
+    }
+
+    fn validate_field(&self, field: &Field) -> Result<(), RenderError> {
+        drop(self.field_type(field)?);
+        if let Some(default) = &field.default_text {
+            safe_text(default)?;
+        }
+        Ok(())
+    }
+
     /// Ketho `GetSystem` plus its analysis-only `---@meta _` file header.
     pub fn render(&self, system: &System) -> Result<String, RenderError> {
         Ok(self.render_mapped(system)?.text)
@@ -387,7 +450,7 @@ impl Renderer {
             separated = true;
         }
         for (index, function) in system.functions.iter().enumerate() {
-            identifier(&function.name)?;
+            self.validate_function(&system.owner, function)?;
             if !function_names.insert(&function.name) {
                 return Err(RenderError::DuplicateName);
             }
@@ -406,7 +469,7 @@ impl Renderer {
         let mut table_names = BTreeSet::new();
         for (index, table) in system.tables.iter().enumerate() {
             let name = table.name();
-            identifier(name)?;
+            self.validate_table(table)?;
             if !table_names.insert(name) {
                 return Err(RenderError::DuplicateName);
             }

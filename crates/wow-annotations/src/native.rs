@@ -514,13 +514,8 @@ pub fn project_with_alias_catalogs<'a>(
             }
             match callable(function, &mut scalars, &mut issues) {
                 Ok(projected) => {
-                    let candidate = System {
-                        owner: input.owner.clone(),
-                        functions: vec![projected.function],
-                        tables: Vec::new(),
-                    };
-                    match renderer.render(&candidate) {
-                        Ok(_) => {
+                    match renderer.validate_function(&input.owner, &projected.function) {
+                        Ok(()) => {
                             name_projections.extend(projected.names);
                             if projected.escaped_documentation {
                                 metadata_sidecars.push(MetadataSidecar {
@@ -528,7 +523,7 @@ pub fn project_with_alias_catalogs<'a>(
                                     source: link(document, function.raw),
                                 });
                             }
-                            input.functions.extend(candidate.functions);
+                            input.functions.push(projected.function);
                             function_sources.push(link(document, function.raw));
                             function_facts.push(function);
                         }
@@ -649,23 +644,14 @@ pub fn project_with_alias_catalogs<'a>(
                 _ => Err(RenderError::UnsupportedType),
             };
             match converted {
-                Ok(Some(projected_table)) => {
-                    let candidate = System {
-                        owner: input.owner.clone(),
-                        functions: Vec::new(),
-                        tables: vec![projected_table],
-                    };
-                    match renderer.render(&candidate) {
-                        Ok(_) => {
-                            input.tables.extend(candidate.tables);
-                            table_sources.push(link(document, raw));
-                            table_facts.push(table);
-                        }
-                        Err(error) => {
-                            issues.push(issue(document, raw, format!("renderer_{error:?}")))
-                        }
+                Ok(Some(projected_table)) => match renderer.validate_table(&projected_table) {
+                    Ok(()) => {
+                        input.tables.push(projected_table);
+                        table_sources.push(link(document, raw));
+                        table_facts.push(table);
                     }
-                }
+                    Err(error) => issues.push(issue(document, raw, format!("renderer_{error:?}"))),
+                },
                 Ok(None) => {}
                 Err(error) => issues.push(issue(document, raw, format!("table_{error:?}"))),
             }
