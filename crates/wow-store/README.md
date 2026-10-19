@@ -19,8 +19,10 @@ It is not a general durable-effect or recovery platform.
 Retain ordinary SQLite schema setup, query bounds, and transactional updates.
 Store plain records and FTS rows directly; keep SQL and connections private.
 Project indexes are derived from source and configuration, so one current format
-can be rebuilt. On unsupported/corrupt derived state, give a clear rebuild/error
-path; never delete or rewrite user source/configuration.
+can be rebuilt. Snapshot open validates manifest membership; requested records
+validate their own payload on read instead of scanning every partition. On
+unsupported/corrupt derived state, give a clear rebuild/error path; never delete
+or rewrite user source/configuration.
 
 The physical epoch-migration/selection platform has been removed. Older
 backup, quarantine, recovery and generic retention machinery remains for the

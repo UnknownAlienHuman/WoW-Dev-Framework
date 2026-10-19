@@ -55,11 +55,8 @@ impl ReadSnapshot {
         let id = &selected;
         let manifest = read_manifest(&connection, id, &db.epoch)?;
         validate_membership(&connection, &manifest)?;
-        // Every member is validated, not just the record eventually requested.
-        for member in &manifest.members {
-            checkpoint(stop)?;
-            read_partition(&connection, member)?;
-        }
+        // Payloads are validated when record() reads them. Opening a snapshot must
+        // not decode and hash every unrelated partition before the caller asks.
         checkpoint(stop)?;
         let next_revision = db
             .life
