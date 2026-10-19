@@ -119,18 +119,19 @@ not an SDK to import or copy. [EmmyLua guide](EMMYLUA_UPSTREAM.md) owns this bou
 ## Blizzard UI index, search and context
 
 **#131 replaces the Project read boundary; #169 implements direct SQLite search;
-#106 connects the user workflow.** `wow-project/src/replay/publication.rs` reads
-through `AcquiredProjectPair::read` → `hydrate_owner`, rebuilding analysis and
-recapturing the replay for equality. Even `wow-store/src/project/read.rs` opens
-a read by loading every partition and decoding/re-encoding/hashing its JSON;
-`record` reads the requested partition again. Bypassing Emmy alone is insufficient.
+#106 connects the user workflow.** `wow-project/src/replay/publication.rs` still
+reads through `AcquiredProjectPair::read` → `hydrate_owner`, rebuilding analysis
+and recapturing replay for equality. `ReadSnapshot::acquire` now validates the
+selected manifest/membership without loading every partition; `record` validates
+only the requested payload. Removing Project/Emmy reconstruction remains the
+larger boundary.
 
-Start #131 with stored file paths/text and the selected source/flavor: open in a
-later process and read a file without source/analyzer callbacks or a whole-index
-payload validation pass. Use ordinary SQLite rows/transactions in `wow-store`;
-do not serialize another snapshot framework. #169 adds name/span and FTS queries
-to this same index. Existing in-memory Project updates can stay while their
-readers move; updating source and reading facts have different work to do.
+Continue #131 with stored file paths/text and selected source/flavor: open in a
+later process and read a file without source/analyzer callbacks. Use ordinary
+SQLite rows/transactions in `wow-store`; do not serialize another snapshot
+framework. #169 adds name/span and FTS queries to this same index. Existing
+in-memory Project updates can stay while readers move; updating source and
+reading facts have different work to do.
 
 Current CLI search is `apps/wow/src/search.rs` → `wow-service/src/search.rs` →
 `wow-search` / `wow-store/src/search/mod.rs`. The ProjectFile shard stores `document_id` and
