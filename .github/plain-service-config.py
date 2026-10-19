@@ -9,9 +9,6 @@ replacements = {
     "    schema: &'static str,\n": '',
     "    service_version: &'static str,\n": '',
     "    result_schema: &'static str,\n": '',
-    "            schema: &'static str,\n": '',
-    "            service_version: &'static str,\n": '',
-    "            result_schema: &'static str,\n": '',
     '            schema: SERVICE_SCHEMA,\n': '',
     '            service_version: SERVICE_VERSION,\n': '',
     '            result_schema: RESULT_SCHEMA,\n': '',
@@ -19,14 +16,7 @@ replacements = {
 
 for old, new in replacements.items():
     count = text.count(old)
-    expected = 2 if old in {
-        "    schema: &'static str,\n",
-        "    service_version: &'static str,\n",
-        "    result_schema: &'static str,\n",
-        '            schema: SERVICE_SCHEMA,\n',
-        '            service_version: SERVICE_VERSION,\n',
-        '            result_schema: RESULT_SCHEMA,\n',
-    } else 1
+    expected = 2 if old != '/// Immutable, content-addressed E0 service configuration.\n' else 1
     if count != expected:
         raise SystemExit(f'unexpected count for {old!r}: {count}, expected {expected}')
     text = text.replace(old, new)
