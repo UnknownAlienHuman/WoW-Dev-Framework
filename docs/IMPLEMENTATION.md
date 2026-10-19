@@ -53,9 +53,10 @@ exports prepared bytes and is not a source-to-library generation command.
    source/partial-result report. Share this producer with local native input;
    keep needed source maps as typed data instead of reconstructing the library
    to recover them. Document the consumer's library-directory setup.
-4. Remove displaced pack requests/administration in the builder and affected
-   `wow-service/src/{reference_pack,reference_pack_admin,reference_admin,annotation_admin}.rs`
-   callers. Native generation must not require a pack registry or signed report.
+4. Uncalled `annotation_admin`, `reference_admin` and `reference_pack_admin`
+   layers are removed. Replace the still-live builder `reference_pack` and
+   `reference_pack_materialization` path with ordinary generated files. Native
+   generation must not require a pack registry or signed report.
 
 `local/native_input.rs` also copies generated Lua into `NativeAnnotationFile`;
 only `reference_pack.rs` consumes that retained copy. Remove the type, field and

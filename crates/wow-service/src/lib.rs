@@ -7,7 +7,6 @@
 //! does not parse source, execute Lua, select a
 //! replacement generation, or reproduce lower-owner semantic algorithms.
 
-pub mod annotation_admin;
 mod backend;
 mod configuration;
 pub mod context;
@@ -21,9 +20,7 @@ mod model;
 mod operation;
 pub mod overlay;
 mod presentation;
-pub mod reference_admin;
 pub mod reference_pack;
-pub mod reference_pack_admin;
 mod reference_pack_license;
 pub mod reference_pack_materialization;
 pub mod search;
