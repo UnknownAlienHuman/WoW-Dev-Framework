@@ -13,12 +13,8 @@ The reusable emitter in `src/ketho.rs` consumes ordered typed declarations; it
 does not parse Blizzard source or infer reference authority. `src/literals.rs`
 projects explicit typed event/CVar/enum/constant data. The native connection in
 `src/native.rs` composes Reference's restricted evaluator and normalization with
-these emitters. The development example is
-`examples/native_library.rs`; #196 will expose that native path through a
-supported command. The existing builder still has pack-oriented commands. Select
-the exact source revision and client flavor; retain partial/unsupported outcomes.
-Regenerate derived libraries
-and reports when their source or projection inputs change.
+these emitters. The supported source-to-directory command is `wow-reference-builder generate`;
+this crate remains the projection owner and has no filesystem/package lifecycle.
 
 The Rust projection preserves donor-specific type and signature behavior,
 including callback argument/return shapes, nilability, defaults, aliases, and

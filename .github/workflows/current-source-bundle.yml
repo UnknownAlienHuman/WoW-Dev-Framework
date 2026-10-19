@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           result=0
-          cargo +stable run --locked -p wow-annotations --example native_library -- \
+          cargo +stable run --locked -p wow-reference-builder -- generate \
             "$RUNNER_TEMP/wow-ui-source" "$(cat "$RUNNER_TEMP/source-revision")" \
             "$SOURCE_TOC" "$SOURCE_ENVIRONMENT" "$RUNNER_TEMP/native-annotations" \
             || result=$?
@@ -96,7 +96,7 @@ jobs:
           git -C "$RUNNER_TEMP/ketho-source" rev-parse HEAD > "$RUNNER_TEMP/alias-revision"
 
           result=0
-          cargo +stable run --locked -p wow-annotations --example native_library -- \
+          cargo +stable run --locked -p wow-reference-builder -- generate \
             "$RUNNER_TEMP/wow-ui-source" "$(cat "$RUNNER_TEMP/source-revision")" \
             "$SOURCE_TOC" "$SOURCE_ENVIRONMENT" "$RUNNER_TEMP/native-aliased" \
             --alias-catalog "$RUNNER_TEMP/ketho-source" "$(cat "$RUNNER_TEMP/alias-revision")" \

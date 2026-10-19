@@ -36,7 +36,7 @@ materializers and respect update mode; preserve dirty/diverged checkouts.
 The native annotation development driver is:
 
 ```sh
-cargo run --locked -p wow-annotations --example native_library --   <checkout> <ref> <TOC> <environment> <new-output>
+cargo run --locked -p wow-reference-builder -- generate   <checkout> <ref> <TOC> <environment> <new-output>
 ```
 
 Read `source-report.json`; exit 3 is partial. For a changed semantic, use an
