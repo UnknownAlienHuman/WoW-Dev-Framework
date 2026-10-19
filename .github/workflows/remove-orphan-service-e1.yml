@@ -1,0 +1,36 @@
+name: Remove orphan Service E1 specifications
+
+on:
+  push:
+    branches:
+      - docs/remove-orphan-service-e1-2026-10-19
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out documentation branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Remove retired E1 specification tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -r crates/wow-service/e1
+          git rm .github/workflows/remove-orphan-service-e1.yml
+          cargo +stable xtask check
+          git diff --check
+          if git grep -n 'crates/wow-service/e1\|wow-service/e1/' -- ':!docs/AUDIT_2026-10-17.md'; then
+            echo 'retired Service E1 references remain' >&2
+            exit 1
+          fi
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git commit -m "docs: remove retired Service E1 specifications"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
