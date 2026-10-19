@@ -40,7 +40,7 @@ a dependency names required replacement behavior, not a whole package gate.
 | With #131/#196 | [#107 — useful relationships](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/107) | Direct records; reuse Library/callable origins instead of regenerating them for graph proofs. |
 | Coordinate #107 | [#118 — removed product routes](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118) | Source comparison and Graph lineage are removed; delete only remaining promotion/fingerprint machinery proven exclusive. |
 | With #195/#107 | [#103 — recognizer scope](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | Remove unconsumed/default placeholder capabilities; keep actionable rules. |
-| With touched owner | [#112 — legacy formats/docs](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112) | One current format and regeneration; remove old readers and duplicated requirements. |
+| With touched owner | [#112 — legacy formats/docs](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112) | Historical exact Project catalogs are removed; collapse remaining replay recipe variants to one current rebuildable representation. |
 
 [#120](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/120)'s frozen
 package-state validators are removed in #192. Normal file/JSON/native-only

@@ -1,325 +1,53 @@
-# Native live project pair publication
+# Current Project publication
 
-The W13 owner/service path accepts an already published physical Lua, selected
-standalone TOC/XML or declared multi-package project and its exact graph. Native
-service operations and the
-[`wow project` CLI](../../apps/wow/LIVE_PROJECT.md) expose this profile; full E2-D
-acceptance remains open.
+Project publication persists a rebuildable local Project/graph snapshot for the
+current tool. It is not a compatibility archive or a database migration product.
 
-`ProjectReplay::capture` archives the original Main files, fixture references,
-exact Library workspace inputs/universes, function-call option and full physical
-configuration. The DTO contains source text and belongs in the explicitly owned
-local store. It is distinct from a `ProjectView`, analyzer state or a public DTO.
-The archive precharges at most 8,192 files, 64 Library workspaces, 16 MiB per file
-and 32 MiB aggregate source bytes before copying. Encoded records also obey the
-existing store's 32 MiB record and 64 MiB generation ceilings; JSON escaping may
-make an otherwise admissible source set exceed the record budget.
+## Owners and flow
 
-Legacy physical-input archives retain the exact v1 encoding. Legacy standalone
-TOC/XML archives use `wow-project/native-project-replay/2` and the
-`wow-project.live-replay.v2` storage schema. They add a selected TOC, explicit selection context, raw consumed
-TOC/XML documents and expected load-plan digest. These documents count against
-the same aggregate archive budget. Loader-specific ceilings remain 1,024 consumed
-files, 1 MiB per source and 16 MiB aggregate, plus existing parser/index limits.
-The replay runs the same loader using a typed retained source port; it neither
-deserializes a load receipt nor creates temporary source files. Exact consumed
-sets, source digests, decisions, indexes and plan IDs must reproduce. Unselected
-or unavailable files are not discovered during replay.
+1. `ProjectPublisher` owns validated Main, Library, TOC/XML and selected Blizzard
+   source inputs.
+2. `ProjectReplay::capture` retains only the inputs needed by the current native
+   reconstruction path.
+3. `ProjectPublicationBundle` combines the replay, graph records and bindings.
+4. `wow-store::project::ProjectStore` commits the generated records in one SQLite
+   publication transaction.
+5. `LiveProjectStore` selects the current catalog for the requested ordinary or
+   named component route and exposes Current/Exact reads.
 
-`hydrate` rebuilds configuration and Library workspaces through their existing
-validators, runs `ProjectPublisher::publish_initial_cancellable` over the exact
-inputs and compares original project/analyzer snapshot identities. It does not
-deserialize an analyzer session or promote compatibility/coverage from labels.
-Library sources remain separate from Main. The resulting ProjectView offers the
-existing freshly recomputed report capabilities; no additional semantic operation
-or target-client runtime capability follows.
+`ReadSnapshot` validates the selected manifest and membership when it opens, then
+validates each requested record on read. `AcquiredProjectPair::read` still rebuilds
+Project/Emmy state from the retained replay before returning a `ProjectView`; #131
+replaces that reconstruction with reader-ready indexed facts.
 
-Ordinary native Library input custody selects
-`wow-project/native-project-replay/native-library-input/1` and the separate
-`wow-project.live-replay.native-library-input.v1` catalog. One immutable service
-producer-input JSON object contributes its domain-separated digest to configuration
-identity; Project neither interprets it nor grants native Reference authority.
-Absence omits the new identity/archive fields and retains earlier recipes. The
-existing base recipe guards still apply, including physical callable selection;
-this channel cannot select platform/candidate publication or widen a prior epoch.
+## Required behavior
 
-Raw producer inputs have a 16 MiB allowance and count toward the existing 32 MiB
-aggregate retained-source and complete encoded-record limits. Configuration copies
-share the immutable input. Hydration retains those bytes through the original
-configuration/snapshot/analyzer comparison and exact recapture fences. The service
-must strictly decode them and rerun the actual Reference/annotation producers,
-then compare the configured profile, Reference generation and generated Library
-snapshot identities before exposing reconstructed callable bindings. Original
-manifest/TOC/version selection is rebuilt through the source-manifest validator
-and TOC owner over the exact retained document set; archived report or receipt
-labels cannot replace those inputs. This custody channel alone proves neither
-accepted API-use graph receipts nor current-source/runtime qualification.
+- Main and Library remain separate inputs to one Emmy analysis.
+- TOC/XML selection, source flavor and source locations survive publication.
+- Project and graph records refer to one selected generation.
+- Writes are transactional; a failed publication does not replace Current.
+- Reads remain bounded and cancellable.
+- Source and user configuration are never deleted during cache rebuild.
 
-Genuine retained native platform graph configuration may select a positive
-`ProjectBudgetPolicy.source_graph.max_metadata_bytes` component. It applies to
-collection and native producer metadata accounting, separately from analyzer
-output, package-plan encoding and store limits. Absence retains the 4 MiB default
-and existing serialized bytes. Presence selects `native-project-replay/14` and
-`live-replay.v14`; numeric changes retain that shape and must reproduce their
-configuration/generation identity on hydration. The actual v13 catalog is frozen
-as `STORAGE_SCHEMAS_V13`: old epochs reopen under their exact catalog and refuse
-v14 writes before changing an operation or Current. No catalog widening occurs.
+## Format policy
 
-`ProjectPublicationBundle::build` validates the live project and graph, recomputes
-the configured source proposals through the existing source owner (`/19` by default,
-`/20` for explicit package graph selection, `/21` with raw inventory) and requires
-the exact source batch, registry, canonically ordered coverage and empty source
-foundation. The raw selector also requires its exact independent inventory batch,
-complete accepted entity set, empty relation set and empty coverage. Other
-producer partitions remain graph-owner validated data; this does not independently
-replay every recognizer or establish complete conflict assessment.
+Historical exact V1–V16 store catalogs are not registered or reopened. An old or
+incompatible derived database must report a rebuild requirement and be recreated
+from current source/configuration.
 
-Logical graph records and the replay record obtain stable partition-version IDs
-first. Project, analyzer, graph and complete logical member versions then derive
-`ProjectPublicationSetId`; its header and bindings enter `StoreGenerationId`
-afterward. Epoch, current, store row identifiers and host paths cannot enter the
-semantic project/graph/publication-set recipes.
+Current named component catalogs and the ordinary current catalog remain while
+their real callers exist. The replay record still contains several current
+recipe shapes selected by configuration; #112 removes those variants as their
+callers are consolidated. Do not introduce `v17`, a converter, an archive reader,
+a disabled compatibility mode or another catalog registry.
 
-`wow_service::live_project::LiveProjectStore` registers a separate live epoch.
-It reuses existing store phases: prepare inactive membership, fresh exact
-read-back, graph/native-replay owner validation and current CAS. Failure leaves
-current unchanged. An uncertain commit is reconciled once, without repeating an
-effect. Original graph-bundle publication remains a distinct registered profile;
-the live API cannot adopt or relabel that epoch.
+## Where to change code
 
-`LiveProjectStore::read` resolves Current or Exact once and returns
-`LiveProjectRead`, which owns the read transaction/lease together with the actual
-ProjectView and GraphPartitionSnapshot. All membership, bindings, header, native
-replay and source-pair checks finish while the lease is held. Existing readers
-stay on the old generation after activation; later readers see the new pair.
-Missing or inconsistent records return a typed unavailable/failure outcome.
+- Capture/hydration: `src/replay/mod.rs` and its small owner modules.
+- Store records/catalogs: `src/replay/publication.rs`.
+- Service publication/read: `wow-service/src/live_project.rs` and operations.
+- Direct reader replacement: #131.
+- Legacy format deletion: #112.
 
-Checked on 2026-10-09: full workspace policy, fmt, check, strict Clippy, tests
-(844 passed, 1 ignored, 103 targets), rustdoc and build. Focused tests cover actual
-close/reopen, Current/Exact acquisition, old leased readers, CAS rejection,
-Library/Main separation, prepublication cancellation, missing/mutated replay and
-mixed project/graph rejection. The later CLI/service checkpoint additionally
-passes the complete producer chain and public read/reconciliation projections
-(847 tests passed, 1 ignored, 103 targets). Loader-plan replay, incremental reuse, crash,
-backup/GC, real-addon, source-parity and full W13/E2 acceptance remain open.
-
-Fresh full workspace gates and build passed for standalone replay on 2026-10-09:
-849 tests passed, 1 ignored, 103 targets. Tests remove the source directory before
-hydrate and full service composition, compare the exact retained plan/semantic IDs,
-reject missing/mutated/surplus/context/schema substitutions and exercise store
-reopen under Exact. Existing physical epochs retain their original catalog and
-epoch IDs through a strictly validated legacy open; v2 writes require a new store.
-There is no migration or catalog widening in place. Package replay, generation
-Library binding and full acceptance remain open at this predecessor.
-
-## Global-access function-call replay compatibility
-
-Retained platform replays captured with `FunctionCallBudget.global_access` before
-the Emmy report10 change use report9. Schema13 is the global-access-only recipe;
-schemas14 and 15 can also carry that report9 recipe when a graph budget is selected.
-`ProjectReplay::hydrate_owner` dispatches those exact schemas to Emmy's frozen
-`LegacyGlobalAccessV9` report recipe and the pre-W6 Project callable query set,
-including `LibStub.EmbedLibrary` only as legacy lookup data. Missing query results
-remain absent from `named_targets`; this compatibility lookup does not assert that
-the target exists. Hydration still compares the captured project/analyzer IDs and
-exact recaptured archive, without rewriting expected identities.
-
-Non-global report7/8 and selected-component replay recipes also retain their
-original callable lookup set. Removing an unresolved lookup still changes the
-shared analyzer session inputs, so these existing namespaces must not silently
-adopt report10's query set. The retained `LibStub.EmbedLibrary` lookup is data;
-W6 does not admit an embed rule from it. Intermediate unversioned captures made
-with the changed non-global query set remain unqualified; the reader never tries
-multiple recipes against an expected hash.
-
-Current report10 global-access archives use
-`wow-project/native-project-replay/16` / `wow-project.live-replay.v16`, including
-when a graph budget is composed. `STORAGE_SCHEMAS_V16` admits this new recipe;
-schema13/14 catalogs retain their prior membership and reject v16 writes. The
-complete pre-report10 catalog, including replay15, is frozen separately as
-`STORAGE_SCHEMAS_V15` and remains in the exact open/recovery/migration catalog
-roster. `LiveProjectStore` and retained Search acquisition use this same admission;
-neither the narrower V14 catalog nor a widened V16 catalog can relabel a V15 epoch.
-The compatibility consumer is the native `ProjectReplay::hydrate_owner` path used by
-`ProjectReplay::hydrate` and `AcquiredProjectPair::read`.
-
-The retained report9 witness is the 8,010-byte schema13 archive captured and
-hydrated at source head `805aa78a6db5171ec75b0e75fd986a237c854904` before report10
-was applied. Its retained fixture is
-`wow-service/src/local/platform_input/tests/data/legacy-global-access-replay13-profile9-805.json`
-with SHA-256 `64ecd01e5088531c70eb9b0a112f761ef3f7e32c3b0cf951ea3c90bc0da8c9b9`.
-
-## Complete declared package corpus
-
-Selected declaration syntax uses
-`wow-project/native-project-replay/physical-function-declarations/1` and
-`wow-project.live-replay.physical-function-declarations.v1`. With reviewed XML
-classification, the exact family is
-`wow-project/native-project-replay/xml-schema-classification-and-physical-function-declarations/1`
-and `wow-project.live-replay.xml-schema-classification-and-physical-function-declarations.v1`.
-Capture and expected-schema validation share one finite selection matrix. Hydration
-rebuilds genuine source/configuration and recomputes declarations in the existing
-session; decoded observations cannot restore analyzer authority.
-
-`AcquiredProjectPair::read` admits these exact records. The explicit service
-`PlatformStoreSelection` chooses their declaration-only or combined catalog for
-create, publication, read and reopen. Old catalogs retain their bytes and refuse
-these writes. Absence retains previous identities; explicit null, unknown recipes
-and an old/different selected replay schema refuse.
-
-Legacy package replay uses `wow-project/native-project-replay/3` and
-`wow-project.live-replay.v3`. The package archive owns every selected closure's
-Lua/TOC/XML bytes, all declared variant TOCs, the shared explicit context and Main
-fixture references. The legacy Main `files` array is empty, so reached Lua is not
-duplicated. Main/Library separation remains exact. All package bytes share the
-aggregate archive ceiling with Library; the package loader also retains its
-4,096-source/64 MiB corpus ceiling and ordinary selected-loader limits.
-
-Raw bytes are retained inside the load owner rather than being reopened from disk.
-The same package loader rebuilds variant receipts, dependency closure, reachability,
-order and the collision-free namespace. Synthetic acquisition roots never enter
-package semantics or access a filesystem. Every selected plan digest, complete
-package/Main digest and original project/analyzer identity must reproduce. An
-unreachable package retains its captured corpus but stays outside Main; a
-nonselected TOC retains its exact identity without loading its entries.
-
-At the package checkpoint, new epochs admitted v1/v2/v3. Previously published v1 and v2 epochs reopened only against
-their exact original catalogs; a v3 write to one rejects without changing current
-or its epoch. This is explicit compatibility, not migration or catalog widening.
-The full service path now also maps source package edges through the existing
-final-generation rebinder; stale accepted edge IDs cannot masquerade as final IDs.
-Relation, confidence and evidence survive the rebind and final presence is checked.
-
-Fresh policy, fmt, workspace check, strict Clippy, tests (850 passed, 1 ignored,
-103 targets), rustdoc and build passed on 2026-10-09. The package regression includes
-a required LOD dependency, missing optional dependency, duplicate Lua basenames,
-XML inline source, unreachable package and nonselected variant. It removes the
-source directory, rejects corpus/variant/root/Main substitutions, executes complete
-service publication and reopens Exact. Full W13/E2 acceptance, generation Library
-binding, incremental reuse, retention/recovery and source/runtime gates remain open.
-
-## Generation-bound replay v4
-
-New publishers use generation recipe v2, binding exact sorted Library snapshot
-IDs and the function-call-facts flag. Every input profile now captures
-`wow-project/native-project-replay/4` with `generation_schema_version: 2` and
-stores `wow-project.live-replay.v4`. Physical, standalone and package byte
-representations retain their existing bounded loader responsibilities.
-
-Old v1/v2/v3 archives omit this field and reproduce the original v1 recipe through
-the crate-private legacy publisher. Both new recipe inputs disappear entirely
-from legacy receipt serialization. Hydration requires the original project and
-analyzer identities and exact canonical recapture; changing a version marker or
-the fact option cannot upgrade or downgrade an existing archive.
-
-`ProjectPublicationBundle::from_replay` performs actual hydration and the same
-project/graph owner checks before constructing a handoff from a retained archive.
-It cannot substitute metadata labels for a live analyzer session.
-
-At the Library-bound checkpoint, new epochs admitted v1/v2/v3/v4. Existing V1/V2/V3 epochs open only under their exact
-frozen catalogs and reject v4 writes without changing current or epoch identity.
-Initialize a new private store for new publications; no epoch migration or catalog
-widening is provided. Frozen native compatibility fixtures were captured on
-`144761f` before the generation change and are never rewritten by tests.
-
-## Genuine platform source replay
-
-Platform inputs now use `wow-project/native-project-replay/5` and
-`wow-project.live-replay.v5`, retaining the original profile/inventory/package
-requests and every Included raw member. Real source/package/configuration/native
-analyzer owners rebuild the pair without disk; exact IDs and full recapture must
-match. Main remains separate from Library, and this channel grants no physical
-update capability. See [PLATFORM_SOURCE_REPLAY.md](../../docs/PLATFORM_SOURCE_REPLAY.md).
-
-At the platform raw-replay checkpoint, new epochs admitted v1-v5. The complete old
-V4 catalog is frozen and participates
-in exact legacy open, quarantine and migration fallback before V3/V2/V1.
-V4 reopening preserves epoch/Current/native pair identities; a v5 write refuses
-without changing Current. No existing catalog is widened. Native durable tests
-and all workspace gates/build pass on 2026-10-10 (925 passed, 1 ignored, 108 targets).
-Stable store namespace across differing source snapshots now uses an explicit
-new-only epoch and reconstructed native bindings; see
-[PLATFORM_STORE_NAMESPACE](../../docs/PLATFORM_STORE_NAMESPACE.md).
-Independent platform producer partitions and full W17/E3 acceptance remain open.
-
-## Explicit package binding and graph replay
-
-`PackageXmlBindingProfile::SameSessionV1` adds native replay
-`wow-project/native-project-replay/6` and storage `wow-project.live-replay.v6`.
-It retains the selector and rebuilds the genuine same-session package binding
-aggregate; it does not opt into package graph projection. See
-[PLATFORM_PACKAGE_XML_BINDINGS.md](../../docs/PLATFORM_PACKAGE_XML_BINDINGS.md).
-
-The separate `PlatformGraphProfile::PackageProjectionV1` requires that binding
-selection and genuine retained platform owners. It adds native replay
-`wow-project/native-project-replay/7`, storage `wow-project.live-replay.v7` and
-source graph recipe `wow-project/source-load-proposals/20`. Both selectors are
-omitted when absent, preserving old configuration/replay bytes. A graph selector
-without the required binding profile, or a mismatched schema/profile, rejects.
-See [PLATFORM_PACKAGE_GRAPH.md](../../docs/PLATFORM_PACKAGE_GRAPH.md).
-
-Hydration rebuilds real source/package/configuration/analyzer owners without
-source disk, checks original project/analyzer IDs and exact canonical recapture.
-Pair acquisition then rebuilds the configured source batch, registry, coverage
-and foundation and validates the complete native graph/publication membership
-under the held read. No decoded binding report replaces these owners. Source and
-Library share the existing aggregate archive limits; borrowed encoded-envelope
-counting enforces the 32 MiB record cap before raw copying.
-
-At the package graph checkpoint, new epochs admitted v1-v7. Complete V1-V6 catalogs remain frozen and reopen only
-against their exact catalog, including native live, migration and quarantine
-routes. An existing V6 epoch refuses v7 publication without retaining an operation
-or changing Current/epoch; no catalog widening or migration is performed.
-
-Two native synthetic project/service cases pass on 2026-10-10, covering disk-absent
-graph evidence reproduction, composed namespace Current reopen and frozen V6
-refusal without effects. The final unreachable chunk/inline omission regression
-also passes. Final workspace policy, fmt, all-target/all-feature check, strict
-Clippy, tests (938 passed, 0 failed, 1 ignored, 111 targets), strict rustdoc with
-`RUSTDOCFLAGS=-D warnings` and all-target/all-feature build pass, completed
-2026-10-10 07:18:40 UTC. This is local verification, not remote publication evidence.
-Full W17/E3 and corpus/performance/runtime acceptance remain open; the direct
-source producer remains monolithic.
-
-## Explicit raw inventory graph replay
-
-`PlatformGraphProfile::PackageProjectionWithRawInventoryV1` selects source graph
-`/21`, registry 16, native `wow-project/native-project-replay/8` and storage
-`wow-project.live-replay.v8`. It retains the same genuine platform and
-SameSessionV1 prerequisites. Default `/19`, package `/20`, replay `/7` and their
-exact identity recipes remain available unchanged.
-
-Hydration re-admits every original Included member, including opaque and unloaded
-files, through the genuine source owner. Pair validation builds the source and
-independent `wow-project.platform-source-inventory` batches once and requires the
-exact accepted raw closure. Raw metadata does not construct a byte capability;
-local reads bind an exact Producer reference to held native project/graph owners.
-See [PLATFORM_RAW_INVENTORY_GRAPH.md](../../docs/PLATFORM_RAW_INVENTORY_GRAPH.md).
-
-New epochs admit v1-v8. Complete V1-V7 catalogs remain frozen. A V7 epoch reopens
-exactly and refuses v8 publication before durable effects, preserving Current,
-epoch and prior membership. Open, quarantine and migration use exact catalog
-fallbacks; no existing catalog is widened.
-
-The native service lifecycle passes on 2026-10-10, covering disk-absent inventory
-closure, borrowed binary reads, exact publication/reopen and frozen V7 refusal.
-Workspace policy, fmt, all-target/all-feature check, strict Clippy, tests
-(939 passed, 0 failed, 1 ignored, 111 targets), strict rustdoc and build pass,
-completed 2026-10-10 07:48:26 UTC. Independent direct producer ownership,
-fingerprints, SkeletonInputView and source service/CLI transport remain open;
-full W17, real corpus/performance/runtime and native fault acceptance are
-NotEvaluated.
-
-## Retained owner updates
-
-Acquisition retains the actual validated `ProjectPublisher` from native hydration
-alongside the immutable project/graph pair. Consuming this owner for update does
-not analyze the same base twice. Only physical archives with generation recipe
-v2 support this handoff; legacy and loader/package archives remain read-only for
-the physical update route. Their exact native acquisition remains unchanged.
-
-The service holds the original read lease through update and validated current
-CAS. It resolves the requested publication record inside that read transaction,
-independently of `current_at_acquisition`, so an idempotent retry after later
-activation still uses its original base. No mutable owner or serialized success
-flag replaces the project/graph validation.
+The architecture and implementation documents define product scope. Git history
+is the record of removed formats; runtime code is not.
