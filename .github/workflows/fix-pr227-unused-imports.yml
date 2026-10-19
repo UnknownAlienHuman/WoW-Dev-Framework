@@ -27,23 +27,25 @@ jobs:
 
           path = Path("crates/wow-service/src/live_project/tests/namespaces/direct_service.rs")
           text = path.read_text()
-          old = '''    PlatformStoreSelection, ProjectStore, ReadSelector, ServiceErrorCode, TestResult, catalog_for,
-    platform_bundle_with_profile_source, publication, publish_input_in_namespace, root,
-'''
-          new = '''    PlatformStoreSelection, ReadSelector, ServiceErrorCode, TestResult,
-    platform_bundle_with_profile_source, publish_input_in_namespace, root,
-'''
+          old = (
+              "    PlatformStoreSelection, ProjectStore, ReadSelector, ServiceErrorCode, TestResult, catalog_for,\n"
+              "    platform_bundle_with_profile_source, publication, publish_input_in_namespace, root,\n"
+          )
+          new = (
+              "    PlatformStoreSelection, ReadSelector, ServiceErrorCode, TestResult,\n"
+              "    platform_bundle_with_profile_source, publish_input_in_namespace, root,\n"
+          )
           if text.count(old) != 1:
               raise SystemExit("unexpected direct_service imports")
           path.write_text(text.replace(old, new))
 
           path = Path("crates/wow-service/src/local/platform_input/tests/project_budgets.rs")
           text = path.read_text()
-          old = '''    use wow_project::replay::publication;
-    use wow_store::project::{ProjectStore, PublicationRequest, ReadSelector, RecordCatalog};
-'''
-          new = '''    use wow_store::project::ReadSelector;
-'''
+          old = (
+              "    use wow_project::replay::publication;\n"
+              "    use wow_store::project::{ProjectStore, PublicationRequest, ReadSelector, RecordCatalog};\n"
+          )
+          new = "    use wow_store::project::ReadSelector;\n"
           if text.count(old) != 1:
               raise SystemExit("unexpected project_budgets imports")
           path.write_text(text.replace(old, new))
