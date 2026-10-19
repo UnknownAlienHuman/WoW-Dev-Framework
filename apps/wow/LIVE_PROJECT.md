@@ -73,9 +73,9 @@ invalid coverage/admission 4, and cancellation 130. Unknown acknowledgment remai
 explicit. The native service also exposes verified backup and restoration to a new
 private path and explicit guarded physical-instance replacement with real
 Project/Graph owner replay. `restore_replace` and exact `resume_replacement` are
-service APIs; this CLI does not dispatch restore. Older readers and semantic IDs
-survive; guarded restore from quarantine, schema migration and full acceptance remain open. See
-[PROJECT_RECOVERY.md](../../crates/wow-store/PROJECT_RECOVERY.md).
+service APIs. The CLI does not dispatch backup, replacement or quarantine
+administration; `recover` only observes the current registered store. Older readers
+and semantic IDs survive. See [PROJECT_RECOVERY.md](../../crates/wow-store/PROJECT_RECOVERY.md).
 
 `--domain-current` adds native Project/Graph replay of the exact Current publication
 retained by the physical report. It keeps that physical evidence beside a typed

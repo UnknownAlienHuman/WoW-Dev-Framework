@@ -24,12 +24,8 @@ pub use skeleton::{
     LIVE_SKELETON_REQUEST_MAX_BYTES, LIVE_SKELETON_REQUEST_SCHEMA, LIVE_SKELETON_RESULT_SCHEMA,
     LiveSkeletonReadResult, execute_live_skeleton_read,
 };
-mod quarantine;
-pub use quarantine::{LiveProjectQuarantineInspection, QuarantinedLiveProject};
 mod recovery;
-pub use recovery::{
-    CurrentState, RecoveryReport, ScopeState, recover_live_project, restore_live_project_to_new,
-};
+pub use recovery::{CurrentState, RecoveryReport, ScopeState, recover_live_project};
 mod retention;
 #[cfg(test)]
 pub(crate) mod tests;
@@ -419,25 +415,6 @@ impl LiveProjectStore {
         let id = OperationId::new(operation_id).map_err(store_error)?;
         self.store.reconcile(&id).map_err(store_error)
     }
-}
-// Ordinary migration/restore/export paths need the same selected qualification
-// before issuing native owner checks. Consume and close the exact held read once.
-fn validate_ordinary_read(
-    read: ReadSnapshot,
-    stop: &AtomicBool,
-) -> ServiceResult<wow_store::project::ValidatedRead> {
-    let validation = (|| {
-        let pair = AcquiredProjectPair::read(&read, stop).map_err(project_error)?;
-        let native_api = crate::graph::validate_native_api_reopen(&pair, stop)?;
-        let validated = read
-            .owner_validation(&candidate::completed_checks(false))
-            .map_err(store_error);
-        drop(native_api);
-        drop(pair);
-        validated
-    })();
-    read.close().map_err(store_error)?;
-    validation
 }
 fn catalog() -> ServiceResult<RecordCatalog> {
     catalog_for(publication::STORAGE_SCHEMAS)
