@@ -1,6 +1,6 @@
 # Implementation and reduction queue
 
-**Default next code task: [#193](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/193).**
+**Default next code task: [#194](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194).**
 The [manifesto](ARCHITECTURE.md) defines purpose and scope;
 [implementation](IMPLEMENTATION.md) maps code, replacements and donors.
 [ADR-058](DECISIONS.md) retires the broader platform plan. `main` is the
@@ -27,7 +27,7 @@ a dependency names required replacement behavior, not a whole package gate.
 
 | Order | Task | Replacement / dependency |
 | --- | --- | --- |
-| 1 | [#193 — Emmy analysis](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/193) | One analysis; Main diagnostics see Library types and retain useful upstream errors. Current engines/config/filter split that behavior. |
+| Completed | [#193 — Emmy analysis](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/193) | One Main + Library analysis now supplies diagnostics, facts and flow; useful parameter-type errors reach Main locations. |
 | Independent | [#202 — catalog parsing](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/202) | Share one Emmy tree across existing validators; keep comment-group isolation. |
 | Independent | [#204 — single emission](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/204) | Retain emitted text/maps instead of trial rendering; keep valid neighbors and aggregate bounds. |
 | 2 | [#194 — result envelopes](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194) | Core E0 envelopes and one-shot registries are removed; finish plain typed output and delete remaining self-hash/size/read journals. |
