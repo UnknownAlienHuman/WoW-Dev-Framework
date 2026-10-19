@@ -1,0 +1,44 @@
+name: Apply Service storage-admin removal
+
+on:
+  push:
+    branches:
+      - refactor/remove-service-store-admin-surface-2026-10-19
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt
+      - name: Remove uncalled Service administration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/scripts/remove_service_store_admin.py
+          git rm \
+            crates/wow-service/src/live_project/quarantine.rs \
+            crates/wow-service/src/live_project/quarantine_tests.rs \
+            crates/wow-service/src/live_project/recovery_tests.rs \
+            crates/wow-service/src/live_project/replacement_tests.rs
+          cargo +stable fmt --all
+          if rg -n \
+            'LiveProjectQuarantineInspection|QuarantinedLiveProject|restore_live_project_to_new|backup_to_new\(|restore_replace\(|resume_replacement\(|replacement_receipt\(|quarantine_inspection\(|quarantined\(' \
+            crates/wow-service apps/wow; then
+            echo 'Service storage-admin residue remains' >&2
+            exit 1
+          fi
+          git diff --check
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor: remove uncalled Service storage administration"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
