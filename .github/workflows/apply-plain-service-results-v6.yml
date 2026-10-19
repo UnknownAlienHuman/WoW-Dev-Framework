@@ -1,0 +1,50 @@
+name: Apply plain Service result refactor v6
+
+on:
+  push:
+    branches:
+      - refactor/plain-service-results-2026-10-19
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out refactor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Apply refactor and validate callers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/fix-plain-service-guard.py
+          python .github/plain-service-results.py
+          python .github/plain-service-config.py
+          python .github/plain-service-docs.py
+          git rm -f .github/fix-plain-service-guard.py
+          git rm -f .github/plain-service-results.py
+          git rm -f .github/plain-service-config.py
+          git rm -f .github/plain-service-docs.py
+          git rm -f .github/workflows/apply-plain-service-results.yml
+          git rm -f .github/workflows/apply-plain-service-results-v2.yml
+          git rm -f .github/workflows/apply-plain-service-results-v3.yml
+          git rm -f .github/workflows/apply-plain-service-results-v4.yml
+          git rm -f .github/workflows/apply-plain-service-results-v5.yml
+          git rm -f .github/workflows/apply-plain-service-results-v6.yml
+          git rm crates/wow-service/CHECK_OPERATION.md
+          git rm crates/wow-service/STATUS_OPERATION.md
+          git rm crates/wow-service/DATA_MODEL.md
+          cargo +stable fmt --all
+          cargo +stable xtask check
+          cargo +stable clippy --locked -p wow-service -p wow-cli --all-targets --all-features -- -D warnings
+          git diff --check
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git add crates/wow-service apps/wow docs
+          git commit -m "refactor: return plain Service status and check results"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
