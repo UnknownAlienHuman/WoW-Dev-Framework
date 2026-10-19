@@ -37,10 +37,10 @@ wrappers. Do not promote a local helper or DTO into a framework.
 
 ## Native annotation generation
 
-**Start #196 in `apps/wow-reference-builder/src/lib.rs`.** Promote the reusable
-driver flow from `wow-annotations/examples/support/mod.rs` into the supported
-command. The example is development tooling; `apps/wow/src/native.rs` currently
-exports prepared bytes and is not a source-to-library generation command.
+**`apps/wow-reference-builder` now owns the supported `generate` command.** It
+reads an exact local Git revision/TOC and writes ordinary annotation files plus a
+source report. `apps/wow/src/native.rs` remains the prepared-input path used by
+local analysis, not a second generator.
 
 1. Reuse source-ref/TOC selection and materialization. The driver reads committed
    blobs; its current TOC support is literal `.lua` entries. Keep those limits
@@ -53,10 +53,9 @@ exports prepared bytes and is not a source-to-library generation command.
    source/partial-result report. Share this producer with local native input;
    keep needed source maps as typed data instead of reconstructing the library
    to recover them. Document the consumer's library-directory setup.
-4. Uncalled `annotation_admin`, `reference_admin` and `reference_pack_admin`
-   layers are removed. Replace the still-live builder `reference_pack` and
-   `reference_pack_materialization` path with ordinary generated files. Native
-   generation must not require a pack registry or signed report.
+4. Uncalled admin layers and the builder pack/materialization CLI are removed.
+   Delete their now-unconsumed Service implementation and retained Lua copy.
+   Native generation requires no pack registry or signed report.
 
 `local/native_input.rs` also copies generated Lua into `NativeAnnotationFile`;
 only `reference_pack.rs` consumes that retained copy. Remove the type, field and

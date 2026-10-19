@@ -43,7 +43,7 @@ assume Mainline data covers another flavor.
 Development driver:
 
 ```sh
-cargo run --locked -p wow-annotations --example native_library -- \
+cargo run --locked -p wow-reference-builder -- generate \
   /path/to/wow-ui-source <resolved-ref> \
   Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc \
   Mainline /path/to/new-output \

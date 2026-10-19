@@ -11,7 +11,7 @@ source producer or an external-interpreter wrapper.
 ## Run
 
 ```sh
-cargo run -p wow-annotations --example native_library -- \
+cargo run -p wow-reference-builder -- generate \
   /path/to/wow-ui-source <resolved-ref> \
   Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc \
   Mainline /path/to/new-output --corrections /path/to/reviewed-corrections.json
