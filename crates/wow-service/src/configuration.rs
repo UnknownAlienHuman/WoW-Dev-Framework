@@ -5,10 +5,6 @@ use serde::Serialize;
 use crate::identity::{canonical_digest, validate_identifier};
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 
-pub(crate) const SERVICE_SCHEMA: &str = "wow-service/e0-f/1";
-pub(crate) const RESULT_SCHEMA: &str = "wow-service/result-envelope/1";
-pub(crate) const SERVICE_VERSION: &str = env!("CARGO_PKG_VERSION");
-
 /// Operations intentionally unavailable during the E0 milestone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -109,19 +105,16 @@ impl Default for ServiceBudgets {
     }
 }
 
-/// Immutable, content-addressed E0 service configuration.
+/// Immutable service configuration with an identity over operational fields.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ServiceConfiguration {
-    schema: &'static str,
-    service_version: &'static str,
     configuration_id: Box<str>,
     project_id: Box<str>,
     profile_id: Box<str>,
     reference_generation_id: Box<str>,
     analyzer_pin_id: Box<str>,
     rule_registry_id: Box<str>,
-    result_schema: &'static str,
     budgets: ServiceBudgets,
     deferred_operations: Vec<DeferredOperation>,
 }
@@ -242,40 +235,31 @@ impl ServiceConfigurationBuilder {
 
         #[derive(Serialize)]
         struct Identity<'a> {
-            schema: &'static str,
-            service_version: &'static str,
             project_id: &'a str,
             profile_id: &'a str,
             reference_generation_id: &'a str,
             analyzer_pin_id: &'a str,
             rule_registry_id: &'a str,
-            result_schema: &'static str,
             budgets: ServiceBudgets,
             deferred_operations: &'a [DeferredOperation],
         }
         let identity = Identity {
-            schema: SERVICE_SCHEMA,
-            service_version: SERVICE_VERSION,
             project_id: &project_id,
             profile_id: &profile_id,
             reference_generation_id: &reference_generation_id,
             analyzer_pin_id: &analyzer_pin_id,
             rule_registry_id: &rule_registry_id,
-            result_schema: RESULT_SCHEMA,
             budgets,
             deferred_operations: &deferred_operations,
         };
         let configuration_id = canonical_digest("service-configuration:sha256:", &identity)?;
         Ok(ServiceConfiguration {
-            schema: SERVICE_SCHEMA,
-            service_version: SERVICE_VERSION,
             configuration_id,
             project_id,
             profile_id,
             reference_generation_id,
             analyzer_pin_id,
             rule_registry_id,
-            result_schema: RESULT_SCHEMA,
             budgets,
             deferred_operations,
         })
