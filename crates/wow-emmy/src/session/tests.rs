@@ -91,8 +91,7 @@ fn unchanged_green_allocations_survive_and_removal_drops_uri_mapping() -> TestRe
     let library = snapshot(&[("lib/api.lua", "---@meta _\nfunction Api() end\n")])?;
     let stop = AtomicBool::new(false);
     let mut session = AnalyzerSession::open(old.clone(), &[library], &stop)?;
-    let syntax_before = green(&session.syntax, &session.syntax_root, "main/keep.lua")?;
-    let semantic_before = green(
+    let tree_before = green(
         &session.semantic.analysis,
         &session.semantic.main_root,
         "main/keep.lua",
@@ -106,24 +105,16 @@ fn unchanged_green_allocations_survive_and_removal_drops_uri_mapping() -> TestRe
         &stop,
     )?;
     assert!(std::ptr::eq(
-        &*syntax_before,
-        &*green(&session.syntax, &session.syntax_root, "main/keep.lua")?
-    ));
-    assert!(std::ptr::eq(
-        &*semantic_before,
+        &*tree_before,
         &*green(
             &session.semantic.analysis,
             &session.semantic.main_root,
             "main/keep.lua"
         )?
     ));
-    for (analysis, root) in [
-        (&session.syntax, &session.syntax_root),
-        (&session.semantic.analysis, &session.semantic.main_root),
-    ] {
-        let uri = file_path_to_uri(&root.join("main/remove.lua")).ok_or("invalid URI")?;
-        assert!(analysis.get_file_id(&uri).is_none());
-    }
+    let uri = file_path_to_uri(&session.semantic.main_root.join("main/remove.lua"))
+        .ok_or("invalid URI")?;
+    assert!(session.semantic.analysis.get_file_id(&uri).is_none());
     assert_eq!(
         session.last_work(),
         AnalyzerUpdateWork {

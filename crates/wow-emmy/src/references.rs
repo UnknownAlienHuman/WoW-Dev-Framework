@@ -771,7 +771,7 @@ impl RegisteredMemberAnalysis {
         let mut analysis = EmmyLuaAnalysis::new();
         let mut configuration = Emmyrc::default();
         configuration.runtime.version = EmmyrcLuaVersion::Lua51;
-        configuration.diagnostics.enable = virtual_units.is_some();
+        configuration.diagnostics.enable = true;
         analysis.update_config(Arc::new(configuration));
         analysis.add_main_workspace(main_root.clone());
         if let Some(root) = &virtual_main_root {

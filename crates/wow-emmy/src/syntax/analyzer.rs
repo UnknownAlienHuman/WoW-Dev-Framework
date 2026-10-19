@@ -363,6 +363,10 @@ fn accepted_code(
             EmmySyntaxDiagnosticKind::AssignmentTypeMismatch,
             "assign-type-mismatch",
         )),
+        NumberOrString::String(value) if value == "param-type-mismatch" => Some((
+            EmmySyntaxDiagnosticKind::ParameterTypeMismatch,
+            "param-type-mismatch",
+        )),
         NumberOrString::String(_) | NumberOrString::Number(_) => None,
     }
 }

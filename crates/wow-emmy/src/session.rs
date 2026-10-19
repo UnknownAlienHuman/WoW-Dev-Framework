@@ -1,7 +1,7 @@
-//! Retained physical Main analysis over exact, caller-supplied snapshots.
+//! Retained Main + Library analysis over exact, caller-supplied snapshots.
 //!
-//! Only changed texts enter the upstream parser. Semantic indexes are rebuilt
-//! conservatively from retained VFS trees; no dependency or fact reuse is inferred.
+//! One upstream analysis owns diagnostics, semantic facts and local flow. Changed
+//! Main texts enter its VFS once; indexes rebuild conservatively from retained trees.
 #[cfg(test)]
 mod tests;
 use std::collections::BTreeSet;
@@ -26,7 +26,14 @@ pub fn analyze_member_call_session_with_local_flow(
     profile: MemberCallSessionQueryProfile<'_>,
     include_function_calls: bool,
     stop: &AtomicBool,
-) -> Result<(crate::references::MemberCallSession, EmmyLocalFlowReport), AnalyzerSessionError> {
+) -> Result<
+    (
+        EmmySyntaxReport,
+        crate::references::MemberCallSession,
+        EmmyLocalFlowReport,
+    ),
+    AnalyzerSessionError,
+> {
     profile
         .validate(include_function_calls, stop)
         .map_err(member_error)?;
@@ -38,6 +45,14 @@ pub fn analyze_member_call_session_with_local_flow(
             stop,
         )
         .map_err(member_error)?;
+        let syntax = crate::syntax::analyzer::collect_registered(
+            &registered.analysis,
+            main,
+            &registered.main_root,
+            stop,
+        )
+        .map_err(map_syntax_error)?;
+        checkpoint(stop)?;
         let session = registered
             .collect(
                 main,
@@ -58,7 +73,7 @@ pub fn analyze_member_call_session_with_local_flow(
         )
         .map_err(map_local_flow_error)?;
         checkpoint(stop)?;
-        Ok((session, local_flow))
+        Ok((syntax, session, local_flow))
     }))
     .unwrap_or_else(|_| Err(error(AnalyzerSessionErrorCode::NativeFailure)))
 }
@@ -144,7 +159,7 @@ impl AnalyzerUpdateBatch {
 }
 
 /// Observed Main parser work for the latest successful transition. Each changed
-/// text is parsed in the separate syntax and semantic engines.
+/// text enters the single shared Main + Library engine once.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct AnalyzerUpdateWork {
     pub added_files: usize,
@@ -264,15 +279,13 @@ pub struct AnalyzerSessionReports {
 pub struct AnalyzerSession {
     main: LuaWorkspaceSnapshot,
     libraries: Vec<LuaWorkspaceSnapshot>,
-    syntax_root: std::path::PathBuf,
-    syntax: EmmyLuaAnalysis,
     semantic: RegisteredMemberAnalysis,
     healthy: bool,
     last_work: AnalyzerUpdateWork,
 }
 
 impl AnalyzerSession {
-    /// Open the existing syntax policy and Main/Library semantic policy separately.
+    /// Open one Main + Library analysis for diagnostics and semantic reports.
     pub fn open(
         main: LuaWorkspaceSnapshot,
         libraries: &[LuaWorkspaceSnapshot],
@@ -280,10 +293,6 @@ impl AnalyzerSession {
     ) -> Result<Self, AnalyzerSessionError> {
         checkpoint(stop)?;
         let result = catch_unwind(AssertUnwindSafe(|| {
-            let syntax_root = crate::syntax::analyzer::virtual_root(main.snapshot_id());
-            let syntax = crate::syntax::analyzer::build_registered(&main, &syntax_root)
-                .map_err(|_| error(AnalyzerSessionErrorCode::NativeFailure))?;
-            checkpoint(stop)?;
             let semantic = RegisteredMemberAnalysis::new(
                 &main,
                 &libraries.iter().collect::<Vec<_>>(),
@@ -299,8 +308,6 @@ impl AnalyzerSession {
             Ok(Self {
                 main,
                 libraries: libraries.to_vec(),
-                syntax_root,
-                syntax,
                 semantic,
                 healthy: true,
                 last_work,
@@ -360,7 +367,7 @@ impl AnalyzerSession {
         result
     }
 
-    /// Validate CAS before touching either VFS. A post-mutation failure poisons
+    /// Validate CAS before touching the VFS. A post-mutation failure poisons
     /// the cache; callers retain their last immutable publication and reopen.
     pub fn apply_update(
         &mut self,
@@ -388,7 +395,6 @@ impl AnalyzerSession {
         }
         self.healthy = false;
         let result = catch_unwind(AssertUnwindSafe(|| {
-            apply_delta(&mut self.syntax, &self.syntax_root, &batch, stop)?;
             apply_delta(
                 &mut self.semantic.analysis,
                 &self.semantic.main_root,
@@ -423,9 +429,9 @@ impl AnalyzerSession {
     ) -> Result<AnalyzerSessionReports, AnalyzerSessionError> {
         checkpoint(stop)?;
         let syntax = crate::syntax::analyzer::collect_registered(
-            &self.syntax,
+            &self.semantic.analysis,
             &self.main,
-            &self.syntax_root,
+            &self.semantic.main_root,
             stop,
         )
         .map_err(map_syntax_error)?;
