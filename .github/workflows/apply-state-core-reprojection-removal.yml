@@ -1,0 +1,37 @@
+name: Apply state-core reprojection removal
+
+on:
+  push:
+    branches:
+      - refactor/remove-state-core-reprojection-2026-10-19
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out refactor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Remove duplicate reprojection and validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/remove-state-core-reprojection.py "$RUNNER_TEMP/remove-state-core-reprojection.py"
+          git rm .github/remove-state-core-reprojection.py
+          python "$RUNNER_TEMP/remove-state-core-reprojection.py"
+          git rm crates/wow-service/src/graph/build/recognizer_handoff.rs
+          cargo +stable fmt --all
+          cargo +stable xtask check
+          cargo +stable clippy --locked -p wow-service -p wow-recognizers --all-targets --all-features -- -D warnings
+          git diff --check
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git add crates/wow-service docs
+          git commit -m "refactor: remove duplicate state-core reprojection"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
