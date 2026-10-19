@@ -34,190 +34,7 @@ pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v16",
     "wow-project.live-pair.v1",
 ];
-/// Exact catalog of already published physical-input epochs. It is never widened
-/// in place; reopening it preserves its original epoch and membership identities.
-pub const STORAGE_SCHEMAS_V1: &[&str] = &["wow-project.live-replay.v1", "wow-project.live-pair.v1"];
-pub const STORAGE_SCHEMAS_V2: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-pair.v1",
-];
-pub const STORAGE_SCHEMAS_V3: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-pair.v1",
-];
-/// Exact catalog before platform raw-source replay; retain these epoch identities.
-pub const STORAGE_SCHEMAS_V4: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-replay.v4",
-    "wow-project.live-pair.v1",
-];
-/// Exact catalog before opt-in same-session package XML binding replay.
-pub const STORAGE_SCHEMAS_V5: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-pair.v1",
-];
-/// Exact catalog before explicitly selected package graph projection.
-pub const STORAGE_SCHEMAS_V6: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-pair.v1",
-];
-/// Exact catalog before the independent platform raw inventory graph partition.
-pub const STORAGE_SCHEMAS_V7: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-pair.v1",
-];
-/// Exact catalog before explicitly selected native direct platform producers.
-pub const STORAGE_SCHEMAS_V8: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-pair.v1",
-];
 pub const STORAGE_CHECK: &str = "wow-project.live-pair-native-replay.v1";
-/// Frozen catalog before exact independently versioned capability selection.
-pub const STORAGE_SCHEMAS_V9: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-replay.v9",
-    "wow-project.live-pair.v1",
-];
-/// Frozen catalog before native retained-package and function-budget replay.
-pub const STORAGE_SCHEMAS_V10: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-replay.v9",
-    "wow-project.live-replay.v10",
-    "wow-project.live-pair.v1",
-];
-/// Frozen actual catalog before explicitly selected global-access work/text.
-pub const STORAGE_SCHEMAS_V12: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-replay.v9",
-    "wow-project.live-replay.v10",
-    "wow-project.live-replay.v11",
-    "wow-project.live-replay.v12",
-    "wow-project.live-pair.v1",
-];
-/// Frozen actual catalog before explicitly selected graph metadata capacity.
-pub const STORAGE_SCHEMAS_V13: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-replay.v9",
-    "wow-project.live-replay.v10",
-    "wow-project.live-replay.v11",
-    "wow-project.live-replay.v12",
-    "wow-project.live-replay.v13",
-    "wow-project.live-pair.v1",
-];
-/// Frozen actual catalog before the optional native XML preflight count component.
-pub const STORAGE_SCHEMAS_V14: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-replay.v9",
-    "wow-project.live-replay.v10",
-    "wow-project.live-replay.v11",
-    "wow-project.live-replay.v12",
-    "wow-project.live-replay.v13",
-    "wow-project.live-replay.v14",
-    "wow-project.live-pair.v1",
-];
-/// Exact complete catalog admitted before report10/replay16. This is the former
-/// default catalog, including v15; V14 cannot reopen these retained epochs.
-pub const STORAGE_SCHEMAS_V15: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-replay.v9",
-    "wow-project.live-replay.v10",
-    "wow-project.live-replay.v11",
-    "wow-project.live-replay.v12",
-    "wow-project.live-replay.v13",
-    "wow-project.live-replay.v14",
-    "wow-project.live-replay.v15",
-    "wow-project.live-pair.v1",
-];
-/// New exact catalog for the report10 retained global-access replay recipe.
-/// Earlier report9 catalogs remain unchanged and continue to reject v16 writes.
-pub const STORAGE_SCHEMAS_V16: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-replay.v9",
-    "wow-project.live-replay.v10",
-    "wow-project.live-replay.v11",
-    "wow-project.live-replay.v12",
-    "wow-project.live-replay.v13",
-    "wow-project.live-replay.v14",
-    "wow-project.live-replay.v15",
-    "wow-project.live-replay.v16",
-    "wow-project.live-pair.v1",
-];
 /// Exact catalog for the named AceAddon local-result replay consumer. Earlier
 /// catalogs remain frozen; this admits only their retained records plus the new
 /// explicitly selected recipe.
@@ -333,7 +150,7 @@ pub const STORAGE_SCHEMAS_NATIVE_API_USES_V1: &[&str] = &[
     super::NATIVE_API_USES_STORAGE_SCHEMA,
     "wow-project.live-pair.v1",
 ];
-/// Exact catalogs admitted by open/recovery/migration. Never widen a retained epoch.
+/// Current catalogs admitted by ordinary open and selected component routes.
 pub const STORAGE_SCHEMA_CATALOGS: &[&[&str]] = &[
     STORAGE_SCHEMAS_NATIVE_API_USES_V1,
     STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1,
@@ -346,21 +163,6 @@ pub const STORAGE_SCHEMA_CATALOGS: &[&[&str]] = &[
     STORAGE_SCHEMAS_XML_CLASSIFICATION_V1,
     STORAGE_SCHEMAS,
     STORAGE_SCHEMAS_ACEADDON_LOCAL_RESULT_V1,
-    STORAGE_SCHEMAS_V16,
-    STORAGE_SCHEMAS_V15,
-    STORAGE_SCHEMAS_V14,
-    STORAGE_SCHEMAS_V13,
-    STORAGE_SCHEMAS_V12,
-    STORAGE_SCHEMAS_V10,
-    STORAGE_SCHEMAS_V9,
-    STORAGE_SCHEMAS_V8,
-    STORAGE_SCHEMAS_V7,
-    STORAGE_SCHEMAS_V6,
-    STORAGE_SCHEMAS_V5,
-    STORAGE_SCHEMAS_V4,
-    STORAGE_SCHEMAS_V3,
-    STORAGE_SCHEMAS_V2,
-    STORAGE_SCHEMAS_V1,
 ];
 const HEADER_KEY: &str = "live.project.header";
 const REPLAY_KEY: &str = "live.project.replay";
