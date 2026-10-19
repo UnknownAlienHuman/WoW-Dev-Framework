@@ -1,0 +1,60 @@
+name: Apply plain Service result refactor v3
+
+on:
+  push:
+    branches:
+      - refactor/plain-service-results-2026-10-19
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out refactor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Apply refactor and validate callers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/plain-service-results.py')
+          text = path.read_text()
+          old = '''    if text.count(field) != 2:
+        raise SystemExit(f"unexpected Service result field count for {field!r}: {text.count(field)}")
+    text = text.replace(field, "")
+'''
+          new = '''    occurrences = text.count(field)
+    if occurrences not in (2, 4):
+        raise SystemExit(f"unexpected Service result field count for {field!r}: {occurrences}")
+    text = text.replace(field, "")
+'''
+          if text.count(old) != 1:
+              raise SystemExit('unexpected result-field guard')
+          path.write_text(text.replace(old, new))
+          PY
+          python .github/plain-service-results.py
+          python .github/plain-service-docs.py
+          git rm .github/plain-service-results.py
+          git rm .github/plain-service-docs.py
+          git rm .github/workflows/apply-plain-service-results.yml
+          git rm .github/workflows/apply-plain-service-results-v2.yml
+          git rm .github/workflows/apply-plain-service-results-v3.yml
+          git rm crates/wow-service/CHECK_OPERATION.md
+          git rm crates/wow-service/STATUS_OPERATION.md
+          git rm crates/wow-service/DATA_MODEL.md
+          cargo +stable fmt --all
+          cargo +stable xtask check
+          cargo +stable clippy --locked -p wow-service -p wow-cli --all-targets --all-features -- -D warnings
+          git diff --check
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git add crates/wow-service apps/wow docs
+          git commit -m "refactor: return plain Service status and check results"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
