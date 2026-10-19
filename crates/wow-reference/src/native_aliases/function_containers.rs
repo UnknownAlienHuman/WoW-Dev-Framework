@@ -2,8 +2,7 @@
 use super::{Result, collect_terms, error, location};
 use crate::native::{NativeErrorCode, Span};
 use emmylua_parser::{
-    LuaAstNode, LuaCommentOwner, LuaDocTag, LuaExpr, LuaIndexKey, LuaLanguageLevel, LuaParser,
-    LuaStat, LuaVarExpr, ParserConfig,
+    LuaAstNode, LuaChunk, LuaCommentOwner, LuaDocTag, LuaExpr, LuaIndexKey, LuaStat, LuaVarExpr,
 };
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -30,15 +29,10 @@ pub struct FunctionContainerReturn {
     pub span: Span,
 }
 
-pub(super) fn read(input: &str, cancelled: &AtomicBool) -> Result<Vec<FunctionContainerFact>> {
+pub(super) fn read(chunk: &LuaChunk, cancelled: &AtomicBool) -> Result<Vec<FunctionContainerFact>> {
     if cancelled.load(Ordering::Relaxed) {
         return Err(error(NativeErrorCode::Cancelled));
     }
-    let tree = LuaParser::parse(input, ParserConfig::with_level(LuaLanguageLevel::Lua51));
-    if !tree.get_errors().is_empty() {
-        return Err(error(NativeErrorCode::Syntax));
-    }
-    let chunk = tree.get_chunk_node();
     let mut class_tags = 0usize;
     let mut return_tags = 0usize;
     for tag in chunk.syntax().descendants().filter_map(LuaDocTag::cast) {

@@ -2,8 +2,7 @@
 use super::{Result, error, location};
 use crate::native::{NativeErrorCode, Span};
 use emmylua_parser::{
-    LuaAstNode, LuaAstToken, LuaDocTag, LuaExpr, LuaLanguageLevel, LuaLiteralToken, LuaParser,
-    LuaStat, LuaVarExpr, ParserConfig,
+    LuaAstNode, LuaAstToken, LuaChunk, LuaDocTag, LuaExpr, LuaLiteralToken, LuaStat, LuaVarExpr,
 };
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,15 +16,10 @@ pub struct GlobalColorFact {
     pub span: Span,
 }
 
-pub(super) fn read(input: &str, cancelled: &AtomicBool) -> Result<Vec<GlobalColorFact>> {
+pub(super) fn read(chunk: &LuaChunk, cancelled: &AtomicBool) -> Result<Vec<GlobalColorFact>> {
     if cancelled.load(Ordering::Relaxed) {
         return Err(error(NativeErrorCode::Cancelled));
     }
-    let tree = LuaParser::parse(input, ParserConfig::with_level(LuaLanguageLevel::Lua51));
-    if !tree.get_errors().is_empty() {
-        return Err(error(NativeErrorCode::Syntax));
-    }
-    let chunk = tree.get_chunk_node();
     for tag in chunk.syntax().descendants().filter_map(LuaDocTag::cast) {
         match tag {
             LuaDocTag::Meta(meta)
