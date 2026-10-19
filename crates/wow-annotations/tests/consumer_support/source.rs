@@ -55,16 +55,13 @@ pub(super) fn prepare(output: &Path, sources: &[(&str, &str)]) -> Result<()> {
     // The production driver must read committed blobs, not these dirty files.
     fs::write(checkout.join(TOC), "uncommitted.lua\n")?;
     fs::write(checkout.join(sources[0].0), "not committed documentation\n")?;
-    let partial = driver::run(
-        vec![
-            checkout.into_os_string(),
-            "HEAD".into(),
-            TOC.into(),
-            "Mainline".into(),
-            output.as_os_str().to_owned(),
-        ],
-        None,
-    )?;
+    let partial = driver::run(vec![
+        checkout.into_os_string(),
+        "HEAD".into(),
+        TOC.into(),
+        "Mainline".into(),
+        output.as_os_str().to_owned(),
+    ])?;
     if partial {
         return Err("synthetic Git/TOC source build is partial".into());
     }

@@ -16,12 +16,9 @@ pub(super) struct CheckedAliases<'a> {
 }
 
 pub(super) fn verify(library: &Value) -> Result<CheckedAliases<'_>> {
-    if library["schema"] == "wow-native-annotation-library/6" && library.get("aliases").is_none() {
-        return Ok(CheckedAliases::default());
-    }
     if !matches!(
         library["schema"].as_str(),
-        Some("wow-native-annotation-library/5" | "wow-native-annotation-library/6")
+        Some("wow-native-annotation-library/5")
     ) {
         if library.get("aliases").is_some() {
             return Err("unexpected alias report".into());

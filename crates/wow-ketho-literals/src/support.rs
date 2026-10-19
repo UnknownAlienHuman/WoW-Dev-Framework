@@ -1,5 +1,5 @@
 //! Literal-profile validation and bounded output; never evaluates source text.
-use wow_render_contract::{LiteralError, MAX_TEXT_BYTES};
+use crate::{LiteralError, MAX_TEXT_BYTES};
 pub(crate) struct Output {
     pub(crate) bytes: String,
     pub(crate) limit: usize,

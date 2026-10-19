@@ -17,5 +17,4 @@ pub mod native;
 pub mod navigation;
 pub mod persistent;
 pub mod reference_links;
-pub mod selected_literals;
 pub mod sidecars;

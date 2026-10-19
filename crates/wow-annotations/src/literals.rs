@@ -1,5 +1,5 @@
-//! Compatibility bridge to the extracted Ketho algorithm. No duplicate emitter.
-//! This facade preserves existing owner APIs and error classifications.
+//! Thin native facade over the Ketho literal algorithm. No duplicate emitter.
+//! This preserves the annotation owner's errors and public types.
 use crate::ketho::RenderError;
 pub use wow_ketho_literals::{
     ConstantGroup, EnumDeclaration, EventLiteral, IntegerFormat, LiteralMember, LiteralValue,
@@ -42,8 +42,5 @@ pub(crate) fn error(error: LiteralError) -> RenderError {
         LiteralError::InputLimit => RenderError::InputLimit,
         LiteralError::OutputLimit => RenderError::OutputLimit,
         LiteralError::UnsupportedLiteral => RenderError::UnsupportedLiteral,
-        LiteralError::InvalidWire
-        | LiteralError::IncompatibleSchema
-        | LiteralError::BridgeFailure => RenderError::BridgeFailure,
     }
 }

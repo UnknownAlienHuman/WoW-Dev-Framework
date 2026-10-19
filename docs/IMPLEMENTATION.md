@@ -22,7 +22,7 @@ workspace-relative.
 | --- | --- |
 | Lua syntax, analysis and incremental sessions | `wow-emmy`; public upstream parser/code-analysis APIs. |
 | Blizzard documentation, source facts, normalization and corrections | `wow-reference/src/native*.rs` and their modules. |
-| Ketho types and annotation output | `wow-annotations/src/{native,ketho,aliases,literals}.rs`; `wow-ketho-literals` is the native literal algorithm, `wow-render-contract` its shared data types. |
+| Ketho types and annotation output | `wow-annotations/src/{native,ketho,aliases,literals}.rs`; `wow-ketho-literals` owns the typed literal data and native algorithm. |
 | Roots, TOC, XML, loaded source and project facts | `wow-project`. |
 | Useful source relationships and WoW diagnostics | `wow-graph`, `wow-recognizers`, `wow-rules`; keep facts with actual search/navigation/diagnostic consumers. |
 | SQLite, transactions and queries | `wow-store`; `wow-search` supplies useful query/projection logic. |
@@ -48,7 +48,7 @@ exports prepared bytes and is not a source-to-library generation command.
 2. Use `wow-reference/src/native.rs::ingest_document` and the existing native
    normalization, alias and correction modules. Reuse Emmy's parser; do not
    execute donor Lua or invent another source evaluator.
-3. Call `wow-annotations/src/native.rs::project_with_alias_catalogs_and_literal_bridge`
+3. Call `wow-annotations/src/native.rs::project_with_alias_catalogs`
    and the existing emitter. Produce ordinary `.lua` files and a small readable
    source/partial-result report. Share this producer with local native input;
    keep needed source maps as typed data instead of reconstructing the library
@@ -70,8 +70,7 @@ and retain their text/ranges for assembly. Reject only the invalid declaration
 or group while keeping independent valid output; preserve aggregate limits.
 Do not duplicate rendering rules in a new validator. #202 shares a parsed
 catalog tree between existing validators.
-#203 keeps `wow-ketho-literals` callable natively, then removes
-`modules/ketho-literals`, `bridges/literal-host`, exclusive options and CI.
+Literal generation calls `wow-ketho-literals` directly; no guest, host, wire or runtime selection path exists.
 
 ## Addon configuration and Emmy analysis
 

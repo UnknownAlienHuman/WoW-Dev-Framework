@@ -142,12 +142,12 @@ stale-lock deletion, blind retry, guessed rollback or fabricated success.
 
 ## Update cost and boundary
 
-Compatible Gethe/Ketho changes update only source/resource data: existing Git
-objects are reused, and no Rust host or WASM rebuild is needed to fetch them.
-Changed algorithms still use separately built, approved WASM modules through the
-[existing bridge](WASM_BRIDGES.md). Network/filesystem authority stays in the
-native acquisition adapter and is never given to the guest. This step does not
-implement incremental analysis, new type semantics or signed module distribution.
+Compatible Gethe/Ketho data changes update only source/resource inputs and reuse
+existing Git objects. Literal and annotation algorithms are ordinary native Rust
+code and change with the product build; there is no guest module, host runtime or
+separate approval/distribution lane. Network/filesystem authority remains in the
+native acquisition adapter. This step does not implement incremental analysis or
+new type semantics.
 
 Rust tests use real SHA-1/SHA-256 and shallow repositories through a test-only local
 transport. They cover drift, divergence, moving remotes, mutation during network
