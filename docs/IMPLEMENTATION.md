@@ -188,10 +188,11 @@ No replacement rule compiler, plugin registry or proof-receipt framework.
 
 ## Results and interfaces
 
-#194 starts at `wow-core/src/{envelope,canonical}.rs` and actual Service callers:
-plain typed values internally, one serialization at CLI/protocol output, bounds
-outside payload identity. Delete self-hashes, size fixed-point loops and durable
-read-operation journals with their callers.
+Local status/check values in `wow-service/src/service.rs` are plain typed results:
+no generic envelope, request/result self-digest, schema echo or service-version
+echo. The application serializes once with an external byte ceiling. #194 now
+continues only through separate Context/Search/graph result families; simplify
+each from its actual caller rather than introducing another universal envelope.
 
 CLI, LSP and MCP consume the same operation result. Keep framing and position
 conversion in `apps/wow`, not copies of analysis/search algorithms. #197 supplies

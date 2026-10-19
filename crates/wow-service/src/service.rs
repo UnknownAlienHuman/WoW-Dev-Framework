@@ -5,8 +5,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::Serialize;
 
 use crate::backend::ServiceBackendStatus;
-use crate::configuration::{RESULT_SCHEMA, SERVICE_SCHEMA, SERVICE_VERSION};
-use crate::identity::canonical_digest;
 use crate::presentation;
 use crate::{
     CapabilityState, CheckContext, CheckRequest, CheckScope, ComponentHealth, ComponentSnapshot,
@@ -26,13 +24,7 @@ const REQUIRED_COMPONENTS: [&str; 5] = [
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StatusResult {
-    schema: &'static str,
-    result_id: Box<str>,
     operation_id: OperationId,
-    request_digest: Box<str>,
-    service_schema: &'static str,
-    service_version: &'static str,
-    configuration_id: Box<str>,
     health: ComponentHealth,
     current_context: Option<ContextIdentity>,
     components: Vec<ComponentSnapshot>,
@@ -40,10 +32,6 @@ pub struct StatusResult {
 }
 
 impl StatusResult {
-    #[must_use]
-    pub fn result_id(&self) -> &str {
-        &self.result_id
-    }
     #[must_use]
     pub const fn health(&self) -> ComponentHealth {
         self.health
@@ -65,13 +53,7 @@ impl StatusResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CheckResult {
-    schema: &'static str,
-    result_id: Box<str>,
     operation_id: OperationId,
-    request_digest: Box<str>,
-    service_schema: &'static str,
-    service_version: &'static str,
-    configuration_id: Box<str>,
     semantic_status: ServiceSemanticStatus,
     context: ContextIdentity,
     selected_scope: CheckScope,
@@ -101,10 +83,6 @@ impl CheckResult {
     }
 
     #[must_use]
-    pub fn result_id(&self) -> &str {
-        &self.result_id
-    }
-    #[must_use]
     pub const fn semantic_status(&self) -> ServiceSemanticStatus {
         self.semantic_status
     }
@@ -126,15 +104,7 @@ impl CheckResult {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "operation", content = "result", rename_all = "snake_case")]
-pub enum ServiceResultEnvelope {
-    Status(StatusResult),
-    Check(CheckResult),
-}
-
-/// Synchronous E0 service. Every operation binds one canonical request to one
-/// retained result or fails without publishing a replacement generation.
+/// Synchronous service for status and checks over one configured backend.
 #[derive(Debug)]
 pub struct Service<B: ServiceBackend> {
     configuration: Arc<ServiceConfiguration>,
@@ -162,11 +132,7 @@ impl<B: ServiceBackend> Service<B> {
         request: &StatusRequest,
         cancelled: &AtomicBool,
     ) -> ServiceResult<StatusResult> {
-        let request_digest = canonical_digest(
-            "service-request:sha256:",
-            &(self.configuration.configuration_id(), request),
-        )?;
-        self.build_status(request, &request_digest, cancelled)
+        self.build_status(request, cancelled)
     }
 
     pub fn check(
@@ -175,11 +141,7 @@ impl<B: ServiceBackend> Service<B> {
         cancelled: &AtomicBool,
     ) -> ServiceResult<CheckResult> {
         self.validate_scope(request.scope())?;
-        let request_digest = canonical_digest(
-            "service-request:sha256:",
-            &(self.configuration.configuration_id(), request),
-        )?;
-        self.build_check(request, &request_digest, cancelled)
+        self.build_check(request, cancelled)
     }
 
     pub fn deferred(&self, operation: DeferredOperation) -> ServiceResult<()> {
@@ -202,7 +164,6 @@ impl<B: ServiceBackend> Service<B> {
     fn build_status(
         &self,
         request: &StatusRequest,
-        request_digest: &str,
         cancelled: &AtomicBool,
     ) -> ServiceResult<StatusResult> {
         check_cancelled(cancelled, request.operation_id())?;
@@ -211,40 +172,8 @@ impl<B: ServiceBackend> Service<B> {
         check_cancelled(cancelled, request.operation_id())?;
         let health = aggregate_health(status.components());
 
-        #[derive(Serialize)]
-        struct Identity<'a> {
-            schema: &'static str,
-            operation_id: &'a OperationId,
-            request_digest: &'a str,
-            service_schema: &'static str,
-            service_version: &'static str,
-            configuration_id: &'a str,
-            health: ComponentHealth,
-            current_context: Option<&'a ContextIdentity>,
-            components: &'a [ComponentSnapshot],
-            deferred_operations: &'a [DeferredOperation],
-        }
-        let identity = Identity {
-            schema: RESULT_SCHEMA,
-            operation_id: request.operation_id(),
-            request_digest,
-            service_schema: SERVICE_SCHEMA,
-            service_version: SERVICE_VERSION,
-            configuration_id: self.configuration.configuration_id(),
-            health,
-            current_context: status.current_context(),
-            components: status.components(),
-            deferred_operations: self.configuration.deferred_operations(),
-        };
-        let result_id = canonical_digest("service-result:sha256:", &identity)?;
         Ok(StatusResult {
-            schema: RESULT_SCHEMA,
-            result_id,
             operation_id: request.operation_id().clone(),
-            request_digest: request_digest.into(),
-            service_schema: SERVICE_SCHEMA,
-            service_version: SERVICE_VERSION,
-            configuration_id: self.configuration.configuration_id().into(),
             health,
             current_context: status.current_context().cloned(),
             components: status.components().to_vec(),
@@ -255,7 +184,6 @@ impl<B: ServiceBackend> Service<B> {
     fn build_check(
         &self,
         request: &CheckRequest,
-        request_digest: &str,
         cancelled: &AtomicBool,
     ) -> ServiceResult<CheckResult> {
         check_cancelled(cancelled, request.operation_id())?;
@@ -308,51 +236,8 @@ impl<B: ServiceBackend> Service<B> {
         let mut rule_evaluations = context.rule_evaluations().to_vec();
         rule_evaluations.sort_by(|left, right| left.evaluation_id().cmp(right.evaluation_id()));
 
-        #[derive(Serialize)]
-        struct Identity<'a> {
-            schema: &'static str,
-            operation_id: &'a OperationId,
-            request_digest: &'a str,
-            service_schema: &'static str,
-            service_version: &'static str,
-            configuration_id: &'a str,
-            semantic_status: ServiceSemanticStatus,
-            context: &'a ContextIdentity,
-            selected_scope: &'a CheckScope,
-            components: &'a [ComponentSnapshot],
-            raw_findings: &'a [RawFinding],
-            presentation_graph: &'a PresentationGraph,
-            rule_evaluations: &'a [RuleEvaluation],
-            deferred_operations: &'a [DeferredOperation],
-            #[serde(skip_serializing_if = "Option::is_none")]
-            owner_analysis: Option<&'a crate::local::OwnerAnalysis>,
-        }
-        let identity = Identity {
-            schema: RESULT_SCHEMA,
-            operation_id: request.operation_id(),
-            request_digest,
-            service_schema: SERVICE_SCHEMA,
-            service_version: SERVICE_VERSION,
-            configuration_id: self.configuration.configuration_id(),
-            semantic_status,
-            context: context.identity(),
-            selected_scope: context.selected_scope(),
-            components: &components,
-            raw_findings: &raw_findings,
-            presentation_graph: &presentation_graph,
-            rule_evaluations: &rule_evaluations,
-            deferred_operations: self.configuration.deferred_operations(),
-            owner_analysis: context.owner_analysis(),
-        };
-        let result_id = canonical_digest("service-result:sha256:", &identity)?;
         Ok(CheckResult {
-            schema: RESULT_SCHEMA,
-            result_id,
             operation_id: request.operation_id().clone(),
-            request_digest: request_digest.into(),
-            service_schema: SERVICE_SCHEMA,
-            service_version: SERVICE_VERSION,
-            configuration_id: self.configuration.configuration_id().into(),
             semantic_status,
             context: context.identity().clone(),
             selected_scope: context.selected_scope().clone(),

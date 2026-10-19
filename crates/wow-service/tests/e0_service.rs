@@ -465,7 +465,7 @@ fn cancellation_leaves_service_usable() -> TestResult {
 }
 
 #[test]
-fn canonical_result_is_invariant_to_owner_input_order() -> TestResult {
+fn result_order_is_invariant_to_owner_input_order() -> TestResult {
     let left_configuration = configuration()?;
     let right_configuration = configuration()?;
     let left = service_with_context(
@@ -492,7 +492,6 @@ fn canonical_result_is_invariant_to_owner_input_order() -> TestResult {
         ),
         &AtomicBool::new(false),
     )?;
-    assert_eq!(left_result.result_id(), right_result.result_id());
     assert_eq!(
         serde_json::to_vec(&left_result)?,
         serde_json::to_vec(&right_result)?
