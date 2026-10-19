@@ -12,6 +12,15 @@ impl LiteralRenderer {
     pub fn new(limit: usize) -> Result<Self, RenderError> {
         NativeRenderer::new(limit).map(Self).map_err(error)
     }
+    pub fn validate_event(value: &EventLiteral) -> Result<(), RenderError> {
+        NativeRenderer::validate_event(value).map_err(error)
+    }
+    pub fn validate_enum(value: &EnumDeclaration) -> Result<(), RenderError> {
+        NativeRenderer::validate_enum(value).map_err(error)
+    }
+    pub fn validate_constant_group(value: &ConstantGroup) -> Result<(), RenderError> {
+        NativeRenderer::validate_constant_group(value).map_err(error)
+    }
     pub fn render_events(&self, values: &[EventLiteral]) -> Result<String, RenderError> {
         self.0.render_events(values).map_err(error)
     }
