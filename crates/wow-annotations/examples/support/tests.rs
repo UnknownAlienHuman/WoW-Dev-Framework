@@ -4,7 +4,7 @@ use std::{
     process::{Command, Stdio},
 };
 fn run(args: Vec<OsString>) -> Result<bool, Box<dyn std::error::Error>> {
-    super::run(args, None)
+    super::run(args)
 }
 
 use std::sync::atomic::{AtomicU64, Ordering};
