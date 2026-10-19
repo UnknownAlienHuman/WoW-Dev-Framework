@@ -69,7 +69,6 @@ pub enum ProjectErrorCode {
     DeferredCapability,
     CanonicalizationFailed,
     StoreReadUnavailable,
-    IncompatibleGenerationPair,
 }
 
 /// One bounded project failure. It never embeds source text or host paths.

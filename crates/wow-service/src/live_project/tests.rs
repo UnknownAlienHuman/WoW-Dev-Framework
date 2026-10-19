@@ -18,7 +18,6 @@ type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 mod current_recovery;
 mod durable;
 mod gc;
-mod generation_pair;
 mod library_modes;
 mod namespaces;
 #[path = "quarantine_tests.rs"]

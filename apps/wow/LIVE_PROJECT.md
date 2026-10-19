@@ -21,36 +21,6 @@ wow project recover --store-root <directory> --domain-current --format json
 wow project update --config final-project.json --project <ProjectId> --store-root <directory> --operation-id <id> --expected-current <record-id> --library keep --allow-partial
 ```
 
-## Exact retained generation pair
-
-```text
-wow project pair --store-root <existing-ordinary-store> --before-generation <exact-id> --after-generation <exact-id> [--max-output-bytes <positive-bound>] [--format json]
-```
-
-This invokes one Service operation over two explicitly ordered native generations.
-Both reads stay held together under the same opened ordinary Store owner. Current,
-publication chronology, source paths, automatic namespace selection and partial
-fallbacks are absent. Reversing the IDs reverses the roles; an identical explicit
-generation is allowed and reports `same_generation=true` without a semantic
-`NoChange` verdict.
-
-The canonical JSON envelope preserves both original publication/project/graph,
-configuration/analyzer/Reference/profile identities, coverage and deferred records.
-`valid_partial` means the exact configured pair was acquired; different
-configuration or graph registry reports `not_evaluated`. Both states exit 2.
-The result reports `lineage_evaluation=not_evaluated` and no negative authority.
-It is pair metadata, not Candidate matching, accepted lineage, removal/introduction
-or migration evidence. Full E4-B remains separate under roadmap #125; this
-prerequisite is tracked by #177.
-
-The default and hard maximum output is 16 MiB. Serialization is checked against
-the selected bound before allocation/delivery. Invalid grammar, duplicate flags,
-symbolic generation IDs or unsupported formats fail with exit 64. Typed identity,
-missing generation or output-bound refusal exits 3; unavailable/internal I/O exits
-4; cancellation exits 130. No failed draft is emitted. After-read, before-read and
-Store closure are checked in reverse order before delivery; close failure
-supersedes an earlier refusal or cancellation. A missing Store is not initialized.
-
 ## Selected native candidate and first Skeleton profile
 
 Selected publication/read uses `--selection <selection.json>` with schema

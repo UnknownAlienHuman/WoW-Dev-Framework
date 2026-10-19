@@ -2,18 +2,12 @@
 //! precede logical membership, publication-set identity and store generation.
 mod commitments;
 mod direct;
-mod generation_pair;
-mod source_generation_pair;
-pub use source_generation_pair::*;
 mod namespace;
 use super::{ProjectReplay, invalid};
 use crate::graph::{
     PLATFORM_RAW_INVENTORY_PARTITION, SOURCE_GRAPH_PARTITION, build_source_graph_proposals,
 };
 use crate::{ProjectPhase, ProjectPublisher, ProjectResult, ProjectView};
-pub use generation_pair::{
-    RETAINED_GENERATION_PAIR_PROFILE, RetainedGenerationPair, RetainedGenerationPairDescriptor,
-};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::atomic::AtomicBool};
 use wow_graph::{GraphPartitionSnapshot, ValidatedGraphPartitionSnapshot};
@@ -474,7 +468,6 @@ impl ProjectPublicationBundle {
 pub struct AcquiredProjectPair {
     read_epoch_id: EpochId,
     read_generation_id: StoreGenerationId,
-    read_origin: wow_store::project::ReadSnapshotOrigin,
     project: ProjectView,
     publisher: ProjectPublisher,
     supports_physical_update: bool,
@@ -670,7 +663,6 @@ impl AcquiredProjectPair {
             Self {
                 read_epoch_id: read.epoch().epoch_id().clone(),
                 read_generation_id: read.manifest().generation_id.clone(),
-                read_origin: read.origin(),
                 project,
                 publisher,
                 supports_physical_update: replay.supports_physical_update(),

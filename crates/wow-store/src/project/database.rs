@@ -78,7 +78,6 @@ CREATE TABLE gc_operations (
 "#;
 
 pub(super) struct Lifetime {
-    pub custody: std::sync::Arc<()>,
     // The OS-held writer lease survives the writer while any read snapshot lives.
     pub _lock: Rc<File>,
     pub _instance_lock: Option<Rc<File>>,
@@ -240,7 +239,6 @@ impl Database {
             root,
             epoch,
             life: Rc::new(Lifetime {
-                custody: std::sync::Arc::new(()),
                 _lock: Rc::new(lock),
                 _instance_lock: None,
                 leases: RefCell::new(BTreeMap::new()),
@@ -288,7 +286,6 @@ impl Database {
             root,
             selection: Some(admitted.selection),
             life: Rc::new(Lifetime {
-                custody: std::sync::Arc::new(()),
                 _lock: Rc::new(lock),
                 _instance_lock: instance_lock,
                 leases: RefCell::new(BTreeMap::new()),

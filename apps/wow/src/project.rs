@@ -1,6 +1,5 @@
 //! Strict transport for live project publication, acquisition and physical recovery.
 use crate::args::Format;
-mod pair;
 mod selected;
 use std::{
     collections::BTreeMap,
@@ -22,7 +21,6 @@ use wow_service::{
 };
 
 const HELP: &str = concat!(
-    "wow project pair --store-root <existing-ordinary-store> --before-generation <exact-id> --after-generation <exact-id> [--max-output-bytes <bound>] [--format json]\n",
     "wow project skeleton --selection <selection.json> --store-root <directory> --store-generation current|<generation-id> --request <skeleton.json> [--format json|text]\n",
     "Platform publish/update/read: --selection <selection.json> selects exact namespace/catalog intent. Publish/update may also supply --function-fingerprints <query.json> and --xml-fingerprints <query.json>. Skeleton requires composed_candidate=true; source-free reopen still rebuilds native/core owners from retained records. Partial/truncated exits 2.\n",
     "wow project publish --config <project.json> --project <ProjectId> [--generation current|<ProjectGenerationId>] --store-root <private-directory> --operation-id <id> --expected-current absent|<record-id> --allow-partial [--initialize] [--format json|text]\n",
@@ -72,9 +70,6 @@ struct Arguments {
 }
 
 pub fn run(values: Vec<OsString>) -> u8 {
-    if values.get(1).is_some_and(|value| value == "pair") {
-        return pair::run(values);
-    }
     if (values.len() == 2
         || (values.len() == 3
             && values.get(1).is_some_and(|v| {

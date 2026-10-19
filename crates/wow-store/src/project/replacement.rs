@@ -322,7 +322,6 @@ impl ProjectStore {
             root: self.db.root.clone(),
             selection: Some(selection),
             life: Rc::new(Lifetime {
-                custody: std::sync::Arc::new(()),
                 _lock: Rc::clone(&self.db.life._lock),
                 _instance_lock: Some(Rc::clone(&candidate.backup.store.db.life._lock)),
                 leases: RefCell::new(BTreeMap::new()),
@@ -394,7 +393,6 @@ impl ProjectStore {
 }
 pub(super) fn share_admission(backup: &mut VerifiedBackup, source: &Rc<Lifetime>) {
     backup.store.db.life = Rc::new(Lifetime {
-        custody: std::sync::Arc::new(()),
         _lock: Rc::clone(&backup.store.db.life._lock),
         _instance_lock: Some(Rc::clone(&source._lock)),
         leases: RefCell::new(BTreeMap::new()),
