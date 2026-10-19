@@ -9,8 +9,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use emmylua_parser::{
-    LexerConfig, LuaAstNode, LuaDocTag, LuaDocType, LuaLanguageLevel, LuaLexer, LuaParser,
-    LuaTokenKind, LuaTypeBinaryOperator, ParserConfig, Reader,
+    LexerConfig, LuaAstNode, LuaChunk, LuaDocTag, LuaDocType, LuaLanguageLevel, LuaLexer,
+    LuaParser, LuaTokenKind, LuaTypeBinaryOperator, ParserConfig, Reader,
 };
 use serde::Serialize;
 
@@ -218,7 +218,12 @@ fn ingest(
         if !string_enums {
             return Err(error(NativeErrorCode::UnsupportedStatement));
         }
-        match namespaces::read(input, cancelled) {
+        let tree = LuaParser::parse(input, ParserConfig::with_level(LuaLanguageLevel::Lua51));
+        if !tree.get_errors().is_empty() {
+            return Err(error(NativeErrorCode::Syntax));
+        }
+        let chunk: LuaChunk = tree.get_chunk_node();
+        match namespaces::read(&chunk, cancelled) {
             Ok(namespaces) => {
                 return Ok(AliasDocument {
                     schema: "wow-native-alias-resource/5",
@@ -237,7 +242,7 @@ fn ingest(
             Err(failure) if failure.code == NativeErrorCode::Cancelled => return Err(failure),
             Err(_) => {}
         }
-        match function_containers::read(input, cancelled) {
+        match function_containers::read(&chunk, cancelled) {
             Ok(function_containers) => {
                 return Ok(AliasDocument {
                     schema: "wow-native-alias-resource/6",
@@ -256,7 +261,7 @@ fn ingest(
             Err(failure) if failure.code == NativeErrorCode::Cancelled => return Err(failure),
             Err(_) => {}
         }
-        let global_colors = global_colors::read(input, cancelled)?;
+        let global_colors = global_colors::read(&chunk, cancelled)?;
         return Ok(AliasDocument {
             schema: "wow-native-alias-resource/7",
             revision: revision.into(),

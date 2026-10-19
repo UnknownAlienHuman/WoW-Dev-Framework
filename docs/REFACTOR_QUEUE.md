@@ -28,7 +28,7 @@ a dependency names required replacement behavior, not a whole package gate.
 | Order | Task | Replacement / dependency |
 | --- | --- | --- |
 | Completed | [#193 — Emmy analysis](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/193) | One Main + Library analysis now supplies diagnostics, facts and flow; useful parameter-type errors reach Main locations. |
-| Independent | [#202 — catalog parsing](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/202) | Share one Emmy tree across existing validators; keep comment-group isolation. |
+| Completed | [#202 — catalog parsing](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/202) | One Emmy Lua 5.1 parse now feeds namespace, FunctionContainer and GlobalColors validators. |
 | Independent | [#204 — single emission](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/204) | Retain emitted text/maps instead of trial rendering; keep valid neighbors and aggregate bounds. |
 | 2 | [#194 — result envelopes](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194) | Core and local Service envelopes/registries are removed; simplify remaining Context/Search/graph self-identities only from real callers. |
 | 3 | [#131 — current index](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131) | Eager all-partition payload reads are removed; store/read file text directly without Project/Emmy rehydration. |

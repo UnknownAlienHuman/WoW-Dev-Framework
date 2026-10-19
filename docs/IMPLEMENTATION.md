@@ -68,8 +68,8 @@ corrections, literals and source maps; reuse its existing consumer probes.
 #204 removes discarded trial renders in `native.rs`: reuse emission helpers
 and retain their text/ranges for assembly. Reject only the invalid declaration
 or group while keeping independent valid output; preserve aggregate limits.
-Do not duplicate rendering rules in a new validator. #202 shares a parsed
-catalog tree between existing validators.
+Do not duplicate rendering rules in a new validator. Statement catalogs now
+parse once and share one Emmy `LuaChunk` across the existing validators.
 Literal generation calls `wow-ketho-literals` directly; no guest, host, wire or runtime selection path exists.
 
 ## Addon configuration and Emmy analysis
