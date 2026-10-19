@@ -22,7 +22,6 @@ use wow_project::{
 use super::disk_input::{DiskAnalyzer, MainInventory};
 use super::input::{ProjectMetadata, invalid};
 use super::native_compatibility::{NativeCompatibilityInputs, NativeCompatibilitySelection};
-use super::native_distribution::{NativeDistributionInputs, NativeDistributionSelection};
 use super::native_reference::{
     InputFailure, NativeProfile, NativeReferenceBuild, project_native_reference,
     project_native_reference_with_type_resolution,
@@ -30,7 +29,6 @@ use super::native_reference::{
 use super::native_resources::{NativeAnnotationInputs, NativeAnnotationInputsReceipt, present};
 use super::native_source::NativeSourceInput;
 use super::{LocalProjectInput, cancelled};
-use crate::reference_pack_license::{NativeDistributionBinding, NativeDistributionManifest};
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
 
 pub const LOCAL_NATIVE_SCHEMA: &str = "wow-service/local-project-native/1";
@@ -60,8 +58,6 @@ struct NativeInput {
     annotation_inputs: Option<NativeAnnotationInputs>,
     #[serde(default, deserialize_with = "present")]
     compatibility_evidence: Option<NativeCompatibilityInputs>,
-    #[serde(default, deserialize_with = "present")]
-    distribution_evidence: Option<NativeDistributionInputs>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -69,30 +65,6 @@ pub struct NativeFileIdentity {
     pub path: String,
     pub sha256: String,
     pub byte_length: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NativeAnnotationFile {
-    path: Box<str>,
-    sha256: Box<str>,
-    bytes: Box<[u8]>,
-}
-
-impl NativeAnnotationFile {
-    #[must_use]
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-
-    #[must_use]
-    pub fn sha256(&self) -> &str {
-        &self.sha256
-    }
-
-    #[must_use]
-    pub fn bytes(&self) -> &[u8] {
-        &self.bytes
-    }
 }
 
 /// Compact public identity; the complete TOC selection record stays in the report.
@@ -184,8 +156,6 @@ pub struct NativeInputReceipt {
     pub restriction_facts: Option<NativeRestrictionIdentity>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compatibility_evidence: Option<NativeCompatibilitySelection>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub distribution_evidence: Option<NativeDistributionSelection>,
     pub semantic_consumer_acceptance: &'static str,
 }
 
@@ -193,11 +163,9 @@ pub(super) struct NativeInputEvidence {
     pub(super) receipt: NativeInputReceipt,
     report: Box<[u8]>,
     annotation_artifact: AnnotationArtifact,
-    annotation_files: Box<[NativeAnnotationFile]>,
     annotation_sidecars: NativeProjectionSidecars,
     annotation_callable_bindings: NativeCallableBindings,
     annotation_compatibility: Option<NativeCompatibilityEvidence>,
-    distribution_evidence: Option<NativeDistributionManifest>,
 }
 
 impl LocalProjectInput {
@@ -230,13 +198,6 @@ impl LocalProjectInput {
     }
 
     #[must_use]
-    pub fn native_annotation_files(&self) -> Option<&[NativeAnnotationFile]> {
-        self.native_input
-            .as_ref()
-            .map(|evidence| evidence.annotation_files.as_ref())
-    }
-
-    #[must_use]
     pub fn native_annotation_sidecars(&self) -> Option<&NativeProjectionSidecars> {
         self.native_input
             .as_ref()
@@ -256,13 +217,6 @@ impl LocalProjectInput {
         self.native_input
             .as_ref()
             .and_then(|evidence| evidence.annotation_compatibility.as_ref())
-    }
-
-    #[must_use]
-    pub(crate) fn native_distribution_evidence(&self) -> Option<&NativeDistributionManifest> {
-        self.native_input
-            .as_ref()
-            .and_then(|evidence| evidence.distribution_evidence.as_ref())
     }
 
     pub(super) fn from_native_manifest(
@@ -422,42 +376,6 @@ impl LocalProjectInput {
         let semantic_consumer_acceptance = annotation_compatibility
             .as_ref()
             .map_or("not_evaluated", |loaded| loaded.evidence.status().as_str());
-        let distribution_evidence = input
-            .distribution_evidence
-            .as_ref()
-            .map(|selected| {
-                let source_manifest = source_manifest.as_ref().ok_or_else(|| {
-                    invalid("native distribution evidence requires manifested source input")
-                })?;
-                let binding = NativeDistributionBinding::new(
-                    profile.profile_id().as_str(),
-                    reference.view.generation_id(),
-                    source_manifest.manifest_sha256.as_str(),
-                    reference.view.self_digest(),
-                    annotation_artifact.artifact_id(),
-                    annotation_sidecars.source_map().source_map_id(),
-                    annotation_sidecars.loss_report().report_id(),
-                    annotation_compatibility
-                        .as_ref()
-                        .map(|loaded| loaded.evidence.evidence_id()),
-                )
-                .map_err(|_| invalid("native distribution binding rejected"))?;
-                selected.read(directory, binding, stop)
-            })
-            .transpose()?;
-        let distribution_selection = distribution_evidence
-            .as_ref()
-            .map(|loaded| loaded.selection.clone());
-        let annotation_files = library
-            .files
-            .iter()
-            .map(|file| NativeAnnotationFile {
-                path: file.path.clone().into_boxed_str(),
-                sha256: file.sha256.clone().into_boxed_str(),
-                bytes: file.text.as_bytes().to_vec().into_boxed_slice(),
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
         let mut analyzer = input.analyzer.read(directory, stop)?;
         let analyzer_input_configuration = analyzer.configuration_digest;
         // Project generation derivation includes the analyzer configuration, not
@@ -562,8 +480,6 @@ impl LocalProjectInput {
             restriction_facts: Option<&'a NativeRestrictionIdentity>,
             #[serde(skip_serializing_if = "Option::is_none")]
             compatibility_evidence: Option<&'a NativeCompatibilitySelection>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            distribution_evidence: Option<&'a NativeDistributionSelection>,
             semantic_consumer_acceptance: &'static str,
         }
         let report_limit = NATIVE_REPORT_LIMIT
@@ -576,9 +492,7 @@ impl LocalProjectInput {
             })?;
         let report = report_bytes_with_limit(
             &Report {
-                schema: if distribution_selection.is_some() {
-                    "wow-service/native-input-report/7"
-                } else if compatibility_selection.is_some() {
+                schema: if compatibility_selection.is_some() {
                     "wow-service/native-input-report/6"
                 } else if manifested {
                     "wow-service/native-input-report/5"
@@ -605,16 +519,13 @@ impl LocalProjectInput {
                     .then_some(wow_reference::native_view::NATIVE_API_PARTITION),
                 restriction_facts: restriction_facts.as_ref(),
                 compatibility_evidence: compatibility_selection.as_ref(),
-                distribution_evidence: distribution_selection.as_ref(),
                 semantic_consumer_acceptance,
             },
             report_limit,
             stop,
         )?;
         let receipt = NativeInputReceipt {
-            schema: if distribution_selection.is_some() {
-                "wow-service/native-input-receipt/7"
-            } else if compatibility_selection.is_some() {
+            schema: if compatibility_selection.is_some() {
                 "wow-service/native-input-receipt/6"
             } else if manifested {
                 "wow-service/native-input-receipt/5"
@@ -649,7 +560,6 @@ impl LocalProjectInput {
                 .then_some(wow_reference::native_view::NATIVE_API_PARTITION),
             restriction_facts,
             compatibility_evidence: compatibility_selection,
-            distribution_evidence: distribution_selection,
             semantic_consumer_acceptance,
         };
         // Preserve the typed origin join while both producer views still exist.
@@ -758,11 +668,9 @@ impl LocalProjectInput {
             receipt,
             report: report.into_boxed_slice(),
             annotation_artifact,
-            annotation_files,
             annotation_sidecars,
             annotation_callable_bindings,
             annotation_compatibility: annotation_compatibility.map(|loaded| loaded.evidence),
-            distribution_evidence: distribution_evidence.map(|loaded| loaded.evidence),
         }));
         cancelled(stop)?;
         Ok(assembled)

@@ -53,14 +53,11 @@ local analysis, not a second generator.
    source/partial-result report. Share this producer with local native input;
    keep needed source maps as typed data instead of reconstructing the library
    to recover them. Document the consumer's library-directory setup.
-4. Uncalled admin layers and the builder pack/materialization CLI are removed.
-   Delete their now-unconsumed Service implementation and retained Lua copy.
-   Native generation requires no pack registry or signed report.
-
-`local/native_input.rs` also copies generated Lua into `NativeAnnotationFile`;
-only `reference_pack.rs` consumes that retained copy. Remove the type, field and
-accessor with the pack path. The analyzer already receives `library.files`;
-this deletion needs no shared-buffer framework or Project input API change.
+4. Builder and Service pack/materialization paths are removed. Generated Lua
+   enters the analyzer once as ordinary Library files; source maps and callable
+   origins remain typed sidecars. Native generation requires no pack registry,
+   distribution manifest gate, signed report, second byte copy or compatibility
+   archive.
 
 The [Ketho map](KETHO_RUST_PORT.md) owns semantic details and a runnable current
 driver command. Preserve aliases, defaults, arrays, receivers, callbacks,
