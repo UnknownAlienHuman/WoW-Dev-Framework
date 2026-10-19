@@ -33,10 +33,9 @@ replaces that reconstruction with reader-ready indexed facts.
 
 ## Format policy
 
-Historical exact store catalogs `STORAGE_SCHEMAS_V1` through
-`STORAGE_SCHEMAS_V16` are not registered or reopened. An old or incompatible
-derived database must report a rebuild requirement and be recreated from current
-source/configuration.
+Historical exact V1–V16 store catalogs are not registered or reopened. An old or
+incompatible derived database must report a rebuild requirement and be recreated
+from current source/configuration.
 
 Current named component catalogs and the ordinary current catalog remain while
 their real callers exist. The replay record still contains several current
