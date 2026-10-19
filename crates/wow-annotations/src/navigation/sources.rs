@@ -237,21 +237,20 @@ impl<'a> Sources<'a> {
             }
         }
         if let Some(report) = &library.aliases {
-            if !matches!(
-                library.schema,
-                "wow-native-annotation-library/5" | "wow-native-annotation-library/6"
-            ) || !matches!(
-                report.schema,
-                "wow-native-alias-projection/1"
-                    | "wow-native-alias-projection/2"
-                    | "wow-native-alias-projection/3"
-                    | "wow-native-alias-projection/4"
-                    | "wow-native-alias-projection/5"
-                    | "wow-native-alias-projection/6"
-                    | "wow-native-alias-projection/7"
-                    | "wow-native-alias-projection/8"
-                    | "wow-native-alias-projection/9"
-            ) {
+            if !matches!(library.schema, "wow-native-annotation-library/5")
+                || !matches!(
+                    report.schema,
+                    "wow-native-alias-projection/1"
+                        | "wow-native-alias-projection/2"
+                        | "wow-native-alias-projection/3"
+                        | "wow-native-alias-projection/4"
+                        | "wow-native-alias-projection/5"
+                        | "wow-native-alias-projection/6"
+                        | "wow-native-alias-projection/7"
+                        | "wow-native-alias-projection/8"
+                        | "wow-native-alias-projection/9"
+                )
+            {
                 return Err(LookupError::UnsupportedProfile);
             }
             if report.authority != "external_annotation_overlay"

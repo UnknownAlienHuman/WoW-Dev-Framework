@@ -26,20 +26,17 @@ pub(super) fn prepare(input: &Path) -> Result<Value> {
         catalog_root.join("Types.lua"),
         "not committed annotations\n",
     )?;
-    if source::driver::run(
-        vec![
-            source_root.into_os_string(),
-            revision.clone().into(),
-            "API.toc".into(),
-            "Mainline".into(),
-            input.as_os_str().to_owned(),
-            "--alias-catalog".into(),
-            catalog_root.into_os_string(),
-            catalog_revision.clone().into(),
-            "Types.lua".into(),
-        ],
-        None,
-    )? {
+    if source::driver::run(vec![
+        source_root.into_os_string(),
+        revision.clone().into(),
+        "API.toc".into(),
+        "Mainline".into(),
+        input.as_os_str().to_owned(),
+        "--alias-catalog".into(),
+        catalog_root.into_os_string(),
+        catalog_revision.clone().into(),
+        "Types.lua".into(),
+    ])? {
         return Err("catalog consumer source build is partial".into());
     }
     verify(input, &revision, &catalog_revision)?;

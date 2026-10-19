@@ -27,10 +27,7 @@ use io::{git, validate_path, write_new};
 #[cfg(test)]
 mod tests;
 
-pub fn run(
-    args: Vec<OsString>,
-    bridge: Option<&dyn wow_render_contract::LiteralBridge>,
-) -> Result<bool, Box<dyn std::error::Error>> {
+pub fn run(args: Vec<OsString>) -> Result<bool, Box<dyn std::error::Error>> {
     if args.len() == 1 && args[0] == "--help" {
         println!("{USAGE}");
         return Ok(false);
@@ -165,12 +162,11 @@ pub fn run(
     };
     let alias_catalogs = catalogs::read(&alias_inputs, &cancelled)?;
     let selected_catalogs = alias_catalogs.iter().collect::<Vec<_>>();
-    let library = wow_annotations::native::project_with_alias_catalogs_and_literal_bridge(
+    let library = wow_annotations::native::project_with_alias_catalogs(
         &documents,
         environment,
         corrections.as_ref(),
         &selected_catalogs,
-        bridge,
         &cancelled,
     )?;
     let partial = !failures.is_empty() || library.projection == "partial";

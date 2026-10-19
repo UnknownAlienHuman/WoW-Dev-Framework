@@ -14,7 +14,7 @@ as recorded in [`THIRD_PARTY_NOTICES.md`](../crates/wow-annotations/THIRD_PARTY_
 |---|---|---|
 | `luasrc/annotate/init.lua`, `wowdoc/init.lua` | `wow-annotations/src/ketho.rs`, `ketho/callbacks.rs` | Typed emitter, receivers, callback signatures. |
 | `wowdoc/loader/init.lua`, `patches.lua`, `doc_widgets.lua` | `wow-reference/src/native{,_model,_corrections}.rs` | Restricted source evaluation, normalization, guarded Type/Nilable/receiver and selected base corrections. |
-| `luasrc/annotate/literals.lua` | `wow-annotations/src/literals.rs` | Event/CVar aliases and enum/constants from explicit typed data. |
+| `luasrc/annotate/literals.lua` | `wow-ketho-literals`; `wow-annotations/src/literals.rs` | Native event/CVar aliases and enum/constants from explicit typed data. |
 | `Annotations/Core/Type/{BlizzardType,StringEnum,EmoteToken,UnitToken}.lua` | `wow-reference/src/native_aliases{,/catalog,/open_strings}.rs`; `wow-annotations/src/aliases.rs` | Named/primitive, closed-string and open-string aliases, maps and losses. |
 | `Annotations/Core/Type/{Structure,Mixin,Namespace,FunctionContainer,GlobalColors}.lua` | Matching `native_aliases/` and `aliases/` modules | Selected structures, namespace bindings, static declarations and colors. |
 | `Annotations/Core/Widget/...` | `wow-annotations/src/native.rs`; `wow-reference/src/native_corrections/inheritance.rs` | Source-bound class/alias and explicit guarded single-parent corrections. |

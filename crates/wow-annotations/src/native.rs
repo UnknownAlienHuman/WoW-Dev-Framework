@@ -22,12 +22,9 @@ use wow_reference::native_model::{
 
 use crate::ketho::{Field, Function, Owner, RenderError, Renderer, System, Table};
 use crate::literals::{
-    ConstantGroup, EnumDeclaration, EventLiteral, IntegerFormat, LiteralMember, LiteralValue,
-    MemberOrder,
+    ConstantGroup, EnumDeclaration, EventLiteral, IntegerFormat, LiteralMember, LiteralRenderer,
+    LiteralValue, MemberOrder,
 };
-
-use crate::selected_literals::{LiteralExecution, SelectedLiterals};
-use wow_render_contract::LiteralBridge;
 
 mod fields;
 pub(crate) mod lowering;
@@ -117,8 +114,6 @@ pub struct NativeLibrary<'a> {
     pub corrections: Option<CorrectionReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aliases: Option<crate::aliases::AliasReport<'a>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub literal_execution: Option<LiteralExecution>,
     pub limitations: Vec<&'static str>,
     /// Sealed final-emission observations; absent from every existing wire identity.
     #[serde(skip)]
@@ -207,69 +202,25 @@ pub fn project_with_alias_catalog<'a>(
     aliases: Option<&'a wow_reference::native_aliases::AliasDocument>,
     cancelled: &AtomicBool,
 ) -> Result<NativeLibrary<'a>, RenderError> {
-    project_with_literal_bridge(
-        documents,
-        environment,
-        corrections,
-        aliases,
-        None,
-        cancelled,
-    )
-}
-
-/// Select one retained literal implementation for this entire projection.
-/// No VM dependency enters this owner. None preserves the existing native path;
-/// a selected bridge must identify itself and never falls back after failure.
-pub fn project_with_literal_bridge<'a>(
-    documents: &'a [DocumentationDocument],
-    environment: &str,
-    corrections: Option<&'a ValidatedCorrections>,
-    aliases: Option<&'a wow_reference::native_aliases::AliasDocument>,
-    bridge: Option<&dyn LiteralBridge>,
-    cancelled: &AtomicBool,
-) -> Result<NativeLibrary<'a>, RenderError> {
-    project_with_alias_catalogs_and_literal_bridge(
+    project_with_alias_catalogs(
         documents,
         environment,
         corrections,
         aliases.as_slice(),
-        bridge,
         cancelled,
     )
 }
 
 /// Compose explicitly selected type resources from one external revision.
-/// Dependencies, duplicates and cycles are resolved across the whole resource set.
-/// The set remains an annotation overlay, independent of Blizzard source authority.
-/// Empty and singleton sets preserve the existing native and single-catalog reports.
+/// Catalog resources are sorted by path, must share one exact external revision,
+/// and cannot repeat a path. The slice itself is not retained in the result.
+/// Alias projection uses the native v5 report; every resource keeps its own
+/// identity, raw bytes and declaration spans.
 pub fn project_with_alias_catalogs<'a>(
     documents: &'a [DocumentationDocument],
     environment: &str,
     corrections: Option<&'a ValidatedCorrections>,
     aliases: &[&'a wow_reference::native_aliases::AliasDocument],
-    cancelled: &AtomicBool,
-) -> Result<NativeLibrary<'a>, RenderError> {
-    project_with_alias_catalogs_and_literal_bridge(
-        documents,
-        environment,
-        corrections,
-        aliases,
-        None,
-        cancelled,
-    )
-}
-
-/// Multi-resource projection using one retained literal implementation.
-/// Catalog resources are sorted by path, must share one exact external revision,
-/// and cannot repeat a path. The slice itself is not retained in the result.
-/// This adds alias-projection v3 inside the existing native v5/v6 envelope;
-/// every resource keeps its own v1/v2 identity, raw bytes and declaration spans.
-pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
-    documents: &'a [DocumentationDocument],
-    environment: &str,
-    corrections: Option<&'a ValidatedCorrections>,
-    aliases: &[&'a wow_reference::native_aliases::AliasDocument],
-    bridge: Option<&dyn LiteralBridge>,
     cancelled: &AtomicBool,
 ) -> Result<NativeLibrary<'a>, RenderError> {
     if aliases.len() > crate::aliases::MAX_CATALOG_FILES {
@@ -417,7 +368,7 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
             .then_some(original)
         })
         .collect::<BTreeSet<_>>();
-    let literals = SelectedLiterals::new(bridge, MAX_FILE_BYTES, cancelled)?;
+    let literals = LiteralRenderer::new(MAX_FILE_BYTES)?;
     let mut files = Vec::new();
     let mut total_bytes = 0usize;
     let mut member_mapping_budget = maps::MAX_MEMBERS;
@@ -437,7 +388,6 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
     let mut all_literal_sources = Vec::new();
     let mut all_event_sources = Vec::new();
     for (document, system) in systems {
-        literals.check()?;
         if cancelled.load(Ordering::Relaxed) {
             return Err(RenderError::Cancelled);
         }
@@ -996,11 +946,8 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
     if cancelled.load(Ordering::Relaxed) {
         return Err(RenderError::Cancelled);
     }
-    let literal_execution = literals.finish(&files)?;
     Ok(NativeLibrary {
-        schema: if literal_execution.is_some() {
-            "wow-native-annotation-library/6"
-        } else if alias_report.is_some() {
+        schema: if alias_report.is_some() {
             "wow-native-annotation-library/5"
         } else if corrected.is_some() {
             "wow-native-annotation-library/4"
@@ -1025,7 +972,6 @@ pub fn project_with_alias_catalogs_and_literal_bridge<'a>(
         name_projections,
         corrections: corrected.map(|c| c.report),
         aliases: alias_report,
-        literal_execution,
         lowering_catalog: lowering_catalog.into(),
         lowering_metadata_bytes: lowering_budget.metadata_bytes(),
         limitations: vec![

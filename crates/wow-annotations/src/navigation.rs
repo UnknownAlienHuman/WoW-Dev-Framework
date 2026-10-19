@@ -133,7 +133,6 @@ fn validate_library(
         "wow-native-annotation-library/3"
             | "wow-native-annotation-library/4"
             | "wow-native-annotation-library/5"
-            | "wow-native-annotation-library/6"
     ) {
         return Err(LookupError::UnsupportedProfile);
     }

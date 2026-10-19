@@ -1,10 +1,34 @@
-//! Ketho literal algorithm shared by the native adapter and separately built Wasm.
-//! No source acquisition, VM, IO, editor state or compiled donor inventory.
+//! Native Ketho literal renderer for events, CVars, enums and constants.
+//! No source acquisition, VM, wire protocol, IO or editor state.
 mod support;
+mod types;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use support::*;
-pub use wow_render_contract::*;
+pub use types::*;
+
+pub const MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
+pub const MAX_TEXT_BYTES: usize = 64 * 1024;
+pub const MAX_ITEMS: usize = 4096;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum LiteralError {
+    InvalidIdentifier,
+    UnsafeDocumentation,
+    DuplicateName,
+    InputLimit,
+    OutputLimit,
+    UnsupportedLiteral,
+}
+
+impl std::fmt::Display for LiteralError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "literal rendering failed: {self:?}")
+    }
+}
+
+impl std::error::Error for LiteralError {}
+
 const MAX_MEMBERS: usize = 65_536;
 const MAX_EXACT_INTEGER: i64 = 9_007_199_254_740_991;
 
@@ -328,16 +352,4 @@ fn quoted(out: &mut Output, value: &str) -> Result<(), LiteralError> {
         }
     }
     out.push("\"")
-}
-
-impl LiteralBridge for LiteralRenderer {
-    fn render(&self, request: &Request) -> Result<String, LiteralError> {
-        request.validate()?;
-        let renderer = Self::new(request.max_output_bytes)?;
-        match &request.input {
-            LiteralInput::Events(values) => renderer.render_events(values),
-            LiteralInput::CVars(values) => renderer.render_cvars(values),
-            LiteralInput::Enums { enums, constants } => renderer.render_enums(enums, constants),
-        }
-    }
 }

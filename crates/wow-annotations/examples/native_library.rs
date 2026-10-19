@@ -2,7 +2,7 @@
 #[path = "support/mod.rs"]
 mod driver;
 fn main() -> std::process::ExitCode {
-    match driver::run(std::env::args_os().skip(1).collect(), None) {
+    match driver::run(std::env::args_os().skip(1).collect()) {
         Ok(partial) => std::process::ExitCode::from(if partial { 3 } else { 0 }),
         Err(error) => {
             eprintln!("native_library: {error}");

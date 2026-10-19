@@ -2520,7 +2520,6 @@ dependencies = [
  "wow-core",
  "wow-ketho-literals",
  "wow-reference",
- "wow-render-contract",
 ]
 
 [[package]]
@@ -2591,15 +2590,7 @@ dependencies = [
 name = "wow-ketho-literals"
 version = "0.1.0"
 dependencies = [
- "wow-render-contract",
-]
-
-[[package]]
-name = "wow-ketho-literals-wasm"
-version = "0.1.0"
-dependencies = [
- "wow-ketho-literals",
- "wow-render-contract",
+ "serde",
 ]
 
 [[package]]
@@ -2651,14 +2642,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "wow-service",
-]
-
-[[package]]
-name = "wow-render-contract"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
 ]
 
 [[package]]
