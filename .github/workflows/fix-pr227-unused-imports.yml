@@ -1,0 +1,59 @@
+name: Fix PR227 unused imports
+
+on:
+  push:
+    branches:
+      - refactor/remove-project-legacy-catalogs-2026-10-19
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out refactor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Remove imports exposed by deleted compatibility tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/wow-service/src/live_project/tests/namespaces/direct_service.rs")
+          text = path.read_text()
+          old = '''    PlatformStoreSelection, ProjectStore, ReadSelector, ServiceErrorCode, TestResult, catalog_for,
+    platform_bundle_with_profile_source, publication, publish_input_in_namespace, root,
+'''
+          new = '''    PlatformStoreSelection, ReadSelector, ServiceErrorCode, TestResult,
+    platform_bundle_with_profile_source, publish_input_in_namespace, root,
+'''
+          if text.count(old) != 1:
+              raise SystemExit("unexpected direct_service imports")
+          path.write_text(text.replace(old, new))
+
+          path = Path("crates/wow-service/src/local/platform_input/tests/project_budgets.rs")
+          text = path.read_text()
+          old = '''    use wow_project::replay::publication;
+    use wow_store::project::{ProjectStore, PublicationRequest, ReadSelector, RecordCatalog};
+'''
+          new = '''    use wow_store::project::ReadSelector;
+'''
+          if text.count(old) != 1:
+              raise SystemExit("unexpected project_budgets imports")
+          path.write_text(text.replace(old, new))
+          PY
+          git rm .github/workflows/fix-pr227-unused-imports.yml
+          cargo +stable fmt --all
+          cargo +stable clippy --locked -p wow-service --all-targets --all-features -- -D warnings
+          git diff --check
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git add crates/wow-service/src
+          git commit -m "test: remove imports left by legacy catalog cleanup"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
