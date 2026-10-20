@@ -35,8 +35,8 @@ const CORE_RECOGNIZER_CALLABLE_QUERIES: &[&str] = &[
     "LibStub.GetLibrary",
     "LibStub.NewLibrary",
 ];
-/// Original non-global recipes and schema13/14/15 report9 used this former W6
-/// callable query as retained lookup data. It grants no recognizer admission.
+/// Non-global recipes retain this former W6 callable query as analyzer-session
+/// lookup data. It grants no recognizer admission.
 const LEGACY_CALLABLE_LOOKUP_QUERIES: &[&str] = &["LibStub.EmbedLibrary"];
 const ACEADDON_LOCAL_RESULT_CALLABLE_QUERIES: &[&str] =
     &["AceAddon.EmbedLibrary", "AceAddonLib.Embed"];
@@ -45,15 +45,10 @@ const ACEADDON_LOCAL_RESULT_CALLABLE_QUERIES: &[&str] =
 pub(crate) enum FunctionCallAnalysisMode {
     Disabled,
     Current,
-    LegacyGlobalAccessV9,
 }
 impl FunctionCallAnalysisMode {
     pub(crate) const fn enabled(self) -> bool {
         !matches!(self, Self::Disabled)
-    }
-
-    pub(crate) const fn uses_legacy_global_access_profile9(self) -> bool {
-        matches!(self, Self::LegacyGlobalAccessV9)
     }
 }
 
@@ -270,7 +265,6 @@ pub(crate) fn build_analyzer_binding(
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectAnalyzerBinding> {
     let function_calls = function_call_mode.enabled();
-    let legacy_global_access_profile9 = function_call_mode.uses_legacy_global_access_profile9();
     checkpoint(stop)?;
     generation.validate(configuration, inventory)?;
     generation.validate_library_ids(libraries.iter().map(LuaWorkspaceSnapshot::snapshot_id))?;
@@ -406,13 +400,11 @@ pub(crate) fn build_analyzer_binding(
             .map(|query| (*query).to_owned())
             .collect::<Vec<_>>();
         queries_to_resolve.extend(queries.iter().cloned());
-        // Only report10's explicitly versioned global-access recipe changed this
-        // query set. Earlier non-global namespaces retain their original session
-        // inputs, even when this lookup has no resolved target.
-        let report10_global_access = !legacy_global_access_profile9
-            && budget
-                .function_call_budget()
-                .is_some_and(|budget| budget.global_access_budget().is_some());
+        // The current global-access recipe owns its explicit query set.
+        // Non-global recipes retain the original lookup input above.
+        let report10_global_access = budget
+            .function_call_budget()
+            .is_some_and(|budget| budget.global_access_budget().is_some());
         if !report10_global_access {
             queries_to_resolve.extend(
                 LEGACY_CALLABLE_LOOKUP_QUERIES
@@ -468,13 +460,6 @@ pub(crate) fn build_analyzer_binding(
     let query_profile = match budget.hook_target_recipe() {
         Some(recipe) => query_profile.with_hook_target_recipe(recipe),
         None => query_profile,
-    };
-    let query_profile = if legacy_global_access_profile9 {
-        query_profile.with_function_call_replay_recipe(
-            wow_emmy::function_calls::FunctionCallReplayRecipe::LegacyGlobalAccessV9,
-        )
-    } else {
-        query_profile
     };
     let query_profile = match declaration_recipe {
         Some(recipe) => query_profile.with_physical_function_declarations(recipe),

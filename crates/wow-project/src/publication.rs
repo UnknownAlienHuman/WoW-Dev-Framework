@@ -63,18 +63,6 @@ impl ProjectPublisher {
         }
     }
 
-    /// Rebuilds retained global-access replay data with its frozen report9 recipe.
-    pub(crate) fn legacy_global_access_profile9_replay() -> Self {
-        Self {
-            function_call_mode: FunctionCallAnalysisMode::LegacyGlobalAccessV9,
-            ..Self::new()
-        }
-    }
-
-    pub(crate) const fn uses_legacy_global_access_profile9(&self) -> bool {
-        self.function_call_mode.uses_legacy_global_access_profile9()
-    }
-
     /// Only old native archives may reproduce the frozen generation recipe.
     pub(crate) fn legacy_replay(function_calls: bool) -> Self {
         Self {

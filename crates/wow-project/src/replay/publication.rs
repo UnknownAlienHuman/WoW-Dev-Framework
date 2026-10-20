@@ -28,7 +28,6 @@ pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v10",
     "wow-project.live-replay.v11",
     "wow-project.live-replay.v12",
-    "wow-project.live-replay.v13",
     "wow-project.live-replay.v14",
     "wow-project.live-replay.v15",
     "wow-project.live-replay.v16",
@@ -51,7 +50,6 @@ pub const STORAGE_SCHEMAS_ACEADDON_LOCAL_RESULT_V1: &[&str] = &[
     "wow-project.live-replay.v10",
     "wow-project.live-replay.v11",
     "wow-project.live-replay.v12",
-    "wow-project.live-replay.v13",
     "wow-project.live-replay.v14",
     "wow-project.live-replay.v15",
     "wow-project.live-replay.v16",
@@ -73,7 +71,6 @@ pub const STORAGE_SCHEMAS_XML_CLASSIFICATION_V1: &[&str] = &[
     "wow-project.live-replay.v10",
     "wow-project.live-replay.v11",
     "wow-project.live-replay.v12",
-    "wow-project.live-replay.v13",
     "wow-project.live-replay.v14",
     "wow-project.live-replay.v15",
     super::XML_CLASSIFICATION_STORAGE_SCHEMA,
@@ -93,7 +90,6 @@ pub const STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1: &[&str] = &[
     "wow-project.live-replay.v10",
     "wow-project.live-replay.v11",
     "wow-project.live-replay.v12",
-    "wow-project.live-replay.v13",
     "wow-project.live-replay.v14",
     "wow-project.live-replay.v15",
     super::PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA,
@@ -113,7 +109,6 @@ pub const STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1: 
     "wow-project.live-replay.v10",
     "wow-project.live-replay.v11",
     "wow-project.live-replay.v12",
-    "wow-project.live-replay.v13",
     "wow-project.live-replay.v14",
     "wow-project.live-replay.v15",
     super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA,
@@ -425,7 +420,6 @@ impl AcquiredProjectPair {
                 | "wow-project.live-replay.v10"
                 | "wow-project.live-replay.v11"
                 | "wow-project.live-replay.v12"
-                | "wow-project.live-replay.v13"
                 | "wow-project.live-replay.v14"
                 | "wow-project.live-replay.v15"
                 | "wow-project.live-replay.v16"
