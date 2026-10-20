@@ -1,8 +1,8 @@
 //! One real service lifecycle over the direct layout and an exact frozen catalog.
 use super::{
     LiveProjectPublishRequest, LiveProjectStore, PlatformFixtureSource, PlatformGraphProfile,
-    PlatformStoreSelection, ProjectStore, ReadSelector, ServiceErrorCode, TestResult, catalog_for,
-    platform_bundle_with_profile_source, publication, publish_input_in_namespace, root,
+    PlatformStoreSelection, ReadSelector, ServiceErrorCode, TestResult,
+    platform_bundle_with_profile_source, publish_input_in_namespace, root,
 };
 use std::{collections::BTreeSet, sync::atomic::AtomicBool};
 use wow_graph::{GraphEdge, GraphPartitionSnapshot, GraphRelationKind};
@@ -300,8 +300,6 @@ fn direct_platform_service_lifecycle(profile: PlatformGraphProfile) -> TestResul
             request_record["projection"],
             wow_project::graph::source_graph_profile(bundle.configuration())
         );
-        let (direct_publication, _) =
-            request.live_publication_in_namespace(input(&bundle)?, selection.namespace(), &stop)?;
         let artifact = crate::graph::execute_graph_build(input(&bundle)?, &request, &stop)?;
         // JSON is inspected as output data; native acquisition below admits the owners.
         let artifact_record: serde_json::Value =
@@ -578,103 +576,6 @@ fn direct_platform_service_lifecycle(profile: PlatformGraphProfile) -> TestResul
         assert!(!source_path.exists());
         drop(read);
         drop(store);
-
-        let legacy_source_path = path.join("legacy-input");
-        let previous_profile = if composed {
-            PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1
-        } else {
-            PlatformGraphProfile::PackageProjectionWithRawInventoryV1
-        };
-        let legacy_bundle = platform_bundle_with_profile_source(
-            &legacy_source_path,
-            1,
-            true,
-            Some(previous_profile),
-            Some(&fixture),
-            &stop,
-        )?;
-        assert!(!legacy_source_path.exists());
-        let legacy_request = crate::graph::GraphBuildRequest::new(
-            legacy_bundle.configuration().project_id().as_str().into(),
-            "current".into(),
-        )?
-        .with_platform_graph_profile(previous_profile);
-        let (baseline, _) = legacy_request.live_publication_in_namespace(
-            input(&legacy_bundle)?,
-            selection.namespace(),
-            &stop,
-        )?;
-        let legacy_path = path.join("frozen-v8");
-        let mut legacy = LiveProjectStore {
-            store: ProjectStore::create_with_namespace(
-                &legacy_path,
-                selection.namespace(),
-                catalog_for(if composed {
-                    publication::STORAGE_SCHEMAS_V9
-                } else {
-                    publication::STORAGE_SCHEMAS_V8
-                })?,
-            )?,
-        };
-        legacy.publish_bundle(baseline, "fixture:direct-v8-baseline", None, &stop)?;
-        let old_current = legacy.current()?.ok_or("V8 Current missing")?;
-        let old_epoch = legacy.store.epoch().clone();
-        let old_read = legacy.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
-        assert!(
-            old_read
-                .read
-                .manifest()
-                .members
-                .iter()
-                .any(|member| member.key == "live.project.replay"
-                    && member.schema
-                        == if composed {
-                            "wow-project.live-replay.v9"
-                        } else {
-                            "wow-project.live-replay.v8"
-                        })
-        );
-        assert_eq!(
-            old_read
-                .graph()
-                .partition(wow_project::graph::SOURCE_GRAPH_PARTITION)
-                .is_some(),
-            !composed
-        );
-        let old_project = old_read.project().snapshot_id().to_owned();
-        let old_graph = old_read.graph().clone();
-        let old_members = old_read.read.manifest().members.clone();
-        let old_set = old_read.publication_set_id().to_owned();
-        drop(old_read);
-        assert_eq!(
-            legacy
-                .publish_bundle(
-                    direct_publication,
-                    "fixture:direct-v9-refused",
-                    Some(old_current.record_id.clone()),
-                    &stop
-                )
-                .err()
-                .ok_or("V8 admitted v9 replay")?
-                .code(),
-            ServiceErrorCode::IdentityMismatch
-        );
-        assert_eq!(legacy.current()?, Some(old_current.clone()));
-        assert_eq!(legacy.store.epoch(), &old_epoch);
-        assert!(legacy.reconcile("fixture:direct-v9-refused")?.is_none());
-        drop(legacy);
-        let legacy = LiveProjectStore::open_in_namespace(&legacy_path, &selection)?;
-        assert_eq!(legacy.current()?, Some(old_current.clone()));
-        assert_eq!(legacy.store.epoch(), &old_epoch);
-        let read = legacy.read_in_namespace(
-            &selection,
-            &ReadSelector::Publication(old_current.record_id),
-            &stop,
-        )?;
-        assert_eq!(read.project().snapshot_id(), old_project);
-        assert_eq!(read.graph(), &old_graph);
-        assert_eq!(read.read.manifest().members, old_members);
-        assert_eq!(read.publication_set_id(), old_set);
     }
     std::fs::remove_dir_all(&path)?;
     Ok(())

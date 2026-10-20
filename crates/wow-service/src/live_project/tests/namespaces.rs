@@ -274,7 +274,7 @@ fn platform_owners(
 }
 
 #[test]
-fn raw_inventory_reopens_with_exact_byte_binding_and_frozen_v7_refuses() -> TestResult {
+fn raw_inventory_reopens_with_exact_byte_binding() -> TestResult {
     use wow_graph::{GraphAssertionKind, GraphAssertionRef, GraphLocalAssertion};
     use wow_project::ProjectErrorCode;
     use wow_project::graph::{
@@ -668,80 +668,15 @@ fn raw_inventory_reopens_with_exact_byte_binding_and_frozen_v7_refuses() -> Test
     drop(read);
     drop(store);
 
-    let legacy_bundle = platform_bundle_with_profiles(
-        &path.join("legacy-input"),
-        1,
-        true,
-        Some(PlatformGraphProfile::PackageProjectionV1),
-        &stop,
-    )?;
-    let (legacy_owner, legacy_graph) = owners_from_bundle(legacy_bundle)?;
-    let legacy_path = path.join("frozen-v7");
-    let mut legacy = LiveProjectStore {
-        store: ProjectStore::create_with_namespace(
-            &legacy_path,
-            selection.namespace(),
-            catalog_for(publication::STORAGE_SCHEMAS_V7)?,
-        )?,
-    };
-    legacy.publish_in_namespace(
-        &selection,
-        &legacy_owner,
-        &legacy_graph,
-        "fixture:raw-baseline-v7",
-        None,
-        &stop,
-    )?;
-    let old_current = legacy.current()?.ok_or("frozen v7 Current missing")?;
-    let old_epoch = legacy.store.epoch().clone();
-    let old_read = legacy.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
-    let old_members = old_read.read.manifest().members.clone();
-    let old_set = old_read.publication_set_id().to_owned();
-    drop(old_read);
-    assert!(
-        legacy
-            .publish_in_namespace(
-                &selection,
-                &selected,
-                &graph,
-                "fixture:raw-v8-refused",
-                Some(old_current.record_id.clone()),
-                &stop
-            )
-            .is_err()
-    );
-    assert_eq!(legacy.current()?, Some(old_current.clone()));
-    assert_eq!(legacy.store.epoch(), &old_epoch);
-    assert!(legacy.reconcile("fixture:raw-v8-refused")?.is_none());
-    drop(legacy);
-    let legacy = LiveProjectStore::open_in_namespace(&legacy_path, &selection)?;
-    assert_eq!(legacy.current()?, Some(old_current));
-    assert_eq!(legacy.store.epoch(), &old_epoch);
-    let read = legacy.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
-    assert_eq!(
-        read.project().snapshot_id(),
-        legacy_owner.open_current()?.snapshot_id()
-    );
-    assert_eq!(read.graph(), &legacy_graph);
-    assert_eq!(read.read.manifest().members, old_members);
-    assert_eq!(read.publication_set_id(), old_set);
-    assert!(
-        read.graph()
-            .partition(PLATFORM_RAW_INVENTORY_PARTITION)
-            .is_none()
-    );
-    drop(read);
-    drop(legacy);
     std::fs::remove_dir_all(path)?;
     Ok(())
 }
 
 #[test]
-fn selected_package_bindings_reopen_exactly_and_frozen_v5_refuses_without_effects() -> TestResult {
+fn selected_package_bindings_reopen_exactly() -> TestResult {
     use wow_project::replay::ProjectReplay;
     let stop = AtomicBool::new(false);
     let path = root("platform-package-bindings-v6")?;
-    let bundle = platform_bundle(&path.join("legacy-input"), 1, &stop)?;
     let selected_bundle =
         platform_bundle_with_bindings(&path.join("selected-input"), 1, true, &stop)?;
     let configuration = selected_bundle.configuration();
@@ -794,71 +729,17 @@ fn selected_package_bindings_reopen_exactly_and_frozen_v5_refuses_without_effect
     drop(read);
     drop(store);
 
-    let (legacy_owner, legacy_graph) = owners_from_bundle(bundle)?;
-    let legacy_path = path.join("frozen-v5");
-    let mut legacy = LiveProjectStore {
-        store: ProjectStore::create_with_namespace(
-            &legacy_path,
-            selection.namespace(),
-            catalog_for(publication::STORAGE_SCHEMAS_V5)?,
-        )?,
-    };
-    legacy.publish_in_namespace(
-        &selection,
-        &legacy_owner,
-        &legacy_graph,
-        "fixture:legacy-v5",
-        None,
-        &stop,
-    )?;
-    let old_current = legacy.current()?.ok_or("v5 Current missing")?;
-    let old_epoch = legacy.store.epoch().clone();
-    assert!(
-        legacy
-            .publish_in_namespace(
-                &selection,
-                &selected,
-                &graph,
-                "fixture:refused-v6",
-                Some(old_current.record_id.clone()),
-                &stop
-            )
-            .is_err()
-    );
-    assert_eq!(legacy.current()?, Some(old_current.clone()));
-    assert!(legacy.reconcile("fixture:refused-v6")?.is_none());
-    drop(legacy);
-    let legacy = LiveProjectStore::open_in_namespace(&legacy_path, &selection)?;
-    assert_eq!(legacy.store.epoch(), &old_epoch);
-    assert_eq!(legacy.current()?, Some(old_current));
-    let old_read = legacy.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
-    assert_eq!(
-        old_read.project().snapshot_id(),
-        legacy_owner.open_current()?.snapshot_id()
-    );
-    assert!(
-        old_read
-            .project()
-            .snapshot()
-            .analyzer_binding()
-            .package_xml_bindings()
-            .is_none()
-    );
-    assert_eq!(old_read.graph(), &legacy_graph);
-    drop(old_read);
-    drop(legacy);
     std::fs::remove_dir_all(path)?;
     Ok(())
 }
 
 #[test]
-fn selected_package_graph_reopens_and_frozen_v6_refuses_without_effects() -> TestResult {
+fn selected_package_graph_reopens_exactly() -> TestResult {
     use wow_project::replay::ProjectReplay;
     use wow_recognizers::source_xml::SourceXmlFamily;
 
     let stop = AtomicBool::new(false);
     let path = root("platform-package-graph-v7")?;
-    let legacy_bundle = platform_bundle_with_bindings(&path.join("legacy-input"), 1, true, &stop)?;
     let selected_bundle = platform_bundle_with_profiles(
         &path.join("selected-input"),
         1,
@@ -866,7 +747,6 @@ fn selected_package_graph_reopens_and_frozen_v6_refuses_without_effects() -> Tes
         Some(PlatformGraphProfile::PackageProjectionV1),
         &stop,
     )?;
-    assert!(!path.join("legacy-input").exists());
     assert!(!path.join("selected-input").exists());
     let packages = selected_bundle
         .configuration()
@@ -918,23 +798,6 @@ fn selected_package_graph_reopens_and_frozen_v6_refuses_without_effects() -> Tes
         serde_json::to_value(ProjectReplay::capture(&selected, &stop)?)?["schema"],
         "wow-project/native-project-replay/7"
     );
-    let (legacy_owner, legacy_graph) = owners_from_bundle(legacy_bundle)?;
-    let legacy_view = legacy_owner.open_current()?;
-    assert!(
-        legacy_view
-            .configuration()
-            .platform_graph_profile()
-            .is_none()
-    );
-    assert_eq!(
-        wow_project::graph::source_graph_profile(legacy_view.configuration()),
-        "wow-project/source-load-proposals/19"
-    );
-    assert_eq!(
-        serde_json::to_value(ProjectReplay::capture(&legacy_owner, &stop)?)?["schema"],
-        "wow-project/native-project-replay/6"
-    );
-
     let input = || -> TestResult<crate::LocalProjectInput> {
         let reference = wow_reference::ReferenceView::new(
             selected_bundle
@@ -1094,54 +957,6 @@ fn selected_package_graph_reopens_and_frozen_v6_refuses_without_effects() -> Tes
     drop(read);
     drop(store);
 
-    let legacy_path = path.join("frozen-v6");
-    let mut legacy = LiveProjectStore {
-        store: ProjectStore::create_with_namespace(
-            &legacy_path,
-            selection.namespace(),
-            catalog_for(publication::STORAGE_SCHEMAS_V6)?,
-        )?,
-    };
-    legacy.publish_in_namespace(
-        &selection,
-        &legacy_owner,
-        &legacy_graph,
-        "fixture:before-graph-v7",
-        None,
-        &stop,
-    )?;
-    let old_current = legacy.current()?.ok_or("frozen v6 Current missing")?;
-    let old_epoch = legacy.store.epoch().clone();
-    assert!(
-        legacy
-            .publish_in_namespace(
-                &selection,
-                &selected,
-                &selected_graph,
-                "fixture:graph-v7-to-v6",
-                Some(old_current.record_id.clone()),
-                &stop,
-            )
-            .is_err()
-    );
-    assert_eq!(legacy.current()?, Some(old_current.clone()));
-    assert_eq!(legacy.store.epoch(), &old_epoch);
-    assert!(legacy.reconcile("fixture:graph-v7-to-v6")?.is_none());
-    drop(legacy);
-    let legacy = LiveProjectStore::open_in_namespace(&legacy_path, &selection)?;
-    assert_eq!(legacy.store.epoch(), &old_epoch);
-    assert_eq!(legacy.current()?, Some(old_current));
-    let read = legacy.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
-    assert_eq!(read.project().snapshot_id(), legacy_view.snapshot_id());
-    assert_eq!(read.graph(), &legacy_graph);
-    assert!(
-        read.project()
-            .configuration()
-            .platform_graph_profile()
-            .is_none()
-    );
-    drop(read);
-    drop(legacy);
     std::fs::remove_dir_all(path)?;
     Ok(())
 }
@@ -1422,50 +1237,6 @@ fn platform_namespace_advances_current_with_exact_readers_and_root_independent_i
     drop(latest);
     drop(store);
 
-    let legacy_path = path.join("legacy-v4");
-    let (ordinary, ordinary_graph) = owners("return External()")?;
-    let mut legacy = LiveProjectStore {
-        store: ProjectStore::create_with_gc(
-            &legacy_path,
-            ordinary_graph.snapshot().universe().as_str(),
-            catalog_for(publication::STORAGE_SCHEMAS_V4)?,
-        )?,
-    };
-    let legacy_epoch = legacy.store.epoch().clone();
-    assert!(legacy_epoch.namespace().is_none());
-    legacy.publish(
-        &ordinary,
-        &ordinary_graph,
-        "fixture:namespace-v4",
-        None,
-        &stop,
-    )?;
-    let legacy_current = legacy.current()?.ok_or("legacy Current missing")?;
-    let read = legacy.read(&ReadSelector::Current, &stop)?;
-    let legacy_set = read.publication_set_id().to_owned();
-    let legacy_members = read.read.manifest().members.clone();
-    drop(read);
-    drop(legacy);
-    assert_eq!(
-        LiveProjectStore::open_in_namespace(&legacy_path, &selection)
-            .err()
-            .ok_or("legacy epoch became namespace epoch")?
-            .code(),
-        ServiceErrorCode::IdentityMismatch
-    );
-    let legacy = LiveProjectStore::open(&legacy_path)?;
-    assert_eq!(legacy.store.epoch(), &legacy_epoch);
-    assert_eq!(legacy.current()?, Some(legacy_current.clone()));
-    let read = legacy.read(&ReadSelector::Publication(legacy_current.record_id), &stop)?;
-    assert_eq!(
-        read.project().snapshot_id(),
-        ordinary.open_current()?.snapshot_id()
-    );
-    assert_eq!(read.graph(), &ordinary_graph);
-    assert_eq!(read.publication_set_id(), legacy_set);
-    assert_eq!(read.read.manifest().members, legacy_members);
-    drop(read);
-    drop(legacy);
     std::fs::remove_dir_all(path)?;
     Ok(())
 }

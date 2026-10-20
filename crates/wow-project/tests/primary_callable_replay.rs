@@ -450,7 +450,6 @@ fn selected_primary_recipes_capture_hydrate_recapture_exactly() -> TestResult {
     assert_eq!(record.version(), expected.version());
     assert_eq!(record.decode::<ProjectReplay>()?, replay);
     assert!(!publication::STORAGE_SCHEMAS.contains(&PRIMARY_STORAGE));
-    assert!(!publication::STORAGE_SCHEMAS_V4.contains(&PRIMARY_STORAGE));
     let old_root = StoreRoot::new()?;
     let old = ProjectStore::create(
         old_root.0.join("store"),

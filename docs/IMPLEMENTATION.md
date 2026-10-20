@@ -157,11 +157,13 @@ as they move into the current index. Do not claim every existing query analyzes.
   Current `wow search context build` explicitly excludes source excerpts: #122
   connects this missing handoff and removes semantic-pack wrapping.
 
-Use one current database layout. Rebuild incompatible derived data from source
-and configuration; switch only after success and preserve user files. If inputs
-are absent, report the rebuild requirement. #111 removes historical epochs,
-backup/quarantine/migration/retention administration once normal reads and
-rebuilds replace it. No compatibility reader or new lifecycle subsystem.
+Use one current database layout. Historical exact Project catalog sets V1–V16
+are no longer registered; an incompatible derived database must be rebuilt from
+source and configuration. Current replay recipe variants remain temporary until
+#112 consolidates their real callers. Switch only after successful rebuild and
+preserve user files. If inputs are absent, report the requirement. #111 removes
+remaining retention/GC administration after normal reads replace it. No
+compatibility reader, converter or new lifecycle subsystem.
 
 ## Typed source relationships
 
