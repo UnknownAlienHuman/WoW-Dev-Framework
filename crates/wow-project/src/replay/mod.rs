@@ -321,13 +321,12 @@ impl ProjectReplay {
             (None, None) => PLATFORM_REPLAY_SCHEMA,
             (None, Some(_)) => return Err(invalid()),
         };
-        let platform_schema = if platform_owner
-            .is_some_and(|owner| owner.retention_limits().is_some())
-        {
-            let has_global_access_budget = configuration
-                .function_call_budget()
-                .is_some_and(|budget| budget.global_access_budget().is_some());
-            if configuration.function_call_evidence_profile()
+        let platform_schema =
+            if platform_owner.is_some_and(|owner| owner.retention_limits().is_some()) {
+                let has_global_access_budget = configuration
+                    .function_call_budget()
+                    .is_some_and(|budget| budget.global_access_budget().is_some());
+                if configuration.function_call_evidence_profile()
                 == Some(
                     wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1,
                 )
@@ -342,9 +341,9 @@ impl ProjectReplay {
             } else {
                 RETAINED_PLATFORM_REPLAY_SCHEMA
             }
-        } else {
-            platform_schema
-        };
+            } else {
+                platform_schema
+            };
         let base_schema = if platform_owner.is_some() {
             platform_schema
         } else if generation_schema_version.is_some() {
