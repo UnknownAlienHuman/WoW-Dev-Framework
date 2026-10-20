@@ -64,7 +64,7 @@ jobs:
           path.write_text(text)
           PY
           python .github/remove-generation-v1-replays.py
-          git rm .github/remove-generation-v1-replays.py
+          git rm -f .github/remove-generation-v1-replays.py
           git rm .github/workflows/apply-remove-generation-v1-replays.yml
           git add -u
           cargo +stable fmt --all
