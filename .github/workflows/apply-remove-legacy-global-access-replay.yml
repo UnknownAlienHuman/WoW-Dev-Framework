@@ -24,6 +24,39 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/remove-legacy-global-access-replay-v2.py")
+          text = path.read_text()
+          old = '''text = many(
+              text,
+              '    "wow-project.live-replay.v13",\\n',
+              "",
+              5,
+              "schema13 catalog memberships",
+          )
+          path.write_text(text)
+          '''
+          new = '''text = many(
+              text,
+              '    "wow-project.live-replay.v13",\\n',
+              "",
+              5,
+              "schema13 catalog memberships",
+          )
+          text = once(
+              text,
+              '                | "wow-project.live-replay.v13"\\n',
+              "",
+              "schema13 read admission",
+          )
+          path.write_text(text)
+          '''
+          if text.count(old) != 1:
+              raise SystemExit("schema13 read-admission patch input mismatch")
+          path.write_text(text.replace(old, new, 1))
+          PY
           python .github/remove-legacy-global-access-replay-v2.py
           git rm .github/remove-legacy-global-access-replay.py
           git rm .github/remove-legacy-global-access-replay-v2.py
