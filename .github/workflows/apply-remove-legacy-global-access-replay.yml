@@ -24,6 +24,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/remove-legacy-global-access-replay.py")
+          text = path.read_text()
+          for old, new, label in [
+              (
+                  '    2,\n    "component collector legacy arguments",\n',
+                  '    4,\n    "component collector legacy arguments",\n',
+                  "component collector cardinality",
+              ),
+              (
+                  '    2,\n    "ordinary collector legacy arguments",\n',
+                  '    0,\n    "ordinary collector legacy arguments",\n',
+                  "ordinary collector cardinality",
+              ),
+          ]:
+              if text.count(old) != 1:
+                  raise SystemExit(f"{label}: patch input mismatch")
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
           python .github/remove-legacy-global-access-replay.py
           git rm .github/remove-legacy-global-access-replay.py
           git rm .github/workflows/apply-remove-legacy-global-access-replay.yml
