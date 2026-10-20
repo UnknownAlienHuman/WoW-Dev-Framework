@@ -61,6 +61,7 @@ jobs:
           git rm .github/remove-legacy-global-access-replay.py
           git rm -f .github/remove-legacy-global-access-replay-v2.py
           git rm .github/workflows/apply-remove-legacy-global-access-replay.yml
+          git add -u
           cargo +stable fmt --all
           cargo +stable xtask check
           cargo +stable check --locked --workspace --all-targets --all-features
