@@ -398,7 +398,6 @@ pub struct MemberCallSessionQueryProfile<'a> {
     query_limit: usize,
     member_pair_limit: usize,
     function_call_budget: Option<crate::function_calls::FunctionCallBudget>,
-    function_call_replay_recipe: Option<crate::function_calls::FunctionCallReplayRecipe>,
     function_call_evidence_profile: Option<crate::function_calls::FunctionCallEvidenceProfile>,
     hook_target_recipe: Option<crate::function_calls::HookTargetRecipe>,
     physical_function_declarations:
@@ -415,7 +414,6 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
             query_limit: crate::bindings::MAX_QUERIES,
             member_pair_limit: DEFAULT_MEMBER_PAIR_LIMIT,
             function_call_budget: None,
-            function_call_replay_recipe: None,
             function_call_evidence_profile: None,
             hook_target_recipe: None,
             physical_function_declarations: None,
@@ -462,17 +460,6 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
         budget: crate::function_calls::FunctionCallBudget,
     ) -> Self {
         self.function_call_budget = Some(budget);
-        self
-    }
-
-    /// Rebuild one exact retained schema13 function-call report recipe.
-    /// The selected budget must carry global-access work/text limits.
-    #[must_use]
-    pub const fn with_function_call_replay_recipe(
-        mut self,
-        recipe: crate::function_calls::FunctionCallReplayRecipe,
-    ) -> Self {
-        self.function_call_replay_recipe = Some(recipe);
         self
     }
 
@@ -541,25 +528,12 @@ impl<'a> MemberCallSessionQueryProfile<'a> {
         if !include_function_calls
             && (self.physical_function_declarations.is_some()
                 || self.physical_function_signatures.is_some()
-                || self.function_call_replay_recipe.is_some()
                 || self.function_call_evidence_profile.is_some()
                 || self.hook_target_recipe.is_some())
         {
             return Err(EmmyMemberCallError::new(
                 EmmyMemberCallErrorCode::InvalidMainWorkspace,
                 "physical-function observations require the function-call sidecar",
-                None,
-            ));
-        }
-        if self.function_call_replay_recipe
-            == Some(crate::function_calls::FunctionCallReplayRecipe::LegacyGlobalAccessV9)
-            && !self
-                .function_call_budget
-                .is_some_and(|budget| budget.global_access_budget().is_some())
-        {
-            return Err(EmmyMemberCallError::new(
-                EmmyMemberCallErrorCode::InvalidMainWorkspace,
-                "legacy global-access report replay requires its selected global-access budget",
                 None,
             ));
         }
@@ -973,7 +947,6 @@ impl RegisteredMemberAnalysis {
                     profile.function_call_budget,
                     profile.physical_function_declarations,
                     profile.physical_function_signatures,
-                    profile.function_call_replay_recipe,
                     profile.function_call_evidence_profile,
                     Some((
                         recipe,
@@ -997,7 +970,6 @@ impl RegisteredMemberAnalysis {
                             profile.function_call_budget,
                             declaration_recipe,
                             Some(signature_recipe),
-                            profile.function_call_replay_recipe,
                             profile.function_call_evidence_profile,
                             None,
                             stop,
@@ -1012,7 +984,6 @@ impl RegisteredMemberAnalysis {
                         &lookup_analysis_ids,
                         profile.function_call_budget,
                         Some(recipe),
-                        profile.function_call_replay_recipe,
                         profile.function_call_evidence_profile,
                         stop,
                     )?,
@@ -1024,7 +995,6 @@ impl RegisteredMemberAnalysis {
                         &callable_signatures,
                         &lookup_analysis_ids,
                         profile.function_call_budget,
-                        profile.function_call_replay_recipe,
                         profile.function_call_evidence_profile,
                         stop,
                     )?,

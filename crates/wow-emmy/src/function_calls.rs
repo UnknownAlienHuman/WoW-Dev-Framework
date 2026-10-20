@@ -54,8 +54,6 @@ pub use signature::{
 pub const FUNCTION_CALL_PROFILE: &str = "wow-emmy/function-call-facts/7";
 /// Explicit budget-bound sidecar; absent selection preserves profile7.
 pub const FUNCTION_CALL_BUDGET_PROFILE: &str = "wow-emmy/function-call-facts/8";
-/// Explicit global-access work/text selection retained by schema13 archives.
-pub const FUNCTION_CALL_GLOBAL_BUDGET_LEGACY_PROFILE: &str = "wow-emmy/function-call-facts/9";
 /// Explicit global-access budget and local-constant custody profile (report10).
 pub const FUNCTION_CALL_GLOBAL_BUDGET_PROFILE: &str = "wow-emmy/function-call-facts/10";
 /// Opt-in exact local call-result custody for the named AceAddon consumer.
@@ -67,11 +65,6 @@ pub enum FunctionCallEvidenceProfile {
     AceAddonLocalResultV1,
 }
 
-/// Exact historical report recipe used by retained global-access replay records.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FunctionCallReplayRecipe {
-    LegacyGlobalAccessV9,
-}
 // Existing callable/call occurrence keys keep their original recipe. Added
 // normalized call arguments/callable keys change report identity, not old occurrence keys.
 const OCCURRENCE_PROFILE: &str = "wow-emmy/function-call-facts/1";
@@ -553,11 +546,6 @@ impl FunctionCallReport {
             (FUNCTION_CALL_PROFILE, None) => FunctionCallBudget::default(),
             (FUNCTION_CALL_BUDGET_PROFILE, Some(limits))
                 if limits.global_access_budget().is_none() =>
-            {
-                limits
-            }
-            (FUNCTION_CALL_GLOBAL_BUDGET_LEGACY_PROFILE, Some(limits))
-                if limits.global_access_budget().is_some() =>
             {
                 limits
             }
@@ -1484,7 +1472,6 @@ pub(crate) fn collect(
     callable_signatures: &BTreeMap<String, LuaSignatureId>,
     symbol_lookup_analysis_ids: &[&str],
     selected_budget: Option<FunctionCallBudget>,
-    replay_recipe: Option<FunctionCallReplayRecipe>,
     local_call_result_profile: Option<FunctionCallEvidenceProfile>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
@@ -1497,7 +1484,6 @@ pub(crate) fn collect(
         symbol_lookup_analysis_ids,
         selected_budget,
         None,
-        replay_recipe,
         local_call_result_profile,
         stop,
     )
@@ -1515,7 +1501,6 @@ pub(crate) fn collect_with_declarations(
     symbol_lookup_analysis_ids: &[&str],
     selected_budget: Option<FunctionCallBudget>,
     declaration_recipe: Option<PhysicalFunctionDeclarationRecipe>,
-    replay_recipe: Option<FunctionCallReplayRecipe>,
     local_call_result_profile: Option<FunctionCallEvidenceProfile>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
@@ -1529,7 +1514,6 @@ pub(crate) fn collect_with_declarations(
         selected_budget,
         declaration_recipe,
         None,
-        replay_recipe,
         local_call_result_profile,
         None,
         stop,
@@ -1548,21 +1532,11 @@ pub(crate) fn collect_with_components(
     selected_budget: Option<FunctionCallBudget>,
     declaration_recipe: Option<PhysicalFunctionDeclarationRecipe>,
     signature_recipe: Option<PhysicalFunctionSignatureRecipe>,
-    replay_recipe: Option<FunctionCallReplayRecipe>,
     local_call_result_profile: Option<FunctionCallEvidenceProfile>,
     hook_targets: Option<(HookTargetRecipe, usize)>,
     stop: &AtomicBool,
 ) -> EmmyMemberCallResult<FunctionCallReport> {
     let limits = selected_budget.unwrap_or_default();
-    let legacy_global_access_profile =
-        replay_recipe == Some(FunctionCallReplayRecipe::LegacyGlobalAccessV9);
-    if (legacy_global_access_profile
-        && (local_call_result_profile.is_some() || hook_targets.is_some()))
-        || (legacy_global_access_profile
-            && !selected_budget.is_some_and(|budget| budget.global_access_budget().is_some()))
-    {
-        return Err(invalid());
-    }
     let mut declaration_bytes = declaration::DeclarationBudget::new(limits.max_report_bytes());
     let mut signatures = HashMap::new();
     let mut access_sources = HashMap::new();
@@ -1782,8 +1756,8 @@ pub(crate) fn collect_with_components(
     let mut global_accesses = Vec::new();
     let mut access_budget =
         crate::global_access::AccessBudget::new(limits.global_access_budget().unwrap_or_default());
-    let include_local_constants = local_call_result_profile.is_some()
-        || (limits.global_access_budget().is_some() && !legacy_global_access_profile);
+    let include_local_constants =
+        local_call_result_profile.is_some() || limits.global_access_budget().is_some();
     for file in main.files() {
         checkpoint(stop)?;
         if files
@@ -2062,8 +2036,6 @@ pub(crate) fn collect_with_components(
         hook_target_recipe: hook_targets.map(|(recipe, _)| recipe),
         profile: if local_call_result_profile.is_some() {
             FUNCTION_CALL_LOCAL_RESULT_PROFILE
-        } else if legacy_global_access_profile {
-            FUNCTION_CALL_GLOBAL_BUDGET_LEGACY_PROFILE
         } else if selected_budget.is_some_and(|budget| budget.global_access_budget().is_some()) {
             FUNCTION_CALL_GLOBAL_BUDGET_PROFILE
         } else if selected_budget.is_some() {

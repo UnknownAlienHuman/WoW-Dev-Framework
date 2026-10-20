@@ -549,10 +549,7 @@ candidate guard still runs before resolution. Encoded-output refusal retains the
 original 128-byte identity reserve and reports the counts already collected;
 the attempted byte count is a lower bound, not the complete encoded size.
 Successful bytes, identities, capacities and cancellation behavior are unchanged.
-The former global-access report9 remains an explicit replay-only recipe for
-retained Project schema13/14/15 archives. It does not collect local constants and
-keeps report9's identity inputs; new global-access analysis uses report10. Project
-selects the legacy recipe only from those exact replay schemas, never by retry,
-hash, or a report-name fallback.
+Current retained Project replay rebuilds the same report10 recipe; incompatible
+derived replay records are regenerated from source and configuration.
 See [the source-state route](../../apps/wow/GRAPH_BUILD.md#typed-literal-keys-and-lexical-aliases)
 for admission limits, serialization versions and deferred cases.
