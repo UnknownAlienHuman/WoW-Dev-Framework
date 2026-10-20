@@ -96,6 +96,7 @@ replace(
     "crates/wow-service/src/live_project/tests.rs",
     "    assert_eq!(archive[\"generation_schema_version\"], 2);\n",
     "",
+    expected=2,
 )
 replace(
     "crates/wow-project/tests/platform_source.rs",
