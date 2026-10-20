@@ -10,7 +10,10 @@ use std::{
     sync::atomic::AtomicBool,
     time::{SystemTime, UNIX_EPOCH},
 };
-use wow_core::{ContentDigest, ProfileIdentity, SourceContent};
+use wow_core::{
+    ContentDigest, ProfileIdentity, ProfileIdentityBuilder, ProfileKind, SchemaVersionEntry,
+    SourceContent, SourceKind, SourceLogicalSnapshot,
+};
 use wow_emmy::{
     EMMYLUA_CODE_ANALYSIS_VERSION, EMMYLUA_REVISION, EMMYLUA_TREE,
     function_calls::{
@@ -50,6 +53,15 @@ const REGISTRATION: &str = "project-store:fixture-primary-callables";
 const INPUT_SCHEMA: &str = "wow-service/local-primary-callables-files/1";
 const REPLAY_SCHEMA: &str = "wow-project/native-project-replay/primary-callables/1";
 const STORAGE_SCHEMA: &str = "wow-project.live-replay.primary-callables.v1";
+const WORKSPACE_ID: &str = "workspace:main:project-pair-regression";
+const SOURCE_ORIGIN_ID: &str = "project-origin:project-pair-regression";
+const LOGICAL_ROOT: &str = "fixtures/project-pair/main";
+const REFERENCE_GENERATION: &str =
+    "generation:reference:sha256:97675ba211ab64855e16865ac469cfe32478719078c34f7c34d31a1a07d99918";
+const ANALYZER_CONFIGURATION_DIGEST: &str =
+    "sha256:0303030303030303030303030303030303030303030303030303030303030303";
+const ANALYZER_CONTRACT_ID: &str = "wow-emmy/e0-c/1";
+const ANALYZER_LIBRARY_CONTRACT_ID: &str = "wow-emmy-e0-c-library-v1";
 // Reuse the native indexed-signature fixture's genuine annotated physical body.
 const MAIN: &str = "---@param value number\n---@return number\nlocal function TypedSignatureFixture(value)\n    return value\nend\n";
 const REMOVED: &str = "---@param value number\n---@return number\nlocal function RemovedDeclaration(value)\n    return value\nend\n";
@@ -128,31 +140,27 @@ fn report() -> TestResult<Value> {
 struct Fixture {
     profile: ProfileIdentity,
     reference: ReferenceView,
-    metadata: Value,
 }
 impl Fixture {
     fn new() -> TestResult<Self> {
-        // Borrow the already retained synthetic native-pair input metadata,
-        // not its decoded configuration/replay as authority.
-        let legacy: Value = serde_json::from_str(include_str!(
-            "../../wow-project/tests/data/native-replay-legacy/physical.json"
-        ))?;
-        let metadata = legacy["configuration"].clone();
-        let profile: ProfileIdentity = serde_json::from_value(metadata["profile"].clone())?;
-        profile.validate()?;
-        let reference = ReferenceView::new(
-            metadata["reference_generation"]
-                .as_str()
-                .ok_or("fixture reference generation")?,
-            Vec::new(),
-            Vec::new(),
-        )?;
+        let profile = ProfileIdentityBuilder::new(
+            "profile:fixture:project-pair-regression-v1".parse()?,
+            ProfileKind::Fixture,
+            "retail",
+            120_100,
+            SourceKind::SyntheticFixture,
+            "fixture:live-pair-v1",
+            ContentDigest::<SourceLogicalSnapshot>::from_bytes([7; 32]),
+        )
+        .schema_versions(vec![SchemaVersionEntry::new(
+            "schema:wow:fixture-e0".parse()?,
+            "1.0.0".parse()?,
+        )])
+        .fixture_scope("native live pair regression")
+        .build()?;
+        let reference = ReferenceView::new(REFERENCE_GENERATION, Vec::new(), Vec::new())?;
         reference.validate()?;
-        Ok(Self {
-            profile,
-            reference,
-            metadata,
-        })
+        Ok(Self { profile, reference })
     }
     fn input(
         &self,
@@ -172,7 +180,6 @@ impl Fixture {
         let profile = write_json(root, "profile.json", &self.profile)?;
         let reference = write_json(root, "reference.json", &self.reference)?;
         let report = write_json(root, "compatibility.json", &report()?)?;
-        let analyzer = &self.metadata["analyzer"];
         let mut files = vec![json!({"path":"main.lua",
             "content_digest":digest(MAIN.as_bytes()),"byte_length":MAIN.len()})];
         if removed {
@@ -183,17 +190,17 @@ impl Fixture {
             "schema":if declarations || signatures { INPUT_SCHEMA } else {
                 "wow-service/local-project-files/1"
             },
-            "project_id":PROJECT,"workspace_id":self.metadata["workspace_id"],
-            "source_origin_id":self.metadata["source_origin_id"],
-            "logical_root":self.metadata["logical_root"],
+            "project_id":PROJECT,"workspace_id":WORKSPACE_ID,
+            "source_origin_id":SOURCE_ORIGIN_ID,
+            "logical_root":LOGICAL_ROOT,
             "profile":profile,"reference_view":reference,
             "analyzer":{
                 "compatibility_report":report,
                 "accepted_pin_id":format!("emmy-pin:{EMMYLUA_REVISION}"),
-                "configuration_digest":analyzer["analyzer_configuration_digest"],
-                "contract_id":analyzer["analyzer_contract_id"],
-                "fixture_contract_id":analyzer["analyzer_fixture_contract_id"],
-                "library_contract_id":analyzer["expected_library_contract_id"]
+                "configuration_digest":ANALYZER_CONFIGURATION_DIGEST,
+                "contract_id":ANALYZER_CONTRACT_ID,
+                "fixture_contract_id":ANALYZER_CONTRACT_ID,
+                "library_contract_id":ANALYZER_LIBRARY_CONTRACT_ID
             },
             "main":{"root":"main","files":files},
             "library":{"root":"library","files":[{

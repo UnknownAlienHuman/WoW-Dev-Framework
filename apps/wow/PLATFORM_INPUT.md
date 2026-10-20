@@ -218,10 +218,10 @@ Encoded bytes are an accounting unit, not an allocator or resident-memory ceilin
 Different populations must still pass every independent owner budget.
 
 The selected limits enter the sealed package binding and original replay request.
-Retained-profile archives use `wow-project/native-project-replay/11`; ordinary
-replay1-10 retain their bytes and selection. Hydration re-admits the exact source
-and package owners under the captured limits. Changed limits or schema downgrade
-refuse. A successful retained Main is not full graph or persistence acceptance:
+Retained-profile archives use `wow-project/native-project-replay/11`; other current
+platform selections keep their exact selected recipe. Hydration re-admits the exact
+source and package owners under the captured limits. Changed limits or schema
+substitution refuse. A successful retained Main is not full graph or persistence acceptance:
 the existing raw replay and record32MiB limits can still refuse a larger corpus.
 
 ### Explicit project budgets
@@ -279,8 +279,8 @@ Selection requires genuine native retained packages, reaches the same semantic
 session, and produces budget-bound `wow-emmy/function-call-facts/8` and
 `wow-project/native-project-replay/12`. The configuration digest and report
 identity both retain the selected values. Hydration rebuilds them without source
-files and refuses removal, downgrade or changed values against the original
-identities. Ordinary replay1-11 recipes remain unchanged.
+files and refuses removal, substitution or changed values against the original
+identities. Other current replay recipes remain unchanged.
 
 The graph callable projector reuses explicitly selected `max_functions` and
 `max_calls` for the same physical Main report arrays after verifying the report

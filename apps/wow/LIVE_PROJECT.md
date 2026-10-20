@@ -5,11 +5,11 @@ profiles expose coherent publication and acquisition through
 `wow-service::live_project`. The app remains a transport over one service operation
 per command. Full W13/E2 acceptance remains open.
 
-The original ordinary publication profile uses native/storage replay v4 and
-generation recipe v2, binding exact Library snapshot identities and the
-function-call-facts profile. V1/V2/V3 stores retain their exact catalogs and reject
-v4 writes. Selected native recipes require their explicitly matched catalogs;
-there is no automatic migration.
+The ordinary publication profile uses native/storage replay v4 and generation
+recipe v2, binding exact Library snapshot identities and the function-call-facts
+profile. Older or incompatible derived stores are not opened or migrated; rebuild
+them from current source and configuration. Selected native recipes still require
+their explicitly matched current catalogs.
 
 ```text
 wow project publish --config project.json --project <ProjectId> --store-root <new-private-directory> --operation-id <id> --expected-current absent --initialize --allow-partial
@@ -111,8 +111,8 @@ On the ordinary route, `update` requires an existing modern physical-Lua
 publication and an explicit final input configuration. The service derives Add/Update/Remove against the
 exact expected publication record, retains its actual native owner under a lease,
 and rebuilds the complete graph producer chain before inactive validation and
-current CAS. Standalone TOC/XML, package and legacy archives remain unavailable
-for this update route. Their read/publication routes remain supported.
+current CAS. Standalone TOC/XML and package publications remain unavailable for
+this update route. Their current read/publication routes remain supported.
 
 `--library keep|replace|clear` is required. Keep requires the supplied final
 Library inventory to match the retained owner; Replace uses the supplied Library
@@ -157,33 +157,9 @@ hook and library families. Constructors now order fixture/rule IDs before the
 unchanged strict validators; profiles are bridge4, hooks5 and library3. Coverage
 keeps no negative authority. No acceptance fixture is regenerated.
 
-The standalone TOC/XML checkpoint uses native replay v2 and retains the exact
-selected TOC, selection context and consumed TOC/XML bytes alongside Main/Library.
-Read-back runs the same bounded loader, checks the original plan digest and
-recreates the original semantic IDs without reopening source directories. Missing,
-excluded and unresolved load decisions remain explicit. Surplus archived files,
-changed documents/context and substituted schema versions reject.
-
-At the standalone checkpoint, physical archives kept v1 encoding. Existing epochs reopened against their
-exact original catalog without changing epoch or membership identities; they
-accept physical publications only. Initialize a new private store to publish v2
-loader archives. No epoch migration is performed. Fresh full workspace gates and
-build passed on 2026-10-09: 849 tests passed, 1 ignored, 103 targets. The new service
-regression runs the complete TOC/XML producer chain after source removal.
-
-At the package checkpoint, replay used native/storage v3. It retains every selected package's
-captured sources, including unreachable Lua, and exact bytes of all declared TOC
-variants. It reconstructs dependencies, reachability, file order and namespaced
-Main with the existing package owner. Unreachable files and unselected-variant
-entries remain outside analyzer Main; their actual source identities stay bound.
-Package sources are archived once, independently of the flattened Main namespace.
-V1/V2 epochs keep their exact catalogs and reject v3 writes before current changes;
-initialize a new private store for v3. Full workspace gates/build passed on
-2026-10-09: 850 tests passed, 1 ignored, 103 targets. The real package service
-regression deletes its source directory before publication and Exact reopen.
-
-The generation checkpoint passed all workspace gates and build on 2026-10-09:
-852 tests passed, 1 ignored, 103 targets. Frozen old archives hydrate with exact
-original IDs; V1/V2/V3 stores retain their epoch/current identities and Exact
-read-back after rejecting v4 publication. Full W14 reuse/removal and W13/E2
-acceptance remain open.
+Standalone TOC/XML and declared package inputs use the same current replay v4 and
+generation-v2 envelope as other ordinary publications. The replay retains their
+selected TOC/context/documents or package sources/variants and rebuilds those owners
+without reopening source directories. No replay-v1/v2/v3 catalog, generation-v1
+reader or store migration remains in the product; incompatible derived stores must
+be recreated from source and configuration.

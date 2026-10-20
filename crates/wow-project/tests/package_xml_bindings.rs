@@ -1659,7 +1659,7 @@ fn selected_package_graph_preserves_local_ids_shared_globals_and_native_replay()
 }
 
 #[test]
-fn package_binding_selection_requires_native_owner_and_preserves_legacy_replay() -> TestResult {
+fn package_binding_selection_requires_native_owner_and_replays_current_input() -> TestResult {
     let stop = AtomicBool::new(false);
     let fixture_target = target()?;
     let ordinary = configuration_builder(ProjectKind::Fixture, &fixture_target)?;
@@ -1718,36 +1718,6 @@ fn package_binding_selection_requires_native_owner_and_preserves_legacy_replay()
     );
     assert!(!root.0.exists());
 
-    let frozen: serde_json::Value =
-        serde_json::from_str(include_str!("data/native-replay-legacy/packages.json"))?;
-    assert_eq!(frozen["schema"], "wow-project/native-project-replay/3");
-    let frozen_view =
-        ProjectReplay::from_json(&serde_json::to_vec(&frozen)?, &stop)?.hydrate(&stop)?;
-    assert_eq!(
-        frozen_view.snapshot_id(),
-        frozen["project_snapshot_id"]
-            .as_str()
-            .ok_or("frozen project ID missing")?
-    );
-    assert_eq!(
-        frozen_view.analyzer_snapshot_id(),
-        frozen["analyzer_snapshot_id"]
-            .as_str()
-            .ok_or("frozen analyzer ID missing")?
-    );
-    assert!(
-        frozen_view
-            .configuration()
-            .package_xml_binding_profile()
-            .is_none()
-    );
-    assert!(
-        frozen_view
-            .snapshot()
-            .analyzer_binding()
-            .package_xml_bindings()
-            .is_none()
-    );
     Ok(())
 }
 

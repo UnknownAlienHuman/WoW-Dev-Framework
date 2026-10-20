@@ -25,7 +25,6 @@ pub struct ProjectPublisher {
     libraries: Vec<LuaWorkspaceSnapshot>,
     last_failure: Option<ProjectError>,
     function_call_mode: FunctionCallAnalysisMode,
-    legacy_generation: bool,
     /// Retained native session for the current physical input set. Build state
     /// only: it never mutates a published snapshot and is discarded on any
     /// candidate failure or cancellation.
@@ -47,7 +46,6 @@ impl ProjectPublisher {
             libraries: Vec::new(),
             last_failure: None,
             function_call_mode: FunctionCallAnalysisMode::Disabled,
-            legacy_generation: false,
             analyzer_session: None,
         }
     }
@@ -59,19 +57,6 @@ impl ProjectPublisher {
     pub fn with_function_call_facts() -> Self {
         Self {
             function_call_mode: FunctionCallAnalysisMode::Current,
-            ..Self::new()
-        }
-    }
-
-    /// Only old native archives may reproduce the frozen generation recipe.
-    pub(crate) fn legacy_replay(function_calls: bool) -> Self {
-        Self {
-            function_call_mode: if function_calls {
-                FunctionCallAnalysisMode::Current
-            } else {
-                FunctionCallAnalysisMode::Disabled
-            },
-            legacy_generation: true,
             ..Self::new()
         }
     }
@@ -104,7 +89,6 @@ impl ProjectPublisher {
             inventory.clone(),
             libraries.clone(),
             self.function_call_mode,
-            self.legacy_generation,
             &mut self.analyzer_session,
             stop,
         ) {
@@ -320,7 +304,6 @@ impl ProjectPublisher {
             inventory.clone(),
             libraries.clone(),
             self.function_call_mode,
-            self.legacy_generation,
             &mut self.analyzer_session,
             stop,
         ) {
@@ -429,21 +412,16 @@ fn build_snapshot(
     inventory: ProjectInputInventory,
     libraries: Vec<LuaWorkspaceSnapshot>,
     function_call_mode: FunctionCallAnalysisMode,
-    legacy_generation: bool,
     cache: &mut Option<AnalyzerSession>,
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectSnapshot> {
     let function_calls = function_call_mode.enabled();
-    let generation = if legacy_generation {
-        ProjectGenerationCandidate::derive(&configuration, &inventory)?
-    } else {
-        ProjectGenerationCandidate::derive_with_analysis(
-            &configuration,
-            &inventory,
-            &libraries,
-            function_calls,
-        )?
-    };
+    let generation = ProjectGenerationCandidate::derive_with_analysis(
+        &configuration,
+        &inventory,
+        &libraries,
+        function_calls,
+    )?;
     let analyzer = build_analyzer_binding(
         &configuration,
         &inventory,

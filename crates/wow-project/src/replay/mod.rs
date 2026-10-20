@@ -22,9 +22,6 @@ use wow_emmy::{
     LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
 };
 
-const REPLAY_SCHEMA: &str = "wow-project/native-project-replay/1";
-const LOAD_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/2";
-const PACKAGE_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/3";
 const LIBRARY_BOUND_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/4";
 const PLATFORM_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/5";
 const PACKAGE_XML_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/6";
@@ -124,11 +121,9 @@ struct ReplayLibrary {
     files: Vec<ReplayFile>,
 }
 
-/// Data-only archive, distinct from the executable owner view. New publications
-/// use v4 with Library-bound generation, v5 for a genuine platform corpus, or v6
-/// for explicitly selected same-session package XML bindings. Package graph
-/// projection uses v7; projection with raw inventory uses v8. Earlier archives
-/// retain their original recipe.
+/// Data-only archive, distinct from the executable owner view. Current publication
+/// requires generation recipe v2; configuration selects the ordinary, platform or
+/// named component replay shape without a legacy fallback.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectReplay {
@@ -139,8 +134,7 @@ pub struct ProjectReplay {
     function_calls: bool,
     project_snapshot_id: String,
     analyzer_snapshot_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    generation_schema_version: Option<u64>,
+    generation_schema_version: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     load: Option<ReplayLoad>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -278,20 +272,10 @@ impl ProjectReplay {
             });
         }
         retained_libraries.sort_by(|a, b| a.snapshot_id.cmp(&b.snapshot_id));
-        let generation_schema_version = match snapshot
+        let generation_schema_version = snapshot
             .generation_candidate()
-            .project_generation_schema_version()
-        {
-            1 => None,
-            2 => Some(2),
-            _ => return Err(invalid()),
-        };
-        if (configuration.native_library_input().is_some()
-            || configuration.native_api_uses().is_some()
-            || configuration.state_projection().is_some()
-            || configuration.hook_target_recipe().is_some())
-            && generation_schema_version != Some(2)
-        {
+            .project_generation_schema_version();
+        if generation_schema_version != crate::PROJECT_GENERATION_SCHEMA_VERSION {
             return Err(invalid());
         }
         // The package graph projection is selected only together with the
@@ -346,28 +330,16 @@ impl ProjectReplay {
             };
         let base_schema = if platform_owner.is_some() {
             platform_schema
-        } else if generation_schema_version.is_some() {
-            LIBRARY_BOUND_REPLAY_SCHEMA
-        } else if packages.is_some() {
-            PACKAGE_REPLAY_SCHEMA
-        } else if load.is_some() {
-            LOAD_REPLAY_SCHEMA
         } else {
-            REPLAY_SCHEMA
+            LIBRARY_BOUND_REPLAY_SCHEMA
         };
         let schema = selected_component_schema(
             base_schema,
             &configuration,
             function_calls,
-            generation_schema_version == Some(2)
-                && load.is_none()
-                && packages.is_none()
-                && platform_owner.is_none(),
+            load.is_none() && packages.is_none() && platform_owner.is_none(),
         )?;
         let platform = if let Some(owner) = platform_owner {
-            if generation_schema_version != Some(2) {
-                return Err(invalid());
-            }
             let envelope_size = encoded_size(
                 &PlatformEnvelopeBudget {
                     schema,
@@ -410,12 +382,7 @@ impl ProjectReplay {
         Ok(replay)
     }
     fn expected_schema(&self) -> ProjectResult<&'static str> {
-        if (self.configuration.native_library_input().is_some()
-            || self.configuration.native_api_uses().is_some()
-            || self.configuration.state_projection().is_some()
-            || self.configuration.hook_target_recipe().is_some())
-            && self.generation_schema_version != Some(2)
-        {
+        if self.generation_schema_version != crate::PROJECT_GENERATION_SCHEMA_VERSION {
             return Err(invalid());
         }
         let schema = self.expected_base_schema()?;
@@ -519,8 +486,7 @@ impl ProjectReplay {
         if self.configuration.function_call_evidence_profile()
             == Some(wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1)
         {
-            return if self.generation_schema_version == Some(2)
-                && self.configuration.is_platform()
+            return if self.configuration.is_platform()
                 && self
                     .platform
                     .as_ref()
@@ -533,9 +499,8 @@ impl ProjectReplay {
             };
         }
         if let Some(profile) = self.configuration.platform_graph_profile() {
-            return if self.generation_schema_version == Some(2)
-                && self.configuration.package_xml_binding_profile()
-                    == Some(PackageXmlBindingProfile::SameSessionV1)
+            return if self.configuration.package_xml_binding_profile()
+                == Some(PackageXmlBindingProfile::SameSessionV1)
                 && self.configuration.is_platform()
                 && self.platform.is_some()
             {
@@ -555,22 +520,15 @@ impl ProjectReplay {
                 Err(invalid())
             };
         }
-        match (
-            self.generation_schema_version,
-            self.configuration.package_xml_binding_profile(),
-        ) {
-            (Some(2), Some(PackageXmlBindingProfile::SameSessionV1))
+        match self.configuration.package_xml_binding_profile() {
+            Some(PackageXmlBindingProfile::SameSessionV1)
                 if self.configuration.is_platform() && self.platform.is_some() =>
             {
                 Ok(PACKAGE_XML_REPLAY_SCHEMA)
             }
-            (_, Some(_)) => Err(invalid()),
-            (Some(2), None) if self.platform.is_some() => Ok(PLATFORM_REPLAY_SCHEMA),
-            (Some(2), None) => Ok(LIBRARY_BOUND_REPLAY_SCHEMA),
-            (None, None) if self.packages.is_some() => Ok(PACKAGE_REPLAY_SCHEMA),
-            (None, None) if self.load.is_some() => Ok(LOAD_REPLAY_SCHEMA),
-            (None, None) => Ok(REPLAY_SCHEMA),
-            (Some(_), None) => Err(invalid()),
+            Some(_) => Err(invalid()),
+            None if self.platform.is_some() => Ok(PLATFORM_REPLAY_SCHEMA),
+            None => Ok(LIBRARY_BOUND_REPLAY_SCHEMA),
         }
     }
     fn validate_budget(&self, stop: &AtomicBool) -> ProjectResult<()> {
@@ -582,10 +540,7 @@ impl ProjectReplay {
             || self.files.len() > MAX_FILES
             || self.configuration.is_platform() != self.platform.is_some()
             || (self.platform.is_some()
-                && (self.load.is_some()
-                    || self.packages.is_some()
-                    || !self.files.is_empty()
-                    || self.generation_schema_version != Some(2)))
+                && (self.load.is_some() || self.packages.is_some() || !self.files.is_empty()))
             || self.files.windows(2).any(|p| p[0].path >= p[1].path)
             || self
                 .libraries
@@ -731,9 +686,7 @@ impl ProjectReplay {
                 .collect::<ProjectResult<Vec<_>>>()?
         };
         let bundle = ProjectInputBundle::closed(config, files, libraries)?;
-        let mut publisher = if self.generation_schema_version.is_none() {
-            ProjectPublisher::legacy_replay(self.function_calls)
-        } else if self.function_calls {
+        let mut publisher = if self.function_calls {
             ProjectPublisher::with_function_call_facts()
         } else {
             ProjectPublisher::new()
@@ -749,23 +702,16 @@ impl ProjectReplay {
         Ok(publisher)
     }
 
-    /// Whether this archive carries the modern Library-bound physical profile
-    /// whose retained owner may accept a durable update. Legacy v1/v2/v3 and
-    /// standalone or package corpora remain read-only compatibility records.
+    /// Whether this current archive is the ordinary physical profile whose retained
+    /// owner may accept a durable update. Standalone, package and platform inputs do not.
     pub(crate) fn supports_physical_update(&self) -> bool {
-        self.generation_schema_version == Some(2)
-            && self.load.is_none()
-            && self.packages.is_none()
-            && self.platform.is_none()
+        self.load.is_none() && self.packages.is_none() && self.platform.is_none()
     }
     fn storage_schema(&self) -> ProjectResult<&'static str> {
         if self.schema != self.expected_schema()? {
             return Err(invalid());
         }
         match self.schema.as_str() {
-            REPLAY_SCHEMA => Ok("wow-project.live-replay.v1"),
-            LOAD_REPLAY_SCHEMA => Ok("wow-project.live-replay.v2"),
-            PACKAGE_REPLAY_SCHEMA => Ok("wow-project.live-replay.v3"),
             LIBRARY_BOUND_REPLAY_SCHEMA => Ok("wow-project.live-replay.v4"),
             PLATFORM_REPLAY_SCHEMA => Ok("wow-project.live-replay.v5"),
             PACKAGE_XML_REPLAY_SCHEMA => Ok("wow-project.live-replay.v6"),
