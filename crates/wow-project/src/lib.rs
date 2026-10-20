@@ -37,11 +37,10 @@ pub use analyzer::{
 };
 pub use configuration::{
     AnalyzerBindingDeclaration, LibraryWitnessRecipe, NativeApiUseRecipe,
-    PROJECT_CONFIGURATION_SCHEMA_VERSION, PROJECT_CONTRACT_ID, PROJECT_GENERATION_SCHEMA_VERSION,
-    PROJECT_SNAPSHOT_SCHEMA_VERSION, PackageXmlBindingProfile, PlatformGraphCapabilities,
-    PlatformGraphCapability, PlatformGraphProfile, ProjectBudgetPolicy, ProjectCapabilityPolicy,
-    ProjectConfiguration, ProjectConfigurationBuilder, ProjectKind, SignalWitnessRecipe,
-    StateProjectionRecipe,
+    PROJECT_CONFIGURATION_SCHEMA_VERSION, PROJECT_CONTRACT_ID, PROJECT_SNAPSHOT_SCHEMA_VERSION,
+    PackageXmlBindingProfile, PlatformGraphCapabilities, PlatformGraphCapability,
+    PlatformGraphProfile, ProjectBudgetPolicy, ProjectCapabilityPolicy, ProjectConfiguration,
+    ProjectConfigurationBuilder, ProjectKind, SignalWitnessRecipe, StateProjectionRecipe,
 };
 pub use error::{ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult};
 pub use generation::ProjectGenerationCandidate;

@@ -318,12 +318,6 @@ impl AcquiredProjectPair {
             || self
                 .project
                 .snapshot()
-                .generation_candidate()
-                .project_generation_schema_version()
-                != 2
-            || self
-                .project
-                .snapshot()
                 .analyzer_binding()
                 .function_call_report()
                 .is_none()

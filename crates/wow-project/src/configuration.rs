@@ -38,8 +38,6 @@ use platform::RetainedPlatformPackages;
 use xml_classification::RetainedXmlClassification;
 
 pub const PROJECT_CONFIGURATION_SCHEMA_VERSION: u64 = 1;
-/// Current project generation identity recipe.
-pub const PROJECT_GENERATION_SCHEMA_VERSION: u64 = 2;
 pub const PROJECT_SNAPSHOT_SCHEMA_VERSION: u64 = 1;
 pub const PROJECT_CONTRACT_ID: &str = "wow-project/e0-d/1";
 

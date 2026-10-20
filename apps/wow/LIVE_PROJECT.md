@@ -5,9 +5,8 @@ profiles expose coherent publication and acquisition through
 `wow-service::live_project`. The app remains a transport over one service operation
 per command. Full W13/E2 acceptance remains open.
 
-The ordinary publication profile uses native/storage replay v4 and generation
-recipe v2, binding exact Library snapshot identities and the function-call-facts
-profile. Older or incompatible derived stores are not opened or migrated; rebuild
+The ordinary publication profile uses native/storage replay v4 and binds exact
+Library snapshot identities plus the function-call-facts profile. Older or incompatible derived stores are not opened or migrated; rebuild
 them from current source and configuration. Selected native recipes still require
 their explicitly matched current catalogs.
 
@@ -158,8 +157,8 @@ hook and library families. Constructors now order fixture/rule IDs before the
 unchanged strict validators; profiles are bridge4, hooks5 and library3. Coverage
 keeps no negative authority. No acceptance fixture is regenerated.
 
-Standalone TOC/XML and declared package inputs use the same current replay v4 and
-generation-v2 envelope as other ordinary publications. The replay retains their
+Standalone TOC/XML and declared package inputs use the same current replay v4
+envelope as other ordinary publications. The replay retains their
 selected TOC/context/documents or package sources/variants and rebuilds those owners
 without reopening source directories. No replay-v1/v2/v3 catalog, generation-v1
 reader or store migration remains in the product; incompatible derived stores must

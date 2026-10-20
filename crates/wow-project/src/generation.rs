@@ -2,7 +2,6 @@ use serde::Serialize;
 use wow_core::{CanonicalResult, ContentDigest, ProjectGenerationId, ReferenceGenerationId};
 use wow_emmy::LuaWorkspaceSnapshot;
 
-use crate::configuration::PROJECT_GENERATION_SCHEMA_VERSION;
 use crate::identity::canonical_id;
 use crate::{
     ProjectConfiguration, ProjectError, ProjectErrorCode, ProjectFileManifestEntry,
@@ -21,7 +20,6 @@ pub struct ProjectGenerationCandidate {
     analyzer_probe_report_id: Box<str>,
     analyzer_configuration_digest: ContentDigest<CanonicalResult>,
     final_file_manifest_digest: ContentDigest<CanonicalResult>,
-    project_generation_schema_version: u64,
     library_snapshot_ids: Vec<Box<str>>,
     function_call_facts: bool,
     derived_project_generation: ProjectGenerationId,
@@ -59,7 +57,6 @@ impl ProjectGenerationCandidate {
         let manifest = inventory.manifest_entries();
         #[derive(Serialize)]
         struct DerivationInput<'a> {
-            project_generation_schema_version: u64,
             project_configuration_digest: ContentDigest<CanonicalResult>,
             project_id: &'a crate::ProjectId,
             project_kind: crate::ProjectKind,
@@ -79,7 +76,6 @@ impl ProjectGenerationCandidate {
             function_call_facts: bool,
         }
         let input = DerivationInput {
-            project_generation_schema_version: PROJECT_GENERATION_SCHEMA_VERSION,
             project_configuration_digest: configuration.configuration_digest(),
             project_id: configuration.project_id(),
             project_kind: configuration.project_kind(),
@@ -141,7 +137,6 @@ impl ProjectGenerationCandidate {
                 .analyzer_binding()
                 .analyzer_configuration_digest(),
             final_file_manifest_digest: inventory.manifest_digest(),
-            project_generation_schema_version: PROJECT_GENERATION_SCHEMA_VERSION,
             library_snapshot_ids,
             function_call_facts,
             derived_project_generation,
@@ -186,11 +181,6 @@ impl ProjectGenerationCandidate {
     #[must_use]
     pub const fn project_generation(&self) -> ProjectGenerationId {
         self.derived_project_generation
-    }
-
-    #[must_use]
-    pub const fn project_generation_schema_version(&self) -> u64 {
-        self.project_generation_schema_version
     }
 
     #[must_use]
