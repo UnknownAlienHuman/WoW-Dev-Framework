@@ -111,8 +111,8 @@ configuration digest and are captured/rebuilt exactly; see
 The selected report is budget-bound function-call `/8`. Omission keeps the default
 report `/7`, current unselected replay and configuration bytes. A `/12` archive with
 the budget removed, a selected budget without retained native packages, schema
-downgrade and budget tampering refuse. Genuine disk-absent service publication, store reopen/read and replay verify the
-same project/analyzer identities. Exact catalog selection refuses an unregistered
+substitution and budget tampering refuse. Genuine disk-absent service publication,
+store reopen/read and replay verify the same project/analyzer identities. Exact catalog selection refuses an unregistered
 record before retaining an operation or changing Current. This does not raise the
 independent raw-source or encoded store record ceilings, qualify full-corpus
 persistence, or establish historical fixture acceptance.

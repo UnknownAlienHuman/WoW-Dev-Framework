@@ -393,7 +393,8 @@ impl AcquiredProjectPair {
             .ok_or_else(invalid)?;
         if !matches!(
             replay_schema,
-            |"wow-project.live-replay.v4"| "wow-project.live-replay.v5"
+            "wow-project.live-replay.v4"
+                | "wow-project.live-replay.v5"
                 | "wow-project.live-replay.v6"
                 | "wow-project.live-replay.v7"
                 | "wow-project.live-replay.v8"

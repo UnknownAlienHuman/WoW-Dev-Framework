@@ -221,7 +221,8 @@ The selected limits enter the sealed package binding and original replay request
 Retained-profile archives use `wow-project/native-project-replay/11`; other current
 platform selections keep their exact selected recipe. Hydration re-admits the exact
 source and package owners under the captured limits. Changed limits or schema
-substitution refuse. A successful retained Main is not full graph or persistence acceptance:
+substitution refuse. A successful retained Main is not full graph or persistence
+acceptance:
 the existing raw replay and record32MiB limits can still refuse a larger corpus.
 
 ### Explicit project budgets

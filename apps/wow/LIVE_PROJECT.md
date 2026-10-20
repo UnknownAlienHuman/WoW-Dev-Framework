@@ -74,8 +74,9 @@ explicit. The native service also exposes verified backup and restoration to a n
 private path and explicit guarded physical-instance replacement with real
 Project/Graph owner replay. `restore_replace` and exact `resume_replacement` are
 service APIs. The CLI does not dispatch backup, replacement or quarantine
-administration; `recover` only observes the current registered store. Older readers
-and semantic IDs survive. See [PROJECT_RECOVERY.md](../../crates/wow-store/PROJECT_RECOVERY.md).
+administration; `recover` only observes the current registered store. Existing leased
+readers and semantic IDs survive physical-instance replacement. See
+[PROJECT_RECOVERY.md](../../crates/wow-store/PROJECT_RECOVERY.md).
 
 `--domain-current` adds native Project/Graph replay of the exact Current publication
 retained by the physical report. It keeps that physical evidence beside a typed
@@ -89,8 +90,8 @@ The service now exposes explicit whole-instance quarantine through
 `LiveProjectQuarantineInspection` and `LiveProjectStore::quarantine`, plus the
 separate read-only `QuarantinedLiveProject`. Standalone inspection can observe and
 explicitly hold damaged SQL without normal writable admission. Exact raw Current
-and recovery evidence guard the hold; old native pairs remain coherent and new
-normal operations return `StoreQuarantined`. This CLI retains that typed error
+and recovery evidence guard the hold; already acquired native pairs remain coherent
+while new normal operations return `StoreQuarantined`. This CLI retains that typed error
 and does not dispatch quarantine or restore. See
 [PROJECT_QUARANTINE.md](../../crates/wow-store/PROJECT_QUARANTINE.md).
 
