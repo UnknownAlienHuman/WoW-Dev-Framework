@@ -22,32 +22,13 @@ pub struct ProjectGenerationCandidate {
     analyzer_configuration_digest: ContentDigest<CanonicalResult>,
     final_file_manifest_digest: ContentDigest<CanonicalResult>,
     project_generation_schema_version: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    library_snapshot_ids: Option<Vec<Box<str>>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    function_call_facts: Option<bool>,
+    library_snapshot_ids: Vec<Box<str>>,
+    function_call_facts: bool,
     derived_project_generation: ProjectGenerationId,
 }
 
 impl ProjectGenerationCandidate {
-    /// Original v1 derivation for retained receipts. New publications use
-    /// `derive_with_analysis` so Library content and fact profile participate in identity.
-    pub fn derive(
-        configuration: &ProjectConfiguration,
-        inventory: &ProjectInputInventory,
-    ) -> ProjectResult<Self> {
-        Self::derive_from_ids(configuration, inventory, None, None)
-    }
-
-    pub fn derive_with_libraries(
-        configuration: &ProjectConfiguration,
-        inventory: &ProjectInputInventory,
-        libraries: &[LuaWorkspaceSnapshot],
-    ) -> ProjectResult<Self> {
-        Self::derive_with_analysis(configuration, inventory, libraries, false)
-    }
-
-    /// Derive v2 from the exact Library corpus and owned analyzer fact profile.
+    /// Derive the current identity from the exact Library corpus and analyzer fact profile.
     pub fn derive_with_analysis(
         configuration: &ProjectConfiguration,
         inventory: &ProjectInputInventory,
@@ -59,19 +40,14 @@ impl ProjectGenerationCandidate {
             .map(|library| Box::<str>::from(library.snapshot_id()))
             .collect::<Vec<_>>();
         ids.sort();
-        Self::derive_from_ids(
-            configuration,
-            inventory,
-            Some(ids),
-            Some(function_call_facts),
-        )
+        Self::derive_from_ids(configuration, inventory, ids, function_call_facts)
     }
 
     fn derive_from_ids(
         configuration: &ProjectConfiguration,
         inventory: &ProjectInputInventory,
-        library_snapshot_ids: Option<Vec<Box<str>>>,
-        function_call_facts: Option<bool>,
+        library_snapshot_ids: Vec<Box<str>>,
+        function_call_facts: bool,
     ) -> ProjectResult<Self> {
         configuration.validate()?;
         if let Some(plan) = configuration.load_plan() {
@@ -81,20 +57,6 @@ impl ProjectGenerationCandidate {
             plan.validate_main_files(inventory.files())?;
         }
         let manifest = inventory.manifest_entries();
-        let version = match (
-            library_snapshot_ids.is_some(),
-            function_call_facts.is_some(),
-        ) {
-            (true, true) => 2,
-            (false, false) => PROJECT_GENERATION_SCHEMA_VERSION,
-            _ => {
-                return Err(ProjectError::new(
-                    ProjectErrorCode::GenerationDerivationFailed,
-                    ProjectPhase::Generation,
-                    "project generation recipe has incomplete analyzer inputs",
-                ));
-            }
-        };
         #[derive(Serialize)]
         struct DerivationInput<'a> {
             project_generation_schema_version: u64,
@@ -113,13 +75,11 @@ impl ProjectGenerationCandidate {
             budget_policy: crate::ProjectBudgetPolicy,
             final_file_manifest_digest: ContentDigest<CanonicalResult>,
             files: &'a [ProjectFileManifestEntry],
-            #[serde(skip_serializing_if = "Option::is_none")]
-            library_snapshot_ids: Option<&'a [Box<str>]>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            function_call_facts: Option<bool>,
+            library_snapshot_ids: &'a [Box<str>],
+            function_call_facts: bool,
         }
         let input = DerivationInput {
-            project_generation_schema_version: version,
+            project_generation_schema_version: PROJECT_GENERATION_SCHEMA_VERSION,
             project_configuration_digest: configuration.configuration_digest(),
             project_id: configuration.project_id(),
             project_kind: configuration.project_kind(),
@@ -139,7 +99,7 @@ impl ProjectGenerationCandidate {
             budget_policy: configuration.budget_policy(),
             final_file_manifest_digest: inventory.manifest_digest(),
             files: &manifest,
-            library_snapshot_ids: library_snapshot_ids.as_deref(),
+            library_snapshot_ids: &library_snapshot_ids,
             function_call_facts,
         };
         let derived_project_generation = ProjectGenerationId::derive(&input).map_err(|source| {
@@ -156,11 +116,7 @@ impl ProjectGenerationCandidate {
         }
         let candidate_id = canonical_id(
             "project-candidate:sha256:",
-            if version == 2 {
-                "wow-project/generation-candidate/e0-d/2"
-            } else {
-                "wow-project/generation-candidate/e0-d/1"
-            },
+            "wow-project/generation-candidate/e0-d/2",
             &CandidateIdentity {
                 project_generation: derived_project_generation,
                 derivation_input: &input,
@@ -185,7 +141,7 @@ impl ProjectGenerationCandidate {
                 .analyzer_binding()
                 .analyzer_configuration_digest(),
             final_file_manifest_digest: inventory.manifest_digest(),
-            project_generation_schema_version: version,
+            project_generation_schema_version: PROJECT_GENERATION_SCHEMA_VERSION,
             library_snapshot_ids,
             function_call_facts,
             derived_project_generation,
@@ -237,22 +193,18 @@ impl ProjectGenerationCandidate {
         self.project_generation_schema_version
     }
 
-    /// Exact sorted Library snapshot identities in v2; absent only for legacy v1.
     #[must_use]
-    pub fn library_snapshot_ids(&self) -> Option<&[Box<str>]> {
-        self.library_snapshot_ids.as_deref()
+    pub fn library_snapshot_ids(&self) -> &[Box<str>] {
+        &self.library_snapshot_ids
     }
 
     #[must_use]
-    pub const fn function_call_facts(&self) -> Option<bool> {
+    pub const fn function_call_facts(&self) -> bool {
         self.function_call_facts
     }
 
     pub(crate) fn validate_function_call_facts(&self, enabled: bool) -> ProjectResult<()> {
-        if self
-            .function_call_facts
-            .is_some_and(|expected| expected != enabled)
-        {
+        if self.function_call_facts != enabled {
             return Err(ProjectError::new(
                 ProjectErrorCode::AnalyzerSnapshotMismatch,
                 ProjectPhase::Generation,
@@ -266,16 +218,19 @@ impl ProjectGenerationCandidate {
         &self,
         ids: impl IntoIterator<Item = &'a str>,
     ) -> ProjectResult<()> {
-        if let Some(expected) = self.library_snapshot_ids() {
-            let mut actual = ids.into_iter().collect::<Vec<_>>();
-            actual.sort_unstable();
-            if !expected.iter().map(AsRef::as_ref).eq(actual) {
-                return Err(ProjectError::new(
-                    ProjectErrorCode::AnalyzerSnapshotMismatch,
-                    ProjectPhase::Generation,
-                    "project generation Library identities differ from analyzer inputs",
-                ));
-            }
+        let mut actual = ids.into_iter().collect::<Vec<_>>();
+        actual.sort_unstable();
+        if !self
+            .library_snapshot_ids
+            .iter()
+            .map(AsRef::as_ref)
+            .eq(actual)
+        {
+            return Err(ProjectError::new(
+                ProjectErrorCode::AnalyzerSnapshotMismatch,
+                ProjectPhase::Generation,
+                "project generation Library identities differ from analyzer inputs",
+            ));
         }
         Ok(())
     }

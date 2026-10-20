@@ -16,9 +16,6 @@ use wow_store::project::{
 };
 
 pub const STORAGE_SCHEMAS: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
     "wow-project.live-replay.v4",
     "wow-project.live-replay.v5",
     "wow-project.live-replay.v6",
@@ -38,9 +35,6 @@ pub const STORAGE_CHECK: &str = "wow-project.live-pair-native-replay.v1";
 /// catalogs remain frozen; this admits only their retained records plus the new
 /// explicitly selected recipe.
 pub const STORAGE_SCHEMAS_ACEADDON_LOCAL_RESULT_V1: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
     "wow-project.live-replay.v4",
     "wow-project.live-replay.v5",
     "wow-project.live-replay.v6",
@@ -59,9 +53,6 @@ pub const STORAGE_SCHEMAS_ACEADDON_LOCAL_RESULT_V1: &[&str] = &[
 /// Explicit composed classification catalog. Keep ordinary/retained epoch bytes
 /// unchanged; application selection must opt into this catalog before publishing.
 pub const STORAGE_SCHEMAS_XML_CLASSIFICATION_V1: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
     "wow-project.live-replay.v4",
     "wow-project.live-replay.v5",
     "wow-project.live-replay.v6",
@@ -78,9 +69,6 @@ pub const STORAGE_SCHEMAS_XML_CLASSIFICATION_V1: &[&str] = &[
 ];
 /// Explicit declaration-only catalog; prior catalogs keep their exact epoch bytes.
 pub const STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
     "wow-project.live-replay.v4",
     "wow-project.live-replay.v5",
     "wow-project.live-replay.v6",
@@ -97,9 +85,6 @@ pub const STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1: &[&str] = &[
 ];
 /// Explicit composed XML/declaration catalog. Neither old selected catalog is widened.
 pub const STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1: &[&str] = &[
-    "wow-project.live-replay.v1",
-    "wow-project.live-replay.v2",
-    "wow-project.live-replay.v3",
     "wow-project.live-replay.v4",
     "wow-project.live-replay.v5",
     "wow-project.live-replay.v6",
@@ -302,7 +287,7 @@ impl AcquiredProjectPair {
     pub fn publication_set_id(&self) -> &str {
         &self.publication_set_id
     }
-    /// Consume the validated owner; legacy and loader profiles cannot be updated
+    /// Consume the validated owner; standalone and package profiles cannot be updated
     /// through the physical-input protocol.
     pub fn into_update_publisher(self) -> ProjectResult<ProjectPublisher> {
         if !self.supports_physical_update {
@@ -316,7 +301,7 @@ impl AcquiredProjectPair {
     }
     /// Consume this exact rebuilt native pair for a retained-platform update.
     /// The proof must own the same snapshot and validated native graph prefix.
-    /// Ordinary physical/legacy admission remains in into_update_publisher.
+    /// Ordinary physical admission remains in into_update_publisher.
     pub fn into_platform_update_publisher(
         self,
         native: &crate::graph::PlatformIndexSourceParts,
@@ -408,10 +393,7 @@ impl AcquiredProjectPair {
             .ok_or_else(invalid)?;
         if !matches!(
             replay_schema,
-            "wow-project.live-replay.v1"
-                | "wow-project.live-replay.v2"
-                | "wow-project.live-replay.v3"
-                | "wow-project.live-replay.v4"
+            "wow-project.live-replay.v4"
                 | "wow-project.live-replay.v5"
                 | "wow-project.live-replay.v6"
                 | "wow-project.live-replay.v7"

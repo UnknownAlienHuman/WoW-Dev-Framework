@@ -43,40 +43,19 @@ channel present, and the archive re-derives its own project and analyzer snapsho
 identities through a fresh publish and compares them against the captured ones before
 the pair is returned.
 
-## Additive schema, no legacy rewrite
+## Current schema selection
 
-The platform channel is new-only. An unselected platform archive uses
-`wow-project/native-project-replay/5` and the `wow-project.live-replay.v5` storage
-schema, and no earlier archive acquires a platform channel it did not have. Ordinary
-generation version 2 archives without the platform channel keep
-`wow-project/native-project-replay/4` and `wow-project.live-replay.v4`.
+All current archives use generation schema version 2. Ordinary non-platform inputs,
+including retained standalone TOC/XML and declared package inputs, use
+`wow-project/native-project-replay/4` and `wow-project.live-replay.v4`. Platform
+input selects `/5`; same-session package XML selects `/6`; package graph and raw
+inventory select `/7` and `/8`. Later direct, retained-budget and named-component
+routes keep their explicitly selected current schemas.
 
-Explicit same-session package XML binding selection adds
-`wow-project/native-project-replay/6` and `wow-project.live-replay.v6`; see
-[package XML bindings](PLATFORM_PACKAGE_XML_BINDINGS.md). It requires the typed
-selection and genuine platform channel. /6 without that selection and /5 with
-it refuse, with no fallback.
-
-Explicit `PlatformGraphProfile::PackageProjectionV1` selects
-`wow-project/native-project-replay/7` and `wow-project.live-replay.v7`, with source
-graph `/20` and registry 15. The new
-`PlatformGraphProfile::PackageProjectionWithRawInventoryV1` selects
-`wow-project/native-project-replay/8` and `wow-project.live-replay.v8`, source `/21`
-and registry 16. Both require genuine platform packages and same-session bindings;
-schema/profile substitution refuses without fallback.
-
-Storage selection stays a closed ladder in order of specificity: selected raw
-graph archives map to v8, selected package graph to v7, selected package XML
-bindings to v6, unselected platform archives to v5, ordinary generation version 2
-to v4, package archives to v3, load-plan archives to v2, and legacy physical archives
-to v1. New epochs admit v1-v8; complete published V1-V7 catalogs remain frozen and
-reopen against their exact membership. They are never widened in place, preserving
-original epoch and membership identities. Ordinary v1-v4 and prior platform v5-v7
-recipes are unchanged.
-
-Replay capture refuses an archive whose schema, platform presence and generation schema
-version disagree, so a v5 claim on a non-platform archive or a platform archive claiming
-v4 is rejected.
+The store registers only current catalog members. Replay v1-v3 and the generation-v1
+identity recipe are not read or migrated; an incompatible derived store must be
+rebuilt from source and configuration. Capture and hydration require generation
+version 2 and exact configuration/schema agreement, with no fallback.
 
 ## Sealed checks carried into replay
 
@@ -129,14 +108,12 @@ use the same retained-owner/budget pair. The six positive limits enter the
 configuration digest and are captured/rebuilt exactly; see
 [platform input](../apps/wow/PLATFORM_INPUT.md#explicit-function-call-budget).
 
-The selected report is budget-bound function-call `/8`. Omission keeps default
-report `/7`, earlier replay recipes and configuration bytes. A `/12` archive with
+The selected report is budget-bound function-call `/8`. Omission keeps the default
+report `/7`, current unselected replay and configuration bytes. A `/12` archive with
 the budget removed, a selected budget without retained native packages, schema
-downgrade and budget tampering refuse. Genuine disk-absent service publication,
-store reopen/read and replay verify the same project/analyzer identities. New
-epochs admit v11/v12; the original v10 catalog is frozen separately and reopens
-unchanged. It refuses the selected record before retaining an operation or
-changing Current. This does not raise the
+substitution and budget tampering refuse. Genuine disk-absent service publication,
+store reopen/read and replay verify the same project/analyzer identities. Exact catalog selection refuses an unregistered
+record before retaining an operation or changing Current. This does not raise the
 independent raw-source or encoded store record ceilings, qualify full-corpus
 persistence, or establish historical fixture acceptance.
 
