@@ -1,0 +1,90 @@
+name: Clean generation-v1 removal diff
+
+on:
+  push:
+    branches:
+      - refactor/remove-generation-v1-replays-2026-10-20
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out audit branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - name: Clean exact diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          patches = {
+              "crates/wow-project/src/replay/publication.rs": [
+                  (
+                      '            |"wow-project.live-replay.v4"| "wow-project.live-replay.v5"\n',
+                      '            "wow-project.live-replay.v4"\n'
+                      '                | "wow-project.live-replay.v5"\n',
+                  ),
+              ],
+              "apps/wow/LIVE_PROJECT.md": [
+                  (
+                      'administration; `recover` only observes the current registered store. Older readers\n'
+                      'and semantic IDs survive. See [PROJECT_RECOVERY.md](../../crates/wow-store/PROJECT_RECOVERY.md).',
+                      'administration; `recover` only observes the current registered store. Existing leased\n'
+                      'readers and semantic IDs survive physical-instance replacement. See\n'
+                      '[PROJECT_RECOVERY.md](../../crates/wow-store/PROJECT_RECOVERY.md).',
+                  ),
+                  (
+                      'and recovery evidence guard the hold; old native pairs remain coherent and new\n'
+                      'normal operations return `StoreQuarantined`.',
+                      'and recovery evidence guard the hold; already acquired native pairs remain coherent\n'
+                      'while new normal operations return `StoreQuarantined`.',
+                  ),
+              ],
+              "apps/wow/PLATFORM_INPUT.md": [
+                  (
+                      'source and package owners under the captured limits. Changed limits or schema\n'
+                      'substitution refuse. A successful retained Main is not full graph or persistence acceptance:\n',
+                      'source and package owners under the captured limits. Changed limits or schema\n'
+                      'substitution refuse. A successful retained Main is not full graph or persistence\n'
+                      'acceptance:\n',
+                  ),
+              ],
+              "docs/PLATFORM_SOURCE_REPLAY.md": [
+                  (
+                      'downgrade and budget tampering refuse. Genuine disk-absent service publication, store reopen/read and replay verify the\n'
+                      'same project/analyzer identities.',
+                      'substitution and budget tampering refuse. Genuine disk-absent service publication,\n'
+                      'store reopen/read and replay verify the same project/analyzer identities.',
+                  ),
+              ],
+          }
+
+          for name, replacements in patches.items():
+              path = Path(name)
+              text = path.read_text()
+              for old, new in replacements:
+                  if text.count(old) != 1:
+                      raise SystemExit(f"patch mismatch in {name}: {old!r}")
+                  text = text.replace(old, new, 1)
+              path.write_text(text)
+          PY
+          git rm .github/workflows/cleanup-pr229.yml
+          cargo +stable fmt --all
+          cargo +stable xtask check
+          cargo +stable clippy --locked -p wow-project --all-targets --all-features -- -D warnings
+          git diff --check
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git add -A
+          git commit -m "style: clean current replay removal"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
