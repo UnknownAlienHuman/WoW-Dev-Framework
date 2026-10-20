@@ -28,10 +28,30 @@ jobs:
           from pathlib import Path
           path = Path('.github/remove-generation-v1-replays.py')
           text = path.read_text()
-          old = '        "Some(2)",\n'
-          if text.count(old) != 1:
-              raise SystemExit('temporary audit guard patch mismatch')
-          path.write_text(text.replace(old, '', 1))
+          patches = [
+              (
+                  '        "Some(2)",\n',
+                  '',
+                  'temporary audit guard',
+              ),
+              (
+                  'text = once(text, "    legacy_generation: bool,\\n", "", "publisher legacy field")\n',
+                  '''text = once(
+              text,
+              "    function_call_mode: FunctionCallAnalysisMode,\\n"
+              "    legacy_generation: bool,\\n",
+              "    function_call_mode: FunctionCallAnalysisMode,\\n",
+              "publisher legacy field",
+          )
+          ''',
+                  'publisher legacy field patch',
+              ),
+          ]
+          for old, new, label in patches:
+              if text.count(old) != 1:
+                  raise SystemExit(f'{label} mismatch')
+              text = text.replace(old, new, 1)
+          path.write_text(text)
           PY
           python .github/remove-generation-v1-replays.py
           git rm .github/remove-generation-v1-replays.py
