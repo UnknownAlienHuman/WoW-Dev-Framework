@@ -46,6 +46,12 @@ jobs:
                   'read-admission patch',
               ),
               (
+                  '    "crates/wow-project/tests/data/native-replay-legacy/packages.json",\n',
+                  '    "crates/wow-project/tests/data/native-replay-legacy/packages.json",\n'
+                  '    "crates/wow-project/tests/data/native-replay-legacy/README.md",\n',
+                  'fixture README patch',
+              ),
+              (
                   '        "Some(2)",\n',
                   '',
                   'temporary audit guard',
