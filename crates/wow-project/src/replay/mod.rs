@@ -122,8 +122,8 @@ struct ReplayLibrary {
 }
 
 /// Data-only archive, distinct from the executable owner view. Current publication
-/// requires generation recipe v2; configuration selects the ordinary, platform or
-/// named component replay shape without a legacy fallback.
+/// has one generation recipe; configuration selects the ordinary, platform or named
+/// component replay shape without a legacy fallback.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectReplay {
@@ -134,7 +134,6 @@ pub struct ProjectReplay {
     function_calls: bool,
     project_snapshot_id: String,
     analyzer_snapshot_id: String,
-    generation_schema_version: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     load: Option<ReplayLoad>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -272,12 +271,6 @@ impl ProjectReplay {
             });
         }
         retained_libraries.sort_by(|a, b| a.snapshot_id.cmp(&b.snapshot_id));
-        let generation_schema_version = snapshot
-            .generation_candidate()
-            .project_generation_schema_version();
-        if generation_schema_version != crate::PROJECT_GENERATION_SCHEMA_VERSION {
-            return Err(invalid());
-        }
         // The package graph projection is selected only together with the
         // genuine platform owner, the same-session XML binding profile, the
         // library-bound generation and the explicit platform graph selector.
@@ -349,7 +342,6 @@ impl ProjectReplay {
                     function_calls,
                     project_snapshot_id: snapshot.snapshot_id(),
                     analyzer_snapshot_id: snapshot.analyzer_binding().analyzer_snapshot_id(),
-                    generation_schema_version: 2,
                     platform: (),
                 },
                 stop,
@@ -373,7 +365,6 @@ impl ProjectReplay {
             function_calls,
             project_snapshot_id: snapshot.snapshot_id().into(),
             analyzer_snapshot_id: snapshot.analyzer_binding().analyzer_snapshot_id().into(),
-            generation_schema_version,
             load,
             packages,
             platform,
@@ -382,9 +373,6 @@ impl ProjectReplay {
         Ok(replay)
     }
     fn expected_schema(&self) -> ProjectResult<&'static str> {
-        if self.generation_schema_version != crate::PROJECT_GENERATION_SCHEMA_VERSION {
-            return Err(invalid());
-        }
         let schema = self.expected_base_schema()?;
         if self.configuration.hook_target_recipe().is_some() {
             // Retained platform owners keep their retention requirement.
@@ -892,7 +880,6 @@ struct PlatformEnvelopeBudget<'a> {
     function_calls: bool,
     project_snapshot_id: &'a str,
     analyzer_snapshot_id: &'a str,
-    generation_schema_version: u64,
     platform: (),
 }
 

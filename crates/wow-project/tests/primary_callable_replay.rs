@@ -331,7 +331,6 @@ fn selected_primary_recipes_capture_hydrate_recapture_exactly() -> TestResult {
         let bytes = canonical_json_bytes(&replay)?;
         let wire: Value = serde_json::from_slice(&bytes)?;
         assert_eq!(wire["schema"], PRIMARY_REPLAY);
-        assert_eq!(wire["generation_schema_version"], 2);
         assert_eq!(wire["function_calls"], true);
         assert!(wire.get("load").is_none());
         assert!(wire.get("packages").is_none());

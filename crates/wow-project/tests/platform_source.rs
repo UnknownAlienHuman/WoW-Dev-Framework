@@ -2673,7 +2673,6 @@ fn platform_configuration_publishes_native_main_and_replays_without_source() -> 
     let replay = ProjectReplay::capture(&publisher, &stop)?;
     let archive = serde_json::to_value(&replay)?;
     assert_eq!(archive["schema"], "wow-project/native-project-replay/5");
-    assert_eq!(archive["generation_schema_version"], 2);
     assert_eq!(archive["function_calls"], true);
     assert!(archive["files"].as_array().is_some_and(Vec::is_empty));
     assert!(archive.get("load").is_none());

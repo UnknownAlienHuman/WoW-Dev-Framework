@@ -264,7 +264,6 @@ fn package_pair_replays_complete_scopes_and_never_admits_unreachable_main() -> T
     let replay = ProjectReplay::capture(&publisher, &stop)?;
     let archive = serde_json::to_value(&replay)?;
     assert_eq!(archive["schema"], "wow-project/native-project-replay/4");
-    assert_eq!(archive["generation_schema_version"], 2);
     assert_eq!(archive["files"].as_array().ok_or("files missing")?.len(), 0);
     assert_eq!(
         archive["packages"]["packages"]
@@ -436,7 +435,6 @@ fn standalone_toc_xml_pair_replays_without_disk_and_rejects_archive_substitution
     let replay = ProjectReplay::capture(&publisher, &stop)?;
     let archive = serde_json::to_value(&replay)?;
     assert_eq!(archive["schema"], "wow-project/native-project-replay/4");
-    assert_eq!(archive["generation_schema_version"], 2);
     assert_eq!(
         archive["load"]["documents"]
             .as_array()
