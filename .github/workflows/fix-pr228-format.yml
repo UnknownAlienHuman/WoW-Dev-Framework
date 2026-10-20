@@ -1,0 +1,37 @@
+name: Format PR228 exact head
+
+on:
+  push:
+    branches:
+      - refactor/remove-legacy-global-access-replay-2026-10-20
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out refactor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Install current stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt
+      - name: Apply exact rustfmt output
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +stable fmt --all
+          changed="$(git diff --name-only)"
+          test "$changed" = "crates/wow-project/src/replay/mod.rs"
+          cargo +stable fmt --all --check
+          git diff --check
+          git rm .github/workflows/fix-pr228-format.yml
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git add crates/wow-project/src/replay/mod.rs
+          git commit -m "style: format current replay selection"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
