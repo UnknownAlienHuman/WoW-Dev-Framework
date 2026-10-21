@@ -167,6 +167,35 @@ text = once(
     "    let storage_schema = replay.storage_schema();\n",
     "infallible replay storage schema",
 )
+text = sub_once(
+    text,
+    r"        let replay_schema = read\n"
+    r"            \.manifest\(\)\n"
+    r"            \.members\n"
+    r"            \.iter\(\)\n"
+    r"            \.find\(\|member\| member\.key == REPLAY_KEY\)\n"
+    r"            \.map\(\|member\| member\.schema\.as_str\(\)\)\n"
+    r"            \.ok_or_else\(invalid\)\?;\n"
+    r"        if !matches!\(.*?\n"
+    r"        \) \{\n"
+    r"            return Err\(invalid\(\)\.into\(\)\);\n"
+    r"        \}\n"
+    r"        let replay: ProjectReplay = load\(read, REPLAY_KEY, replay_schema, stop\)\?;\n"
+    r"        if replay\.storage_schema\(\)\? != replay_schema \{\n"
+    r"            return Err\(invalid\(\)\.into\(\)\);\n"
+    r"        \}\n",
+    "        let replay: ProjectReplay =\n            load(read, REPLAY_KEY, super::STORAGE_SCHEMA, stop)?;\n",
+    "read-side replay schema admission",
+)
+path.write_text(text)
+
+path, text = read("crates/wow-project/src/replay/publication/commitments.rs")
+text = once(
+    text,
+    "    let replay_record = PartitionRecord::new(REPLAY_KEY, replay.storage_schema()?, replay)\n",
+    "    let replay_record = PartitionRecord::new(REPLAY_KEY, replay.storage_schema(), replay)\n",
+    "commitment replay storage schema",
+)
 path.write_text(text)
 
 # Private replay-configuration getters used only by the removed tag-selection
