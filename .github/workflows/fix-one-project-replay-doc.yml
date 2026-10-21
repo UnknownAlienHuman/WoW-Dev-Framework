@@ -1,0 +1,57 @@
+name: Finish one Project replay documentation
+
+on:
+  push:
+    branches:
+      - refactor/one-project-replay-record-2026-10-21
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out refactor branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Replace stale implementation status
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("docs/IMPLEMENTATION.md")
+          text = path.read_text()
+          old = """Use one current database layout and one ordinary Project replay catalog; the only
+          second physical variant adds the candidate receipt/check. Exact feature choices
+          are validated from reconstructed configuration, not catalog identity. Payload
+          schema tags remain to be collapsed only after tracing their real readers. An
+          incompatible derived database must be rebuilt from source/configuration; preserve
+          user files and report missing inputs. #111 removes remaining retention/GC
+          administration. No compatibility reader, converter or new lifecycle subsystem.
+          """
+          new = """Use one current database layout, one strict `ProjectReplay` DTO and one replay
+          record. The only second physical variant adds the candidate receipt/check. Exact
+          feature choices are validated from reconstructed configuration and owners, not
+          catalog or payload tags. Incompatible derived data is rebuilt from source and
+          configuration; preserve user files and report missing inputs. #111 removes
+          remaining retention/GC administration. No compatibility reader, converter or new
+          lifecycle subsystem.
+          """
+          if text.count(old) != 1:
+              raise SystemExit("stale replay implementation paragraph not found exactly once")
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git rm .github/workflows/fix-one-project-replay-doc.yml
+          cargo +stable xtask check
+          git diff --check
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git add docs/IMPLEMENTATION.md
+          git commit -m "docs: record the single Project replay DTO"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
