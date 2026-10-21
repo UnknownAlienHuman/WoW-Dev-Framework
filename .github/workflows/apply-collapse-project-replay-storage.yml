@@ -24,6 +24,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/collapse-project-replay-storage.py')
+          text = path.read_text()
+          old = r': &str =\\n\\s+\"wow-project'
+          new = r': &str =\\s*\"wow-project'
+          if text.count(old) != 1:
+              raise SystemExit('storage-constant regex patch input mismatch')
+          path.write_text(text.replace(old, new, 1))
+          PY
           python .github/collapse-project-replay-storage.py
           git rm .github/collapse-project-replay-storage.py
           git rm .github/workflows/apply-collapse-project-replay-storage.yml
