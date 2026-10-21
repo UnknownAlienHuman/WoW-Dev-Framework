@@ -292,49 +292,18 @@ fn non_null_physical_function_signatures<'de, D: serde::Deserializer<'de>>(
 }
 
 impl ReplayConfiguration {
-    pub(super) const fn signal_witnesses(&self) -> Option<crate::SignalWitnessRecipe> {
-        self.signal_witnesses
-    }
-    pub(super) const fn library_witnesses(&self) -> Option<crate::LibraryWitnessRecipe> {
-        self.library_witnesses
-    }
-    pub(super) const fn state_projection(&self) -> Option<crate::StateProjectionRecipe> {
-        self.state_projection
-    }
     pub(super) const fn native_library_input(&self) -> Option<&crate::NativeLibraryInput> {
         self.native_library_input.as_ref()
     }
-    pub(super) const fn native_api_uses(&self) -> Option<crate::NativeApiUseRecipe> {
-        self.native_api_uses
-    }
-    pub(super) const fn physical_function_signatures(
-        &self,
-    ) -> Option<wow_emmy::function_calls::PhysicalFunctionSignatureRecipe> {
-        self.physical_function_signatures
-    }
-    pub(super) const fn physical_function_declarations(
-        &self,
-    ) -> Option<wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe> {
-        self.physical_function_declarations
-    }
-    pub(super) const fn source_graph_budget(&self) -> Option<crate::graph::SourceGraphBudget> {
-        self.budgets.source_graph
-    }
-    pub(super) const fn function_call_budget(
-        &self,
-    ) -> Option<wow_emmy::function_calls::FunctionCallBudget> {
-        self.budgets.function_calls
-    }
 
-    pub(super) const fn function_call_evidence_profile(
-        &self,
-    ) -> Option<wow_emmy::function_calls::FunctionCallEvidenceProfile> {
-        self.budgets.function_call_evidence_profile
-    }
-    pub(super) const fn hook_target_recipe(
-        &self,
-    ) -> Option<wow_emmy::function_calls::HookTargetRecipe> {
-        self.budgets.hook_target_recipe
+    pub(super) const fn requires_function_calls(&self) -> bool {
+        self.budgets.hook_target_recipe.is_some()
+            || self.budgets.function_call_evidence_profile.is_some()
+            || self.physical_function_declarations.is_some()
+            || self.physical_function_signatures.is_some()
+            || self.state_projection.is_some()
+            || self.library_witnesses.is_some()
+            || self.signal_witnesses.is_some()
     }
     pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {
         config.validate()?;
@@ -379,12 +348,6 @@ impl ReplayConfiguration {
     }
     pub(super) fn is_platform(&self) -> bool {
         self.kind == ReplayKind::BlizzardUiPlatformSource
-    }
-    pub(super) fn package_xml_binding_profile(&self) -> Option<PackageXmlBindingProfile> {
-        self.package_xml_binding_profile
-    }
-    pub(super) fn platform_graph_profile(&self) -> Option<crate::PlatformGraphProfile> {
-        self.platform_graph_profile
     }
 
     /// Refuse missing intent, a stray binding, or downgrade to an unselected recipe.

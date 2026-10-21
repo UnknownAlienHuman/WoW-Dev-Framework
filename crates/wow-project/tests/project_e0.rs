@@ -441,7 +441,6 @@ fn library_order_is_canonical_and_fact_profile_changes_generation() -> TestResul
     let replay = ProjectReplay::capture(&callable, &stop)?;
     assert_eq!(replay.hydrate(&stop)?.snapshot_id(), extended.snapshot_id());
     let archive = serde_json::to_value(replay)?;
-    assert_eq!(archive["schema"], "wow-project/native-project-replay/4");
     let mut mismatched = archive.clone();
     mismatched["function_calls"] = false.into();
     assert!(
@@ -450,12 +449,8 @@ fn library_order_is_canonical_and_fact_profile_changes_generation() -> TestResul
             .is_err()
     );
     let mut obsolete = archive;
-    obsolete["schema"] = "wow-project/native-project-replay/1".into();
-    assert!(
-        serde_json::from_value::<ProjectReplay>(obsolete)?
-            .hydrate(&stop)
-            .is_err()
-    );
+    obsolete["obsolete_schema"] = true.into();
+    assert!(serde_json::from_value::<ProjectReplay>(obsolete).is_err());
     Ok(())
 }
 

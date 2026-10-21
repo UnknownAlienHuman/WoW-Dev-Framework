@@ -460,10 +460,6 @@ fn retained_native_bindings_use_the_fact_budget_and_replay_exactly() -> TestResu
     let view = publisher.open_current()?;
     let replay = ProjectReplay::capture(&publisher, &stop)?;
     let bytes = serde_json::to_vec(&replay)?;
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&bytes)?["schema"],
-        "wow-project/native-project-replay/11"
-    );
     let restored = ProjectReplay::from_json(&bytes, &stop)?.hydrate(&stop)?;
     assert_eq!(restored.snapshot_id(), view.snapshot_id());
     assert_eq!(restored.project_generation(), view.project_generation());
@@ -1642,7 +1638,6 @@ fn selected_package_graph_preserves_local_ids_shared_globals_and_native_replay()
     );
     let archive = ProjectReplay::capture(&selected, &stop)?;
     let replay_wire = serde_json::to_value(&archive)?;
-    assert_eq!(replay_wire["schema"], "wow-project/native-project-replay/7");
     let restored =
         ProjectReplay::from_json(&serde_json::to_vec(&archive)?, &stop)?.hydrate(&stop)?;
     let (_, restored_batch, restored_coverage, restored_provenance, _) =
@@ -1651,7 +1646,7 @@ fn selected_package_graph_preserves_local_ids_shared_globals_and_native_replay()
     assert_eq!(restored_coverage, coverage);
     assert_eq!(restored_provenance, provenance);
     let mut wrong_recipe = replay_wire;
-    wrong_recipe["schema"] = serde_json::json!("wow-project/native-project-replay/6");
+    wrong_recipe["obsolete_schema"] = serde_json::json!("obsolete-project-replay-schema");
     assert!(ProjectReplay::from_json(&serde_json::to_vec(&wrong_recipe)?, &stop).is_err());
     let cancelled = AtomicBool::new(true);
     assert!(build_source_graph_proposals(&view, &cancelled).is_err());
@@ -1698,7 +1693,6 @@ fn package_binding_selection_requires_native_owner_and_replays_current_input() -
     let archive = ProjectReplay::capture(&publisher, &stop)?;
     let encoded = serde_json::to_vec(&archive)?;
     let wire: serde_json::Value = serde_json::from_slice(&encoded)?;
-    assert_eq!(wire["schema"], "wow-project/native-project-replay/5");
     assert!(
         wire["configuration"]
             .get("package_xml_binding_profile")
@@ -1964,7 +1958,6 @@ fn package_xml_bindings_keep_local_scopes_and_one_shared_native_lookup_in_replay
     let archive = ProjectReplay::capture(&publisher, &stop)?;
     let encoded = serde_json::to_vec(&archive)?;
     let wire: serde_json::Value = serde_json::from_slice(&encoded)?;
-    assert_eq!(wire["schema"], "wow-project/native-project-replay/6");
     assert_eq!(
         wire["configuration"]["package_xml_binding_profile"],
         "same_session_v1"
@@ -2003,7 +1996,7 @@ fn package_xml_bindings_keep_local_scopes_and_one_shared_native_lookup_in_replay
     assert!(!root.0.exists());
 
     let mut wrong_schema = wire.clone();
-    wrong_schema["schema"] = serde_json::json!("wow-project/native-project-replay/5");
+    wrong_schema["obsolete_schema"] = serde_json::json!("obsolete-project-replay-schema");
     let mut missing_selector = wire.clone();
     missing_selector["configuration"]
         .as_object_mut()

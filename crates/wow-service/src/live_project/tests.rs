@@ -263,7 +263,6 @@ fn package_pair_replays_complete_scopes_and_never_admits_unreachable_main() -> T
         owners_from_bundle(input_bundle_with_plans(files, None, Some((&load, &main)))?)?;
     let replay = ProjectReplay::capture(&publisher, &stop)?;
     let archive = serde_json::to_value(&replay)?;
-    assert_eq!(archive["schema"], "wow-project/native-project-replay/4");
     assert_eq!(archive["files"].as_array().ok_or("files missing")?.len(), 0);
     assert_eq!(
         archive["packages"]["packages"]
@@ -434,7 +433,6 @@ fn standalone_toc_xml_pair_replays_without_disk_and_rejects_archive_substitution
     let (publisher, graph) = owners_from_bundle(input_bundle_with_plan(files, Some(&plan))?)?;
     let replay = ProjectReplay::capture(&publisher, &stop)?;
     let archive = serde_json::to_value(&replay)?;
-    assert_eq!(archive["schema"], "wow-project/native-project-replay/4");
     assert_eq!(
         archive["load"]["documents"]
             .as_array()
@@ -478,7 +476,7 @@ fn standalone_toc_xml_pair_replays_without_disk_and_rejects_archive_substitution
                     .push(serde_json::json!({"path":"unused.xml", "text":"<Ui/>"}));
             }
             3 => changed["load"]["context"]["game_types"]["classic"] = true.into(),
-            _ => changed["schema"] = "wow-project/native-project-replay/1".into(),
+            _ => changed["obsolete_schema"] = "obsolete-project-replay-schema".into(),
         }
         let substituted: ProjectReplay = serde_json::from_value(changed)?;
         assert!(
@@ -552,8 +550,6 @@ fn platform_pair_publishes_retained_source_and_old_catalog_refuses_v5() -> TestR
         PlatformSourceClass, PlatformSourceInventory, PlatformSourceOrigin, PlatformSourceRevision,
         PlatformTarget, ProfileExclusion, SourceAdmissionLimits,
     };
-    use wow_project::replay::ProjectReplay;
-
     let stop = AtomicBool::new(false);
     let path = root("platform-replay-v5")?;
     let source_root = path.join("input");
@@ -688,11 +684,6 @@ fn platform_pair_publishes_retained_source_and_old_catalog_refuses_v5() -> TestR
         ordinary.libraries().to_vec(),
     )?)?;
     let project = publisher.open_current()?;
-    let replay = ProjectReplay::capture(&publisher, &stop)?;
-    assert_eq!(
-        serde_json::to_value(&replay)?["schema"],
-        "wow-project/native-project-replay/5"
-    );
     let store_path = path.join("store");
     let mut store = LiveProjectStore::create(&store_path, graph.snapshot().universe().as_str())?;
     let operation = store.publish(&publisher, &graph, "fixture:platform-v5", None, &stop)?;
@@ -705,7 +696,7 @@ fn platform_pair_publishes_retained_source_and_old_catalog_refuses_v5() -> TestR
             .members
             .iter()
             .any(|member| member.key == "live.project.replay"
-                && member.schema == "wow-project.live-replay.v5")
+                && member.schema == "wow-project.live-replay")
     );
     assert_eq!(read.project().snapshot_id(), project.snapshot_id());
     assert_eq!(read.graph(), &graph);
@@ -978,7 +969,7 @@ fn missing_or_mutated_replay_and_mixed_project_graph_never_activate() -> TestRes
             value["files"][0]["text"] = serde_json::Value::String("return 42\n".into());
             records[index] = wow_store::project::PartitionRecord::new(
                 "live.project.replay",
-                "wow-project.live-replay.v4",
+                "wow-project.live-replay",
                 &value,
             )?;
         } else {

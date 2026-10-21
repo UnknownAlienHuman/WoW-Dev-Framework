@@ -49,10 +49,6 @@ impl PlatformPackageRequest {
             stop,
         )
     }
-
-    pub(crate) const fn has_retention_limits(&self) -> bool {
-        self.retention_limits.is_some()
-    }
 }
 
 /// Actual native package/Main owners bound to their retained original source.

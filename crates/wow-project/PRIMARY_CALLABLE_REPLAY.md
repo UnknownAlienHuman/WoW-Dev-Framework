@@ -1,19 +1,15 @@
 # Ordinary Primary callable replay
 
-This route retains physical Main, exact Library files and the selected declaration/
-signature recipe, then rebuilds the real Emmy analysis when read. Its replay payload
-is `wow-project/native-project-replay/primary-callables/1`; hook/witness selections
-use `wow-project/native-project-replay/selected-components/1`.
+Project replay retains exact Main and Library files plus the selected declaration,
+signature, hook, witness and native-input configuration. Every current replay uses
+the same `ProjectReplay` DTO and `wow-project.live-replay` store record.
 
-All current Project replay payloads share `publication::STORAGE_SCHEMAS`. The store
-catalog no longer encodes feature combinations. Exact declaration, signature, hook,
-XML and platform choices remain in `ProjectConfiguration`; hydration and readback
-must reproduce those choices and analyzer/graph identities. A different selection
-may open the same physical store but its read is rejected after configuration is
-reconstructed.
+Feature choices are not encoded in a schema name. Hydration rebuilds
+`ProjectConfiguration`, Emmy analysis and graph owners, verifies the captured
+configuration and semantic identities, then compares the complete recaptured DTO.
+A different selection is rejected by those owners.
 
-Current publication performs inactive owner readback before Current activation.
-Incompatible derived stores are rebuilt from source and configuration; no legacy
-catalog reader, migration or feature-specific epoch is provided. These observations
-remain source structure, not runtime guarantees. Broader context work is tracked by
+Old derived records are rebuilt from source and configuration. There is no tag
+ladder, compatibility reader or migration path. These source observations do not
+claim runtime behavior. Broader context work is tracked by
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).

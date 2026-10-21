@@ -18,7 +18,7 @@ same-session input binding.
 | Service source recipe | `wow-project/source-load-proposals/22` |
 | Native source capability | `wow-project/platform-direct-producers/1` |
 | Service request / result | `wow-service/graph-build-request/12` / `wow-service/graph-build-result/19` |
-| Native replay / stored replay | `wow-project/native-project-replay/9` / `wow-project.live-replay.v9` |
+| Native replay / stored replay | `ProjectReplay` / `wow-project.live-replay` |
 
 The monolithic proposal builder refuses this selector. Older source recipes
 /19-/21, native replay /1-/8 and their exact catalogs retain their own routes.

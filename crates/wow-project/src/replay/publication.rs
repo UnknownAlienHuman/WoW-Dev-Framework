@@ -17,31 +17,7 @@ use wow_store::project::{
 
 /// Every current Project replay payload is admitted by one rebuildable catalog.
 /// Exact feature selection remains in ProjectConfiguration and replay validation.
-pub const STORAGE_SCHEMAS: &[&str] = &[
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-replay.v9",
-    "wow-project.live-replay.v10",
-    "wow-project.live-replay.v11",
-    "wow-project.live-replay.v12",
-    "wow-project.live-replay.v14",
-    "wow-project.live-replay.v15",
-    "wow-project.live-replay.v16",
-    super::ACEADDON_LOCAL_RESULT_STORAGE_SCHEMA,
-    super::XML_CLASSIFICATION_STORAGE_SCHEMA,
-    super::PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA,
-    super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA,
-    super::PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA,
-    super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA,
-    super::SELECTED_COMPONENTS_STORAGE_SCHEMA,
-    super::PRIMARY_CALLABLES_STORAGE_SCHEMA,
-    super::NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA,
-    super::NATIVE_API_USES_STORAGE_SCHEMA,
-    "wow-project.live-pair.v1",
-];
+pub const STORAGE_SCHEMAS: &[&str] = &[super::STORAGE_SCHEMA, "wow-project.live-pair.v1"];
 pub const STORAGE_CHECK: &str = "wow-project.live-pair-native-replay.v1";
 const HEADER_KEY: &str = "live.project.header";
 const REPLAY_KEY: &str = "live.project.replay";
@@ -269,43 +245,7 @@ impl AcquiredProjectPair {
         if header.schema != HEADER_SCHEMA {
             return Err(invalid().into());
         }
-        let replay_schema = read
-            .manifest()
-            .members
-            .iter()
-            .find(|member| member.key == REPLAY_KEY)
-            .map(|member| member.schema.as_str())
-            .ok_or_else(invalid)?;
-        if !matches!(
-            replay_schema,
-            "wow-project.live-replay.v4"
-                | "wow-project.live-replay.v5"
-                | "wow-project.live-replay.v6"
-                | "wow-project.live-replay.v7"
-                | "wow-project.live-replay.v8"
-                | "wow-project.live-replay.v9"
-                | "wow-project.live-replay.v10"
-                | "wow-project.live-replay.v11"
-                | "wow-project.live-replay.v12"
-                | "wow-project.live-replay.v14"
-                | "wow-project.live-replay.v15"
-                | "wow-project.live-replay.v16"
-                | super::XML_CLASSIFICATION_STORAGE_SCHEMA
-                | super::PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA
-                | super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA
-                | super::PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA
-                | super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA
-                | super::SELECTED_COMPONENTS_STORAGE_SCHEMA
-                | super::PRIMARY_CALLABLES_STORAGE_SCHEMA
-                | super::NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA
-                | super::NATIVE_API_USES_STORAGE_SCHEMA
-        ) {
-            return Err(invalid().into());
-        }
-        let replay: ProjectReplay = load(read, REPLAY_KEY, replay_schema, stop)?;
-        if replay.storage_schema()? != replay_schema {
-            return Err(invalid().into());
-        }
+        let replay: ProjectReplay = load(read, REPLAY_KEY, super::STORAGE_SCHEMA, stop)?;
         let graph =
             GraphPartitionSnapshot::read_stored_validated(read, stop).map_err(graph_error)?;
         let publisher = replay.hydrate_owner(stop)?;
@@ -514,7 +454,7 @@ fn plan(
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectPublicationBundle> {
     let mut records = graph.storage_records(stop).map_err(graph_error)?;
-    let storage_schema = replay.storage_schema()?;
+    let storage_schema = replay.storage_schema();
     records.push(
         PartitionRecord::new(REPLAY_KEY, storage_schema, replay).map_err(|_| super::exhausted())?,
     );

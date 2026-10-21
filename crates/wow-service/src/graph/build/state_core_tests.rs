@@ -134,10 +134,6 @@ fn state_core_pipeline_publishes_roots_and_literal_paths() -> Result<(), Box<dyn
     let replay = wow_project::replay::ProjectReplay::capture(&publisher, &stop)?;
     let archive = serde_json::to_value(&replay)?;
     assert_eq!(
-        archive["schema"],
-        "wow-project/native-project-replay/selected-components/1"
-    );
-    assert_eq!(
         archive["configuration"]["state_projection"],
         "dynamic_prefixes_v1"
     );

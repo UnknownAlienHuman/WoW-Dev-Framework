@@ -37,8 +37,7 @@ type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 type Declarations = PhysicalFunctionDeclarationRecipe;
 type Signatures = PhysicalFunctionSignatureRecipe;
 
-const PRIMARY_REPLAY: &str = "wow-project/native-project-replay/primary-callables/1";
-const PRIMARY_STORAGE: &str = "wow-project.live-replay.primary-callables.v1";
+const PRIMARY_STORAGE: &str = "wow-project.live-replay";
 // Same typed native fixture used by the existing service signature regression.
 const MAIN: &str = "---@param value number\n---@return number\nlocal function TypedSignatureFixture(value)\n    return value\nend\n";
 // Retained synthetic compatibility import fixture used by the existing native
@@ -330,7 +329,6 @@ fn selected_primary_recipes_capture_hydrate_recapture_exactly() -> TestResult {
         let replay = ProjectReplay::capture(&publisher, &stop)?;
         let bytes = canonical_json_bytes(&replay)?;
         let wire: Value = serde_json::from_slice(&bytes)?;
-        assert_eq!(wire["schema"], PRIMARY_REPLAY);
         assert_eq!(wire["function_calls"], true);
         assert!(wire.get("load").is_none());
         assert!(wire.get("packages").is_none());
@@ -396,8 +394,8 @@ fn selected_primary_recipes_capture_hydrate_recapture_exactly() -> TestResult {
     let (publisher, replay, library) = combined.ok_or("combined native replay case")?;
     let wire = serde_json::to_value(&replay)?;
     for schema in [
-        "wow-project/native-project-replay/4",
-        "wow-project/native-project-replay/primary-callables/2",
+        "obsolete-project-replay-schema",
+        "obsolete-project-replay-schema",
     ] {
         let mut changed = wire.clone();
         changed["schema"] = schema.into();
@@ -482,7 +480,6 @@ fn unselected_primary_keeps_v4_and_ordinary_catalog() -> TestResult {
     );
     let replay = ProjectReplay::capture(&publisher, &stop)?;
     let wire = serde_json::to_value(&replay)?;
-    assert_eq!(wire["schema"], "wow-project/native-project-replay/4");
     assert_eq!(wire["function_calls"], false);
     assert!(
         wire["configuration"]
@@ -501,8 +498,7 @@ fn unselected_primary_keeps_v4_and_ordinary_catalog() -> TestResult {
         .ok_or("ordinary replay record")?;
     assert_eq!(
         record.version(),
-        PartitionRecord::new("live.project.replay", "wow-project.live-replay.v4", &replay)?
-            .version()
+        PartitionRecord::new("live.project.replay", "wow-project.live-replay", &replay)?.version()
     );
     let root = StoreRoot::new()?;
     let store = ProjectStore::create(

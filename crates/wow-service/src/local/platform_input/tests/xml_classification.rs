@@ -97,16 +97,9 @@ fn selected_declared_headers_compose_with_xml_classification_and_exact_catalog()
         .find(|record| record.key() == "live.project.replay")
         .ok_or("combined replay record")?;
     let replay: ProjectReplay = record.decode()?;
-    let expected_record = wow_store::project::PartitionRecord::new(
-        record.key(),
-        "wow-project.live-replay.xml-schema-classification-and-physical-function-declarations.v1",
-        &replay,
-    )?;
+    let expected_record =
+        wow_store::project::PartitionRecord::new(record.key(), "wow-project.live-replay", &replay)?;
     assert_eq!(record.version(), expected_record.version());
-    assert_eq!(
-        serde_json::to_value(&replay)?["schema"],
-        "wow-project/native-project-replay/xml-schema-classification-and-physical-function-declarations/1"
-    );
     let decoded = ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?;
     let hydrated = decoded.hydrate(&stop)?;
     assert_eq!(hydrated.snapshot_id(), project.snapshot_id());
@@ -1109,10 +1102,6 @@ fn selected_xml_classification_reaches_service_replay_and_publication() -> TestR
         .find(|record| record.key() == "live.project.replay")
         .ok_or("native replay record")?
         .decode()?;
-    assert_eq!(
-        serde_json::to_value(&replay)?["schema"],
-        "wow-project/native-project-replay/xml-schema-classification/1"
-    );
     let decoded = ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?;
     let reopened = decoded.hydrate(&stop)?;
     assert_eq!(

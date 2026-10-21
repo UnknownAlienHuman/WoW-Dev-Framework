@@ -51,8 +51,7 @@ type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 const PROJECT: &str = "fixture-live-pair";
 const REGISTRATION: &str = "project-store:fixture-primary-callables";
 const INPUT_SCHEMA: &str = "wow-service/local-primary-callables-files/1";
-const REPLAY_SCHEMA: &str = "wow-project/native-project-replay/primary-callables/1";
-const STORAGE_SCHEMA: &str = "wow-project.live-replay.primary-callables.v1";
+const STORAGE_SCHEMA: &str = "wow-project.live-replay";
 const WORKSPACE_ID: &str = "workspace:main:project-pair-regression";
 const SOURCE_ORIGIN_ID: &str = "project-origin:project-pair-regression";
 const LOGICAL_ROOT: &str = "fixtures/project-pair/main";
@@ -268,7 +267,7 @@ fn raw_replay(root: &Path, selected: bool, stop: &AtomicBool) -> TestResult<(Val
         if selected {
             STORAGE_SCHEMA
         } else {
-            "wow-project.live-replay.v4"
+            "wow-project.live-replay"
         }
     );
     let replay: ProjectReplay = read
@@ -276,14 +275,6 @@ fn raw_replay(root: &Path, selected: bool, stop: &AtomicBool) -> TestResult<(Val
         .ok_or("retained replay record")?
         .decode()?;
     let wire = serde_json::to_value(&replay)?;
-    assert_eq!(
-        wire["schema"],
-        if selected {
-            REPLAY_SCHEMA
-        } else {
-            "wow-project/native-project-replay/4"
-        }
-    );
     read.close()?;
     store.close()?;
     Ok((epoch, wire))

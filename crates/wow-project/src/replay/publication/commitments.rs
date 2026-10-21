@@ -25,7 +25,7 @@ pub(super) fn validate_read(
         .validate_storage_membership(read, stop)
         .map_err(graph_error)?;
     crate::analyzer::checkpoint(stop)?;
-    let replay_record = PartitionRecord::new(REPLAY_KEY, replay.storage_schema()?, replay)
+    let replay_record = PartitionRecord::new(REPLAY_KEY, replay.storage_schema(), replay)
         .map_err(|_| super::super::exhausted())?;
     let owner = graph.as_snapshot();
     let (expected_header, mut bindings) = {

@@ -13,8 +13,8 @@ It selects `wow-project/source-load-proposals/21` and registry version 16.
 Absent selection keeps `/19`; `PackageProjectionV1` keeps `/20`; both retain
 registry 15. Configuration/project-generation identity binds the selection.
 
-The selected native replay schema is `wow-project/native-project-replay/8`, with
-storage `wow-project.live-replay.v8`. Native service request
+The selected native replay schema is `ProjectReplay`, with
+storage `wow-project.live-replay`. Native service request
 `wow-service/graph-build-request/11` must match the held raw configuration and
 returns `wow-service/graph-build-result/18`. Earlier requests/results, ordinary
 replay v1-v4 and platform v5-v7 retain their identities. Complete frozen V1-V7

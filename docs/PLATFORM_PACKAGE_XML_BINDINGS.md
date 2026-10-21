@@ -105,8 +105,8 @@ replace the stricter configured output or complete 32 MiB replay-record ceiling.
 
 ## Exact replay and frozen catalogs
 
-Selected genuine platform inputs use `wow-project/native-project-replay/6`
-and storage `wow-project.live-replay.v6`. Unselected platform inputs keep /5;
+Selected genuine platform inputs use `ProjectReplay`
+and storage `wow-project.live-replay`. Unselected platform inputs keep /5;
 ordinary v1-v4 routes retain their recipes. Schema, typed selector, generation
 recipe and genuine platform presence must agree. Hydration re-enters native
 source/package/configuration/analyzer owners without disk and compares exact
