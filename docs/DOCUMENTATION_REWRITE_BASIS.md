@@ -115,6 +115,40 @@ cancellation; `main` uses 8 for signal-handler setup failure. The old Ketho guid
 blanket failure code 2 was wrong. New-only output and report-last writing already
 exist; do not replace them with pack publication. These gaps belong to #201.
 
+## Generator handoff follow-up at `1a87ce15` (2026-10-21)
+
+The new entrypoint exists, but tracing its real consumers exposes a second
+instance of our own "new path added, old path retained" mistake. These findings
+come from source review; no builder, Rust test or real-source workflow ran here.
+
+| Boundary | Confirmed mismatch | Required replacement |
+| --- | --- | --- |
+| `apps/wow-reference-builder/src/lib.rs` → `tools/xtask/src/library.rs::verify` | Producer writes `wow-native-source-build/2`; verifier admits only `/1` and reads the old embedded `library` object. The current-source workflow invokes them consecutively. | #201: align useful file/source checks with the real output or retire the obsolete verifier. A version-string edit alone is insufficient; do not restore embedded generated text or maintain both formats. |
+| `wow-annotations/tests/consumer_support/{source,catalog_source}.rs` → `examples/support` | Probes call a separate old driver; `source_report.rs` expects `/1`. Git-I/O and catalog helpers are identical copies of builder helpers. | Move public-entrypoint checks to builder integration; retain emitter/type cases below it, then remove the old driver and duplicate helpers. No lower-owner dependency on the application or new generic driver framework. |
+| `wow-annotations/src/native.rs` → `wow-project/src/disk.rs::read_lua_inventory` and `wow-service/src/local/input.rs` | Producer ceilings are 4096 files, 8 MiB/file and 64 MiB/library; ordinary Library acquisition/assembly permits 1024 files, 1 MiB/file and 16 MiB/library. | #200/#201: define a usable bounded output/input contract and expose useful failures. A valid producer result can exceed consumer ceilings; this does not establish that a real corpus currently does. Do not blindly raise every limit. |
+| Current-source workflow → `KETHO_TYPE_CATALOG.md` | Workflow selects six catalogs; documentation claimed all nine listed resources. | Name the actual selection. Parser support, workflow selection and executed donor coverage are different facts. |
+
+The public report deliberately omits the embedded Library text but still includes
+file hashes, byte lengths, mappings and source metadata. It is not hash-free and
+should not be described as such. Keep only what real consumers need; deleting
+one duplicated payload does not complete the handoff or remove all bureaucracy.
+
+The old helper is active test code despite living under `examples/support`.
+Deleting that directory without moving its useful cases would repeat the earlier
+lint-based deletion error. Conversely, keeping it merely because tests use it
+would preserve the duplicate producer indefinitely.
+
+For new instructions, trace **command → output → actual reader → observable
+result**, including the existing workflow and the test's producer. A green
+emitter probe cannot stand in for a different application. Reuse one small
+source fixture for the real producer/reader handoff when repairing #201; do not
+create a schema certification suite. Partial status also requires inspecting
+annotation count and issues: it is not a guarantee of usable Library output.
+
+The [Ketho emitter at the recorded pin](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/luasrc/annotate/init.lua)
+was re-read for default/nilability, stride and callback behavior. Those semantics
+must survive driver consolidation; this source comparison is not donor parity.
+
 ## What to retain from old requirements and donors
 
 The old architecture mandated evidence universes, service-only application access,
