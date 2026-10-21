@@ -37,9 +37,6 @@ pub use operations::{
     update_input_in_namespace, update_local_project,
 };
 use std::{path::Path, sync::atomic::AtomicBool};
-use wow_emmy::function_calls::{
-    PhysicalFunctionDeclarationRecipe, PhysicalFunctionSignatureRecipe,
-};
 use wow_graph::GraphPartitionSnapshot;
 use wow_project::replay::publication::{self, AcquiredProjectPair, ProjectPublicationBundle};
 use wow_project::{ProjectPublisher, ProjectView};
@@ -173,77 +170,31 @@ impl LiveProjectStore {
             store: ProjectStore::create_with_gc(root, owner, catalog()?).map_err(store_error)?,
         })
     }
-    // This ordinary recipe family never selects a platform or candidate namespace.
-    fn create_primary_callables(root: &Path, owner: &str) -> ServiceResult<Self> {
-        Ok(Self {
-            store: ProjectStore::create_with_gc(
-                root,
-                owner,
-                catalog_for(publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1)?,
-            )
-            .map_err(store_error)?,
-        })
-    }
-    fn create_native_library_input(root: &Path, owner: &str) -> ServiceResult<Self> {
-        Ok(Self {
-            store: ProjectStore::create_with_gc(
-                root,
-                owner,
-                catalog_for(publication::STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1)?,
-            )
-            .map_err(store_error)?,
-        })
-    }
     pub fn open(root: &Path) -> ServiceResult<Self> {
-        Self::open_selected(root, None, None)
+        Self::open_selected(root, None)
     }
-    /// Retained Service consumers share the same exact registered-catalog
-    /// admission. Extracting this typed Store owner does not relabel its epoch.
+    /// Retained Service consumers share the same current catalog admission.
     pub(crate) fn open_retained_owner_store(root: &Path) -> ServiceResult<ProjectStore> {
         Self::open(root).map(|owner| owner.store)
     }
-    // None preserves general open/recovery across every registered catalog.
-    // Old catalogs bind the XML/declaration pair; selected-component catalogs
-    // retain exact recipes in configuration, validated on native pair readback.
-    fn open_selected(
-        root: &Path,
-        components: Option<(
-            bool,
-            Option<PhysicalFunctionDeclarationRecipe>,
-            Option<PhysicalFunctionSignatureRecipe>,
-        )>,
-        candidate_catalog: Option<bool>,
-    ) -> ServiceResult<Self> {
-        // Each open requires an exact registered epoch. The store rejects a
-        // catalog mismatch before opening SQLite writable; no migration occurs.
-        for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
-            if components.is_some_and(|selected| !catalog_accepts_components(schemas, selected)) {
-                continue;
-            }
-            for selected in [false, true] {
-                if selected
-                    && (schemas == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1
-                        || schemas == publication::STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1
-                        || schemas == publication::STORAGE_SCHEMAS_NATIVE_API_USES_V1)
-                {
-                    continue;
+    fn open_selected(root: &Path, candidate_catalog: Option<bool>) -> ServiceResult<Self> {
+        match candidate_catalog {
+            Some(true) => ProjectStore::open(root, &candidate::catalog()?)
+                .map(|store| Self { store })
+                .map_err(store_error),
+            Some(false) => ProjectStore::open(root, &catalog()?)
+                .map(|store| Self { store })
+                .map_err(store_error),
+            None => match ProjectStore::open(root, &catalog()?) {
+                Ok(store) => Ok(Self { store }),
+                Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {
+                    ProjectStore::open(root, &candidate::catalog()?)
+                        .map(|store| Self { store })
+                        .map_err(store_error)
                 }
-                if candidate_catalog.is_some_and(|expected| expected != selected) {
-                    continue;
-                }
-                let catalog = if selected {
-                    candidate::catalog(schemas)?
-                } else {
-                    catalog_for(schemas)?
-                };
-                match ProjectStore::open(root, &catalog) {
-                    Ok(store) => return Ok(Self { store }),
-                    Err(error) if error.code() == StoreErrorCode::IntegrityViolation => {}
-                    Err(error) => return Err(store_error(error)),
-                }
-            }
+                Err(error) => Err(store_error(error)),
+            },
         }
-        Err(fail(ServiceErrorCode::IdentityMismatch))
     }
     pub fn current(&self) -> ServiceResult<Option<CurrentPublication>> {
         self.store.current().map_err(store_error)
@@ -418,52 +369,6 @@ impl LiveProjectStore {
 }
 fn catalog() -> ServiceResult<RecordCatalog> {
     catalog_for(publication::STORAGE_SCHEMAS)
-}
-// The selected-component family cannot attest XML/declaration choices itself.
-// require_configuration checks those exact choices against reconstructed owners.
-fn catalog_accepts_components(
-    schemas: &[&str],
-    components: (
-        bool,
-        Option<PhysicalFunctionDeclarationRecipe>,
-        Option<PhysicalFunctionSignatureRecipe>,
-    ),
-) -> bool {
-    if schemas == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1
-        || schemas == publication::STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1
-        || schemas == publication::STORAGE_SCHEMAS_NATIVE_API_USES_V1
-    {
-        return false;
-    }
-    match components.2 {
-        Some(PhysicalFunctionSignatureRecipe::IndexedTypesV1) => {
-            schemas == publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1
-        }
-        None => {
-            schemas != publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1
-                && catalog_components(schemas) == (components.0, components.1)
-        }
-    }
-}
-// Retained signature-free catalogs bind exact XML/declaration recipes.
-// Called only after excluding the selected-component family.
-fn catalog_components(schemas: &[&str]) -> (bool, Option<PhysicalFunctionDeclarationRecipe>) {
-    use PhysicalFunctionDeclarationRecipe::{DeclaredSyntaxAndBodyShapeV1, DeclaredSyntaxV1};
-    if schemas == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_V1 {
-        (true, Some(DeclaredSyntaxAndBodyShapeV1))
-    } else if schemas == publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1 {
-        (false, Some(DeclaredSyntaxAndBodyShapeV1))
-    } else if schemas
-        == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1
-    {
-        (true, Some(DeclaredSyntaxV1))
-    } else if schemas == publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1 {
-        (false, Some(DeclaredSyntaxV1))
-    } else if schemas == publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1 {
-        (true, None)
-    } else {
-        (false, None)
-    }
 }
 fn catalog_for(project_schemas: &[&'static str]) -> ServiceResult<RecordCatalog> {
     let mut schemas = GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();

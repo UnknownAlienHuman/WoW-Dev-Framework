@@ -52,9 +52,9 @@ impl CandidatePublication {
     }
 }
 
-pub(super) fn catalog(project_schemas: &[&'static str]) -> ServiceResult<RecordCatalog> {
+pub(super) fn catalog() -> ServiceResult<RecordCatalog> {
     let mut schemas = GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();
-    schemas.extend_from_slice(project_schemas);
+    schemas.extend_from_slice(publication::STORAGE_SCHEMAS);
     schemas.push(CANDIDATE_STORAGE_SCHEMA);
     RecordCatalog::new(
         &schemas,
@@ -67,17 +67,15 @@ pub(super) fn catalog(project_schemas: &[&'static str]) -> ServiceResult<RecordC
     .map_err(store_error)
 }
 
-/// Epoch selection is exact. No optional receipt fallback and no old widening.
+/// Epoch selection distinguishes only the optional candidate receipt.
 pub(crate) fn is_selected(actual: &RecordCatalog) -> ServiceResult<bool> {
-    for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
-        if actual == &catalog(schemas)? {
-            return Ok(true);
-        }
-        if actual == &catalog_for(schemas)? {
-            return Ok(false);
-        }
+    if actual == &catalog()? {
+        Ok(true)
+    } else if actual == &catalog_for(publication::STORAGE_SCHEMAS)? {
+        Ok(false)
+    } else {
+        Err(fail(ServiceErrorCode::IdentityMismatch))
     }
-    Err(fail(ServiceErrorCode::IdentityMismatch))
 }
 
 pub(crate) fn read_owners(

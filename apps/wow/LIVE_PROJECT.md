@@ -7,8 +7,8 @@ per command. Full W13/E2 acceptance remains open.
 
 The ordinary publication profile uses native/storage replay v4 and binds exact
 Library snapshot identities plus the function-call-facts profile. Older or incompatible derived stores are not opened or migrated; rebuild
-them from current source and configuration. Selected native recipes still require
-their explicitly matched current catalogs.
+them from current source and configuration. One current Project catalog admits
+the payload schemas; reconstructed configuration proves exact selections.
 
 ```text
 wow project publish --config project.json --project <ProjectId> --store-root <new-private-directory> --operation-id <id> --expected-current absent --initialize --allow-partial

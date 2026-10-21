@@ -184,15 +184,11 @@ fn assert_literal_graph_readback(root: &FixtureRoot) -> TestResult {
             "exact Derived hook edge absent from readback"
         );
     }
-    // The explicitly registered selected-components catalog is the real
-    // AcquiredProjectPair consumer; no expected-hash reader search is involved.
+    // The current catalog admits the selected replay record; reconstructed
+    // configuration still proves the exact hook recipe on readback.
     let bundle = ProjectPublicationBundle::build(&publisher, &snapshot, &stop)?;
-    assert_eq!(
-        bundle.replay_storage_schema(),
-        publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1[0]
-    );
     let mut schemas = GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();
-    schemas.extend_from_slice(publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1);
+    schemas.extend_from_slice(publication::STORAGE_SCHEMAS);
     let catalog = RecordCatalog::new(
         &schemas,
         &[

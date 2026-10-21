@@ -4,7 +4,6 @@ use super::{LiveProjectRead, LiveProjectStore, PlatformStoreSelection, fail};
 use crate::{LocalProjectInput, ServiceErrorCode, ServiceResult, graph::GraphBuildRequest};
 use serde::Serialize;
 use std::{path::Path, sync::atomic::AtomicBool};
-use wow_project::replay::publication;
 use wow_store::{
     OperationId,
     project::{
@@ -222,34 +221,7 @@ pub(super) fn publish_input(
     let (bundle, owner) = crate::graph::live_publication(input, graph_request, stop)?;
     super::publication_checkpoint(stop)?;
     let mut store = if request.initialize {
-        // Dispatch from the actual native replay record, not a raw input selector.
-        let schema = bundle.replay_storage_schema();
-        if schema == publication::STORAGE_SCHEMAS_NATIVE_API_USES_V1[0] {
-            LiveProjectStore {
-                store: wow_store::project::ProjectStore::create_with_gc(
-                    root,
-                    &owner,
-                    super::catalog_for(publication::STORAGE_SCHEMAS_NATIVE_API_USES_V1)?,
-                )
-                .map_err(super::store_error)?,
-            }
-        } else if schema == publication::STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1[0] {
-            LiveProjectStore::create_native_library_input(root, &owner)?
-        } else if schema == publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1[0] {
-            LiveProjectStore::create_primary_callables(root, &owner)?
-        } else if schema == publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1[0] {
-            // Select the registered catalog from the actual replay record.
-            LiveProjectStore {
-                store: wow_store::project::ProjectStore::create_with_gc(
-                    root,
-                    &owner,
-                    super::catalog_for(publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1)?,
-                )
-                .map_err(super::store_error)?,
-            }
-        } else {
-            LiveProjectStore::create(root, &owner)?
-        }
+        LiveProjectStore::create(root, &owner)?
     } else {
         LiveProjectStore::open(root)?
     };

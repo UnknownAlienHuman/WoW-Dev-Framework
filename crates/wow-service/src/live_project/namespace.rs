@@ -1,8 +1,7 @@
 //! Explicit logical platform-store selection, separate from source generations.
 use super::{
     LiveProjectRead, LiveProjectReadFailure, LiveProjectResult, LiveProjectStore,
-    LiveProjectUpdateRequest, ReadFailureClosure, catalog_accepts_components, catalog_for, fail,
-    store_error,
+    LiveProjectUpdateRequest, ReadFailureClosure, catalog_for, fail, store_error,
 };
 use crate::{LocalProjectInput, ServiceErrorCode, ServiceResult, graph::GraphBuildRequest};
 use std::{path::Path, sync::atomic::AtomicBool};
@@ -88,58 +87,24 @@ impl PlatformStoreSelection {
     pub(super) const fn composed_candidate_selected(&self) -> bool {
         self.composed_candidate_catalog
     }
-    fn selected_catalog(&self, schemas: &[&'static str]) -> ServiceResult<RecordCatalog> {
+    fn selected_catalog(&self) -> ServiceResult<RecordCatalog> {
         if self.composed_candidate_catalog {
-            super::candidate::catalog(schemas)
+            super::candidate::catalog()
         } else {
-            catalog_for(schemas)
+            catalog_for(publication::STORAGE_SCHEMAS)
         }
     }
 
     fn catalog(&self) -> ServiceResult<RecordCatalog> {
-        if self.physical_function_signatures_catalog
-            == Some(PhysicalFunctionSignatureRecipe::IndexedTypesV1)
-        {
-            return self.selected_catalog(publication::STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1);
-        }
-        use PhysicalFunctionDeclarationRecipe::{DeclaredSyntaxAndBodyShapeV1, DeclaredSyntaxV1};
-        match (
-            self.xml_classification_catalog,
-            self.physical_function_declarations_catalog,
-        ) {
-            (false, None) => self.selected_catalog(publication::STORAGE_SCHEMAS),
-            (true, None) => {
-                self.selected_catalog(publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_V1)
-            }
-            (false, Some(DeclaredSyntaxV1)) => self
-                .selected_catalog(publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1),
-            (true, Some(DeclaredSyntaxV1)) => self.selected_catalog(
-                publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1,
-            ),
-            (false, Some(DeclaredSyntaxAndBodyShapeV1)) => {
-                self.selected_catalog(publication::STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1)
-            }
-            (true, Some(DeclaredSyntaxAndBodyShapeV1)) => self.selected_catalog(
-                publication::STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_V1,
-            ),
-        }
+        self.selected_catalog()
     }
 
     fn require_catalog(&self, actual: &RecordCatalog) -> ServiceResult<()> {
-        for &schemas in publication::STORAGE_SCHEMA_CATALOGS {
-            if catalog_accepts_components(
-                schemas,
-                (
-                    self.xml_classification_catalog,
-                    self.physical_function_declarations_catalog,
-                    self.physical_function_signatures_catalog,
-                ),
-            ) && &self.selected_catalog(schemas)? == actual
-            {
-                return Ok(());
-            }
+        if &self.selected_catalog()? == actual {
+            Ok(())
+        } else {
+            Err(fail(ServiceErrorCode::IdentityMismatch))
         }
-        Err(fail(ServiceErrorCode::IdentityMismatch))
     }
 
     /// Immutable configuration getters are not a receipt-derived capability.
@@ -222,16 +187,8 @@ impl LiveProjectStore {
         selection: &PlatformStoreSelection,
     ) -> Result<Self, LiveProjectReadFailure> {
         selection.validate().map_err(namespace_unacquired)?;
-        let store = Self::open_selected(
-            root,
-            Some((
-                selection.xml_classification_catalog,
-                selection.physical_function_declarations_catalog,
-                selection.physical_function_signatures_catalog,
-            )),
-            Some(selection.composed_candidate_catalog),
-        )
-        .map_err(namespace_unacquired)?;
+        let store = Self::open_selected(root, Some(selection.composed_candidate_catalog))
+            .map_err(namespace_unacquired)?;
         if let Err(error) = store.require_namespace(selection) {
             return Err(namespace_closed_failure(error, store.close()));
         }

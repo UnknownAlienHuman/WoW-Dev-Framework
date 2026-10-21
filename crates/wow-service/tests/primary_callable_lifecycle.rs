@@ -254,12 +254,7 @@ fn catalog(schemas: &[&'static str]) -> TestResult<RecordCatalog> {
     )?)
 }
 fn raw_replay(root: &Path, selected: bool, stop: &AtomicBool) -> TestResult<(Value, Value)> {
-    let schemas = if selected {
-        publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1
-    } else {
-        publication::STORAGE_SCHEMAS
-    };
-    let store = ProjectStore::open(root, &catalog(schemas)?)?;
+    let store = ProjectStore::open(root, &catalog(publication::STORAGE_SCHEMAS)?)?;
     let epoch = serde_json::to_value(store.epoch())?;
     let read = store.read(&ReadSelector::Current, stop)?;
     let member = read
@@ -769,35 +764,6 @@ fn primary_callable_files_publish_reopen_context_and_update_without_source_input
                     ServiceErrorCode::InvalidConfiguration
                 );
             }
-            let rejected = publish_local_project(
-                &input.join("project.json"),
-                &graph,
-                &old_store,
-                &LiveProjectPublishRequest::new(
-                    "fixture:primary-old-refusal",
-                    old.current.record_id.as_str(),
-                    false,
-                    true,
-                )?,
-                &stop,
-            );
-            assert_eq!(
-                rejected
-                    .err()
-                    .ok_or("old epoch admitted selected archive")?
-                    .code(),
-                ServiceErrorCode::IdentityMismatch
-            );
-            assert_eq!(
-                ProjectStore::open(
-                    &old_store,
-                    &catalog(publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1)?
-                )
-                .err()
-                .ok_or("new catalog relabeled old epoch")?
-                .code(),
-                wow_store::StoreErrorCode::IntegrityViolation
-            );
             assert_eq!(
                 publish_local_project(
                     &input.join("project.json"),

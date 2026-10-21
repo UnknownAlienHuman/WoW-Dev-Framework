@@ -15,6 +15,8 @@ use wow_store::project::{
     EpochId, PartitionRecord, ProjectStoreNamespace, ReadSnapshot, StoreGenerationId,
 };
 
+/// Every current Project replay payload is admitted by one rebuildable catalog.
+/// Exact feature selection remains in ProjectConfiguration and replay validation.
 pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v4",
     "wow-project.live-replay.v5",
@@ -28,122 +30,19 @@ pub const STORAGE_SCHEMAS: &[&str] = &[
     "wow-project.live-replay.v14",
     "wow-project.live-replay.v15",
     "wow-project.live-replay.v16",
-    "wow-project.live-pair.v1",
-];
-pub const STORAGE_CHECK: &str = "wow-project.live-pair-native-replay.v1";
-/// Exact catalog for the named AceAddon local-result replay consumer. Earlier
-/// catalogs remain frozen; this admits only their retained records plus the new
-/// explicitly selected recipe.
-pub const STORAGE_SCHEMAS_ACEADDON_LOCAL_RESULT_V1: &[&str] = &[
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-replay.v9",
-    "wow-project.live-replay.v10",
-    "wow-project.live-replay.v11",
-    "wow-project.live-replay.v12",
-    "wow-project.live-replay.v14",
-    "wow-project.live-replay.v15",
-    "wow-project.live-replay.v16",
     super::ACEADDON_LOCAL_RESULT_STORAGE_SCHEMA,
-    "wow-project.live-pair.v1",
-];
-/// Explicit composed classification catalog. Keep ordinary/retained epoch bytes
-/// unchanged; application selection must opt into this catalog before publishing.
-pub const STORAGE_SCHEMAS_XML_CLASSIFICATION_V1: &[&str] = &[
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-replay.v9",
-    "wow-project.live-replay.v10",
-    "wow-project.live-replay.v11",
-    "wow-project.live-replay.v12",
-    "wow-project.live-replay.v14",
-    "wow-project.live-replay.v15",
     super::XML_CLASSIFICATION_STORAGE_SCHEMA,
-    "wow-project.live-pair.v1",
-];
-/// Explicit declaration-only catalog; prior catalogs keep their exact epoch bytes.
-pub const STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1: &[&str] = &[
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-replay.v9",
-    "wow-project.live-replay.v10",
-    "wow-project.live-replay.v11",
-    "wow-project.live-replay.v12",
-    "wow-project.live-replay.v14",
-    "wow-project.live-replay.v15",
     super::PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA,
-    "wow-project.live-pair.v1",
-];
-/// Explicit composed XML/declaration catalog. Neither old selected catalog is widened.
-pub const STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1: &[&str] = &[
-    "wow-project.live-replay.v4",
-    "wow-project.live-replay.v5",
-    "wow-project.live-replay.v6",
-    "wow-project.live-replay.v7",
-    "wow-project.live-replay.v8",
-    "wow-project.live-replay.v9",
-    "wow-project.live-replay.v10",
-    "wow-project.live-replay.v11",
-    "wow-project.live-replay.v12",
-    "wow-project.live-replay.v14",
-    "wow-project.live-replay.v15",
     super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA,
-    "wow-project.live-pair.v1",
-];
-/// Exact body-shape recipe catalog. Old recipes retain their separate catalogs.
-pub const STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1: &[&str] = &[
     super::PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA,
-    "wow-project.live-pair.v1",
-];
-/// Exact composed XML/body-shape catalog; no prior selected epoch is widened.
-pub const STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_V1: &[&str] = &[
     super::XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA,
-    "wow-project.live-pair.v1",
-];
-/// Fixed selected-component envelope; exact recipes are retained in configuration.
-/// Prior catalogs keep their exact schema membership and epoch identities.
-pub const STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1: &[&str] = &[
     super::SELECTED_COMPONENTS_STORAGE_SCHEMA,
-    "wow-project.live-pair.v1",
-];
-/// Ordinary physical Primary callables; platform and prior catalogs stay frozen.
-pub const STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1: &[&str] = &[
     super::PRIMARY_CALLABLES_STORAGE_SCHEMA,
-    "wow-project.live-pair.v1",
-];
-/// Ordinary native Library producer-input custody; prior epoch catalogs are frozen.
-pub const STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1: &[&str] = &[
     super::NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA,
-    "wow-project.live-pair.v1",
-];
-/// Ordinary selected native API-use recipe; prior epoch catalogs remain frozen.
-pub const STORAGE_SCHEMAS_NATIVE_API_USES_V1: &[&str] = &[
     super::NATIVE_API_USES_STORAGE_SCHEMA,
     "wow-project.live-pair.v1",
 ];
-/// Current catalogs admitted by ordinary open and selected component routes.
-pub const STORAGE_SCHEMA_CATALOGS: &[&[&str]] = &[
-    STORAGE_SCHEMAS_NATIVE_API_USES_V1,
-    STORAGE_SCHEMAS_NATIVE_LIBRARY_INPUT_V1,
-    STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1,
-    STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1,
-    STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1,
-    STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_V1,
-    STORAGE_SCHEMAS_PHYSICAL_FUNCTION_DECLARATIONS_V1,
-    STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_V1,
-    STORAGE_SCHEMAS_XML_CLASSIFICATION_V1,
-    STORAGE_SCHEMAS,
-    STORAGE_SCHEMAS_ACEADDON_LOCAL_RESULT_V1,
-];
+pub const STORAGE_CHECK: &str = "wow-project.live-pair-native-replay.v1";
 const HEADER_KEY: &str = "live.project.header";
 const REPLAY_KEY: &str = "live.project.replay";
 const HEADER_SCHEMA: &str = "wow-project/live-project-graph-pair/1";
@@ -163,7 +62,6 @@ struct PairHeader {
 pub struct ProjectPublicationBundle {
     records: Vec<PartitionRecord>,
     bindings: BTreeMap<String, String>,
-    replay_storage_schema: &'static str,
 }
 impl ProjectPublicationBundle {
     pub fn build(
@@ -231,13 +129,6 @@ impl ProjectPublicationBundle {
         validate_native_parts(&project, graph, native, stop)?;
         let replay = ProjectReplay::capture(publisher, stop)?;
         plan_in_namespace(&replay, &project, graph, namespace, stop)
-    }
-
-    /// Exact schema already selected and validated for the retained replay record.
-    /// Catalog dispatch borrows this native handoff without decoding record bytes.
-    #[must_use]
-    pub const fn replay_storage_schema(&self) -> &'static str {
-        self.replay_storage_schema
     }
 
     pub fn into_parts(self) -> (Vec<PartitionRecord>, BTreeMap<String, String>) {
@@ -623,10 +514,9 @@ fn plan(
     stop: &AtomicBool,
 ) -> ProjectResult<ProjectPublicationBundle> {
     let mut records = graph.storage_records(stop).map_err(graph_error)?;
-    let replay_storage_schema = replay.storage_schema()?;
+    let storage_schema = replay.storage_schema()?;
     records.push(
-        PartitionRecord::new(REPLAY_KEY, replay_storage_schema, replay)
-            .map_err(|_| super::exhausted())?,
+        PartitionRecord::new(REPLAY_KEY, storage_schema, replay).map_err(|_| super::exhausted())?,
     );
     records.sort_by(|a, b| a.key().cmp(b.key()));
     // PartitionVersionId already binds key, schema, byte count and exact payload.
@@ -640,11 +530,7 @@ fn plan(
             .map_err(|_| invalid())?,
     );
     records.sort_by(|a, b| a.key().cmp(b.key()));
-    Ok(ProjectPublicationBundle {
-        records,
-        bindings,
-        replay_storage_schema,
-    })
+    Ok(ProjectPublicationBundle { records, bindings })
 }
 fn load<T: serde::de::DeserializeOwned>(
     read: &ReadSnapshot,

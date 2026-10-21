@@ -78,11 +78,9 @@ Capability without the reviewed owner, owner without the capability, explicit
 null and mismatched source/catalog/profile identities refuse.
 
 The same `wow graph build` route emits the selected classification result schema.
-Native namespaced persistence additionally requires
-`PlatformStoreSelection::with_xml_classification_catalog()` on the exact selection;
-this chooses the registered classification catalog for create/open/publication.
-An ordinary epoch is not upgraded implicitly. The selector is catalog intent;
-publication still validates the genuine source-bound configuration and replay.
+Native namespaced persistence also records XML classification in the explicit
+`PlatformStoreSelection`. The physical store uses the one current Project catalog;
+publication/readback validate the genuine source-bound configuration and replay.
 
 To collect physical function declarations, explicitly provide
 `"physical_function_declarations":"wow-emmy/physical-function-declaration-syntax/1"`
@@ -90,10 +88,9 @@ with a `direct_capabilities_v1` graph profile. Unknown recipes and explicit null
 refuse. The existing Main session emits form, ordered parameter/vararg tokens and
 explicit colon syntax; it supplies no inferred types/returns or runtime claim.
 The selection binds configuration, report and replay identity. Namespaced
-persistence requires `PlatformStoreSelection::with_physical_function_declarations_catalog()`,
-combined with `with_xml_classification_catalog()` when classification is selected.
-Create, publication and reopen require the exact combination; old epochs are not
-widened. `--fingerprints` then includes the selected declared-header component;
+persistence records the same declaration/XML choices in `PlatformStoreSelection`;
+readback checks them against reconstructed configuration. `--fingerprints` then
+includes the selected declared-header component;
 see [the component policy](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
 
 ### Declaration/body shape selection
@@ -121,18 +118,11 @@ Namespaced persistence selects
 with `PhysicalFunctionDeclarationRecipe::DeclaredSyntaxAndBodyShapeV1`, adding
 `with_xml_classification_catalog()` for selected XML classification. The existing
 no-argument `with_physical_function_declarations_catalog()` selects header-only.
-Configuration and catalog intent must match; retained epochs are not widened.
+Configuration and explicit selection must match; incompatible derived stores rebuild.
 
-With signatures absent, the replay schemas are
-`wow-project/native-project-replay/physical-function-declaration-syntax-and-body-shape/1`
-and, with XML classification,
-`wow-project/native-project-replay/xml-schema-classification-and-physical-function-declaration-syntax-and-body-shape/1`.
-Their exact catalogs are `STORAGE_SCHEMAS_PHYSICAL_FUNCTION_BODY_SHAPE_V1` and
-`STORAGE_SCHEMAS_XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_V1`: respectively
-`wow-project.live-replay.physical-function-declaration-syntax-and-body-shape.v1`
-and `wow-project.live-replay.xml-schema-classification-and-physical-function-declaration-syntax-and-body-shape.v1`,
-each paired only with `wow-project.live-pair.v1`. Full corpus/reopen acceptance
-remains open; these registered catalogs are not acceptance evidence.
+With signatures absent, replay retains the body-shape payload schema, with a
+separate XML/body-shape payload tag when classification is selected. Both are
+members of the one current Project catalog; configuration owns the exact recipe.
 
 ### Indexed-type signature selection
 
@@ -146,16 +136,9 @@ The held native signature index supplies typed observations, not a second parser
 Existing `--fingerprints` exposes the selected component; see
 [the finite comparison recipe](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
 
-Selected signatures use one replay family
-`wow-project/native-project-replay/selected-components/1` and exact catalog
-`STORAGE_SCHEMAS_SELECTED_COMPONENTS_V1`: `wow-project.live-replay.selected-components.v1`
-plus `wow-project.live-pair.v1`. Exact declaration/XML/signature selections remain
-in configuration; this family does not enumerate their combinations. Namespaced
-store intent uses `PlatformStoreSelection::with_physical_function_signatures_catalog`
-with `PhysicalFunctionSignatureRecipe::IndexedTypesV1`, alongside exact selected
-declaration/XML intent. Configuration/catalog admission must agree. All prior
-signature-None schemas, catalogs and omitted fields retain their old routes;
-retained epochs are not widened. Full replay/corpus acceptance remains pending.
+Selected signatures use `wow-project/native-project-replay/selected-components/1`.
+Exact declaration/XML/signature choices remain in configuration and the explicit
+selection; the one current Project catalog does not enumerate their combinations.
 
 ## Native authority and bounds
 
