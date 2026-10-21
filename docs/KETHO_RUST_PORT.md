@@ -20,7 +20,8 @@ as recorded in [`THIRD_PARTY_NOTICES.md`](../crates/wow-annotations/THIRD_PARTY_
 | `Annotations/Core/Widget/...` | `wow-annotations/src/native.rs`; `wow-reference/src/native_corrections/inheritance.rs` | Source-bound class/alias and explicit guarded single-parent corrections. |
 | Generated/source navigation | `wow-annotations/src/navigation/`; [consumer probes](ANNOTATION_CONSUMER_PROBES.md) | Maps and representative semantic-consumer checks. |
 
-Reuse these owners and their one native source-to-library composition. Do not
+Reuse these owners; the supported application must be the single source-to-library
+composition. The test-only duplicate driver remains to be removed (see below). Do not
 add a second importer/parser, Lua/Node/Wasm runtime, custom full Lua language
 server, or a separate pipeline/report format for every optional feature.
 `wow-emmy` uses EmmyLua's public semantic-analysis APIs; upstream LSP handlers
@@ -60,7 +61,10 @@ The output directory must be new. Exit codes: 0 projected, 3 partial, 2 argument
 5 generation failure, 6 observed cancellation, 8 signal-handler setup failure.
 `source-report.json` is written last. A partial report does not prove unsupported
 or missing declarations absent. #196 delivered this command; #201 connects and
-verifies the actual generator-to-addon check workflow.
+verifies the actual generator-to-addon check workflow. The [handoff review](BLIZZARD_API_REFERENCE.md#current-handoff-gap)
+records a current blocker: `verify-library` and the semantic probes still consume
+the old driver's report, not this command's output. Do not claim those probes
+validate the public entrypoint or restore the old payload to satisfy them.
 
 Generate the library once; regenerate derived files when source, corrections,
 catalogs or projection semantics change. #204 delivered renderer-owned declaration

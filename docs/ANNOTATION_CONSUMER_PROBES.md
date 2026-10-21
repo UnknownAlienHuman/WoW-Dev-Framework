@@ -1,72 +1,58 @@
 # Annotation consumer probes
 
-`crates/wow-annotations/tests/consumers.rs` runs two existing semantic slices
-against the generated native library using real EmmyLua (`emmylua_check`) and
-LuaLS command-line consumers. The probes check analyzer feedback, not just Lua
-parsing. They are focused examples and do not certify the complete Blizzard
-library, arbitrary addons, editors, or runtime behavior.
+These tests check selected type semantics with real EmmyLua (`emmylua_check`)
+and LuaLS command-line consumers. They do not establish full-corpus parity or
+that the supported generator-to-addon workflow works.
 
-## Signature probe
+## Actual producer under test
 
-The positive program exercises ordered multiple returns, structure fields,
-ScriptObject receivers/methods, arrays, enum parameters, and optional/nil
-arguments. Nine negative cases expect the specified diagnostic code and source
-line at error/warning severity. Unexpected diagnostics in the generated library
-or positive fixture fail. Empty output, unrelated warnings, wrong positions, or
-a crashing consumer do not count as a match.
+At `1a87ce15`, `tests/consumer_support/source.rs` includes
+`../../examples/support/mod.rs`; `catalog_source.rs` calls that same driver.
+It is not `apps/wow-reference-builder::run_with_stop`. The old driver emits
+`wow-native-source-build/1` with an embedded library, while the supported command
+emits `/2` with a smaller report. The source-report assertions expect `/1`.
+The two drivers also contain identical Git-I/O and catalog helper files.
 
-Two controls mutate the generated input: erase a parameter type to `any`, then
-remove the library. Each mutation must make the expected negative check fail.
-This confirms that the consumer used the library's types. `open-namespace.lua`
-records that Ketho's namespaces are open tables: a missing member there is not a
-reliable generic error. An unknown method on a named ScriptObject is tested
-separately.
+The probes remain useful evidence about the shared renderer and selected source
+semantics. They do **not** verify the public command's argument handling, exit
+codes, cancellation, report format or integration with ordinary `wow check`.
+For #201, move application entrypoint checks to the builder's integration tests
+and reuse its actual producer. Keep lower-level renderer checks in the annotation
+crate. Remove the superseded driver/helpers after moving their useful cases;
+do not add an application dependency to a lower owner or a third driver.
 
-## Closed string-enum probe
+## Useful cases to keep
 
-The catalog case generates one synthetic Ketho-style alias resource in a
-separate test-owned Git input and passes it through `--alias-catalog`. Positive
-code checks both allowed literals, a literal-union return, and a named optional
-alias. Four negative cases check an unlisted string, number-to-enum assignment,
-enum-return-to-number assignment, and boolean-to-optional-alias assignment.
-The control replaces the closed alias with `string`: only the unlisted-string
-diagnostic should disappear; the other three errors remain. Synthetic values
-are type-semantics fixtures, not a WoW client inventory.
+The signature fixture covers ordered returns, structures, ScriptObject methods,
+arrays, enums and optional arguments. Nine negative cases require the relevant
+diagnostic code and source line. Controls erase a parameter type to `any` and
+remove the Library: the expected checks must then stop matching. Ketho's open
+namespaces do not justify an undefined-member assertion; named ScriptObject
+members are checked separately.
 
-## Run the external probe
+The string-enum fixture checks allowed and disallowed literals, return types and
+an optional alias. Replacing the closed alias with `string` should remove only
+the corresponding closed-literal diagnostic. Unexpected positive-program or
+library errors, unrelated warnings, wrong locations and consumer crashes are
+not passing evidence. Keep these semantics when changing the producer.
 
-Provide paths to approved, materialized analyzer distributions and new output
-directory (or omit output to use a removed-after-run temporary directory):
+## Run the existing external probe
+
+Supply the explicit consumer executables and their current expected hashes:
 
 ```sh
 export WDF_EMMY_CHECK=/path/to/emmylua_check
-export WDF_EMMY_CHECK_SHA256=sha256:<approved-executable-hash>
+export WDF_EMMY_CHECK_SHA256=sha256:<expected-executable-hash>
 export WDF_LUALS=/path/to/luals/bin/lua-language-server
-export WDF_LUALS_SHA256=sha256:<approved-executable-hash>
+export WDF_LUALS_SHA256=sha256:<expected-executable-hash>
 export WDF_CONSUMER_OUTPUT=/path/to/new-report-directory
 cargo test --locked -p wow-annotations --test consumers -- --ignored --nocapture
 ```
 
-The ignored `both_consumers_interpret_generated_library` test runs both
-signature and catalog slices for EmmyLua and LuaLS. Its fixed checker calls use
-the Emmy `--config`, `--output-format json`, `--output`, and
-`--warnings-as-errors` options; LuaLS uses `--check`, `--configpath`,
-`--checklevel=Hint`, `--check_format=json`, and `--check_out_path`. Normal offline
-workspace tests leave this external-process test ignored;
-the dedicated Linux and Windows consumer jobs run both slices. Missing binaries
-or required hash inputs fail rather than silently skip.
-
-The current harness also isolates child environments, checks package/executable
-inputs, bounds reports and process time, and has Windows path handling. Those
-runtime controls still exist; simplification is tracked separately in Issues
-#193, #196, and #203. A hash identifies bytes, not trustworthiness or authorship.
-
-## What these probes do not establish
-
-They do not certify full-corpus type closure, every custom signature, all widget
-inheritance, hover/definition mappings, incremental editor behavior, production
-analyzer/service integration, or runtime Secret/combat behavior. For a bounded
-semantic change, run one relevant positive and negative consumer case. Broader
-consumer qualification is needed when claiming broader coverage, not as a
-prerequisite for every patch. Keep the detailed annotation semantics in the
-[Ketho port map](KETHO_RUST_PORT.md) and [type-lowering guide](../crates/wow-annotations/TYPE_LOWERING.md).
+`both_consumers_interpret_generated_library` is ignored in normal test runs.
+This command still uses the old producer described above; no execution is claimed
+by this documentation update. Existing process isolation, time/output limits and
+hash requirements are harness behavior, not additional product configuration or
+proof of trusted authorship. No whole-corpus or all-editor campaign is required
+for a bounded change. See the [Ketho semantics](KETHO_RUST_PORT.md) and
+[type lowering](../crates/wow-annotations/TYPE_LOWERING.md).
