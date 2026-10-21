@@ -74,8 +74,8 @@ jobs:
           )
           replace(
               "crates/wow-service/src/live_project/tests.rs",
-              "    use wow_project::replay::ProjectReplay;\n",
-              "",
+              "    use wow_project::replay::ProjectReplay;\n\n    let stop = AtomicBool::new(false);\n    let path = root(\"platform-replay-v5\")?;\n",
+              "    let stop = AtomicBool::new(false);\n    let path = root(\"platform-replay-v5\")?;\n",
           )
           replace(
               "crates/wow-service/src/live_project/tests/namespaces/direct_service.rs",
