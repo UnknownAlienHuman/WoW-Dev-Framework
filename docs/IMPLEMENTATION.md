@@ -157,13 +157,13 @@ as they move into the current index. Do not claim every existing query analyzes.
   Current `wow search context build` explicitly excludes source excerpts: #122
   connects this missing handoff and removes semantic-pack wrapping.
 
-Use one current database layout and one ordinary Project replay catalog; the only
-second physical variant adds the candidate receipt/check. Exact feature choices
-are validated from reconstructed configuration, not catalog identity. Payload
-schema tags remain to be collapsed only after tracing their real readers. An
-incompatible derived database must be rebuilt from source/configuration; preserve
-user files and report missing inputs. #111 removes remaining retention/GC
-administration. No compatibility reader, converter or new lifecycle subsystem.
+Use one current database layout, one strict `ProjectReplay` DTO and one replay
+record. The only second physical variant adds the candidate receipt/check. Exact
+feature choices are validated from reconstructed configuration and owners, not
+catalog or payload tags. Incompatible derived data is rebuilt from source and
+configuration; preserve user files and report missing inputs. #111 removes
+remaining retention/GC administration. No compatibility reader, converter or new
+lifecycle subsystem.
 
 ## Typed source relationships
 
