@@ -73,6 +73,16 @@ jobs:
               "    let project = publisher.open_current()?;\n    let store_path = path.join(\"store\");\n",
           )
           replace(
+              "crates/wow-service/src/live_project/tests.rs",
+              "    use wow_project::replay::ProjectReplay;\n",
+              "",
+          )
+          replace(
+              "crates/wow-service/src/live_project/tests/namespaces/direct_service.rs",
+              "                    == if composed {\n                        \"wow-project.live-replay\"\n                    } else {\n                        \"wow-project.live-replay\"\n                    }\n",
+              "                    == \"wow-project.live-replay\"\n",
+          )
+          replace(
               "crates/wow-service/src/local/platform_input/tests/event_registry_keys.rs",
               "    let replay_json = serde_json::to_value(&replay)?;\n",
               "",
