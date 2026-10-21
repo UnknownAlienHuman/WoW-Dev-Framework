@@ -1,222 +1,169 @@
 # Documentation rewrite basis
 
-Reviewed 2026-10-21 against `687049b66f64304422649e857ec3a7a38b2c8a4c`.
-This is preparation evidence, not another normative architecture or work queue.
-The [manifesto](ARCHITECTURE.md) still owns scope; [Issues and queue](REFACTOR_QUEUE.md)
-own implementation. Do not require every developer to load this document.
+Reviewed 2026-10-21 against `3e446746ece1b93a51d438a4c8f17cfd21d73beb`.
+Preparation evidence, not another normative architecture or task tracker.
+[Architecture](ARCHITECTURE.md) owns scope; [implementation](IMPLEMENTATION.md)
+and the [queue](REFACTOR_QUEUE.md) route changes. Do not load this whole review
+as mandatory context for every task.
 
-## What was actually reviewed
+## Overall diagnosis
 
-The [original Gemini audit](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/e6961862853506adad63fe296991c5b12a24fe13/docs/AUDIT_2026-10-17.md),
-its [architecture](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/e6961862853506adad63fe296991c5b12a24fe13/docs/ARCHITECTURE.md),
-current instructions, selected producer/reader paths, replay changes #231–#233,
-and the secondary platform notes listed below were compared. The local source
-copy matches tree `63e5751b40ee9d66400da68704867893c9b599f9` from #233's checked archive.
+The product problem is not merely excess lines or old format names. Five design
+choices keep recreating the same failure:
 
-Current tracked source has 847 Rust files / 361,367 LF lines, including tests,
-examples and support code. Service accounts for 94,350 of those lines. This is
-not a production-only count, deletion target or performance measurement.
-No full Rust test suite, real-addon workflow, donor corpus or benchmark was run
-in this review. Findings below distinguish source-level proof from runtime evidence.
+1. Work closes around a crate/representation, while the producer, actual reader
+   and user-visible result remain disconnected. The builder/verifier mismatch
+   and old test driver are concrete examples.
+2. Adapters preserve identities, classifications and proofs while discarding
+   useful meaning. Emmy messages/severities and readable source are examples.
+3. Saved data is treated as a recipe to recompute and certify, not a cheap query
+   result. Project hydration and nested Search SQLite are examples.
+4. Fixed product behavior is routed through a general platform: matcher packs,
+   publication/retention protocols and feature-combination formats.
+5. Documentation, Issues and tests describe different revisions. Editing one
+   document or passing Clippy does not reconcile those descriptions.
 
-## Mistakes introduced or repeated by our own refactoring
+Our refactoring repeated these mistakes: adding a public generator without
+switching its test producer/readers, mechanically replacing schema assertions,
+reporting deletions instead of a completed workflow, and leaving the umbrella
+Issue pointing at merged #192 and completed #193 as the next work.
 
-### 1. A replay regression survived a green compile/lint gate
+## Scope of this review and delivered work
 
-In [the TOC/XML Service test, lines 465–485](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/687049b66f64304422649e857ec3a7a38b2c8a4c/crates/wow-service/src/live_project/tests.rs#L465-L485),
-#232 replaced a historical schema mutation with `obsolete_schema`, but left
-`serde_json::from_value(changed)?` before the rejection assertion.
-`ProjectReplay` has `deny_unknown_fields`: the last mutation returns an error
-from the test instead of reaching `hydrate(...).is_err()`. This is a confirmed
-source-level test defect, not an executed test failure or a production exploit.
+Compared Gemini's [original audit](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/e6961862853506adad63fe296991c5b12a24fe13/docs/AUDIT_2026-10-17.md)
+and [old architecture](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/e6961862853506adad63fe296991c5b12a24fe13/docs/ARCHITECTURE.md)
+with current instructions, selected producers/readers, frontend/rule/diagnostic
+paths and pinned Ketho/Emmy APIs. The inspected source tree is
+`12bd0cbd253a2fccdd84a5bc2b74c06e671f8037`, also the checked #235 tree.
 
-Repair the existing check at the actual decode/admission boundary. Do not restore
-a deleted schema, suppress the error, or delete the useful source-substitution
-case just to regain green checks. Owner: #112.
+There are 847 Rust files / 361,367 LF lines; Service contributes 182 files /
+94,350 lines. Counts include tests, examples and support code. They are not a
+production-only count, measured saving or deletion quota.
 
-### 2. Removing tag dispatch also moved validation between phases
+Delivered: one Main/Library analysis, one statement-catalog parse, one final
+annotation emission and a native generation entrypoint. Wasm, Reference Pack
+administration, Core E0 envelopes, one-shot replay registries, lineage/comparison,
+Project historical/catalog/replay tag ladders and substantial obsolete plans were
+removed. These are useful changes, not proof that the three user workflows work.
 
-[The empty-package test, lines 101–109](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/687049b66f64304422649e857ec3a7a38b2c8a4c/crates/wow-service/src/local/platform_input/tests/empty_packages.rs#L101-L109)
-still requires missing retention limits to fail in `ProjectReplay::from_json`.
-The new decoder checks shape/size and selected fact availability; it no longer
-contains the old retained-schema selector. `ReplayPlatform::validate_budget`
-checks files, not this selection. The semantic requirement remains in
-[ProjectConfiguration::validate, lines 767–839](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/687049b66f64304422649e857ec3a7a38b2c8a4c/crates/wow-project/src/configuration.rs#L767-L839),
-reached during hydration. The missing native-library-input assertion in
-`wow-service/src/local/platform_input/tests.rs` needs the same phase review.
+No full Rust tests, real-addon workflow, donor corpus, Windows protocol session
+or benchmark was run in this review. Rust/Cargo are unavailable in this local
+review environment. Source conclusions below are not claimed executed failures.
 
-Do not equate a decoded DTO with an admitted project. State which existing owner
-rejects a missing selection; align that owner's consumers and checks. This review
-does **not** demonstrate that invalid configuration passes hydration. Owner: #112.
+## Current defects and missing user behavior
 
-### 3. Literal replacement was mistaken for documentation reconciliation
+Paths below are relative to the repository at the reviewed commit. Existing
+Issues own fixes; this table is evidence for the rewrite, not a parallel backlog.
 
-#232 removed exact replay tags but left prose requiring frozen V5/V8 catalogs,
-report9 compatibility and historical acceptance. The reviewed audit itself still
-said two Emmy engines and an unfinished pack builder existed. Ketho/Emmy guides
-also described delivered work as future work. #233 corrected three documents,
-not the whole corpus. A token search cannot establish semantic consistency.
-
-Rewrite each active description from its current caller. Remove the old behavior,
-not just its identifier. Historical check counts belong in their commit, not in
-current acceptance statements. The secondary-note inventory below remains work.
-
-### 4. Process ceremony displaced delivery
-
-Our recent changes spent repeated CI runs repairing text-replacement scripts;
-PR #232's surviving product change came after several failed helper runs.
-Mechanical edits also left duplicate obsolete-schema cases in
-`wow-project/tests/primary_callable_replay.rs:396–402`. This is the same pattern
-we were removing: more machinery and green metadata, without checking meaning.
-
-Use one inspected worktree and Git tree/blob writes, not a new apply-workflow for
-each replacement. After two failed approaches, inspect the failed assumption and
-change method. Keep the existing compile/lint gate; do not turn its artifacts,
-line counts or passed compilation into user-workflow acceptance. Do not add a
-new evidence service, audit registry or blanket test campaign to fix this process.
-
-## Remaining code findings that new instructions must not conceal
-
-Crate paths in this table are relative to `crates/`.
-
-| Finding and evidence at the reviewed commit | Consequence / next replacement |
-| --- | --- |
-| `wow-project/src/replay/mod.rs::hydrate_owner` still publishes a reconstructed owner and compares a complete recapture; `replay/publication.rs::read_owner` also validates reconstructed graph contents. | #131 must give ordinary readers stored facts/text without Emmy or graph construction. Removing the final equality alone does not implement persistence. |
-| `wow-store/src/search/mod.rs:444,605,742` stores an inner SQLite image as `database_hex`; ProjectFile FTS covers labels, not source bodies. | #131/#169: files/text/symbol spans and FTS in the ordinary database. A body-only term must work after reopening. Merely moving metadata rows is insufficient. |
-| Four Search pagination files still contain `for _ in 0..8`, including `entities/query/pagination.rs:170–233`. | #194/#169: remove self-sizing page/cursor payloads and retained-result ceremony. Bound the actual output outside it; do not invent a generic framework preserving the same cycle. |
-| `wow-core/src/canonical/admission.rs:88–130,299–309,407–421` still builds a JSON value tree and rejects negative integers, floats and `None`. | Trace remaining real callers first. Removing E0 envelopes did not remove this constraint. Prefer ordinary DTO serialization where exact canonical identity is unnecessary, not a new universal canonicalizer. |
-| `wow-context/src/render.rs::emit_record`, lines 836–898, escapes source punctuation and quoted JSON as `\\uXXXX`. | #122: human-readable paths, ranges and fenced source; neutralize dangerous presentation without destroying code readability. Preserve source as data, not instructions. |
-| `wow-annotations/src/native.rs:929–936` still selects library `/3`, `/4`, `/5`; `aliases.rs:529–545` selects another feature-dependent tag family. | #112 with the touched annotation route: one current representation. Project replay cleanup is not evidence that all format proliferation is gone. |
-| `wow-recognizers/src/source_signals.rs::w1_pack` still constructs a fixed matcher pack for facts already selected in Rust; Service retains substantial graph composition. | #195: replace one consumed relation path with direct typed facts and remove its obsolete adapter/pack. Moving files or removing lint attributes is not simplification. |
-| `wow-emmy/src/references.rs:745–780` configures Lua 5.1 but never calls `init_std_lib`; `AnalyzerSession` now correctly owns one shared analysis. | #200: ordinary addon setup must load upstream standard declarations once. Do not recreate the solved split-engine task or promise standard typing merely because engines were joined. |
-| `apps/wow/src/mcp.rs:232–234,720–724` closes on an unhandled notification and rejects nonempty `_meta`. | #199: retain valid session traffic and bounded extension metadata. External protocol extensibility is not internal cache compatibility. Do not blindly apply `deny_unknown_fields` everywhere. |
-
-These are inspected paths, not measured latency percentages. Existing single-engine,
-single-parser and single-emission work remains useful; it must not be reimplemented.
-
-## New generator gaps found while reviewing our delivery
-
-TOC/API source acquisition calls [the Git helper](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/687049b66f64304422649e857ec3a7a38b2c8a4c/apps/wow-reference-builder/src/io.rs#L30-L86)
-with `cat-file blob` but never verifies the selected tree entry's file mode. A
-symlink is also a blob. A local Git plumbing reproduction with mode `120000`
-returned its link-target text through that read. The builder binary was not run.
-This contradicts the guide's regular-file guarantee; it does not prove symlink
-following, outside-root reads or Lua execution. The alias-catalog path already
-[checks mode and exact path](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/687049b66f64304422649e857ec3a7a38b2c8a4c/apps/wow-reference-builder/src/catalogs.rs#L79-L95).
-Reuse that check for TOC/API input, not another source-admission platform.
-
-The same helper has no cancellation argument: `read_to_end` and `child.wait`
-cannot observe `STOP`. Checkpoints around calls are not cancellation during a
-blocked Git subprocess. Thread cancellation through the existing helper and reap
-the child; do not add a daemon/job lifecycle. Latency was not benchmarked.
-
-`run_with_stop` returns 2 for arguments, 5 for generation failures, 6 for observed
-cancellation; `main` uses 8 for signal-handler setup failure. The old Ketho guide's
-blanket failure code 2 was wrong. New-only output and report-last writing already
-exist; do not replace them with pack publication. These gaps belong to #201.
-
-## Generator handoff follow-up at `1a87ce15` (2026-10-21)
-
-The new entrypoint exists, but tracing its real consumers exposes a second
-instance of our own "new path added, old path retained" mistake. These findings
-come from source review; no builder, Rust test or real-source workflow ran here.
-
-| Boundary | Confirmed mismatch | Required replacement |
+| Problem | Concrete source / effect | Existing task and replacement |
 | --- | --- | --- |
-| `apps/wow-reference-builder/src/lib.rs` → `tools/xtask/src/library.rs::verify` | Producer writes `wow-native-source-build/2`; verifier admits only `/1` and reads the old embedded `library` object. The current-source workflow invokes them consecutively. | #201: align useful file/source checks with the real output or retire the obsolete verifier. A version-string edit alone is insufficient; do not restore embedded generated text or maintain both formats. |
-| `wow-annotations/tests/consumer_support/{source,catalog_source}.rs` → `examples/support` | Probes call a separate old driver; `source_report.rs` expects `/1`. Git-I/O and catalog helpers are identical copies of builder helpers. | Move public-entrypoint checks to builder integration; retain emitter/type cases below it, then remove the old driver and duplicate helpers. No lower-owner dependency on the application or new generic driver framework. |
-| `wow-annotations/src/native.rs` → `wow-project/src/disk.rs::read_lua_inventory` and `wow-service/src/local/input.rs` | Producer ceilings are 4096 files, 8 MiB/file and 64 MiB/library; ordinary Library acquisition/assembly permits 1024 files, 1 MiB/file and 16 MiB/library. | #200/#201: define a usable bounded output/input contract and expose useful failures. A valid producer result can exceed consumer ceilings; this does not establish that a real corpus currently does. Do not blindly raise every limit. |
-| Current-source workflow → `KETHO_TYPE_CATALOG.md` | Workflow selects six catalogs; documentation claimed all nine listed resources. | Name the actual selection. Parser support, workflow selection and executed donor coverage are different facts. |
+| Emmy diagnostics are reduced to four codes. | `crates/wow-emmy/src/syntax/analyzer.rs::accepted_code` retains syntax, doc-syntax, assignment and parameter mismatch only; the collection loop silently skips everything else. | #201: use configured upstream diagnostics, not a new local allowlist/type checker. Explicit justified suppressions are different from withholding every unlisted code. |
+| Diagnostic meaning is lost. | The same collector does not retain `Diagnostic.message` and forces `normalized_severity = Error`; `EmmySyntaxDiagnostic`/Service `GenericFinding` have no message. LSP emits the constant `Diagnostic from the selected local syntax adapter family`. CLI text serializes findings as JSON. | #201/#198: carry bounded upstream message/code/severity/location through the existing DTOs and render a readable error. No translated diagnostic catalogue or approval registry. |
+| Rule selection is applied after execution. | `wow-service/src/local/projection.rs::check_context` calls the engine before filtering requested rules. `wow-rules/src/engine.rs::run_providers` executes both API and Secret providers. | #201: pass the selected rule set before provider work; do not spend another provider's work/budget for an unrequested check. |
+| Command status is based on unrelated subsystem completeness. | `local/projection.rs::components` considers Secret capability regardless of selected rules and always adds a Degraded/Partial annotation component for native receipts. `service.rs::derive_status` puts any partial component before Findings. | #201: retain actual findings and report completeness of the requested analysis separately. Do not label missing required knowledge clean; optional/unselected features must not decide another check's outcome. |
+| Editor analysis is not the configured addon analysis. | `wow-service/src/frontend/lsp/diagnostics.rs` calls `analyze_syntax_with_stop` and enforces exactly one file. The path does not consume the configured Main/Library analysis delivered in #193. | #198/#200: decide and document the WoW frontend boundary; reuse the configured owner or upstream server. Do not copy another general LSP engine. |
+| Public generator and verification workflow disagree. | Builder `src/lib.rs` emits `wow-native-source-build/2`; `tools/xtask/src/library.rs::verify` accepts only `/1` plus an embedded `library`. `current-source-bundle.yml` connects them. | #201: align the useful reader with current output or remove the obsolete verifier. A tag-only substitution cannot fix the changed shape. |
+| Tests use a different generator. | `wow-annotations/tests/consumer_support/source.rs` includes `examples/support/mod.rs`, not the supported application. Old Git-I/O/catalog helpers duplicate the builder's copies. | #201: application checks invoke the supported producer; retain type/map cases at their owner and remove the superseded driver. No third driver or reverse application dependency. |
+| Producer/consumer limits disagree. | Native output allows 4096 files / 8 MiB per file / 64 MiB; ordinary Library input allows 1024 / 1 MiB / 16 MiB. | #200/#201: agree finite limits at the real handoff. No real-corpus overflow was demonstrated; do not claim compatibility merely because each side is bounded. |
+| Normal setup still demands internal evidence. | `local/{disk_input,input,native_input}.rs` consumes explicit host/configuration/Reference/analyzer-report inputs; `apps/wow/src/args.rs` requires config/project. Engine constructors do not call `init_std_lib`. | #200/#197: ordinary root/flavor/TOC/Library settings and bounded discovery; load appropriate upstream standard declarations once. Do not manufacture Reference evidence or add installers. |
+| Persistence repeats analysis. | `wow-project/src/replay/mod.rs::hydrate_owner` reconstructs/publishes then compares a full recapture; `replay/publication.rs` validates reconstructed graph contents. | #131: query stored facts/text without Emmy/graph reconstruction. Removing only the final equality is not the fix. |
+| Search is not yet repository body search. | `wow-store/src/search/mod.rs` stores an inner SQLite image as `database_hex`; existing file FTS covers labels, with separate source-name observations. | #131/#169/#106: ordinary file/text/symbol-span tables and FTS, queried after reopen. Specify token/phrase versus substring semantics; do not add another engine. |
+| Search-to-readable-source handoff is missing. | Current search/context route excludes source excerpts; `wow-context/src/pack/source_excerpt.rs` already has a bounded reader. `render.rs::emit_record` escapes punctuation into `\uXXXX`. | #122: connect the hit to matching indexed text and readable path/range/fenced code. Preserve source as data and never use old offsets on new text. |
+| Updates do not cover the main addon load path. | Physical deltas reuse syntax trees but reindex remaining files; Service live updates reject TOC/package load plans. `reused_files` is not semantic reuse. | #109: connect existing reload/rebuild and preserve changed/deleted-source behavior. No invented incremental framework or speedup. |
+| Result bureaucracy survives Core envelope removal. | Four Search paginators contain `for _ in 0..8`; canonical admission builds a JSON tree and rejects negative integers/floats/None; Context still has duplicate wire representations. | #194/#169: remove self-size/self-identity dependencies at actual readers; serialize ordinary DTOs once with external output bounds. Preserve admission for validated owners. |
+| Fixed relationships pass through a generic matcher. | `wow-recognizers/src/source_signals.rs::w1_pack` rebuilds a fixed pack after Rust already selected facts; State Core repeats pack/projection handoff in Service. | #195/#103: map consumed typed facts directly and remove obsolete adapters/packs, not their useful relations. |
+| Graph navigation can regenerate an existing Library. | `wow-service/src/local/native_library_input.rs::rebuild_for_project` reprojects Reference/annotations/sidecars to compare identities; `graph/build/native_api.rs` consumes it. | #107: reuse loaded Library and callable/source origins; remove requalification from that read path. Ordinary Library use need not acquire this obligation. |
+| Feature-format/lifecycle proliferation remains elsewhere. | Annotation `native.rs` still chooses library /3,/4,/5; aliases and frontend hosts have other families. Store retains lifecycle administration outside narrowed scope. | #112/#111 with the relevant consumer: one current representation; rebuild derived output, preserve user files. Project cleanup did not finish these domains. |
+| Protocol machinery rejects valid ordinary usage. | `apps/wow/src/mcp.rs` closes on unhandled notifications/rejects nonempty `_meta`; LSP uses private no-match errors and disclosure gates. | #198/#199: standard empty results/extensions and useful existing operations. External protocol evolution is not internal cache compatibility. |
 
-The public report deliberately omits the embedded Library text but still includes
-file hashes, byte lengths, mappings and source metadata. It is not hash-free and
-should not be described as such. Keep only what real consumers need; deleting
-one duplicated payload does not complete the handoff or remove all bureaucracy.
+The first four rows are newly traced user-output defects/limitations. The prior
+owner note incorrectly elevated the four-code slice into a permanent product
+boundary; it is corrected in this change. One shared engine is not enough when
+its results are then discarded or misrepresented.
 
-The old helper is active test code despite living under `examples/support`.
-Deleting that directory without moving its useful cases would repeat the earlier
-lint-based deletion error. Conversely, keeping it merely because tests use it
-would preserve the duplicate producer indefinitely.
+## Generator acquisition details not to lose
 
-For new instructions, trace **command → output → actual reader → observable
-result**, including the existing workflow and the test's producer. A green
-emitter probe cannot stand in for a different application. Reuse one small
-source fixture for the real producer/reader handoff when repairing #201; do not
-create a schema certification suite. Partial status also requires inspecting
-annotation count and issues: it is not a guarantee of usable Library output.
+`apps/wow-reference-builder/src/io.rs` uses `cat-file blob` for TOC/API inputs
+without checking tree mode. The alias reader in `catalogs.rs` already validates
+ordinary-file mode and exact path. Reuse it. A prior local Git demonstration
+returned a mode-120000 symlink's target text as a blob; this does not demonstrate
+symlink following, outside-root access or Lua execution by the builder.
 
-The [Ketho emitter at the recorded pin](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/luasrc/annotate/init.lua)
-was re-read for default/nilability, stride and callback behavior. Those semantics
-must survive driver consolidation; this source comparison is not donor parity.
+The Git helper has no stop parameter; blocking `read_to_end`/`wait` cannot observe
+cancellation. Checkpoints before/after it do not make the child interruptible.
+Thread cancellation through the existing helper and reap the child; no job system.
+Keep new-only output/report-last behavior. Failure codes are 2 for arguments,
+5 for generation failure, 6 for observed cancellation and 8 for signal setup.
 
-## What to retain from old requirements and donors
+The workflow selects six Ketho catalog files, not every resource the donor or
+parser supports. Keep catalog implementation coverage, selected bundle coverage
+and actual consumer coverage distinct. No full donor parity was demonstrated.
 
-The old architecture mandated evidence universes, service-only application access,
-immutable publication/readback and independent acceptance gates for nearly every
-operation. That explains much of the current plumbing; it is not a reason to
-preserve it. Retain the useful user invariants, not that organizational model:
+## Our regressions and audit corrections
 
-- Exact source path/range and selected flavor; ambiguity, unsupported input and
-  incomplete output stay visible. A missing result is not automatically success.
-- One input analysis supplies Main diagnostics and Library-aware facts. Querying
-  an index does not repeat analysis. Unsaved editor text must not use saved offsets.
-- Nonexecuting source reads, configured roots, bounded work/output, cancellation
-  and preservation of user files. Old derived data gets a clear rebuild response,
-  not silent deletion based on paths found in the old cache.
-- Ketho's useful lowering: `Default ~= nil` includes false/zero, InnerType arrays,
-  receivers, ordered parameters/returns and selected callbacks. Do not simplify
-  unsupported types into `any` or lose the location of an independent valid item.
+- #232's `wow-service/src/live_project/tests.rs:465–485` mutates `obsolete_schema`,
+  then `serde_json::from_value(changed)?` exits before the expected rejection
+  assertion. Repair the existing boundary check, keeping source-substitution cases.
+- `local/platform_input/tests/empty_packages.rs:101–109` and
+  `platform_input/tests.rs:441–447` still expect semantic selection failures during
+  decode. Trace `ProjectConfiguration::validate` in hydration before changing the
+  expectation. No invalid-hydration bypass is established. Remove the duplicate
+  obsolete-schema case in `wow-project/tests/primary_callable_replay.rs:396–402`.
+- Our #225 producer move left the previous test producer and incompatible consumer.
+  Our #232 tag edits left contradictory prose. #191 still named merged #192 and
+  completed #193 as active work until this review. Fix actual handoffs and entry
+  instructions; do not recreate delivered functionality from stale status text.
+- Repeated helper-workflow/CI repairs and line-deletion reports displaced delivery.
+  Use one inspected worktree and normal Git writes. After two failed approaches,
+  change the failed assumption. No new evidence platform or broad test campaign.
+- Gemini's cited XML vector is charged **after** the loop; that does not prove
+  quadratic work. `allow(dead_code)` does not prove no consumers; `generated_api.rs`
+  has a live role. No measured 70–80% runtime saving exists.
+- `CheckRequest::with_rules` rejects unknown rule IDs. The late-selection finding
+  above concerns known requested rules, not an unknown-rule bypass.
+- Keep plain DTO decoding distinct from admission of invariant-bearing owners.
+  Removing wire duplication must not manufacture validated executable state.
 
-Re-read donors: [Ketho emitter at d0b5b51](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/luasrc/annotate/init.lua)
-and [Emmy engine API at aaaca684](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/lib.rs).
-This was source comparison, not full donor parity. Standard declarations initialize
-separately; changed-only upstream updates do not establish dependent-file invalidation.
+## Material for the new documentation
 
-Corrections to Gemini remain important: the cited XML type-shape vector is charged
-**after**, not inside, the item loop; this does not prove quadratic work. A module's
-`allow(dead_code)` is not proof it has no callers. `generated_api.rs` has a live
-purpose. Do not derive `Deserialize` on invariant-bearing owners merely to delete
-`Wire` types: plain DTOs may derive it; executable/validated state needs its existing
-admission boundary. No 70–80% saving has been established by measurement.
+Keep only the manifesto, workflow implementation routes, queue and the necessary
+owner details. A workflow recipe states ordinary inputs/defaults, actual producer
+and reader, observable output/error, and displaced code to remove. It distinguishes
+implemented code from exercised behavior. No parallel state/acceptance framework.
 
-External references checked on 2026-10-21: [Serde unknown-field behavior](https://serde.rs/container-attrs.html),
-[Git blob/symlink behavior](https://git-scm.com/docs/git-cat-file),
-[SQLite FTS5](https://www.sqlite.org/fts5.html), and the selected
-[MCP 2025-11-25 base protocol](https://modelcontextprotocol.io/specification/2025-11-25/basic).
-FTS token/phrase matching is not arbitrary substring search. Specify the supported
-query semantics before claiming repository text search; do not add an engine to
-avoid deciding what the user query means.
-
-## Material to carry into the rewritten documentation
-
-Keep the manifesto short and implementation organized by three workflows:
-generate a library; check an addon; index/query/read source context. Each recipe
-needs only inputs/defaults, the existing owners, the data passed between them,
-observable output/failure and old code to remove. It must say whether behavior
-exists, was exercised, or remains work; no new status framework is needed.
-
-| Old material | Retain in the relevant workflow | Retire instead of copying |
+| Old notes | Useful facts to transfer once | Requirements to retire |
 | --- | --- | --- |
-| `PLATFORM_SOURCE_CONFIGURATION.md`, `PLATFORM_STORE_NAMESPACE.md` | Source/flavor selection, Main/Library roles, isolation and current reopen limitations. | Frozen epochs, migration promises, old-byte preservation and claims the existing CLI is absent. |
-| `PLATFORM_DIRECT_PRODUCERS.md`, `PLATFORM_DIRECT_SERVICE.md`, `PLATFORM_RECOGNIZER_ASSERTIONS.md` | Actually consumed TOC/XML/call/state relations, locations and ambiguity. | Mandatory staged proof choreography, version histories, fingerprints as completion obligations. |
-| `PLATFORM_RAW_INVENTORY_GRAPH.md`, `PLATFORM_INVENTORY_SPANS.md` | Indexed versus loaded files; whole-file versus byte-range locations. | Raw inventory certificates and legacy replay acceptance. |
-| `PLATFORM_XML_SOURCE_MAPS.md` | XML entity/newline mapping, CDATA/comment gaps, virtual-Lua coordinates and ambiguous carets. | Replay8/9/10 narratives and historical gate totals. |
-| `wow-recognizers/e2/PARTITIONS_AND_VERSIONING.md` | Replace stale derived relations when source/selection changes. | Frozen report9, shadow/holdout/promotion and per-feature compatibility matrices. |
+| `PLATFORM_SOURCE_CONFIGURATION.md`, `PLATFORM_STORE_NAMESPACE.md` | Source/flavor, Main/Library, isolation and actual reopen limits. | Frozen epochs, migrations, old-byte preservation and claims that the CLI is absent. |
+| `PLATFORM_DIRECT_PRODUCERS.md`, `PLATFORM_DIRECT_SERVICE.md`, `PLATFORM_RECOGNIZER_ASSERTIONS.md` | Consumed TOC/XML/call/state relations, locations and ambiguity. | Staged proof choreography, version histories and fingerprint acceptance. |
+| `PLATFORM_RAW_INVENTORY_GRAPH.md`, `PLATFORM_INVENTORY_SPANS.md` | Indexed versus loaded files; whole-file versus byte-range locations. | Inventory certificates and legacy replay acceptance. |
+| `PLATFORM_XML_SOURCE_MAPS.md` | Entities/newlines, CDATA/comment gaps, virtual Lua and ambiguous carets. | Replay-version narratives and historical gate counts. |
+| `wow-recognizers/e2/PARTITIONS_AND_VERSIONING.md` | Replace stale derived relations on source/selection change. | Frozen report9, shadow/holdout/promotion and feature matrices. |
 
-Do not rewrite these nine notes by swapping strings again. Move each needed fact
-once to its workflow/owner note, remove superseded prose and redirect actual links.
-Keep the seven already recorded broken Store links in #112's cleanup; do not restore
-deleted E2 specifications to satisfy them. A new audit is not a replacement tracker.
+The nine notes and seven broken Store links recorded in #112 still need semantic
+consolidation. Do not restore deleted E2 specifications to satisfy those links.
 
-Priority: #200 → #201 for generation-to-addon checking; #131/#169/#122 for a reopened
-body/symbol query with located text. Attach #194/#107/#112 reductions to those
-consumers, not as an unlimited prerequisite phase. Use these concrete observations
-when the implementation reaches them: correct/wrong Library argument at the addon
-line; a body-only term found after process restart; changed/deleted source no longer
-producing stale hits; a missing input reported honestly. Do not expand this into an
-all-editor, historical-cache or runtime-WoW qualification campaign.
+Reuse [Ketho's pinned emitter](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/luasrc/annotate/init.lua)
+for defaults including false/zero, arrays, receivers, parameter/return order and
+callbacks; preserve maps and explicit unsupported types instead of inventing any.
+Reuse [the pinned Emmy API](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/lib.rs)
+for analysis/library setup. STD is not WoW runtime authority; changed-only updates
+do not establish dependent-file invalidation. These comparisons are not corpus parity.
 
-Remaining uncertainty: no complete semantic audit of every source file, no full
-annotation corpus parity, no Windows runtime/protocol session run and no measured
-end-to-end performance. The material above prepares a safer rewrite; it does not
-claim that the product or future documentation is error-free.
+## Delivery order, not another cleanup phase
+
+First #200/#201: public generation -> loaded Library -> addon check, with readable
+upstream diagnostics and honest requested-scope status. Reuse the existing small
+consumer shape; check a valid and invalid call at the addon location and one
+missing/partial input. Do not replace this with an emitter-only test.
+
+Parallel #131/#169/#122: persisted source -> later-process body/symbol query ->
+matching located excerpt. A body-only term must be found; changed/deleted source
+must not leave stale hits. Keep actual FTS semantics explicit.
+
+Then #198/#199 expose these same useful results to editors/agents. #194/#107/#112
+reductions attach to those consumers; they are not an unlimited prerequisite phase.
+General Lua features belong to upstream EmmyLua. Preserve source/configuration,
+root bounds, cancellation and uncertainty without a new proof/lifecycle platform.
+
+This review is not a complete audit of every source file, a release qualification,
+or a claim that future documentation will be error-free.
