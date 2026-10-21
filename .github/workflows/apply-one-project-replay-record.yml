@@ -48,8 +48,8 @@ jobs:
           )
           replace(
               "crates/wow-project/src/replay/configuration.rs",
-              "    pub(super) const fn native_library_input(&self) -> Option<&crate::NativeLibraryInput> {\n        self.native_library_input.as_ref()\n    }\n    pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {\n",
-              "    pub(super) const fn native_library_input(&self) -> Option<&crate::NativeLibraryInput> {\n        self.native_library_input.as_ref()\n    }\n    pub(super) const fn requires_function_calls(&self) -> bool {\n        self.budgets.hook_target_recipe.is_some()\n            || self.budgets.function_call_evidence_profile.is_some()\n            || self.physical_function_declarations.is_some()\n            || self.physical_function_signatures.is_some()\n            || self.state_projection.is_some()\n            || self.library_witnesses.is_some()\n            || self.signal_witnesses.is_some()\n    }\n    pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {\n",
+              "    pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {\n",
+              "    pub(super) const fn requires_function_calls(&self) -> bool {\n        self.budgets.hook_target_recipe.is_some()\n            || self.budgets.function_call_evidence_profile.is_some()\n            || self.physical_function_declarations.is_some()\n            || self.physical_function_signatures.is_some()\n            || self.state_projection.is_some()\n            || self.library_witnesses.is_some()\n            || self.signal_witnesses.is_some()\n    }\n    pub(super) fn from_configuration(config: &ProjectConfiguration) -> ProjectResult<Self> {\n",
           )
           replace(
               "crates/wow-project/src/replay/mod.rs",
