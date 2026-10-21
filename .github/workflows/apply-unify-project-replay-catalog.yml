@@ -52,7 +52,7 @@ jobs:
           path.write_text(text.replace(old, new, 1))
           PY
           python .github/unify-project-replay-catalog.py
-          git rm .github/unify-project-replay-catalog.py
+          git rm -f .github/unify-project-replay-catalog.py
           git rm .github/workflows/apply-unify-project-replay-catalog.yml
           git add -u
           cargo +stable fmt --all
