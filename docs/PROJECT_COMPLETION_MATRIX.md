@@ -1,7 +1,8 @@
 # Product completion
 
 Current scope: [ARCHITECTURE.md](ARCHITECTURE.md), accepted 2026-10-18. This page
-records useful capability, not E0–E7 certification. Implementation tasks live
+records useful capability, not E0–E7 certification. Status reviewed against
+`db1a62c9` on 2026-10-21; this is not full product acceptance. Implementation tasks live
 in [REFACTOR_QUEUE.md](REFACTOR_QUEUE.md) and their Issues; code/donor routes are
 in [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
@@ -9,17 +10,24 @@ in [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 | Workflow | Existing code | Remaining product work |
 | --- | --- | --- |
-| Native Ketho annotations | Restricted native source loader, emitter, aliases, selected corrections/inheritance, literals, maps and consumer probes. | #196 supported generation; #203 native-only path; #204 emit once; close actual semantic gaps against selected Ketho/Blizzard input (#125). |
-| EmmyLua addon analysis | Pinned engine and Main/Library semantic facts; generic diagnostics currently use a separate Main-only analysis and a three-code filter. | #193 one analysis with Library-aware diagnostics; #200 normal root/TOC/library configuration; #201 real addon flow. |
+| Native Ketho annotations | Supported `wow-reference-builder generate`, native literals, one final emission, aliases, selected corrections/inheritance and maps (#196/#203/#204 delivered). | Verify selected Ketho/Blizzard semantics and the generator-to-addon consumer path (#125/#201); reuse produced Library/origins instead of graph requalification (#107). |
+| EmmyLua addon analysis | One Main + Library analysis supplies diagnostics, facts and flow; `param-type-mismatch` reaches Main locations (#193 delivered). | #200 normal root/TOC/library configuration; #201 real addon flow. The complete user workflow still needs its own verification. |
 | Blizzard UI search | Source/TOC/XML owners and native graphs; FTS over file labels/recorded names; separate source-excerpt reader. | #131 reader-ready index, #169 source-content/FTS tables, #106 real body/symbol search, #117 XML links, #122 hit-to-excerpt handoff. |
-| Updating source | Physical updates retain syntax trees but reindex all remaining files; live update rejects TOC/package load plans. | #109 connect reload/rebuild and verify diagnostics/search against the final source; #193 removes the duplicate analysis. |
+| Updating source | Physical updates retain syntax trees in the shared engine but reindex remaining files; ordinary live update still rejects TOC/package load plans. | #109 connect reload/rebuild and verify diagnostics/search against the final source. |
 | Editor/agent access | Selected stdio LSP/MCP, overlay, definition/reference/symbol/context routes exist. | #198/#199 standards fixes; #125 useful Search exposure and upstream Emmy setup. No required reimplementation of all Lua language features. |
 | Build/distribution | Cargo workspace and CI exist. | A normal build and real workflow on each advertised platform; ordinary artifact/notices. No custom release engine. |
 
-Current CLI inputs are still too elaborate; current caches still carry legacy
-and publication machinery. Documentation changes do not complete those runtime
-refactors. Raw metadata preservation and synthetic type probes already exist;
-do not recreate them from stale owner status text.
+Project replay now has one strict DTO and one store record (#231/#232); its
+numbered/feature catalog matrix is removed. Ordinary retained reads still rebuild
+Emmy/Project and recapture replay (#131). CLI configuration, publication/lifecycle
+machinery and other domains' formats remain reduction work, not completed scope.
+Raw metadata preservation and synthetic type probes already exist.
+
+## Verification boundary
+
+Quick for #232 passed policy, formatting, workspace compilation and strict Clippy.
+It did not execute the advertised end-to-end workflows or establish release
+readiness. Historical test counts are not validation of the current revision.
 
 ## Completion checks
 
