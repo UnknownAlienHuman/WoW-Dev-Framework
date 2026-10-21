@@ -209,12 +209,8 @@ end
     use wow_project::replay::publication::{self, AcquiredProjectPair, ProjectPublicationBundle};
     use wow_store::project::{ProjectStore, PublicationRequest, ReadSelector, RecordCatalog};
     let bundle = ProjectPublicationBundle::build(&publisher, &snapshot, &stop)?;
-    let project_schemas = publication::STORAGE_SCHEMA_CATALOGS
-        .iter()
-        .find(|schemas| schemas.contains(&bundle.replay_storage_schema()))
-        .ok_or("registered captured schema catalog")?;
     let mut schemas = GraphPartitionSnapshot::STORAGE_SCHEMAS.to_vec();
-    schemas.extend_from_slice(project_schemas);
+    schemas.extend_from_slice(publication::STORAGE_SCHEMAS);
     let catalog = RecordCatalog::new(
         &schemas,
         &[

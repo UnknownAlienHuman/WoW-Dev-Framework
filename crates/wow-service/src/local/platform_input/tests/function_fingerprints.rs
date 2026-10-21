@@ -995,10 +995,12 @@ fn selected_declared_headers_survive_native_replay_and_selected_durable_reopen()
         &stop,
     )?;
     assert_eq!(serde_json::to_value(&published)?["status"], "activated");
+    let wrong_store = LiveProjectStore::open_in_namespace(&store_root, &default_selection)?;
     assert_eq!(
-        LiveProjectStore::open_in_namespace(&store_root, &default_selection)
+        wrong_store
+            .read_in_namespace(&default_selection, &ReadSelector::Current, &stop)
             .err()
-            .ok_or("ordinary catalog reopened declaration epoch")?
+            .ok_or("ordinary selection read declaration configuration")?
             .code(),
         ServiceErrorCode::IdentityMismatch
     );

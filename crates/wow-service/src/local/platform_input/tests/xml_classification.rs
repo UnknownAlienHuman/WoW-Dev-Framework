@@ -136,13 +136,12 @@ fn selected_declared_headers_compose_with_xml_classification_and_exact_catalog()
     )?;
     assert_eq!(serde_json::to_value(published)?["status"], "activated");
     for wrong in [&ordinary, &xml_only, &declaration_only] {
-        assert_eq!(
-            LiveProjectStore::open_in_namespace(&store_root, wrong)
-                .err()
-                .ok_or("different component catalog reopened combined epoch")?
-                .code(),
-            crate::ServiceErrorCode::IdentityMismatch
-        );
+        let wrong_store = LiveProjectStore::open_in_namespace(&store_root, wrong)?;
+        let refusal = wrong_store
+            .read_in_namespace(wrong, &ReadSelector::Current, &stop)
+            .err()
+            .ok_or("different component selection read combined epoch")?;
+        assert_eq!(refusal.code(), crate::ServiceErrorCode::IdentityMismatch);
     }
     let store = LiveProjectStore::open_in_namespace(&store_root, &selection)?;
     let read = store.read_in_namespace(&selection, &ReadSelector::Current, &stop)?;
@@ -1171,11 +1170,13 @@ fn selected_xml_classification_reaches_service_replay_and_publication() -> TestR
         &stop,
     )?;
     assert_eq!(serde_json::to_value(&published)?["status"], "activated");
-    let wrong_catalog = LiveProjectStore::open_in_namespace(&store_root, &default_selection)
+    let wrong_store = LiveProjectStore::open_in_namespace(&store_root, &default_selection)?;
+    let wrong_selection = wrong_store
+        .read_in_namespace(&default_selection, &ReadSelector::Current, &stop)
         .err()
-        .ok_or("ordinary selection reopened classification epoch")?;
+        .ok_or("ordinary selection read classified configuration")?;
     assert_eq!(
-        wrong_catalog.code(),
+        wrong_selection.code(),
         crate::ServiceErrorCode::IdentityMismatch
     );
     let store = LiveProjectStore::open_in_namespace(&store_root, &selection)?;

@@ -29,7 +29,7 @@ use wow_project::{
     replay::{ProjectReplay, publication},
 };
 use wow_store::{
-    OperationId, StoreErrorCode,
+    OperationId,
     project::{PartitionRecord, ProjectStore, PublicationRequest, RecordCatalog},
 };
 
@@ -448,38 +448,21 @@ fn selected_primary_recipes_capture_hydrate_recapture_exactly() -> TestResult {
     let expected = PartitionRecord::new("live.project.replay", PRIMARY_STORAGE, &replay)?;
     assert_eq!(record.version(), expected.version());
     assert_eq!(record.decode::<ProjectReplay>()?, replay);
-    assert!(!publication::STORAGE_SCHEMAS.contains(&PRIMARY_STORAGE));
-    let old_root = StoreRoot::new()?;
-    let old = ProjectStore::create(
-        old_root.0.join("store"),
+    assert!(publication::STORAGE_SCHEMAS.contains(&PRIMARY_STORAGE));
+    let root = StoreRoot::new()?;
+    let store = ProjectStore::create(
+        root.0.join("store"),
         "fixture.primary-callables",
         catalog(publication::STORAGE_SCHEMAS)?,
     )?;
-    let refused = PublicationRequest::new(
-        old.epoch(),
-        OperationId::new("primary-new-on-old")?,
-        None,
-        bindings.clone(),
-        records.clone(),
-    )
-    .err()
-    .ok_or("old catalog accepted selected primary records")?;
-    assert_eq!(refused.code(), StoreErrorCode::IntegrityViolation);
-    old.close()?;
-    let selected_root = StoreRoot::new()?;
-    let selected = ProjectStore::create(
-        selected_root.0.join("store"),
-        "fixture.primary-callables",
-        catalog(publication::STORAGE_SCHEMAS_PRIMARY_CALLABLES_V1)?,
-    )?;
     PublicationRequest::new(
-        selected.epoch(),
+        store.epoch(),
         OperationId::new("primary-selected")?,
         None,
         bindings,
         records,
     )?;
-    selected.close()?;
+    store.close()?;
     Ok(())
 }
 
