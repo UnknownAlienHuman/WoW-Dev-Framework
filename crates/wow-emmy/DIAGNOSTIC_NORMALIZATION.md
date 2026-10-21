@@ -1,33 +1,40 @@
 # Diagnostic adapter
 
-Current code: `src/session.rs`; `src/syntax/analyzer.rs::{collect_registered,accepted_code}`;
-`src/syntax.rs::EmmySyntaxDiagnostic`; Project consumes the report in
-`../wow-project/src/{analyzer,snapshot}.rs`. The implementation route is
-[addon analysis](../../docs/IMPLEMENTATION.md#addon-configuration-and-emmy-analysis).
+Read `src/session.rs`, `src/syntax/analyzer.rs::{collect_registered,accepted_code}`,
+`src/syntax.rs::EmmySyntaxDiagnostic`, Project `src/{analyzer,snapshot}.rs`,
+Service `src/local/projection.rs` and `src/frontend/lsp/diagnostics.rs`, and
+`apps/wow/src/output.rs`. The [analysis route](../../docs/IMPLEMENTATION.md#addon-configuration-and-emmy-analysis)
+uses upstream EmmyLua; #201 owns the useful addon result, #198 its editor projection.
 
-## Current behavior
+## Current behavior, not the target contract
 
-One `EmmyLuaAnalysis` registers Main and Library, then supplies Main diagnostics,
-member/call facts and local flow. The adapter keeps this useful diagnostic slice:
+One shared `EmmyLuaAnalysis` supplies Main diagnostics with Library types, facts
+and flow (#193 delivered). The adapter currently retains only `syntax-error`,
+`doc-syntax-error`, `assign-type-mismatch` and `param-type-mismatch`.
+It discards other codes and upstream messages, and forces normalized severity
+to Error. Service findings have no message; LSP supplies constant generic prose.
+An empty report therefore covers only this restricted slice.
 
-| Upstream code | Local kind |
-| --- | --- |
-| `syntax-error` | `LuaSyntax` |
-| `doc-syntax-error` | `DocumentationSyntax` |
-| `assign-type-mismatch` | `AssignmentTypeMismatch` |
-| `param-type-mismatch` | `ParameterTypeMismatch` |
+The former instruction to keep all other codes outside the product was too
+restrictive. It preserved an adapter limitation instead of reusing the engine.
 
-Other upstream codes remain outside the current product until a concrete addon
-workflow needs them. An empty report therefore means no finding in this selected
-slice, not complete proof of correctness or runtime safety.
+## Replacement through the existing result path
 
-Keep UTF-8 half-open spans via `syntax/coordinates.rs`. Diagnostics are collected
-only for Main files even though Library declarations participate in type checking.
-Distinguish invalid input, cancellation and unavailable analysis from a clean
-result. Reuse upstream diagnostic generation; do not add a custom type checker,
-code-approval registry or result-fingerprint framework.
+Use upstream diagnostic selection/configuration for the selected Lua/WoW inputs.
+Carry code, bounded message, actual severity and exact source location through
+Project, Service and frontend output. Suppress a known inappropriate diagnostic
+explicitly when justified by the selected environment, not by requiring every
+new upstream code to enter a framework approval enum. Do not force warnings to
+errors or replace explanatory text with hashes/classification labels.
 
-Normal configuration belongs to #200 and the complete generation-to-check CLI
-workflow to #201. Standard library setup uses the pinned donor's initializer as
-described in `docs/EMMYLUA_UPSTREAM.md`; it does not require another catalog or
-installation subsystem.
+Preserve UTF-8 half-open spans via `syntax/coordinates.rs`, XML virtual-source
+mapping and document versions. Treat messages as display data: bound/escape them
+at rendering and never execute/interpret them as instructions. Main diagnostics
+use Library declarations; do not project STD/Library locations into addon files.
+Missing input, failed analysis and cancellation must not become a clean result.
+
+#200 owns ordinary configuration/stdlib setup. #201 must verify one real consumer
+receives a useful message/code/severity/location and a selected upstream code
+outside the old four-code filter. Reuse existing diagnostic/consumer fixtures;
+no new approval registry, custom type checker, translation catalogue or full
+historical diagnostic matrix. These source findings are not fixed by this note.
