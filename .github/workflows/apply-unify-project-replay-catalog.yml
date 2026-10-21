@@ -24,6 +24,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/unify-project-replay-catalog.py')
+          text = path.read_text()
+          old = '''path, text = read("docs/REFACTOR_QUEUE.md")
+          text = sub_once(
+              text,
+              r"\\| 6 \\| \\[#112 — current formats\\].*?\\|\\n",
+              "| 6 | [#112 — current formats](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112) | Historical and feature-combination catalogs are removed; collapse remaining replay payload tags only from real readers. |\\n",
+              "queue current formats row",
+          )
+          path.write_text(text)
+          '''
+          new = '''path, text = read("docs/REFACTOR_QUEUE.md")
+          text = replace_once(
+              text,
+              "| With touched owner | [#112 — legacy formats/docs](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112) | Historical exact Project catalogs are removed; collapse remaining replay recipe variants to one current rebuildable representation. |\\n",
+              "| With touched owner | [#112 — legacy formats/docs](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112) | Historical and feature-combination catalogs are removed; collapse remaining replay payload tags only from real readers. |\\n",
+              "queue current formats row",
+          )
+          path.write_text(text)
+          '''
+          if text.count(old) != 1:
+              raise SystemExit('queue patch input mismatch')
+          path.write_text(text.replace(old, new, 1))
+          PY
           python .github/unify-project-replay-catalog.py
           git rm .github/unify-project-replay-catalog.py
           git rm .github/workflows/apply-unify-project-replay-catalog.yml
