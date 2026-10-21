@@ -69,8 +69,8 @@ jobs:
           )
           replace(
               "crates/wow-service/src/live_project/tests.rs",
-              "    let replay = ProjectReplay::capture(&publisher, &stop)?;\n",
-              "",
+              "    let project = publisher.open_current()?;\n    let replay = ProjectReplay::capture(&publisher, &stop)?;\n    let store_path = path.join(\"store\");\n",
+              "    let project = publisher.open_current()?;\n    let store_path = path.join(\"store\");\n",
           )
           replace(
               "crates/wow-service/src/local/platform_input/tests/event_registry_keys.rs",
