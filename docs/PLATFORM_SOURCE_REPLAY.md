@@ -1,135 +1,25 @@
 # Platform source replay
 
-**Status:** implemented and verified. Original v5 checkpoint evidence on 2026-10-10: policy,
-fmt, all-target/all-feature check, strict Clippy, tests (925 passed, 1 ignored, 108
-targets), strict rustdoc under `RUSTDOCFLAGS=-D warnings`, and all-target/all-feature
-build. Implemented scope is source and package replay plus the durable native store
-channel. Full W17 acceptance remains open.
+`ProjectReplay` retains the exact source/package inputs needed to rebuild a current
+Project without reopening the source checkout. It stores raw member bytes, selected
+TOC/package plans, Main and Library files, configuration and expected semantic IDs.
+It never executes source code or treats serialized receipts as authority.
 
-The subsequent selected /6 checkpoint passed all seven workspace gates/build
-with 936 tests passed, 1 ignored and 111 targets; see
-[package XML bindings](PLATFORM_PACKAGE_XML_BINDINGS.md).
+## Read path
 
-The subsequent package graph `/7` checkpoint passed 938 tests, 1 ignored across
-111 targets; see [selected package graph](PLATFORM_PACKAGE_GRAPH.md). The new
-explicit raw inventory `/8` checkpoint passes all seven workspace gates/build,
-with 939 passed, 0 failed, 1 ignored and 111 targets, completed
-2026-10-10 07:48:26 UTC. It adds a separate Included-member graph/native local-read
-binding; see [raw inventory graph](PLATFORM_RAW_INVENTORY_GRAPH.md). These scoped
-results do not establish complete W17 or corpus/runtime acceptance.
+1. Bound and decode one strict DTO.
+2. Rebuild source/package/configuration owners from retained bytes.
+3. Run the real Emmy/Project producer path.
+4. Compare configuration, Project, analyzer and replay identities.
+5. Admit the stored Project/graph pair only after those checks succeed.
 
-Byte admission is documented in
-[PLATFORM_SOURCE_ADMISSION](PLATFORM_SOURCE_ADMISSION.md), package specialization in
-[PLATFORM_SOURCE_PACKAGES](PLATFORM_SOURCE_PACKAGES.md), and the owner-bound
-configuration in [PLATFORM_SOURCE_CONFIGURATION](PLATFORM_SOURCE_CONFIGURATION.md).
-Publication behavior is in
-[REPLAY_PUBLICATION](../crates/wow-project/REPLAY_PUBLICATION.md).
+All current feature combinations use one DTO and one
+`wow-project.live-replay` record. XML classification, declarations, signatures,
+function-call budgets, hooks and other selections remain typed configuration;
+they do not create storage or replay versions. The composed candidate receipt is
+a separate record because it is a separate owner.
 
-## What now replays
-
-The platform channel holds the original profile request, the exact declared inventory,
-every retained raw member, and the package request with its expected binding digest.
-Hydration re-enters the real source and package owners, validating the profile,
-inventory, observed byte lengths/digests and source/load/Main binding. It performs
-no filesystem or network access. Serialized receipts cannot construct these owners.
-
-Raw members are carried as byte sequences, never as decoded text, so unknown extensions
-and undecodable data retain their exact bytes. Main fixture references are retained as
-exact path and reference pairs, and hydration restores them by sorting both sides rather
-than by positional matching.
-
-The durable native store lifecycle uses generation schema version 2 with the platform
-channel present, and the archive re-derives its own project and analyzer snapshot
-identities through a fresh publish and compares them against the captured ones before
-the pair is returned.
-
-## Current schema selection
-
-All current archives use generation schema version 2. Ordinary non-platform inputs,
-including retained standalone TOC/XML and declared package inputs, use
-`wow-project/native-project-replay/4` and `wow-project.live-replay.v4`. Platform
-input selects `/5`; same-session package XML selects `/6`; package graph and raw
-inventory select `/7` and `/8`. Later direct, retained-budget and named-component
-routes keep their explicitly selected current schemas.
-
-The store registers only current catalog members. Replay v1-v3 and the generation-v1
-identity recipe are not read or migrated; an incompatible derived store must be
-rebuilt from source and configuration. Capture and hydration require generation
-version 2 and exact configuration/schema agreement, with no fallback.
-
-## Sealed checks carried into replay
-
-The binding is revalidated on capture against the held source and its load and Main plans,
-and the Main files are validated against the Main plan. On rebuild, the package request
-re-specializes the re-admitted source and the resulting binding digest must equal the
-captured one, so a package set or plan that would change the binding is refused.
-
-Raw members share the ordinary archive budgets with Library: 8,192 files,
-64 Libraries, 16 MiB per file and 32 MiB total raw source. The complete encoded
-record also stays within the store's 32 MiB ceiling; JSON byte sequences can
-exceed that ceiling before the raw limit is reached. Capture counts the borrowed
-encoded corpus before copying it. Fixture-reference metadata has separate finite
-count/path/reference bounds and contributes to the encoded record budget.
-Reordered, duplicate, missing and surplus retained members reject.
-
-`ProjectReplay::from_json` bounds the raw envelope before strict typed decoding
-and archive validation. Direct `Deserialize` constructs an inert DTO; owner
-admission still requires `hydrate`. Stored reads enforce the same record ceiling.
-
-## Selected raw inventory graph replay
-
-The `/8` selector participates in configuration/project-generation identity.
-Hydration re-admits the original raw source and package request, then rebuilds
-the configured native owners. Pair acquisition recomputes both the source batch
-and the separate `wow-project.platform-source-inventory` batch, requiring exact
-registry, coverage, graph and publication membership. Deserialized inventory
-metadata or read-capability labels do not replace this native validation.
-
-Native service request `wow-service/graph-build-request/11` must match the held
-raw graph configuration and returns `wow-service/graph-build-result/18`.
-Default `/19` and package `/20` routes keep their request/result identities;
-their retained evidence/persistence APIs refuse the raw variant with
-`DeferredCapability` instead of discarding it or falling back.
-
-The native synthetic lifecycle verifies disk-absent `/8` publication and namespace
-reopen with the exact original project/analyzer, source/load/Main and graph
-identities, Included bytes and bounded native read binding. A complete frozen V7
-epoch refuses v8 without changing Current, epoch or membership and retains no
-operation for the refused request. This is scoped compatibility evidence, not
-catalog migration or full replay fault acceptance.
-
-## Retained packages and selected function-call capacity
-
-Explicit native package retention selects `wow-project/native-project-replay/11`
-and `wow-project.live-replay.v11`. A retained configuration with the optional
-typed `ProjectBudgetPolicy.function_calls` component instead selects replay `/12`
-and `wow-project.live-replay.v12`. Capture, expected schema and storage selection
-use the same retained-owner/budget pair. The six positive limits enter the
-configuration digest and are captured/rebuilt exactly; see
-[platform input](../apps/wow/PLATFORM_INPUT.md#explicit-function-call-budget).
-
-The selected report is budget-bound function-call `/8`. Omission keeps the default
-report `/7`, current unselected replay and configuration bytes. A `/12` archive with
-the budget removed, a selected budget without retained native packages, schema
-substitution and budget tampering refuse. Genuine disk-absent service publication,
-store reopen/read and replay verify the same project/analyzer identities. Exact catalog selection refuses an unregistered
-record before retaining an operation or changing Current. This does not raise the
-independent raw-source or encoded store record ceilings, qualify full-corpus
-persistence, or establish historical fixture acceptance.
-
-## Update capability is not granted
-
-A platform archive is a read-only compatibility record for the update protocol. Only the
-modern physical update profile supports a durable update, and a platform channel excludes
-it, so `into_update_publisher` refuses a platform archive with `DeferredCapability`.
-
-## Not claimed
-
-Stable logical namespace publication across differing source snapshots is now a
-separate focused owner slice; see [PLATFORM_STORE_NAMESPACE.md](PLATFORM_STORE_NAMESPACE.md).
-The separate raw inventory partition is executable; remaining TOC/XML/analyzer
-direct assertions still share the prior source producer. The full four-way split,
-structural fingerprints, bounded SkeletonInputView, and source service and CLI
-transport for an explicit platform request remain open. Gethe acquisition and
-materialization remain deferred. Real mirror, performance and runtime
-acceptance and full W17, E3, E0 and E2 acceptance remain open.
+Replay is bounded by the current file, source-byte and store-record ceilings.
+Cancellation is checked during capture, decoding and rebuild. Incompatible derived
+stores are recreated from source and user configuration; no migration or archive
+reader is maintained.

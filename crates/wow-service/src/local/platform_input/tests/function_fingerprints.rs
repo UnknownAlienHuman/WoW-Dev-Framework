@@ -407,10 +407,6 @@ fn native_function_source_span_query_is_selected_bounded_and_recomputed_from_rep
     assert_eq!(record.decode::<Value>()?, before.decode::<Value>()?);
     let replay: ProjectReplay = record.decode()?;
     let replay_wire = serde_json::to_value(&replay)?;
-    assert_eq!(
-        replay_wire["schema"],
-        "wow-project/native-project-replay/10"
-    );
     assert!(replay_wire.get("function_fingerprints").is_none());
     assert!(
         replay_wire["configuration"]
@@ -898,17 +894,10 @@ fn selected_declared_headers_survive_native_replay_and_selected_durable_reopen()
         .find(|record| record.key() == "live.project.replay")
         .ok_or("selected replay record")?;
     let replay: ProjectReplay = record.decode()?;
-    let expected_record = wow_store::project::PartitionRecord::new(
-        record.key(),
-        "wow-project.live-replay.physical-function-declarations.v1",
-        &replay,
-    )?;
+    let expected_record =
+        wow_store::project::PartitionRecord::new(record.key(), "wow-project.live-replay", &replay)?;
     assert_eq!(record.version(), expected_record.version());
     let replay_wire = serde_json::to_value(&replay)?;
-    assert_eq!(
-        replay_wire["schema"],
-        "wow-project/native-project-replay/physical-function-declarations/1"
-    );
     assert_eq!(
         replay_wire["configuration"]["physical_function_declarations"],
         serde_json::to_value(recipe)?
@@ -1900,17 +1889,9 @@ fn selected_indexed_signatures_survive_selected_replay_and_catalog_reopen() -> T
         .find(|record| record.key() == "live.project.replay")
         .ok_or("selected signature replay record")?;
     let replay: ProjectReplay = record.decode()?;
-    let expected_record = PartitionRecord::new(
-        record.key(),
-        "wow-project.live-replay.selected-components.v1",
-        &replay,
-    )?;
+    let expected_record = PartitionRecord::new(record.key(), "wow-project.live-replay", &replay)?;
     assert_eq!(record.version(), expected_record.version());
     let wire = serde_json::to_value(&replay)?;
-    assert_eq!(
-        wire["schema"],
-        "wow-project/native-project-replay/selected-components/1"
-    );
     assert_eq!(
         wire["configuration"]["physical_function_signatures"],
         "wow-emmy/physical-function-indexed-types/1"

@@ -54,7 +54,6 @@ fn retained_package_profile_binds_native_graph_and_replay_limits() -> TestResult
         .ok_or("replay record")?
         .decode()?;
     let wire = serde_json::to_value(&replay)?;
-    assert_eq!(wire["schema"], "wow-project/native-project-replay/11");
     assert_eq!(
         wire["platform"]["package_request"]["retention_limits"],
         serde_json::to_value(limits)?
@@ -94,7 +93,7 @@ fn retained_package_profile_binds_native_graph_and_replay_limits() -> TestResult
     )?;
     assert!(changed.hydrate(&stop).is_err());
     let mut downgraded = wire.clone();
-    downgraded["schema"] = json!("wow-project/native-project-replay/10");
+    downgraded["obsolete_schema"] = json!("obsolete-project-replay-schema");
     assert!(
         wow_project::replay::ProjectReplay::from_json(&serde_json::to_vec(&downgraded)?, &stop)
             .is_err()

@@ -136,7 +136,7 @@ The held native signature index supplies typed observations, not a second parser
 Existing `--fingerprints` exposes the selected component; see
 [the finite comparison recipe](../../crates/wow-project/e3/FUNCTION_FINGERPRINTS.md).
 
-Selected signatures use `wow-project/native-project-replay/selected-components/1`.
+Selected signatures use `ProjectReplay`.
 Exact declaration/XML/signature choices remain in configuration and the explicit
 selection; the one current Project catalog does not enumerate their combinations.
 
@@ -201,7 +201,7 @@ Encoded bytes are an accounting unit, not an allocator or resident-memory ceilin
 Different populations must still pass every independent owner budget.
 
 The selected limits enter the sealed package binding and original replay request.
-Retained-profile archives use `wow-project/native-project-replay/11`; other current
+Retained-profile archives use `ProjectReplay`; other current
 platform selections keep their exact selected recipe. Hydration re-admits the exact
 source and package owners under the captured limits. Changed limits or schema
 substitution refuse. A successful retained Main is not full graph or persistence
@@ -261,7 +261,7 @@ Missing fields, unknown/duplicate keys, zero, invalid types and explicit `null`
 refuse. Omission preserves the previous policy, report `/7` and replay `/11`.
 Selection requires genuine native retained packages, reaches the same semantic
 session, and produces budget-bound `wow-emmy/function-call-facts/8` and
-`wow-project/native-project-replay/12`. The configuration digest and report
+`ProjectReplay`. The configuration digest and report
 identity both retain the selected values. Hydration rebuilds them without source
 files and refuses removal, substitution or changed values against the original
 identities. Other current replay recipes remain unchanged.

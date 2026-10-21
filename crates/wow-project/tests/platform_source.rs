@@ -2672,7 +2672,6 @@ fn platform_configuration_publishes_native_main_and_replays_without_source() -> 
     assert!(!root.0.exists());
     let replay = ProjectReplay::capture(&publisher, &stop)?;
     let archive = serde_json::to_value(&replay)?;
-    assert_eq!(archive["schema"], "wow-project/native-project-replay/5");
     assert_eq!(archive["function_calls"], true);
     assert!(archive["files"].as_array().is_some_and(Vec::is_empty));
     assert!(archive.get("load").is_none());
@@ -2788,7 +2787,7 @@ fn platform_configuration_publishes_native_main_and_replays_without_source() -> 
             "altered load context" => {
                 changed["platform"]["package_request"]["context"] = changed_context.clone();
             }
-            _ => changed["schema"] = "wow-project/native-project-replay/4".into(),
+            _ => changed["obsolete_schema"] = "obsolete-project-replay-schema".into(),
         }
         assert!(
             ProjectReplay::from_json(&serde_json::to_vec(&changed)?, &stop)

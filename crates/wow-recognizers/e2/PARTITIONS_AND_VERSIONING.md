@@ -37,8 +37,8 @@ The opt-in `AceAddonLocalResultV1` report11 recipe uses the separate
 `wow-calibration-aceaddon-local-result` pack and
 `calibration.library.aceaddon_embed@1` rule. Its source-library profile is
 `wow-recognizers/source-library/aceaddon-local-result/1`; Project retains it under
-`wow-project/native-project-replay/aceaddon-local-result/1` and
-`wow-project.live-replay.aceaddon-local-result.v1`. Default and previously admitted
+`ProjectReplay` and
+`wow-project.live-replay`. Default and previously admitted
 recipes retain their original interpretation. This selected structural adapter
 does not activate `core.library.embed@1` or accept the E5 calibration lifecycle.
 

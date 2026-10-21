@@ -407,7 +407,6 @@ fn selected_sidecar_budget_binds_native_report_and_replay_without_downgrade() ->
         .ok_or("replay record")?
         .decode()?;
     let wire = serde_json::to_value(&replay)?;
-    assert_eq!(wire["schema"], "wow-project/native-project-replay/12");
     assert_eq!(
         wire["configuration"]["budgets"]["function_calls"],
         serde_json::to_value(sidecar)?
@@ -466,7 +465,7 @@ fn selected_sidecar_budget_binds_native_report_and_replay_without_downgrade() ->
     for mutation in 0..5 {
         let mut changed = wire.clone();
         match mutation {
-            0 => changed["schema"] = json!("wow-project/native-project-replay/11"),
+            0 => changed["obsolete_schema"] = json!("obsolete-project-replay-schema"),
             1 => {
                 changed["configuration"]["budgets"]
                     .as_object_mut()
@@ -640,7 +639,6 @@ fn explicit_project_budgets_bind_native_admission_publication_and_cold_replay() 
 
     let replay = ProjectReplay::capture(&publisher, &stop)?;
     let wire = serde_json::to_value(&replay)?;
-    assert_eq!(wire["schema"], "wow-project/native-project-replay/11");
     assert_eq!(
         wire["configuration"]["budgets"],
         serde_json::to_value(policy)?

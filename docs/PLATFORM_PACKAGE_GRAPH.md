@@ -66,7 +66,7 @@ The selector participates in configuration and project-generation identity.
 Selected graph output uses
 `wow-project/source-load-proposals/20`; absence retains the published `/19`
 recipe, including binding-only native replay `/6`. Selected native replay uses
-`wow-project/native-project-replay/7` and `wow-project.live-replay.v7`.
+`ProjectReplay` and `wow-project.live-replay`.
 
 `ProjectReplay::hydrate` re-admits retained source/package/configuration/analyzer
 owners without disk and compares project/analyzer identities plus full canonical

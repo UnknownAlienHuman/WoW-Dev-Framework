@@ -8,9 +8,8 @@ pub mod publication;
 mod xml_classification;
 
 use crate::{
-    PackageXmlBindingProfile, PlatformGraphProfile, ProjectError, ProjectErrorCode,
-    ProjectInputBundle, ProjectInputFile, ProjectPhase, ProjectPublisher, ProjectResult,
-    ProjectView,
+    ProjectError, ProjectErrorCode, ProjectInputBundle, ProjectInputFile, ProjectPhase,
+    ProjectPublisher, ProjectResult, ProjectView,
 };
 use configuration::ReplayConfiguration;
 use load::ReplayLoad;
@@ -22,58 +21,7 @@ use wow_emmy::{
     LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
 };
 
-const LIBRARY_BOUND_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/4";
-const PLATFORM_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/5";
-const PACKAGE_XML_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/6";
-const PACKAGE_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/7";
-const RAW_INVENTORY_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/8";
-const DIRECT_PLATFORM_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/9";
-const CAPABILITIES_GRAPH_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/10";
-const RETAINED_PLATFORM_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/11";
-const FUNCTION_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/12";
-const GRAPH_METADATA_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/14";
-const GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/15";
-/// Current report10 interpretation for retained global-access replays.
-const GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/16";
-/// Named replay reader for the opt-in AceAddon local-result evidence recipe.
-const ACEADDON_LOCAL_RESULT_REPLAY_SCHEMA: &str =
-    "wow-project/native-project-replay/aceaddon-local-result/1";
-pub(super) const ACEADDON_LOCAL_RESULT_STORAGE_SCHEMA: &str =
-    "wow-project.live-replay.aceaddon-local-result.v1";
-// New selection is a named component recipe, not a renumbered aggregate ladder.
-// Actual consumers are expected_schema, hydrate and publication storage catalogs.
-const XML_CLASSIFICATION_REPLAY_SCHEMA: &str =
-    "wow-project/native-project-replay/xml-schema-classification/1";
-pub(super) const XML_CLASSIFICATION_STORAGE_SCHEMA: &str =
-    "wow-project.live-replay.xml-schema-classification.v1";
-const PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA: &str =
-    "wow-project/native-project-replay/physical-function-declarations/1";
-const XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/xml-schema-classification-and-physical-function-declarations/1";
-pub(super) const PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA: &str =
-    "wow-project.live-replay.physical-function-declarations.v1";
-pub(super) const XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA: &str =
-    "wow-project.live-replay.xml-schema-classification-and-physical-function-declarations.v1";
-const PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA: &str =
-    "wow-project/native-project-replay/physical-function-declaration-syntax-and-body-shape/1";
-const XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/xml-schema-classification-and-physical-function-declaration-syntax-and-body-shape/1";
-pub(super) const PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA: &str =
-    "wow-project.live-replay.physical-function-declaration-syntax-and-body-shape.v1";
-pub(super) const XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA: &str = "wow-project.live-replay.xml-schema-classification-and-physical-function-declaration-syntax-and-body-shape.v1";
-const SELECTED_COMPONENTS_REPLAY_SCHEMA: &str =
-    "wow-project/native-project-replay/selected-components/1";
-pub(super) const SELECTED_COMPONENTS_STORAGE_SCHEMA: &str =
-    "wow-project.live-replay.selected-components.v1";
-const PRIMARY_CALLABLES_REPLAY_SCHEMA: &str =
-    "wow-project/native-project-replay/primary-callables/1";
-pub(super) const PRIMARY_CALLABLES_STORAGE_SCHEMA: &str =
-    "wow-project.live-replay.primary-callables.v1";
-const NATIVE_LIBRARY_INPUT_REPLAY_SCHEMA: &str =
-    "wow-project/native-project-replay/native-library-input/1";
-pub(super) const NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA: &str =
-    "wow-project.live-replay.native-library-input.v1";
-const NATIVE_API_USES_REPLAY_SCHEMA: &str = "wow-project/native-project-replay/native-api-uses/1";
-pub(super) const NATIVE_API_USES_STORAGE_SCHEMA: &str =
-    "wow-project.live-replay.native-api-uses.v1";
+pub(super) const STORAGE_SCHEMA: &str = "wow-project.live-replay";
 const MAX_FILES: usize = 8192;
 const MAX_LIBRARIES: usize = 64;
 const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
@@ -127,7 +75,6 @@ struct ReplayLibrary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectReplay {
-    schema: String,
     configuration: ReplayConfiguration,
     files: Vec<ReplayFile>,
     libraries: Vec<ReplayLibrary>,
@@ -271,71 +218,9 @@ impl ProjectReplay {
             });
         }
         retained_libraries.sort_by(|a, b| a.snapshot_id.cmp(&b.snapshot_id));
-        // The package graph projection is selected only together with the
-        // genuine platform owner, the same-session XML binding profile, the
-        // library-bound generation and the explicit platform graph selector.
-        let platform_schema = match (
-            configuration.package_xml_binding_profile(),
-            configuration.platform_graph_profile(),
-        ) {
-            (
-                Some(PackageXmlBindingProfile::SameSessionV1),
-                Some(PlatformGraphProfile::PackageProjectionV1),
-            ) => PACKAGE_GRAPH_REPLAY_SCHEMA,
-            (
-                Some(PackageXmlBindingProfile::SameSessionV1),
-                Some(PlatformGraphProfile::PackageProjectionWithRawInventoryV1),
-            ) => RAW_INVENTORY_GRAPH_REPLAY_SCHEMA,
-            (
-                Some(PackageXmlBindingProfile::SameSessionV1),
-                Some(PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1),
-            ) => DIRECT_PLATFORM_GRAPH_REPLAY_SCHEMA,
-            (
-                Some(PackageXmlBindingProfile::SameSessionV1),
-                Some(PlatformGraphProfile::DirectCapabilitiesV1(_)),
-            ) => CAPABILITIES_GRAPH_REPLAY_SCHEMA,
-            (Some(PackageXmlBindingProfile::SameSessionV1), None) => PACKAGE_XML_REPLAY_SCHEMA,
-            (None, None) => PLATFORM_REPLAY_SCHEMA,
-            (None, Some(_)) => return Err(invalid()),
-        };
-        let platform_schema =
-            if platform_owner.is_some_and(|owner| owner.retention_limits().is_some()) {
-                let has_global_access_budget = configuration
-                    .function_call_budget()
-                    .is_some_and(|budget| budget.global_access_budget().is_some());
-                if configuration.function_call_evidence_profile()
-                == Some(
-                    wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1,
-                )
-            {
-                ACEADDON_LOCAL_RESULT_REPLAY_SCHEMA
-            } else if has_global_access_budget {
-                GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA
-            } else if let Some(budget) = configuration.source_graph_budget() {
-                graph_budget_schema(budget)
-            } else if configuration.function_call_budget().is_some() {
-                FUNCTION_BUDGET_REPLAY_SCHEMA
-            } else {
-                RETAINED_PLATFORM_REPLAY_SCHEMA
-            }
-            } else {
-                platform_schema
-            };
-        let base_schema = if platform_owner.is_some() {
-            platform_schema
-        } else {
-            LIBRARY_BOUND_REPLAY_SCHEMA
-        };
-        let schema = selected_component_schema(
-            base_schema,
-            &configuration,
-            function_calls,
-            load.is_none() && packages.is_none() && platform_owner.is_none(),
-        )?;
         let platform = if let Some(owner) = platform_owner {
             let envelope_size = encoded_size(
                 &PlatformEnvelopeBudget {
-                    schema,
                     configuration: &configuration,
                     files: &files,
                     libraries: &retained_libraries,
@@ -358,7 +243,6 @@ impl ProjectReplay {
             None
         };
         let replay = Self {
-            schema: schema.into(),
             configuration,
             files,
             libraries: retained_libraries,
@@ -372,158 +256,13 @@ impl ProjectReplay {
         replay.validate_budget(stop)?;
         Ok(replay)
     }
-    fn expected_schema(&self) -> ProjectResult<&'static str> {
-        let schema = self.expected_base_schema()?;
-        if self.configuration.hook_target_recipe().is_some() {
-            // Retained platform owners keep their retention requirement.
-            if !self.function_calls
-                || self.configuration.function_call_budget().is_none()
-                || (self.configuration.is_platform()
-                    != self
-                        .platform
-                        .as_ref()
-                        .is_some_and(ReplayPlatform::has_retention_limits))
-            {
-                return Err(invalid());
-            }
-            return selected_component_schema(
-                schema,
-                &self.configuration,
-                self.function_calls,
-                self.supports_physical_update(),
-            );
-        }
-        if self.configuration.function_call_evidence_profile()
-            == Some(wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1)
-        {
-            return if schema == ACEADDON_LOCAL_RESULT_REPLAY_SCHEMA
-                && self.function_calls
-                && self
-                    .platform
-                    .as_ref()
-                    .is_some_and(ReplayPlatform::has_retention_limits)
-                && self.configuration.function_call_budget().is_some()
-            {
-                Ok(ACEADDON_LOCAL_RESULT_REPLAY_SCHEMA)
-            } else {
-                Err(invalid())
-            };
-        }
-        let has_global_access_budget = self
-            .configuration
-            .function_call_budget()
-            .is_some_and(|budget| budget.global_access_budget().is_some());
-        if has_global_access_budget
-            && self
-                .platform
-                .as_ref()
-                .is_some_and(ReplayPlatform::has_retention_limits)
-            && self
-                .configuration
-                .source_graph_budget()
-                .is_none_or(|_| self.configuration.platform_graph_profile().is_some())
-        {
-            if self.schema != GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA {
-                return Err(invalid());
-            }
-            let selected = GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA;
-            return selected_component_schema(
-                selected,
-                &self.configuration,
-                self.function_calls,
-                self.supports_physical_update(),
-            );
-        }
-        if let Some(budget) = self.configuration.source_graph_budget() {
-            return if self
-                .platform
-                .as_ref()
-                .is_some_and(ReplayPlatform::has_retention_limits)
-                && self.configuration.platform_graph_profile().is_some()
-            {
-                selected_component_schema(
-                    graph_budget_schema(budget),
-                    &self.configuration,
-                    self.function_calls,
-                    false,
-                )
-            } else {
-                Err(invalid())
-            };
-        }
-        let schema = match (
-            self.platform
-                .as_ref()
-                .is_some_and(ReplayPlatform::has_retention_limits),
-            self.configuration.function_call_budget(),
-        ) {
-            (true, Some(budget)) if budget.global_access_budget().is_some() => Err(invalid()),
-            (true, Some(_)) => Ok(FUNCTION_BUDGET_REPLAY_SCHEMA),
-            (true, None) => Ok(RETAINED_PLATFORM_REPLAY_SCHEMA),
-            (false, None) => Ok(schema),
-            (false, Some(_)) => Err(invalid()),
-        }?;
-        selected_component_schema(
-            schema,
-            &self.configuration,
-            self.function_calls,
-            self.supports_physical_update(),
-        )
-    }
-    fn expected_base_schema(&self) -> ProjectResult<&'static str> {
-        if self.configuration.function_call_evidence_profile()
-            == Some(wow_emmy::function_calls::FunctionCallEvidenceProfile::AceAddonLocalResultV1)
-        {
-            return if self.configuration.is_platform()
-                && self
-                    .platform
-                    .as_ref()
-                    .is_some_and(ReplayPlatform::has_retention_limits)
-                && self.configuration.function_call_budget().is_some()
-            {
-                Ok(ACEADDON_LOCAL_RESULT_REPLAY_SCHEMA)
-            } else {
-                Err(invalid())
-            };
-        }
-        if let Some(profile) = self.configuration.platform_graph_profile() {
-            return if self.configuration.package_xml_binding_profile()
-                == Some(PackageXmlBindingProfile::SameSessionV1)
-                && self.configuration.is_platform()
-                && self.platform.is_some()
-            {
-                Ok(match profile {
-                    PlatformGraphProfile::PackageProjectionV1 => PACKAGE_GRAPH_REPLAY_SCHEMA,
-                    PlatformGraphProfile::PackageProjectionWithRawInventoryV1 => {
-                        RAW_INVENTORY_GRAPH_REPLAY_SCHEMA
-                    }
-                    PlatformGraphProfile::DirectPlatformProducersWithRawInventoryV1 => {
-                        DIRECT_PLATFORM_GRAPH_REPLAY_SCHEMA
-                    }
-                    PlatformGraphProfile::DirectCapabilitiesV1(_) => {
-                        CAPABILITIES_GRAPH_REPLAY_SCHEMA
-                    }
-                })
-            } else {
-                Err(invalid())
-            };
-        }
-        match self.configuration.package_xml_binding_profile() {
-            Some(PackageXmlBindingProfile::SameSessionV1)
-                if self.configuration.is_platform() && self.platform.is_some() =>
-            {
-                Ok(PACKAGE_XML_REPLAY_SCHEMA)
-            }
-            Some(_) => Err(invalid()),
-            None if self.platform.is_some() => Ok(PLATFORM_REPLAY_SCHEMA),
-            None => Ok(LIBRARY_BOUND_REPLAY_SCHEMA),
-        }
-    }
     fn validate_budget(&self, stop: &AtomicBool) -> ProjectResult<()> {
-        let expected_schema = self.expected_schema()?;
+        self.configuration.has_xml_classification()?;
+        if self.configuration.requires_function_calls() && !self.function_calls {
+            return Err(invalid());
+        }
         if (self.load.is_some() && self.packages.is_some())
             || (self.packages.is_some() && !self.files.is_empty())
-            || self.schema != expected_schema
             || self.libraries.len() > MAX_LIBRARIES
             || self.files.len() > MAX_FILES
             || self.configuration.is_platform() != self.platform.is_some()
@@ -695,185 +434,14 @@ impl ProjectReplay {
     pub(crate) fn supports_physical_update(&self) -> bool {
         self.load.is_none() && self.packages.is_none() && self.platform.is_none()
     }
-    fn storage_schema(&self) -> ProjectResult<&'static str> {
-        if self.schema != self.expected_schema()? {
-            return Err(invalid());
-        }
-        match self.schema.as_str() {
-            LIBRARY_BOUND_REPLAY_SCHEMA => Ok("wow-project.live-replay.v4"),
-            PLATFORM_REPLAY_SCHEMA => Ok("wow-project.live-replay.v5"),
-            PACKAGE_XML_REPLAY_SCHEMA => Ok("wow-project.live-replay.v6"),
-            PACKAGE_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v7"),
-            RAW_INVENTORY_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v8"),
-            DIRECT_PLATFORM_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v9"),
-            CAPABILITIES_GRAPH_REPLAY_SCHEMA => Ok("wow-project.live-replay.v10"),
-            RETAINED_PLATFORM_REPLAY_SCHEMA => Ok("wow-project.live-replay.v11"),
-            FUNCTION_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v12"),
-            GRAPH_METADATA_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v14"),
-            GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA => Ok("wow-project.live-replay.v15"),
-            GLOBAL_ACCESS_REPORT10_REPLAY_SCHEMA => Ok("wow-project.live-replay.v16"),
-            ACEADDON_LOCAL_RESULT_REPLAY_SCHEMA => Ok(ACEADDON_LOCAL_RESULT_STORAGE_SCHEMA),
-            XML_CLASSIFICATION_REPLAY_SCHEMA => Ok(XML_CLASSIFICATION_STORAGE_SCHEMA),
-            PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA => {
-                Ok(PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA)
-            }
-            XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA => {
-                Ok(XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_STORAGE_SCHEMA)
-            }
-            PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA => {
-                Ok(PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA)
-            }
-            XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA => {
-                Ok(XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_STORAGE_SCHEMA)
-            }
-            SELECTED_COMPONENTS_REPLAY_SCHEMA => Ok(SELECTED_COMPONENTS_STORAGE_SCHEMA),
-            PRIMARY_CALLABLES_REPLAY_SCHEMA => Ok(PRIMARY_CALLABLES_STORAGE_SCHEMA),
-            NATIVE_LIBRARY_INPUT_REPLAY_SCHEMA => Ok(NATIVE_LIBRARY_INPUT_STORAGE_SCHEMA),
-            NATIVE_API_USES_REPLAY_SCHEMA => Ok(NATIVE_API_USES_STORAGE_SCHEMA),
-            _ => Err(invalid()),
-        }
-    }
-}
-/// A finite recipe matrix shared by capture and exact expected-schema validation.
-fn selected_component_schema(
-    base: &'static str,
-    configuration: &ReplayConfiguration,
-    function_calls: bool,
-    physical_primary: bool,
-) -> ProjectResult<&'static str> {
-    let selected =
-        selected_component_base_schema(base, configuration, function_calls, physical_primary)?;
-    let selected = if configuration.hook_target_recipe().is_some() {
-        if !function_calls
-            || configuration.function_call_budget().is_none()
-            || matches!(
-                base,
-                GRAPH_METADATA_BUDGET_REPLAY_SCHEMA | GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA
-            )
-        {
-            return Err(invalid());
-        }
-        // Ordinary inputs reuse the existing Library-bound physical owner.
-        if !configuration.is_platform()
-            && (!physical_primary || base != LIBRARY_BOUND_REPLAY_SCHEMA)
-        {
-            return Err(invalid());
-        }
-        // Exact component recipe; hydrate and AcquiredProjectPair share the
-        // already registered selected-components catalog. Old readers stay exact.
-        SELECTED_COMPONENTS_REPLAY_SCHEMA
-    } else if configuration.library_witnesses().is_some()
-        || configuration.signal_witnesses().is_some()
-    {
-        if !function_calls {
-            return Err(invalid());
-        }
-        SELECTED_COMPONENTS_REPLAY_SCHEMA
-    } else if configuration.state_projection().is_some() {
-        if !function_calls
-            || configuration.is_platform()
-            || configuration.platform_graph_profile().is_some()
-        {
-            return Err(invalid());
-        }
-        // Reuse the existing exact component envelope and registered reader.
-        SELECTED_COMPONENTS_REPLAY_SCHEMA
-    } else {
-        selected
-    };
-    match configuration.native_api_uses() {
-        Some(crate::NativeApiUseRecipe::ReferenceV1)
-            if configuration.native_library_input().is_some() && !configuration.is_platform() =>
-        {
-            return Ok(NATIVE_API_USES_REPLAY_SCHEMA);
-        }
-        Some(_) => return Err(invalid()),
-        None => {}
-    }
-    if configuration.native_library_input().is_some() {
-        if configuration.is_platform() {
-            return Err(invalid());
-        }
-        Ok(NATIVE_LIBRARY_INPUT_REPLAY_SCHEMA)
-    } else {
-        Ok(selected)
-    }
-}
-
-fn selected_component_base_schema(
-    base: &'static str,
-    configuration: &ReplayConfiguration,
-    function_calls: bool,
-    physical_primary: bool,
-) -> ProjectResult<&'static str> {
-    use wow_emmy::function_calls::PhysicalFunctionDeclarationRecipe::{
-        DeclaredSyntaxAndBodyShapeV1, DeclaredSyntaxV1,
-    };
-    let classification = configuration.has_xml_classification()?;
-    let declarations = configuration.physical_function_declarations();
-    let signatures = configuration.physical_function_signatures();
-    if (declarations.is_some() || signatures.is_some()) && !configuration.is_platform() {
-        return if physical_primary
-            && base == LIBRARY_BOUND_REPLAY_SCHEMA
-            && function_calls
-            && !classification
-            && configuration.package_xml_binding_profile().is_none()
-            && configuration.platform_graph_profile().is_none()
-            && matches!(declarations, None | Some(DeclaredSyntaxV1))
-            && matches!(
-                signatures,
-                None | Some(
-                    wow_emmy::function_calls::PhysicalFunctionSignatureRecipe::IndexedTypesV1
-                )
-            ) {
-            Ok(PRIMARY_CALLABLES_REPLAY_SCHEMA)
-        } else {
-            Err(invalid())
-        };
-    }
-    if (declarations.is_some() || signatures.is_some())
-        && (!function_calls
-            || !configuration.is_platform()
-            || configuration.package_xml_binding_profile()
-                != Some(PackageXmlBindingProfile::SameSessionV1)
-            || !matches!(
-                configuration.platform_graph_profile(),
-                Some(PlatformGraphProfile::DirectCapabilitiesV1(_))
-            ))
-    {
-        return Err(invalid());
-    }
-    if signatures == Some(wow_emmy::function_calls::PhysicalFunctionSignatureRecipe::IndexedTypesV1)
-    {
-        // One envelope family; exact component recipes remain in configuration.
-        return Ok(SELECTED_COMPONENTS_REPLAY_SCHEMA);
-    }
-    Ok(match (classification, declarations) {
-        (false, None) => base,
-        (true, None) => XML_CLASSIFICATION_REPLAY_SCHEMA,
-        (false, Some(DeclaredSyntaxV1)) => PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA,
-        (true, Some(DeclaredSyntaxV1)) => {
-            XML_CLASSIFICATION_PHYSICAL_FUNCTION_DECLARATIONS_REPLAY_SCHEMA
-        }
-        (false, Some(DeclaredSyntaxAndBodyShapeV1)) => PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA,
-        (true, Some(DeclaredSyntaxAndBodyShapeV1)) => {
-            XML_CLASSIFICATION_PHYSICAL_FUNCTION_BODY_SHAPE_REPLAY_SCHEMA
-        }
-    })
-}
-
-fn graph_budget_schema(budget: crate::graph::SourceGraphBudget) -> &'static str {
-    if budget.xml_counts().is_some() {
-        GRAPH_XML_COUNT_BUDGET_REPLAY_SCHEMA
-    } else {
-        GRAPH_METADATA_BUDGET_REPLAY_SCHEMA
+    fn storage_schema(&self) -> &'static str {
+        STORAGE_SCHEMA
     }
 }
 /// Same envelope shape as a platform archive, with a four-byte null in place of
 /// its corpus. Charge the remaining record budget before that corpus is copied.
 #[derive(Serialize)]
 struct PlatformEnvelopeBudget<'a> {
-    schema: &'a str,
     configuration: &'a ReplayConfiguration,
     files: &'a [ReplayFile],
     libraries: &'a [ReplayLibrary],

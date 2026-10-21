@@ -3004,14 +3004,6 @@ fn direct_package_stages_bind_native_predecessors_and_preserve_replay() -> Resul
     let view = publisher.open_current()?;
     let legacy_archive = serde_json::to_vec(&ProjectReplay::capture(&legacy, &stop)?)?;
     let archive = serde_json::to_vec(&ProjectReplay::capture(&publisher, &stop)?)?;
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&legacy_archive)?["schema"],
-        "wow-project/native-project-replay/6"
-    );
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&archive)?["schema"],
-        "wow-project/native-project-replay/7"
-    );
     let (registry, monolithic, coverage, provenance, limits) =
         build_source_graph_proposals(&view, &stop)?.into_parts();
     let (old_registry, old_batch, old_coverage, old_source, old_limits) =
@@ -3344,10 +3336,6 @@ fn direct_package_stages_bind_native_predecessors_and_preserve_replay() -> Resul
     )?;
     let raw_view = raw_publisher.open_current()?;
     let raw_archive = serde_json::to_vec(&ProjectReplay::capture(&raw_publisher, &stop)?)?;
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&raw_archive)?["schema"],
-        "wow-project/native-project-replay/8"
-    );
     let raw_proposals = build_source_graph_proposals(&raw_view, &stop)?;
     let raw_batch = raw_proposals
         .inventory_batch()

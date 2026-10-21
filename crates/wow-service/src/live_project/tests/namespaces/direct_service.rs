@@ -444,27 +444,13 @@ fn direct_platform_service_lifecycle(profile: PlatformGraphProfile) -> TestResul
                 .is_empty()
         );
         assert!(read.read.manifest().members.iter().any(|member| {
-            member.key == "live.project.replay"
-                && member.schema
-                    == if composed {
-                        "wow-project.live-replay.v10"
-                    } else {
-                        "wow-project.live-replay.v9"
-                    }
+            member.key == "live.project.replay" && member.schema == "wow-project.live-replay"
         }));
         let replay: serde_json::Value = read
             .read
             .record("live.project.replay", &stop)?
             .ok_or("v9 replay missing")?
             .decode()?;
-        assert_eq!(
-            replay["schema"],
-            if composed {
-                "wow-project/native-project-replay/10"
-            } else {
-                "wow-project/native-project-replay/9"
-            }
-        );
         if let PlatformGraphProfile::DirectCapabilitiesV1(capabilities) = profile {
             assert_eq!(read.graph().registry().version(), capabilities.version_id());
             assert_eq!(
@@ -518,7 +504,7 @@ fn direct_platform_service_lifecycle(profile: PlatformGraphProfile) -> TestResul
                 ServiceErrorCode::IdentityMismatch
             );
             let mut downgrade = replay.clone();
-            downgrade["schema"] = serde_json::json!("wow-project/native-project-replay/9");
+            downgrade["obsolete_schema"] = serde_json::json!("obsolete-project-replay-schema");
             assert!(
                 wow_project::replay::ProjectReplay::from_json(
                     &serde_json::to_vec(&downgrade)?,

@@ -623,11 +623,6 @@ fn aceaddon_local_result_embed_reaches_service_graph_readback() -> TestResult {
     let mut publisher = ProjectPublisher::with_function_call_facts();
     publisher.publish_initial_cancellable(input.bundle.clone(), &stop)?;
     let replay = ProjectReplay::capture(&publisher, &stop)?;
-    let replay_json = serde_json::to_value(&replay)?;
-    assert_eq!(
-        replay_json["schema"],
-        "wow-project/native-project-replay/aceaddon-local-result/1"
-    );
     let restored =
         ProjectReplay::from_json(&serde_json::to_vec(&replay)?, &stop)?.hydrate(&stop)?;
     assert_eq!(

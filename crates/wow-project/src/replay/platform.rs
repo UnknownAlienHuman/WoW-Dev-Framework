@@ -63,10 +63,6 @@ impl Serialize for BorrowedFiles<'_> {
 }
 
 impl ReplayPlatform {
-    pub(super) const fn has_retention_limits(&self) -> bool {
-        self.package_request.has_retention_limits()
-    }
-
     pub(super) fn capture(
         owner: &PlatformPackageSpecialization,
         main: &[ProjectInputFile],

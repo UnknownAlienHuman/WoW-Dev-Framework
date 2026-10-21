@@ -281,7 +281,6 @@ fn raw_inventory_reopens_with_exact_byte_binding() -> TestResult {
         PLATFORM_RAW_INVENTORY_PARTITION, PLATFORM_RAW_MEMBER_KIND, SOURCE_GRAPH_PARTITION,
         bind_platform_raw_member, build_source_graph_proposals,
     };
-    use wow_project::replay::ProjectReplay;
 
     let stop = AtomicBool::new(false);
     let path = root("platform-raw-graph-v8")?;
@@ -377,10 +376,6 @@ fn raw_inventory_reopens_with_exact_byte_binding() -> TestResult {
     assert_eq!(
         wow_project::graph::source_graph_profile(view.configuration()),
         "wow-project/source-load-proposals/21"
-    );
-    assert_eq!(
-        serde_json::to_value(ProjectReplay::capture(&selected, &stop)?)?["schema"],
-        "wow-project/native-project-replay/8"
     );
     let proposals = build_source_graph_proposals(&view, &stop)?;
     let inventory_batch = proposals
@@ -503,7 +498,7 @@ fn raw_inventory_reopens_with_exact_byte_binding() -> TestResult {
     );
     assert_eq!(serde_json::to_value(read.graph())?, artifact_snapshot);
     assert!(read.read.manifest().members.iter().any(|member| {
-        member.key == "live.project.replay" && member.schema == "wow-project.live-replay.v8"
+        member.key == "live.project.replay" && member.schema == "wow-project.live-replay"
     }));
     let inventory = read
         .graph()
@@ -674,7 +669,6 @@ fn raw_inventory_reopens_with_exact_byte_binding() -> TestResult {
 
 #[test]
 fn selected_package_bindings_reopen_exactly() -> TestResult {
-    use wow_project::replay::ProjectReplay;
     let stop = AtomicBool::new(false);
     let path = root("platform-package-bindings-v6")?;
     let selected_bundle =
@@ -696,11 +690,6 @@ fn selected_package_bindings_reopen_exactly() -> TestResult {
         .ok_or("selected binding missing")?
         .analysis_id()
         .to_owned();
-    let replay = ProjectReplay::capture(&selected, &stop)?;
-    assert_eq!(
-        serde_json::to_value(&replay)?["schema"],
-        "wow-project/native-project-replay/6"
-    );
     let mut store = LiveProjectStore::create_in_namespace(&path.join("new"), &selection)?;
     store.publish_in_namespace(
         &selection,
@@ -735,7 +724,6 @@ fn selected_package_bindings_reopen_exactly() -> TestResult {
 
 #[test]
 fn selected_package_graph_reopens_exactly() -> TestResult {
-    use wow_project::replay::ProjectReplay;
     use wow_recognizers::source_xml::SourceXmlFamily;
 
     let stop = AtomicBool::new(false);
@@ -793,10 +781,6 @@ fn selected_package_graph_reopens_exactly() -> TestResult {
     assert_eq!(
         wow_project::graph::source_graph_profile(selected_view.configuration()),
         "wow-project/source-load-proposals/20"
-    );
-    assert_eq!(
-        serde_json::to_value(ProjectReplay::capture(&selected, &stop)?)?["schema"],
-        "wow-project/native-project-replay/7"
     );
     let input = || -> TestResult<crate::LocalProjectInput> {
         let reference = wow_reference::ReferenceView::new(
@@ -860,7 +844,7 @@ fn selected_package_graph_reopens_exactly() -> TestResult {
         selected_bundle.configuration()
     );
     assert!(read.read.manifest().members.iter().any(|member| {
-        member.key == "live.project.replay" && member.schema == "wow-project.live-replay.v7"
+        member.key == "live.project.replay" && member.schema == "wow-project.live-replay"
     }));
     assert_eq!(
         read.graph()

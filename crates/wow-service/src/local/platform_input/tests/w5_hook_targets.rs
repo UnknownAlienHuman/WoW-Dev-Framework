@@ -259,15 +259,6 @@ fn canonical_hook_literals_replay_source_absent_preserves_original_ids_and_old_r
         let bytes = serde_json::to_vec(report)?;
         assert_eq!(report.hook_target_recipe().is_some(), selected);
         let replay = ProjectReplay::capture(&publisher, &stop)?;
-        let wire = serde_json::to_value(&replay)?;
-        assert_eq!(
-            wire["schema"],
-            if selected {
-                "wow-project/native-project-replay/selected-components/1"
-            } else {
-                "wow-project/native-project-replay/16"
-            }
-        );
         std::fs::remove_dir_all(root.0.join("UI"))?;
         std::fs::remove_dir_all(root.0.join("Library"))?;
         cases.push((
