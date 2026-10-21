@@ -1,12 +1,20 @@
 # Implementation and reduction queue
 
-**Default next code task: [#194](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194).**
+**Default next user-facing task: [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/200)
+→ [#201](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/201): normal configuration
+and generated Library → addon check.** The parallel search route is #131/#169/#122.
+Attach remaining reductions to these consumers; completing every cleanup Issue
+is not a prerequisite for a usable workflow.
 The [manifesto](ARCHITECTURE.md) defines purpose and scope;
 [implementation](IMPLEMENTATION.md) maps code, replacements and donors.
 [ADR-058](DECISIONS.md) retires the broader platform plan. `main` is the
 source of truth; [#191](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/191)
 tracks reduction and [#125](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/125)
 tracks completion of the narrowed product.
+
+The [rewrite basis](DOCUMENTATION_REWRITE_BASIS.md) records current findings,
+including #232 rejection-check regressions. It is preparation material, not a
+second queue or a new mandatory reading bundle.
 
 ## Take one task
 
@@ -30,7 +38,7 @@ a dependency names required replacement behavior, not a whole package gate.
 | Completed | [#193 — Emmy analysis](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/193) | One Main + Library analysis now supplies diagnostics, facts and flow; useful parameter-type errors reach Main locations. |
 | Completed | [#202 — catalog parsing](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/202) | One Emmy Lua 5.1 parse now feeds namespace, FunctionContainer and GlobalColors validators. |
 | Completed | [#204 — single emission](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/204) | Renderer-owned validation admits declarations; final mapped assembly is the only byte emission. |
-| 2 | [#194 — result envelopes](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194) | Core and local Service envelopes/registries are removed; simplify remaining Context/Search/graph self-identities only from real callers. |
+| With the consuming workflow | [#194 — result envelopes](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194) | Core and local Service envelopes/registries are removed; simplify remaining Context/Search/graph self-identities only from real callers. |
 | 3 | [#131 — current index](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131) | Eager all-partition payload reads are removed; store/read file text directly without Project/Emmy rehydration. |
 | 4 | [#169 — SQLite search](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169) | Direct source-content/FTS tables in #131's index; current FTS covers file labels/recorded names. Remove nested SQLite/hex/JSON. |
 | 5 | [#111 — storage lifecycle](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111) | Physical epoch migration is removed; after #131 delete remaining backup/quarantine/recovery and generic retention/GC/journals. |

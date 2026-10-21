@@ -31,7 +31,7 @@ runtime or distribution requirement.
 
 ## Native source-to-library flow
 
-The existing Git driver reads committed regular blobs from one resolved source
+The supported Git driver reads committed blobs from one resolved source
 revision and the selected TOC/flavor, then uses EmmyLua Lua 5.1 syntax,
 `wow-reference`'s restricted evaluator and typed facts, and the shared
 `wow-annotations` emitter. It retains raw expressions/unknowns, revision and
@@ -40,7 +40,7 @@ generated stubs are never executed. Current source/API meaning must be checked
 against the selected Blizzard revision; do not hard-code a moving build or
 assume Mainline data covers another flavor.
 
-Development driver:
+Supported command:
 
 ```sh
 cargo run --locked -p wow-reference-builder -- generate \
@@ -52,18 +52,21 @@ cargo run --locked -p wow-reference-builder -- generate \
 ```
 
 Corrections and alias catalogs are independent optional inputs; catalogs may
-repeat. Refs resolve once; only committed regular blobs are read. Missing Git
-objects must be materialized through the existing source workflow. The output
-directory must be new. Exit 0 is projected, 3 partial, 2 failure;
-`source-report.json` is written last. A partial report remains useful evidence,
-but does not prove unsupported or missing declarations absent. The example is
-development tooling; #196 exposes this same generation through a supported
-CLI/builder command. Reuse the native flow instead of adding another writer.
+repeat. Refs resolve once; missing Git objects must be materialized explicitly.
+Alias catalogs already check regular-file tree modes; TOC/API source reads do not.
+Reuse that existing check in #201. Cancellation checkpoints also do not yet
+interrupt a blocked Git child.
+The output directory must be new. Exit codes: 0 projected, 3 partial, 2 arguments,
+5 generation failure, 6 observed cancellation, 8 signal-handler setup failure.
+`source-report.json` is written last. A partial report does not prove unsupported
+or missing declarations absent. #196 delivered this command; #201 connects and
+verifies the actual generator-to-addon check workflow.
+
 Generate the library once; regenerate derived files when source, corrections,
-catalogs or projection semantics change. #204 removes the native adapter's
-discarded declaration/registration trial renders by retaining emitter output
-and ranges. Independent valid declarations must survive a rejected neighbor;
-do not introduce a second validator or type model.
+catalogs or projection semantics change. #204 delivered renderer-owned declaration
+validation and one final mapped emission, not a cache of discarded trial renders.
+Independent valid declarations must survive a rejected neighbor; do not introduce
+a second validator or type model.
 
 ## Semantics worth preserving
 

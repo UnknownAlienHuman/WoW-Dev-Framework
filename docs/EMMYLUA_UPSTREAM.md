@@ -3,8 +3,9 @@
 The workspace pins the compiled EmmyLua revision in `Cargo.toml` and
 `Cargo.lock`. `wow-emmy` adapts the public `emmylua_code_analysis` and parser
 APIs. The [analysis route](IMPLEMENTATION.md#addon-configuration-and-emmy-analysis)
-identifies the duplicate engines and Library/diagnostic gap; #193 joins their
-work. EmmyLua remains the only Lua parser/analyzer.
+uses one shared Main/Library analysis for diagnostics, facts and flow (#193).
+EmmyLua remains the only Lua parser/analyzer. Standard-library setup below is
+separate remaining work, not another engine-unification task.
 
 ## Engine setup
 
