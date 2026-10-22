@@ -7,7 +7,7 @@ DTOs or green compilation. [AUDIT.md](AUDIT.md) contains the source diagnosis;
 
 | Workflow | Existing substance | Exercised public result | Status |
 | --- | --- | --- | --- |
-| Generate annotation Library | Native Reference/Ketho projection, aliases/corrections/literals/maps and public builder exist. | Builder output is not accepted by the workflow's current verifier; application tests use another producer. | **Not complete** |
+| Generate annotation Library | Native Reference/Ketho projection, aliases/corrections/literals/maps and public builder exist. | Workflow packaging no longer calls the incompatible verifier and now includes Lua; actual Library-reader acceptance is unverified and application tests still use another producer. | **Not complete** |
 | Check addon with Library | Project owns one Main+Library Emmy analysis and parameter mismatches can exist at Main locations. | No normal root/TOC/Library CLI flow; messages/severity are lost; LSP uses isolated one-file analysis. | **Not complete** |
 | Persist/search source | Project source/TOC/XML owners, SQLite/FTS code and excerpt reader exist. | No later-process body search over direct persisted text; reads still reconstruct analysis; hit-to-readable excerpt is disconnected. | **Not complete** |
 | Update current source | Physical changes and conservative semantic rebuild exist. | Main Service path rejects TOC/package updates; no complete change/delete workflow proves stale diagnostics/hits disappear. | **Not complete** |
