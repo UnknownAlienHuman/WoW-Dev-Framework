@@ -5,6 +5,8 @@ Issue. [AUDIT.md](AUDIT.md) explains why the replacement is needed;
 [REFACTOR_QUEUE.md](REFACTOR_QUEUE.md) orders it. This document states the target
 owners and current handoffs. It does not claim that a route already works.
 
+<a id="code-ownership"></a>
+
 ## Target ownership
 
 | Responsibility | Target owner |
@@ -23,6 +25,8 @@ owners and current handoffs. It does not claim that a route already works.
 
 The current crate count is not a requirement. Remove or merge boundaries after
 callers move; do not create replacement frameworks.
+
+<a id="native-annotation-generation"></a>
 
 ## Route 1 — generate a Library
 
@@ -60,6 +64,8 @@ compatibility/certification reports and unconsumed artifact identities.
 A small committed fixture runs through the public builder, loads through the real
 Library reader and preserves representative Ketho output/maps. Then one selected
 real source/flavor establishes the claimed coverage only.
+
+<a id="addon-configuration-and-emmy-analysis"></a>
 
 ## Route 2 — check an addon
 
@@ -138,6 +144,8 @@ machinery as their consumers switch.
 After process restart, find a term absent from filenames but present in a file
 body, a known symbol and one useful TOC/XML relation. Return readable matching
 source. Change/delete a file and verify stale hits disappear.
+
+<a id="typed-source-relationships"></a>
 
 ## Direct relationships and checks
 

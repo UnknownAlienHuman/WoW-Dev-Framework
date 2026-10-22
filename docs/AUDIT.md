@@ -33,6 +33,14 @@ examples and support code, plus about **49,000 Markdown lines**. `wow-service`
 alone contains about 94,500 Rust lines. These mixed counts are scale indicators,
 not deletion targets or measured runtime costs.
 
+The structural inventory also found 2,178 Rust structs with fields; a field named
+`schema` occurs in 309 of them. Search has four parallel pagination policies and
+four matching Service continuation/result wrappers. Context contains hundreds of
+`*Wire` references mirroring Project/Graph records. Recognizer adapters repeat
+the same proposal/receipt/input shapes across families. These counts include
+private and test code, but the duplicated shapes occur in production owners and
+support the platform-duplication diagnosis below.
+
 Not run as part of this audit: the full Rust test suite, a real addon workflow,
 a complete Blizzard/Ketho corpus, Windows editor sessions or a performance
 benchmark. Each is implementation acceptance for the corresponding claim, not a
@@ -225,6 +233,12 @@ Project diagnostics, member/call facts and flow.
 12. **Compatibility probe remains.** `wow-emmy` still imports/validates a rolling
     compatibility report and ships a probe binary although Cargo already pins the
     dependency used by the product.
+13. **Cancellation is lost inside multi-file diagnostics.** The operation stop
+    state is not threaded through the complete collector; per-file calls receive
+    a fresh token and the session notices cancellation only around the whole
+    collection. The narrow repair is tracked in #135. Upstream remains
+    synchronous within one file, so between-file cancellation must not be sold as
+    preemption.
 
 ### Required replacement
 
@@ -368,11 +382,14 @@ status comments or line counts as behavior. Add only scoped workflow checks:
 
 ## 8. Documentation and Issue audit
 
-There are 329 Markdown files. Large superseded trees remain under package `e1`,
-`e2`, `e3` and old platform directories; roughly two thirds of documentation is
-not reachable from current entry documents. Old scope terms still occur
-thousands of times. Thirteen relative links are broken, including links to
-removed Store E2 specifications.
+The baseline had 329 Markdown files; this rewrite leaves 328 after replacing two
+intermediate audits with this one. Large superseded trees remain under package
+`e1`, `e2`, `e3` and old platform directories; 220 files are not reachable from
+the canonical entry documents. Old scope terms still occur thousands of times.
+Seven known relative links in old Store lifecycle notes still target removed E2
+specifications; #112 must consolidate or delete those notes rather than restore
+the deleted contracts. Canonical entry and owner links resolve through the
+current implementation routes.
 
 `PROJECT_COMPLETION_MATRIX.md` and parts of `IMPLEMENTATION.md` claimed generic
 storage administration, pack/materialization and other platform paths were
