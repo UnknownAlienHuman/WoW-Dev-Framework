@@ -54,14 +54,19 @@ excerpt, and remove hits after change/delete.
 Do not finish every cleanup before a workflow. Attach each deletion to the caller
 that makes it obsolete.
 
-## Phase 4 — stdio and final product completion
+## Phase 4 — collapse frontends onto the same product operations
 
-- [#198](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/198):
-  standard LSP empty results and the configured check/search owner.
-- [#199](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/199):
-  bounded extensible MCP metadata/notifications and useful read-only operations.
 - [#197](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/197):
-  ordinary CLI defaults; remove internal IDs/profiles/budget JSON from user flows.
+  reduce the public CLI from the current internal Graph/Project/Search/Context
+  platform to Library generation, configured addon check and direct index/search
+  with readable context; keep finite user-meaningful defaults only.
+- [#198](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/198):
+  one standard LSP stdio adapter to the configured check and retained indexed
+  navigation owners; standard empty results and positions, no parallel Lua engine
+  or profile family.
+- [#199](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/199):
+  one standard MCP profile with useful read-only check/search/context tools;
+  accept bounded extension metadata and ignore valid unknown notifications.
 - [#125](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/125):
   close only after all three advertised workflows run through their public
   entrypoints and the corresponding scoped evidence exists.

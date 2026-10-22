@@ -9,7 +9,7 @@ mistaking build success for behavioral verification.
 - Normal implementation tasks do not need this file unless they continue the
   audit or change an entry below.
 
-**Current repository baseline:** `4f429d5e41147aee5caf8dca2b67294083215562`
+**Current repository baseline:** `12056d72da00605a736b320cd17f508ae1067f2e`
 (`main`, 2026-10-22).
 
 ## Status vocabulary
@@ -47,8 +47,9 @@ observable result.
 | Search storage/query | **S** | **U** | Nested SQLite→bytes→hex→JSON→outer Store, metadata/name FTS and four pagination families traced. | #169/#106: direct body/symbol FTS after restart. |
 | Context rendering/handoff | **S** | **U** | Existing excerpt reader, disconnected search path, continuation/pack platform and `\uXXXX` rendering traced. | #122: matching indexed text → readable located excerpt. |
 | Source updates | **P** | **U** | Physical delta behavior and Service refusal of TOC/package plans traced. | #109: changed/deleted Lua and load selection, stale-result removal. |
-| LSP | **P** | **U** | Stdio implementation and isolated one-file diagnostics traced; standard empty-result issue #198. | Configured addon/Library path, framed no-match→next-request sequence, Windows/client checks. |
-| MCP | **P** | **U** | Stdio parser/dispatch and metadata/unknown-notification constraints traced. | #199: initialize→unknown notification→useful request sequence. |
+| Public CLI operation surface | **S** | **U** | Root dispatcher and every branch enum/help route are classified below; at least 68 semantic routes expose internal graph/store/search/context lifecycle. | #197: collapse to generation, configured check and direct index/search; no public workflow exercised yet. |
+| LSP | **S** | **U** | Both profiles, lifecycle/sync methods, diagnostics/navigation operations and Service registry ownership are mapped below. | #198: one standard adapter to the configured check/search owners; framed runtime acceptance remains. |
+| MCP | **S** | **U** | Both profiles, methods, tools/resources and Service registry ownership are mapped below. | #199: one standard profile with useful check/search/context tools; runtime client sequence remains. |
 | Security/root/file boundaries | **P** | **U** | Root ownership, no source execution, Git blob regular-file gap and blocking child cancellation traced. | Recheck final builder/index filesystem paths; no full threat/security review claimed. |
 | Performance/resource behavior | **U** | **U** | Only structural amplification and existing counters inspected. | #113: representative real workflow, exact revision/input, reached-stage measurements. |
 | Full Rust test suite | **U** | **U** | Not part of the architecture audit. | Run only when product implementation reaches the corresponding integration boundary. |
@@ -261,14 +262,95 @@ Runtime boundary: source/import review only. No output compatibility, oversized
 response, stored-operation replay or public CLI behavior was executed in this
 pass.
 
+### 2026-10-22 — Frontend operation inventory
+
+**Baseline:** `12056d72` (`main`).
+
+Inspected:
+
+- root CLI dispatch, argument parser and every branch under `apps/wow/src`;
+- command/request enums and help text for Status/Check, Native, Source, Overlay,
+  Graph, Project, Search, Context and Transport;
+- both stdio LSP profiles and every implemented protocol method;
+- both MCP profiles, tools/resources and the Service frontend registry;
+- frontend source size and exact public route counts.
+
+Current public surface:
+
+| Surface | Current semantic routes | Target disposition |
+| --- | ---: | --- |
+| Root Status/Check | 2 | Keep configured `check`; retain only a concise status if a real workflow needs it. |
+| Native / Source / Overlay | 5 | Fold useful acquisition/check behavior into the builder and configured check; remove internal artifact/probe/private-overlay commands. |
+| Graph | 9 | Remove as a public proof/query product; retain only relationships consumed by direct search/context. |
+| Project | 6 | Replace publish/update/read/skeleton/reconcile/recover administration with one current index lifecycle behind normal commands. |
+| Search | 31 | Replace durable build/query/retrieve/continue/release/retire/GC, federation, reference and entity families with direct index/query results. |
+| Context | 12 | Integrate readable matching context with search; remove map/pack/continuation/status/platform variants. |
+| Transport capabilities | 1 | Remove the internal registry/capability dump. |
+| LSP | 2 profiles, 12 methods/notifications | One standard stdio adapter to configured check and useful indexed navigation; general Lua features remain upstream EmmyLua. |
+| MCP | 2 profiles, 2 tools plus resources | One standard profile exposing the same useful check/search/context operations. |
+
+The CLI implementation alone is 13,886 Rust lines across 38 files: Context 5,202,
+LSP 3,079, Search 1,826, MCP 1,262, Graph 1,054 and Project 625. This is a source
+size observation, not a deletion quota or runtime-cost measurement.
+
+Findings:
+
+1. **The current `wow` executable exposes at least 68 semantic routes.** Most are
+   lifecycle, identity, continuation, proof or inspection operations for internal
+   platforms rather than the three user workflows.
+2. **Search turns one user need into 31 commands.** It exposes Store build/query,
+   retrieve/continue/release, retire/GC, Reference, Entity, Federation,
+   observations, selection and Context orchestration with operation IDs, leases,
+   profiles and multiple internal budgets.
+3. **Context turns one located excerpt into 12 routes.** Map, inspect, build,
+   continue, prune, status, platform and combined variants explicitly exclude or
+   disconnect the source excerpt the user needs.
+4. **Graph and Project are public administration products.** Their 15 routes expose
+   publication, reconciliation, recovery, generic graph queries and proof state.
+   Useful relations/index updates should remain internal to check/search.
+5. **Native, Source and Overlay are parallel producer/check paths.** The supported
+   builder and configured addon checker must absorb their useful behavior; keeping
+   them public would preserve duplicate acquisition and isolated-analysis owners.
+6. **LSP is a private Lua product rather than a thin adapter.** It has two profile
+   IDs, its own operation/session/ticket registry and local diagnostic,
+   definition, references and symbol paths. Diagnostics use isolated one-file
+   analysis rather than the configured addon+Library owner. General Lua language
+   features belong to upstream EmmyLua.
+7. **MCP is a registry demo, not product delivery.** The base profile exposes only
+   `wow.status`; the context profile adds `wow.context_inspect`. Tools/resources
+   publish frontend registry state, not the configured addon check or direct
+   source search. Valid unknown notifications currently terminate the session.
+8. **Service maintains a general frontend platform for two MCP tools and two LSP
+   profiles.** Registry/profile/schema digests, effect classes, manifests and
+   exact per-profile capabilities should disappear with the profile family; keep
+   only standard bounded protocol state needed by surviving operations.
+
+Decision:
+
+- The final public command surface is generation plus a configured addon check and
+  direct source index/search with readable context. Keep only user-meaningful
+  source/root/TOC/flavor/Library/database/query/limit/format inputs.
+- #197 removes internal CLI branches and mandatory IDs/profiles/budget JSON as
+  their owners switch; no compatibility aliases for deleted commands.
+- #198 provides one standard LSP adapter to the same configured diagnostic and
+  indexed-navigation owners. Standard empty results, document versions/positions
+  and honest cooperative cancellation remain; duplicate general Lua semantics do
+  not.
+- #199 provides one standard MCP profile with useful read-only check/search/context
+  tools. Accept bounded extension metadata and ignore valid unknown
+  notifications; remove status-only registry/resource ceremony.
+- Do not declare a route retained merely because it has help text, a frozen
+  profile, protocol fixtures or a Service operation.
+
+Runtime boundary: source/help/dispatch review only. None of the final public CLI,
+LSP or MCP workflows was exercised in this pass.
+
 ## Next audit passes
 
-1. **Frontend operation inventory:** classify each CLI/LSP/MCP operation as one of
-   the three workflows, necessary support, or removal candidate (#197/#198/#199).
-2. **Old documentation extraction:** move the remaining useful coordinate/TOC/XML
+1. **Old documentation extraction:** move the remaining useful coordinate/TOC/XML
    facts, then delete unreachable E1–E7/platform notes and repair the seven known
    Store links (#112).
-3. **Runtime acceptance registry:** as implementation lands, add the exact public
+2. **Runtime acceptance registry:** as implementation lands, add the exact public
    command/input/result for each **R** upgrade; never infer runtime success from
    compilation or an internal fixture.
 
