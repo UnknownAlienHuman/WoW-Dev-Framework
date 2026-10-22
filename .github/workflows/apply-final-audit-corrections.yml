@@ -1,0 +1,36 @@
+name: Apply final audit corrections
+
+"on":
+  push:
+    branches:
+      - docs/final-source-architecture-audit-2026-10-22
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out audit branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Apply staged patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check .github/final-audit-corrections.patch
+          git apply --index .github/final-audit-corrections.patch
+          git rm .github/final-audit-corrections.patch
+          git rm .github/workflows/apply-final-audit-corrections.yml
+          git diff --cached --check
+          test "$(find . -name '*.md' -type f | wc -l)" -eq 328
+          grep -q '<a id="code-ownership"></a>' docs/IMPLEMENTATION.md
+          grep -q 'Cancellation is lost inside multi-file diagnostics' docs/AUDIT.md
+          git config user.name "Iurii Lisenkov"
+          git config user.email "71514792+UnknownAlienHuman@users.noreply.github.com"
+          git commit -m "docs: correct audit evidence and preserve owner links"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
