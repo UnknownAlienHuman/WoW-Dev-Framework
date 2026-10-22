@@ -62,9 +62,11 @@ The output directory must be new. Exit codes: 0 projected, 3 partial, 2 argument
 `source-report.json` is written last. A partial report does not prove unsupported
 or missing declarations absent. #196 delivered this command; #201 connects and
 verifies the actual generator-to-addon check workflow. The [handoff review](BLIZZARD_API_REFERENCE.md#current-handoff-gap)
-records a current blocker: `verify-library` and the semantic probes still consume
-the old driver's report, not this command's output. Do not claim those probes
-validate the public entrypoint or restore the old payload to satisfy them.
+records the remaining mismatch: `verify-library` and semantic probes still
+consume the old driver's report. The workflow now bypasses that obsolete
+verifier and uploads the generated Lua directories; addon-reader acceptance is
+still pending. Do not claim old probes validate this producer or restore its
+old payload.
 
 Generate the library once; regenerate derived files when source, corrections,
 catalogs or projection semantics change. #204 delivered renderer-owned declaration

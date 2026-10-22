@@ -147,10 +147,11 @@ Useful implementation already exists:
 
 ### Confirmed defects and duplication
 
-1. **Broken public handoff.** The builder emits
-   `wow-native-source-build/2`; `cargo xtask verify-library` accepts `/1` and
-   expects the removed embedded `library` object. The current source-bundle
-   workflow connects these incompatible shapes.
+1. **Producer/consumer handoff.** At the baseline, the source-bundle workflow
+   fed builder `/2` output to the `/1` verifier and uploaded reports, not Lua.
+   The workflow now omits that verifier, rejects input failures directly and
+   uploads both generated directories. The obsolete verifier and old test
+   producer still need removal; actual addon Library loading remains unverified.
 2. **Tests invoke another producer.** Annotation consumer tests include
    `examples/support/mod.rs`, not the supported builder. Its Git and catalog
    helpers duplicate the builder helpers byte-for-byte.
@@ -233,12 +234,13 @@ Project diagnostics, member/call facts and flow.
 12. **Compatibility probe remains.** `wow-emmy` still imports/validates a rolling
     compatibility report and ships a probe binary although Cargo already pins the
     dependency used by the product.
-13. **Cancellation is lost inside multi-file diagnostics.** The operation stop
-    state is not threaded through the complete collector; per-file calls receive
-    a fresh token and the session notices cancellation only around the whole
-    collection. The narrow repair is tracked in #135. Upstream remains
-    synchronous within one file, so between-file cancellation must not be sold as
-    preemption.
+13. **Cancellation correction (rechecked at `0c46e48b`).** The earlier claim that
+    the collector loses stop state was false for this baseline. Both session
+    paths pass `stop`; `collect_registered` checks it before/after each diagnostic
+    call and during conversion, and session mapping preserves `Cancelled`.
+    #135 was already closed. A token snapshots stop at call entry; it does not
+    make the synchronous per-file upstream call preemptible. No fresh runtime
+    cancellation measurement was performed; the Git-child gap above is separate.
 
 ### Required replacement
 
@@ -368,9 +370,10 @@ should accept an explicit checkout/ref and not need a custom update/release
 platform. Retain a narrow maintenance helper only where it removes real repeated
 work and does not become a product contract.
 
-Current CI proves formatting, workspace compilation and Clippy. The
-current-source workflow is not valid end-to-end because it joins builder `/2` to
-verifier `/1`. There is no workflow proving the three user operations.
+Quick checks formatting, workspace compilation and Clippy. The current-source
+workflow now packages generated Lua without invoking the incompatible verifier;
+its direct `input_failures == []` guard is not semantic or Library-consumer
+qualification. No executed workflow in this audit proves all three user operations.
 
 Keep Quick as the shared build gate, but stop treating its source archive,
 status comments or line counts as behavior. Add only scoped workflow checks:

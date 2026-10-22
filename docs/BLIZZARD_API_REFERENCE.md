@@ -15,20 +15,21 @@ cargo run --locked -p wow-reference-builder -- generate \
 
 ## Current handoff gap
 
-Reviewed at `1a87ce15` on 2026-10-21: the producer writes
-`wow-native-source-build/2`, with top-level `annotation_files` and sidecars.
-`tools/xtask/src/library.rs::verify` accepts only `wow-native-source-build/1`
-and requires the old embedded `library` object, including generated text.
-**Do not append `cargo xtask verify-library` to the command above and call it a
-working workflow.** `.github/workflows/current-source-bundle.yml` still does so;
-a successful generation reaches an incompatible reader. This is a source-level
-finding, not a workflow run performed by this review.
+The producer writes `wow-native-source-build/2`, with top-level
+`annotation_files` and sidecars. `tools/xtask/src/library.rs::verify` still accepts
+only `/1` and requires the old embedded `library`, including generated text.
+Do not append that verifier to this command or restore its old payload.
 
-#201 must reconcile that consumer with the supported producer or remove the old
-verifier if its remaining checks duplicate the producer. Preserve useful checks
-of actual generated files and source locations. Do not fix this by accepting both
-versions, restoring the large embedded library, adding a converter, or changing
-only the admitted version string: the field layout also differs.
+The current-source workflow no longer invokes it. Generation exits 0/3 are
+accepted with partial-projection warnings; a direct `input_failures == []` check
+still rejects omitted source inputs. On success, `native-lua-libraries-<sha>`
+contains both `native-annotations/` and `native-aliased/`, including their Lua
+files and reports. The separate report artifact is retained even on failure.
+This is artifact delivery, not proof that the addon checker loaded the Library.
+
+#201 still must remove the old verifier/test producer after moving useful
+source-map/type checks to their actual owners. No report converter, `/1`
+compatibility reader or regenerated embedded text is needed.
 
 Generation is not addon-check acceptance. #200 still supplies ordinary root,
 flavor, TOC and Library-directory configuration; the existing disk reader requires
