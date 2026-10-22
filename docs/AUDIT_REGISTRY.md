@@ -9,7 +9,7 @@ mistaking build success for behavioral verification.
 - Normal implementation tasks do not need this file unless they continue the
   audit or change an entry below.
 
-**Current repository baseline:** `3c5356f5ea0dbf215e7e7007e09552f64682a756`
+**Current repository baseline:** `4f429d5e41147aee5caf8dca2b67294083215562`
 (`main`, 2026-10-22).
 
 ## Status vocabulary
@@ -41,6 +41,7 @@ observable result.
 | Emmy cancellation | **S** | **U** | Multi-file collector loses the operation stop state; per-file upstream call remains synchronous; #135. | Focused between-file cancellation witness; do not claim per-file preemption. |
 | Built-in rules selection/status | **S** | **U** | Requested rules are filtered after provider execution; unrelated partial components can dominate status. | #201/#103: select before work and separate findings from requested-scope completeness. |
 | Recognizer/matcher families | **P** | **U** | Every public built-in recognizer producer and its sole production caller under `wow-service/src/graph/build` is mapped; generic pack APIs and reopen reconstruction are traced. | Decide which typed relations survive in direct Graph/SQL consumers; no user workflow has exercised them. |
+| Core/Service DTO ownership | **S** | **U** | Root Core/Service exports, exact external imports, local results, Search envelopes, canonical round-trips and self-validation are mapped below. | Remove metadata with its real consumer; frontend operation inventory remains the next audit pass. |
 | Project persistence/read | **S** | **U** | Replay hydration reconstructs analysis/graph and recaptures the result; Project Store read path traced. | #131: later-process direct rows without Emmy/Graph reconstruction. |
 | Store/Service lifecycle | **S** | **U** | Detailed review below: orphan lifecycle APIs separated from Search/Context/Project consumers. | #111 after #131/#169/#122 switch actual readers. |
 | Search storage/query | **S** | **U** | Nested SQLite→bytes→hex→JSON→outer Store, metadata/name FTS and four pagination families traced. | #169/#106: direct body/symbol FTS after restart. |
@@ -172,17 +173,102 @@ Decision:
 Runtime boundary: source/caller review only. No built-in family was exercised
 through the public CLI, persisted search or editor in this pass.
 
+### 2026-10-22 — Core and Service DTO ownership
+
+**Baseline:** `4f429d5e` (`main`).
+
+Inspected:
+
+- every root export in `wow-core/src/lib.rs` and exact production imports outside
+  the crate;
+- Core canonical, digest, coverage, evidence, finding, generation, profile,
+  source and integrity implementations;
+- root `wow-service` exports and exact imports outside the crate;
+- local Status/Check result construction and CLI serialization;
+- Search durable response/journal paths, owner-result handoffs and all four
+  pagination families;
+- production conversions from owner `canonical_bytes()` back into JSON values.
+
+Findings:
+
+1. **`wow-core` exports 149 root names; 79 have no external production import.**
+   This is API-surface evidence, not a claim that every such item is internally
+   dead. Module use is concentrated as follows: callable lowering 7/8 exports,
+   canonical 4/4, digest 14/21 and source 6/12 are imported externally; budget is
+   0/8, error 1/7, coverage 5/19, evidence 7/17, finding 9/17, generation 3/9,
+   IDs 9/18 and profile 5/9.
+2. **The broadly reused Core primitives and the proof platform are separable.**
+   Source paths/spans, selected IDs, content hashes and Ketho callable lowering
+   have direct producer/consumer value. Coverage/evidence/finding/generation/
+   profile records are concentrated in Recognizers, Rules, Graph, Project and
+   Context—the platform consumers already scheduled for reduction.
+3. **Core integrity validates records by serializing them to generic JSON.**
+   SourceHandle, Evidence, Conflict, Coverage, Finding and Warning validation
+   rebuilds JSON projections, removes or copies fields, re-hashes and compares the
+   result. Surviving types should validate direct invariants; removed proof types
+   must take this self-certification code with them.
+4. **`wow-core::OperationId` has no external production import, while Service and
+   Store each maintain their own operation identifier.** Similar public parsing
+   and comparison helpers have no external production import. Do not preserve
+   duplicate identifier families merely because they are re-exported.
+5. **The root Service API exports 46 names, but external production code imports
+   only eight:** `LocalCommand`, `LocalOperationResult`, `LocalProjectInput`,
+   `OperationId`, `ServiceError`, `ServiceErrorCode`, `ServiceResult` and
+   `execute_local`. The remaining root DTOs are internal orchestration surface;
+   public Context/Search/Frontend submodules are reviewed separately.
+6. **Local Check/Status still serialize platform state rather than a user result.**
+   `ContextIdentity` carries nine identities; component snapshots carry producer,
+   exact/last-good/failed identities and capability maps. Check additionally
+   returns a presentation graph, rule evaluations and deferred operations. The
+   CLI consumes only `LocalOperationResult`; useful diagnostics and requested
+   completeness can be represented without exporting this whole model.
+7. **Search still owns an independent durable envelope and response journal.**
+   Each result carries schema, operation, operation ID, request digest, result ID
+   and payload. This is separate from the already simplified local result path
+   and remains coupled to the generic Store operation journal.
+8. **Typed owner results are repeatedly serialized, parsed as JSON and serialized
+   again.** An exact production-source scan found 32
+   `serde_json::from_*(*.canonical_bytes())` conversions in 21 files, primarily
+   Search federation/pagination/selection plus MCP Context and recognizer handoff.
+   Replace each at its real caller with a typed value; do not introduce a generic
+   value transport.
+9. **Four `wow-search` pagination implementations run an eight-pass fixed point.**
+   Delivered byte count is embedded in the page/cursor being measured. Output
+   bounds belong outside a plain page result; #169/#194 own removal with the
+   direct query path.
+10. **Canonical JSON is too widespread for an indiscriminate purge.** The exact
+    import map found `canonical_json_bytes` in 136 production files. Remove it
+    where a handoff no longer needs canonical identity; retain deterministic
+    persistence/identity only where a surviving consumer can name the need.
+
+Decision:
+
+- Keep a small Core of paths/spans, selected identifiers, finite bounds, content
+  identity and callable lowering while their consumers remain.
+- Make Service orchestration DTOs private or delete them as the CLI becomes
+  user-oriented; preserve diagnostics, accurate locations, requested-scope
+  completeness, cancellation and bounded output.
+- #201/#198 fixes diagnostic meaning first. #169/#122 replaces Search/Context
+  envelopes, JSON round-trips and fixed-point pages. #195/#107/#103 removes the
+  evidence/finding/generation consumers, after which Core can be pruned without a
+  compatibility layer. #111 removes response journals when direct SQL readers no
+  longer require them.
+- Serialize a plain result once at the frontend. Durable write transactions may
+  keep an internal operation key, but ordinary reads do not need a public
+  request/result self-identity envelope.
+
+Runtime boundary: source/import review only. No output compatibility, oversized
+response, stored-operation replay or public CLI behavior was executed in this
+pass.
+
 ## Next audit passes
 
-1. **Core/Service DTO ownership:** map remaining canonical JSON, finding,
-   capability, evidence, wire and identity types to actual consumers; identify
-   forwarding-only layers (#194).
-2. **Frontend operation inventory:** classify each CLI/LSP/MCP operation as one of
+1. **Frontend operation inventory:** classify each CLI/LSP/MCP operation as one of
    the three workflows, necessary support, or removal candidate (#197/#198/#199).
-3. **Old documentation extraction:** move the remaining useful coordinate/TOC/XML
+2. **Old documentation extraction:** move the remaining useful coordinate/TOC/XML
    facts, then delete unreachable E1–E7/platform notes and repair the seven known
    Store links (#112).
-4. **Runtime acceptance registry:** as implementation lands, add the exact public
+3. **Runtime acceptance registry:** as implementation lands, add the exact public
    command/input/result for each **R** upgrade; never infer runtime success from
    compilation or an internal fixture.
 
