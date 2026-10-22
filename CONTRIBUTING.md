@@ -1,90 +1,64 @@
 # Contributing
 
-WoW Dev Framework is in architecture/bootstrap. Contributions should reduce uncertainty around an accepted milestone, not expand the product surface without evidence.
+Read [AGENTS.md](AGENTS.md), the full
+[architecture manifesto](docs/ARCHITECTURE.md), the selected route in
+[IMPLEMENTATION.md](docs/IMPLEMENTATION.md) and the chosen Issue. The
+[source audit](docs/AUDIT.md) is required for architecture/rewrite planning, not
+for every small patch.
 
-## Before starting
+## What a useful change does
 
-Read `AGENTS.md`, the documentation index, the relevant architecture contract, and the current roadmap gate. Search existing decisions before proposing a new component.
+- completes one observable part of Library generation, addon checking or source
+  index/search/context;
+- removes the displaced code, options, tests and documentation in the same
+  change;
+- fixes a concrete source/behavior defect without inventing another framework;
+- preserves user source/configuration, exact locations, ambiguity, bounded work
+  and honest incomplete results.
 
-A useful contribution normally does one of the following:
+Existing code, an old test, schema or Issue comment is not justification for a
+feature. The current manifesto and queue supersede E1–E7/platform plans.
 
-- implements one independently testable responsibility in the active milestone;
-- turns a research claim into a pinned fixture or reproducible compatibility probe;
-- closes a documented coverage gap;
-- improves determinism, provenance, safety, or diagnostic precision;
-- clarifies a contract without changing its meaning;
-- proposes an ADR with explicit alternatives and consequences.
+## Required trace
 
-## Change classes
+Before editing, identify:
 
-### Normative contract change
+```text
+user input -> actual producer -> handoff -> actual reader -> visible result
+```
 
-Changes to architecture, public schemas, evidence semantics, storage formats, profile isolation, or accepted ADRs must include:
-
-- the problem and concrete failure mode;
-- affected invariants and documents;
-- alternatives considered;
-- migration and compatibility impact;
-- an acceptance test or measurable gate;
-- an ADR update.
-
-### Implementation change
-
-Implementation changes must identify the owning crate/application boundary, avoid speculative abstractions, and include tests that prove the intended path executed.
-
-### Research update
-
-Research belongs in `docs/RESEARCH_BASELINE.md` only when it pins an input required by this repository. Living WoW patch/security notes belong in the separate knowledge base. Research conclusions are not production contracts until promoted into a decision, schema, fixture, or test.
-
-### Candidate idea
-
-Ideas belong in `docs/IDEAS.md` and must be marked non-normative. Include a falsifiable experiment, expected benefit, cost, and rejection criterion.
-
-## Pull requests
-
-A pull request should contain:
-
-- a concise problem statement;
-- scope and non-goals;
-- affected contracts or ADRs;
-- exact profile/build assumptions, when relevant;
-- evidence or fixtures;
-- validation commands and results;
-- compatibility and migration notes;
-- unresolved coverage gaps.
-
-Do not combine an architecture rewrite, dependency update, schema migration, and unrelated cleanup in one pull request.
+Do not close a task because one DTO or crate compiles. If a representation is
+removed, change its callers and delete exclusive fixtures/docs rather than adding
+a compatibility reader.
 
 ## Validation
 
-The implementation is not present yet. As executable components appear, the default local validation sequence is expected to become:
+Write code first. Run formatting and strict Clippy for affected crates and
+callers. After the path exists, run the smallest existing consumer check that can
+fail for the changed behavior. Add a test only for a concrete uncovered risk.
+Delete tests for removed obligations. A product claim requires the actual public
+workflow; green compilation is only build evidence.
 
-```text
+Typical commands:
+
+```sh
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace --all-features
-cargo deny check
-wow-eval <relevant task set>
+cargo clippy --locked -p <crate> --all-targets --all-features -- -D warnings
 ```
 
-Until those commands exist, validate documentation routing, links, schemas, fixture checksums, and deterministic generators manually. Report unavailable commands as `skipped`.
+Broaden to shared callers or one relevant reopen/protocol case when the change
+crosses those boundaries. Do not recreate historical matrices or run an
+unrelated full campaign for a bounded change.
 
-## Test requirements
+## Pull request
 
-- Golden outputs must be deterministically sorted and stable across repeated runs.
-- Negative fixtures must be capable of failing when the target behavior is broken.
-- Differential tests must preserve disagreements rather than overwrite one oracle with another.
-- Performance claims require a corpus, hardware/runtime description, repeated samples, and raw measurements.
-- Runtime WoW claims require the exact client build, restriction state, scenario, and raw probe output.
+State the user problem, replacement, removed path, retained behavior, checks and
+remaining limitation. Report production code reduction separately from tests,
+docs and generated data. Do not claim runtime/performance improvement without a
+measured representative workflow.
 
-See `docs/TEST_STRATEGY.md`.
+## Third-party material
 
-## Compatibility
-
-Public contracts are versioned. Breaking changes require a schema/version bump, migration notes, compatibility fixtures, and a release-note entry once releases begin.
-
-A project generation may use only one active Reference Pack profile. Tests that intentionally compare profiles must keep their outputs and evidence partitions separate.
-
-## License and third-party material
-
-Contributions are accepted under the MIT license. Before copying third-party code or data, record its license and provenance. Prefer small independently authored fixtures and stable source handles over vendoring external repositories.
+Record provenance and preserve licenses/notices for reused Ketho, EmmyLua,
+Blizzard or other input material. Prefer exact source revisions and small
+representative fixtures over vendoring another platform.

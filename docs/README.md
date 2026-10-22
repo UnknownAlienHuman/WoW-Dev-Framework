@@ -1,19 +1,22 @@
 # Documentation
 
-Start with root [AGENTS.md](../AGENTS.md) and read the complete product manifesto.
-Then select one task and read only its implementation route, code and donor.
+Read root [AGENTS.md](../AGENTS.md) and the complete manifesto. Then select one
+Issue and read only its implementation route, code and donor.
 
 | Question | Document |
 | --- | --- |
-| Why does the product exist, what must it do, what is out of scope? | [Architecture manifesto](ARCHITECTURE.md) |
-| What code exists, how should it change, what comes from donors? | [Implementation](IMPLEMENTATION.md) |
-| What should be done next? | [Queue](REFACTOR_QUEUE.md), selected GitHub Issue |
-| What works and what is still missing? | [Completion](PROJECT_COMPLETION_MATRIX.md) |
-| How do contributors coordinate, check and publish? | [Execution](EXECUTION_MODEL.md) |
-| Which annotation behavior matters? | [Ketho map](KETHO_RUST_PORT.md), [corrections](KETHO_NATIVE_CORRECTIONS.md) |
-| How is the Lua engine/server reused? | [EmmyLua](EMMYLUA_UPSTREAM.md) |
-| Which defects were verified? | [Audit](AUDIT_2026-10-17.md) |
-| Which commands currently run? | [CLI](../apps/wow/README.md), [stdio](FRONTENDS.md) |
+| Why does the product exist and what is out of scope? | [Architecture manifesto](ARCHITECTURE.md) |
+| What is wrong with the current system and what must be removed/reused? | [Source and architecture audit](AUDIT.md) |
+| What are the target owners and replacement routes? | [Implementation](IMPLEMENTATION.md) |
+| What is the ordered work? | [Queue](REFACTOR_QUEUE.md), selected GitHub Issue |
+| Which user workflows are actually exercised? | [Completion](PROJECT_COMPLETION_MATRIX.md) |
+| How do contributors coordinate and check a change? | [Execution](EXECUTION_MODEL.md) |
+| Which annotation semantics matter? | [Ketho map](KETHO_RUST_PORT.md), [corrections](KETHO_NATIVE_CORRECTIONS.md) |
+| How is upstream Lua analysis reused? | [EmmyLua](EMMYLUA_UPSTREAM.md) |
+| How should CLI/LSP/MCP behave? | [Frontends](FRONTENDS.md) |
 
-Detailed owner documents describe their current code. They cannot restore
-removed scope or require historical package/certification matrices.
+Package owner notes may describe current code but cannot expand the manifesto or
+restore retired compatibility, proof, lifecycle or certification requirements.
+Historical plans remain in Git history. Do not load the audit or every package
+specification into a small implementation task unless that task changes the
+architecture itself.
