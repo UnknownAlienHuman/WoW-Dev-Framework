@@ -1,56 +1,43 @@
 # Product completion
 
-Current scope: [ARCHITECTURE.md](ARCHITECTURE.md), accepted 2026-10-18. This page
-records useful capability, not E0–E7 certification. Status reviewed against
-`db1a62c9` on 2026-10-21; this is not full product acceptance. Implementation tasks live
-in [REFACTOR_QUEUE.md](REFACTOR_QUEUE.md) and their Issues; code/donor routes are
-in [IMPLEMENTATION.md](IMPLEMENTATION.md).
+Reviewed against `3c3d5bc526105259ac80379dd475b5565993f5c0`.
+This page records exercised user behavior, not the existence of internal crates,
+DTOs or green compilation. [AUDIT.md](AUDIT.md) contains the source diagnosis;
+[REFACTOR_QUEUE.md](REFACTOR_QUEUE.md) owns remaining work.
 
-## What exists and what must become usable
+| Workflow | Existing substance | Exercised public result | Status |
+| --- | --- | --- | --- |
+| Generate annotation Library | Native Reference/Ketho projection, aliases/corrections/literals/maps and public builder exist. | Builder output is not accepted by the workflow's current verifier; application tests use another producer. | **Not complete** |
+| Check addon with Library | Project owns one Main+Library Emmy analysis and parameter mismatches can exist at Main locations. | No normal root/TOC/Library CLI flow; messages/severity are lost; LSP uses isolated one-file analysis. | **Not complete** |
+| Persist/search source | Project source/TOC/XML owners, SQLite/FTS code and excerpt reader exist. | No later-process body search over direct persisted text; reads still reconstruct analysis; hit-to-readable excerpt is disconnected. | **Not complete** |
+| Update current source | Physical changes and conservative semantic rebuild exist. | Main Service path rejects TOC/package updates; no complete change/delete workflow proves stale diagnostics/hits disappear. | **Not complete** |
+| CLI | Large internal operator command surface exists. | Three ordinary workflows still require materialized configs, IDs, profiles, reports and many flags. | **Not complete** |
+| LSP/MCP | Stdio transports and many private operations exist. | They do not yet expose the configured three workflows with standard useful results. | **Not complete** |
+| Build gate | Workspace Quick compiles and runs strict Clippy. | This is build evidence only. | **Available** |
 
-| Workflow | Existing code | Remaining product work |
-| --- | --- | --- |
-| Native Ketho annotations | Supported `wow-reference-builder generate`, native literals, one final emission, aliases, selected corrections/inheritance and maps (#196/#203/#204 delivered). | Verify selected Ketho/Blizzard semantics and the generator-to-addon consumer path (#125/#201); reuse produced Library/origins instead of graph requalification (#107). |
-| EmmyLua addon analysis | One Main + Library analysis supplies diagnostics, facts and flow; `param-type-mismatch` reaches Main locations (#193 delivered). | #200 normal root/TOC/library configuration; #201 real addon flow. The complete user workflow still needs its own verification. |
-| Blizzard UI search | Source/TOC/XML owners and native graphs; FTS over file labels/recorded names; separate source-excerpt reader. | #131 reader-ready index, #169 source-content/FTS tables, #106 real body/symbol search, #117 XML links, #122 hit-to-excerpt handoff. |
-| Updating source | Physical updates retain syntax trees in the shared engine but reindex remaining files; ordinary live update still rejects TOC/package load plans. | #109 connect reload/rebuild and verify diagnostics/search against the final source. |
-| Editor/agent access | Selected stdio LSP/MCP, overlay, definition/reference/symbol/context routes exist. | #198/#199 standards fixes; #125 useful Search exposure and upstream Emmy setup. No required reimplementation of all Lua language features. |
-| Build/distribution | Cargo workspace and CI exist. | A normal build and real workflow on each advertised platform; ordinary artifact/notices. No custom release engine. |
+## Delivered implementation components
 
-Project replay now has one strict DTO and one store record (#231/#232); its
-numbered/feature catalog matrix is removed. Ordinary retained reads still rebuild
-Emmy/Project and recapture replay (#131). CLI configuration, publication/lifecycle
-machinery and other domains' formats remain reduction work, not completed scope.
-Raw metadata preservation and synthetic type probes already exist.
+- one Project Main+Library Emmy analysis;
+- one statement-catalog parse and one final annotation emission;
+- native Ketho literal path and public builder entrypoint;
+- removal of Wasm, Core E0 envelopes, one-shot registries, Reference Pack
+  administration, lineage/comparison and Project catalog/replay tag ladders.
 
-## Verification boundary
+These components are reusable. They do not make a workflow complete until the
+public producer, real reader and visible result are connected.
 
-Quick for #232 passed policy, formatting, workspace compilation and strict Clippy.
-It did not execute the advertised end-to-end workflows or establish release
-readiness. Historical test counts are not validation of the current revision.
+## Completion observations required
 
-## Completion checks
+1. Builder output loads directly through the real Library reader.
+2. CLI valid/invalid typed calls produce clean/real diagnostic outcomes at the
+   addon line with upstream message and severity.
+3. After restart, a body-only term and symbol are found from the persisted index
+   and return readable matching source.
+4. Changed/deleted source and TOC/XML selection do not leave stale results.
+5. Missing/ambiguous/partial input is explicit.
+6. LSP/MCP expose the same useful operations with standard protocol behavior.
+7. User source/configuration remains untouched; work/output is bounded and
+   cancellation is reported at its actual granularity.
 
-- Generate a library from the selected source/flavor and verify the relevant
-  annotation semantics in a real consumer using existing representative probes.
-- Configure a real addon once and obtain actual Emmy/WoW diagnostics with correct
-  locations. A call violating a Library annotation must produce the relevant
-  upstream diagnostic; a valid counterpart stays clean. Generator-only external
-  consumer probes do not establish this production integration.
-- Index the selected Blizzard checkout; find a known symbol/text and source link,
-  reopen/query in a later process, and update/remove a file without stale results.
-- State skipped/unsupported source accurately, keep normal limits/cancellation,
-  and test only the stdio operations and platforms being advertised.
-
-Use the actual CLI and reused artifacts for these checks. A focused patch does
-not need all four before starting; a product claim must have its corresponding
-workflow evidence. The current review does not claim a complete supported release.
-
-## Explicitly removed
-
-Old compatibility matrices/readers, graph proof/lineage promotion, recognizer
-calibration/holdout/signing, external provider/CBM, Wasm algorithm plugins,
-generic storage retention/backup/migration, daemon/HTTP and custom
-release/install/update/rollback lifecycles are outside completion scope.
-[#125](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/125) is the
-completion tracker. Removed planning is in Git history, not a future backlog.
+No historical schema matrix, signed pack, lineage proof, release executor or
+arbitrary line/performance percentage is part of completion.

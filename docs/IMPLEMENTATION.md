@@ -1,224 +1,212 @@
 # Implementation guide
 
-Read the whole [manifesto](ARCHITECTURE.md), then the relevant route below and
-the selected Issue. This guide maps the existing code to the intended simpler
-implementation; it does not claim that the replacements already work.
-[Queue](REFACTOR_QUEUE.md): order and dependencies.
-[Completion](PROJECT_COMPLETION_MATRIX.md): delivered behavior and remaining gaps.
-[Execution](EXECUTION_MODEL.md): coordination and proportionate checks.
+Read the complete [manifesto](ARCHITECTURE.md), then the selected route and
+Issue. [AUDIT.md](AUDIT.md) explains why the replacement is needed;
+[REFACTOR_QUEUE.md](REFACTOR_QUEUE.md) orders it. This document states the target
+owners and current handoffs. It does not claim that a route already works.
 
-Routes: [annotations](#native-annotation-generation),
-[addon analysis](#addon-configuration-and-emmy-analysis),
-[Blizzard search/context](#blizzard-ui-index-search-and-context),
-[source relationships](#typed-source-relationships),
-[results/interfaces](#results-and-interfaces), [donors](#sources-and-donors).
+<a id="code-ownership"></a>
 
-## Code ownership
+## Target ownership
 
-Crate paths omit the leading `crates/`; `apps/`, `modules/` and `bridges/` are
-workspace-relative.
-
-| Responsibility | Existing owner |
+| Responsibility | Target owner |
 | --- | --- |
-| Lua syntax, analysis and incremental sessions | `wow-emmy`; public upstream parser/code-analysis APIs. |
-| Blizzard documentation, source facts, normalization and corrections | `wow-reference/src/native*.rs` and their modules. |
-| Ketho types and annotation output | `wow-annotations/src/{native,ketho,aliases,literals}.rs`; `wow-ketho-literals` owns the typed literal data and native algorithm. |
-| Roots, TOC, XML, loaded source and project facts | `wow-project`. |
-| Useful source relationships and WoW diagnostics | `wow-graph`, `wow-recognizers`, `wow-rules`; keep facts with actual search/navigation/diagnostic consumers. |
-| SQLite, transactions and queries | `wow-store`; `wow-search` supplies useful query/projection logic. |
-| Located excerpts and readable context | `wow-context`. |
-| Multi-owner composition and user interfaces | `wow-service`; `apps/wow` for CLI/stdio, `apps/wow-reference-builder` for the current builder. |
-| Shared values | `wow-core`; only values genuinely shared by these callers. |
+| Blizzard source/ref/flavor/TOC acquisition | `apps/wow-reference-builder` with small source helpers |
+| Normalized Blizzard API model, aliases and corrections | `wow-reference` |
+| Ketho-style annotation files and source mappings | `wow-annotations` + `wow-ketho-literals` |
+| Lua 5.1 Main+Library analysis, diagnostics and updates | `wow-emmy` using upstream public APIs |
+| Addon root, TOC/XML/load selection and current in-memory project | `wow-project` |
+| Current persisted files/text/symbols/relations and SQL queries | `wow-store` |
+| Text/symbol query projection | a reduced `wow-search`, or `wow-store` if no separate algorithm remains |
+| Readable located source excerpt | a reduced `wow-context`, or a local query helper |
+| Useful WoW relationships/checks | direct typed owners; no generic pack/proof platform |
+| User operations and protocol DTOs | thin `wow-service`; CLI/LSP/MCP in `apps/wow` |
+| Shared primitives | `wow-core` only when multiple retained owners genuinely share them |
 
-This is a map of existing code, not a required crate count. Cargo manifests own
-actual dependencies. Keep algorithms with their owner; a single-owner command
-may call it directly. Merge forwarding/copying layers rather than adding Service
-wrappers. Do not promote a local helper or DTO into a framework.
+The current crate count is not a requirement. Remove or merge boundaries after
+callers move; do not create replacement frameworks.
 
-## Native annotation generation
+<a id="native-annotation-generation"></a>
 
-**`apps/wow-reference-builder` now owns the supported `generate` command.** It
-reads an exact local Git revision/TOC and writes ordinary annotation files plus a
-source report. `apps/wow/src/native.rs` remains the prepared-input path used by
-local analysis, not a second generator.
+## Route 1 — generate a Library
 
-1. Reuse source-ref/TOC selection and materialization. The driver reads committed
-   blobs; its current TOC support is literal `.lua` entries. Keep those limits
-   visible until deliberately extended.
-2. Use `wow-reference/src/native.rs::ingest_document` and the existing native
-   normalization, alias and correction modules. Reuse Emmy's parser; do not
-   execute donor Lua or invent another source evaluator.
-3. Call `wow-annotations/src/native.rs::project_with_alias_catalogs`
-   and the existing emitter. Produce ordinary `.lua` files and a small readable
-   source/partial-result report. Share this producer with local native input;
-   keep needed source maps as typed data instead of reconstructing the library
-   to recover them. Document the consumer's library-directory setup.
-4. Builder and Service pack/materialization paths are removed. Generated Lua
-   enters the analyzer once as ordinary Library files; source maps and callable
-   origins remain typed sidecars. Native generation requires no pack registry,
-   distribution manifest gate, signed report, second byte copy or compatibility
-   archive.
+### Inputs
 
-The [Ketho map](KETHO_RUST_PORT.md) owns semantic details and a runnable current
-driver command. Preserve aliases, defaults, arrays, receivers, callbacks,
-corrections, literals and source maps; reuse its existing consumer probes.
-Functions, structures/callback tables, enums, constants and events now use
-renderer-owned declaration validation; only the final mapped aggregate render
-emits bytes. Statement catalogs likewise parse once and share one Emmy
-`LuaChunk` across the existing validators. Keep these owner boundaries when
-extending Ketho behavior; do not reintroduce trial artifacts or a second type or
-validation model.
-Literal generation calls `wow-ketho-literals` directly; no guest, host, wire or runtime selection path exists.
+- explicit Blizzard checkout and commit/ref;
+- selected flavor;
+- selected or unambiguous TOC;
+- output directory, created new/no-clobber;
+- finite internal limits and cancellation.
 
-## Addon configuration and Emmy analysis
+### Existing substance to reuse
 
-**#200 supplies normal configuration; one shared Emmy analysis now owns diagnostics and facts.**
-`wow-service/src/local/disk_input.rs::DiskInput.library` already accepts a root
-and declared Lua files through Project's `read_lua_inventory`. Build that bounded
-inventory from the configured library directory. Remove user-supplied probe,
-contract and digest fields; existing Lua files are enough to implement #200
-before #196. The generation-to-check integration belongs to #201.
+- `apps/wow-reference-builder/src/{lib,io,catalogs}.rs`;
+- `wow-reference/src/native*.rs`, aliases and corrections;
+- `wow-annotations/src/{native,ketho,aliases,literals}.rs` and source maps;
+- `wow-ketho-literals` native algorithm;
+- Ketho emitter behavior described in [KETHO_RUST_PORT.md](KETHO_RUST_PORT.md).
 
-`local/native_input.rs::from_native_manifest` generates Lua and passes it to
-`local/input.rs::assemble_with_load_plan` as Library files. Ordinary checks reuse
-that Library. By contrast, `local/native_library_input.rs::rebuild_for_project`
-re-ingests and re-renders retained inputs for `graph/build/native_api.rs::publish`
-and `LiveProjectRead::requalify_native_library`; `verify_library_files` builds
-another snapshot for identity comparison. #196/#107 reuse the produced Library
-and needed callable-origin mappings, then remove that duplicate producer. Do not
-make requalification the new check/load path.
+### Replacement
 
-`wow-emmy/src/session.rs::AnalyzerSession` owns one
-`RegisteredMemberAnalysis`: Main and Library are registered once, then the same
-`EmmyLuaAnalysis` supplies Main diagnostics, member/call facts and local flow.
-The TOC/XML cold branch uses the same composition without constructing separate
-syntax, member and flow engines. `syntax/analyzer.rs::accepted_code` keeps the
-useful current slice, including upstream `param-type-mismatch`; diagnostics are
-reported only for Main files while Library declarations participate in checking.
-Reuse upstream checking, not a new type checker or diagnostic approval registry.
+Read exact regular-file tree entries using a bounded batch/tree Git operation.
+Thread stop state through child I/O and reap the child. Parse/normalize/project
+once and write ordinary `.lua` files. The report contains selected source/ref/
+flavor, admitted/failed inputs, limitations and mappings consumed by later
+navigation—nothing else.
 
-Preserve Main/Library roles, virtual spans, cancellation and add/change/remove
-behavior. Follow the [engine setup](EMMYLUA_UPSTREAM.md#engine-setup) for Lua 5.1
-and standard declarations. Normal Project checks now receive annotation-defined
-parameter errors at the Main location. Queries consume produced facts or the
-index without creating another analyzer.
+The real Library reader must accept every successful output within the same
+published limits. Application-level checks invoke this producer. Delete the old
+example producer, duplicated Git/catalog helpers, stale `/1` verifier,
+compatibility/certification reports and unconsumed artifact identities.
 
-`session.rs::apply_delta` keeps unchanged syntax trees in the shared VFS, then
-clears and rebuilds retained semantic indexes. `reused_files` counts unchanged
-Main inputs, not saved semantic work. #109 preserves final results through the
-[current update route](../crates/wow-project/UPDATE_MODEL.md). Do not replace this
-rebuild with changed-only upstream calls on assumption: the pinned bulk updater
-does not schedule unchanged global/type consumers.
+### Observable check
 
-Use upstream's public engine APIs through `wow-emmy`. Standard Lua editor
-features use its existing `emmylua_ls` server: its `handlers` module is private,
-not an SDK to import or copy. [EmmyLua guide](EMMYLUA_UPSTREAM.md) owns this boundary.
+A small committed fixture runs through the public builder, loads through the real
+Library reader and preserves representative Ketho output/maps. Then one selected
+real source/flavor establishes the claimed coverage only.
 
-## Blizzard UI index, search and context
+<a id="addon-configuration-and-emmy-analysis"></a>
 
-**#131 replaces the Project read boundary; #169 implements direct SQLite search;
-#106 connects the user workflow.** `wow-project/src/replay/publication.rs` still
-reads through `AcquiredProjectPair::read` → `hydrate_owner`, rebuilding analysis
-and recapturing replay for equality. `ReadSnapshot::acquire` now validates the
-selected manifest/membership without loading every partition; `record` validates
-only the requested payload. Removing Project/Emmy reconstruction remains the
-larger boundary.
+## Route 2 — check an addon
 
-Continue #131 with stored file paths/text and selected source/flavor: open in a
-later process and read a file without source/analyzer callbacks. Use ordinary
-SQLite rows/transactions in `wow-store`; do not serialize another snapshot
-framework. #169 adds name/span and FTS queries to this same index. Existing
-in-memory Project updates can stay while readers move; updating source and
-reading facts have different work to do.
+### Inputs
 
-Current CLI search is `apps/wow/src/search.rs` → `wow-service/src/search.rs` →
-`wow-search` / `wow-store/src/search/mod.rs`. The ProjectFile shard stores `document_id` and
-`owner_metadata_label`; FTS searches these file labels/paths, **not source bodies**.
-It serializes an inner SQLite image as hex/JSON into Store. Moving only those
-metadata rows does not implement source-text search.
+- addon root;
+- selected or auto-discovered TOC, with ambiguity reported;
+- flavor/source selection when WoW-specific relationships require it;
+- generated or existing Library directory;
+- output format and optional selected checks.
 
-`wow-service/src/search/source_observations.rs::execute` already queries stored
-native names without Project hydration. Its separate `acquire_bound` federation
-path and the shard builder do hydrate Project. Reuse the facts and name lookup
-in `wow-search/src/source_observations.rs`; remove unneeded shard/proof wrapping
-as they move into the current index. Do not claim every existing query analyzes.
+No user-supplied Project IDs, generations, probe reports, contract IDs, digests,
+proof manifests or budget JSON are required for ordinary use.
 
-- Store current file paths/text and available symbol names/spans in the ordinary
-  local index; reuse the selected Project/Emmy facts. Keep only TOC/XML links
-  consumed by the requested navigation. Use existing rusqlite/FTS5 and normal
-  transactions; remove the image/hex/JSON path and its exclusive manifests/holds.
-- Query the tables/FTS directly with finite defaults and parameters. #106 must
-  find a term occurring in a source body but absent from its filename, plus a
-  real symbol. #109 covers changes/removals; #113 measures this actual workflow.
-- Connect the hit to the indexed text or matching selected source and emit its
-  path, range and excerpt. Never apply old offsets to changed text. The existing
-  bounded excerpt reader is `wow-context/src/pack/source_excerpt.rs`, consuming
-  `wow_project::graph::ProjectSourceReadReport`; reuse the reading logic.
-  Current `wow search context build` explicitly excludes source excerpts: #122
-  connects this missing handoff and removes semantic-pack wrapping.
+### Existing substance to reuse
 
-Use one current database layout, one strict `ProjectReplay` DTO and one replay
-record. The only second physical variant adds the candidate receipt/check. Exact
-feature choices are validated from reconstructed configuration and owners, not
-catalog or payload tags. Incompatible derived data is rebuilt from source and
-configuration; preserve user files and report missing inputs. #111 removes
-remaining retention/GC administration. No compatibility reader, converter or new
-lifecycle subsystem.
+- `wow-project` root/TOC/XML/load readers;
+- `wow-emmy/src/session.rs::AnalyzerSession` and registered Main+Library analysis;
+- upstream Lua 5.1 configuration and `init_std_lib(None)`;
+- current Project update facts and exact coordinates;
+- small useful WoW checks after they are selected before execution.
 
-## Typed source relationships
+### Replacement
 
-**Start #195 with `wow-recognizers/src/source_state_core/project.rs::execute`
-and Service's `graph/build/recognizer_handoff.rs`.** Typed state accesses and
-root/caller/target bindings already exist. The adapter creates generic facts,
-fixed packs and matcher output; Service reconstructs the four read/write ×
-root/path packs and plans to project those results into the graph again.
+Create one configured analysis owner. Load standard declarations once, then
+Library and Main. Preserve upstream diagnostic message, code, severity and range
+for Main. Apply only explicit documented WoW suppressions. Findings and
+completeness are separate fields; an unrelated optional component cannot hide a
+finding or make the requested analysis partial.
 
-Map the admitted typed facts directly to the consumed relationships. Keep
-root versus literal-path targets, account/character scope, source locations,
-ambiguity and incomplete-input results. Remove `evaluations`, pack/plan digests
-and the repeated handoff; they are not a required result DTO. Reuse the positive
-and unresolved-path behavior in `graph/build/state_core_tests.rs`. Strip matcher
-assertions from the handoff test while retaining its useful `execute_graph_build`
-check in the existing suite; direct adapter tests alone do not exercise Service.
+Execute only requested checks. Convert typed facts directly to consumed
+relationships; remove generic recognizer packs and graph requalification as their
+callers move. TOC/XML/load changes reload or rebuild the same owner. LSP/MCP call
+this operation rather than standalone one-file analysis.
 
-Trace the other live `src/source_*` adapters through their actual callers and
-remove the same redundant conversions where present. #103 removes unconsumed
-capabilities; a lint annotation alone
-does not prove one unused. #107/#118 remove graph proof/lineage machinery.
-No replacement rule compiler, plugin registry or proof-receipt framework.
+### Observable check
 
-## Results and interfaces
+The actual CLI loads a typed Library function: a valid call is clean; an invalid
+argument reports the upstream message/severity at the addon line. Also exercise
+one missing/ambiguous input and one changed/deleted or TOC-selection update.
 
-Local status/check values in `wow-service/src/service.rs` are plain typed results:
-no generic envelope, request/result self-digest, schema echo or service-version
-echo. The application serializes once with an external byte ceiling. #194 now
-continues only through separate Context/Search/graph result families; simplify
-each from its actual caller rather than introducing another universal envelope.
+## Route 3 — index, search and read source
 
-CLI, LSP and MCP consume the same operation result. Keep framing and position
-conversion in `apps/wow`, not copies of analysis/search algorithms. #197 supplies
-normal defaults; #198/#199 fix existing standard protocol behavior. Use the
-current recipes in [FRONTENDS.md](FRONTENDS.md); add only useful supported stdio
-operations, not a host profile or registry per feature.
+### Inputs
 
-## Sources and donors
+- selected Blizzard/addon source root, ref and flavor;
+- current database path;
+- text/symbol query and finite result limit.
 
-| Source | Take / read |
+### Existing substance to reuse
+
+- `wow-project` source/TOC/XML/load selection and available Emmy facts;
+- rusqlite/FTS5;
+- useful native-name/source observations;
+- the bounded source-excerpt reading logic in
+  `wow-context/src/pack/source_excerpt.rs`.
+
+### Replacement
+
+Use one current SQLite database. Store source identity, file path/text/content
+version, symbol name/kind/span and only useful TOC/XML/source relations in normal
+tables. FTS indexes source bodies with documented token/phrase semantics. Query
+after reopening without Project/Emmy/Graph reconstruction. Updates replace
+changed rows and delete removed rows transactionally.
+
+Return bounded plain hits. Read the matching indexed text or exactly matching
+selected source and render path, range and fenced source. Never apply old offsets
+to changed text.
+
+Remove Project replay recapture, nested SQLite/hex/JSON, generic Store lifecycle,
+retained-result/federation/self-sizing cursors and Context pack/map/skeleton
+machinery as their consumers switch.
+
+### Observable check
+
+After process restart, find a term absent from filenames but present in a file
+body, a known symbol and one useful TOC/XML relation. Return readable matching
+source. Change/delete a file and verify stale hits disappear.
+
+<a id="typed-source-relationships"></a>
+
+## Direct relationships and checks
+
+Keep only relations consumed by diagnostics, search or navigation: source
+call/target, TOC/XML load/template/script, callable origin and selected state or
+library relationships. Preserve location, ambiguity and incomplete coverage.
+
+Do not convert fixed Rust facts into JSON packs, compile them, execute a generic
+matcher and map them back. Do not retain graph proposals, validation proofs,
+partitions or registries merely because old tests assert their IDs. A small typed
+relation table/module is sufficient unless a real user query demonstrates more.
+
+## Results and frontends
+
+Each use case returns a plain typed result with data the caller presents:
+findings, completeness, source identity, paths/ranges, hits/excerpts and typed
+errors. Serialize once at the frontend with an external output ceiling. Remove
+self-hashes, byte fixed points, request journals and replay registries from
+ordinary reads.
+
+CLI is the complete local path with useful defaults. LSP/MCP are thin adapters to
+the same check/search/context operations. General Lua editor features remain the
+upstream EmmyLua server. Follow [FRONTENDS.md](FRONTENDS.md) for protocol details.
+
+## Code that must disappear with its replacement
+
+- annotation and Emmy compatibility/certification reports and probe binaries;
+- duplicate annotation producer/verifier and producer-only fixtures;
+- evidence-heavy local input variants and user-facing IDs/digests/contracts;
+- Project replay hydration/recapture and companion proof reconstruction;
+- generic Store object/catalog, nested Search database and backup/retention/
+  quarantine/recovery/replacement administration;
+- generic recognizer pack/plan/matcher and proof graph paths with no remaining
+  consumer;
+- Context external pack/map/skeleton/universe/continuation platform;
+- Search federation, retained-result lifecycle and self-sizing pagination not
+  required by direct source queries;
+- internal CLI commands, profiles, schemas, tests and documents owned only by
+  those paths;
+- old E1–E7/platform specifications after useful facts move to retained owners.
+
+## Donors
+
+| Donor | Reuse |
 | --- | --- |
-| [EmmyLua](https://github.com/EmmyLuaLs/emmylua-analyzer-rust) | The parser, `crates/emmylua_code_analysis/src/lib.rs` session/update/library APIs and standard server. Use the compiled Cargo pin; change it only for a concrete need. |
-| [Ketho](https://github.com/Ketho/vscode-wow-api) | `luasrc/annotate/init.lua` type/field/callback emission; loader/corrections and annotation catalogs through the [existing Rust map](KETHO_RUST_PORT.md). Port useful behavior and notices, not extension activation or build/runtime dependencies. |
-| [Blizzard UI source](https://github.com/Gethe/wow-ui-source) | Actual API documentation, Lua, XML and TOCs at the requested revision/flavor. Reuse [source materialization](SOURCE_MATERIALIZATION.md) and [updates](SOURCE_CHECKOUT_UPDATES.md); preserve dirty/diverged checkouts. |
-| [SQLite FTS5](https://www.sqlite.org/fts5.html) | Existing virtual tables, ordinary queries and updates; use the repository's rusqlite dependency, not another search engine. |
+| [EmmyLua](https://github.com/EmmyLuaLs/emmylua-analyzer-rust) | public analysis/session/update/library APIs and standard server/declarations |
+| [Ketho](https://github.com/Ketho/vscode-wow-api) | annotation type/default/array/callback/receiver behavior, corrections and notices—not VS Code activation/runtime |
+| [Blizzard UI source](https://github.com/Gethe/wow-ui-source) | selected Lua/XML/TOC/API documentation at an explicit revision/flavor |
+| [SQLite FTS5](https://www.sqlite.org/fts5.html) | ordinary current tables, transactions and documented token/phrase queries |
 
-Resolve source revisions when changing source-sensitive behavior. Generic
-plumbing needs no fresh WoW corpus. Optional private context stays advisory and
-out of public logs, fixtures and Issues; it is not an implementation prerequisite.
+Read the exact donor module when its semantics change. Do not infer unsupported
+WoW facts or promise parity not exercised by the selected workflow.
 
-## Finish the selected replacement
+## Working rule
 
-Trace its producer and real consumer, implement the useful path, then remove the
-superseded code/options/tests/docs in the same change. Use the smallest existing
-check that exercises the changed behavior; add a regression test only for an
-uncovered concrete risk. Do not rebuild every old fixture matrix. Follow
-[EXECUTION_MODEL.md](EXECUTION_MODEL.md) for commands and publication, and update
-the affected route/Issue when the implementation changes.
+For every change trace:
+
+```text
+user input -> actual producer -> handoff -> actual reader -> visible result
+```
+
+Finish that path and remove its displaced code/options/tests/docs in the same
+change. Use the smallest existing consumer check after the path works. Build and
+Clippy are required code gates, not behavioral acceptance.
