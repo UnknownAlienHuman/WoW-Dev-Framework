@@ -4,7 +4,7 @@ use std::{sync::Arc, sync::atomic::AtomicBool};
 
 use serde::Deserialize;
 use wow_project::{
-    PlatformGraphProfile, ProjectBudgetPolicy, ProjectFileRole, ProjectId, ProjectSourceOriginId,
+    PlatformGraphProfile, ProjectBudgetPolicy, ProjectId, ProjectSourceOriginId,
     ProjectWorkspaceId,
     disk::{ManifestedPlatformInput, ProjectDiskFile, ProjectInputDirectory},
     load::{
@@ -223,14 +223,7 @@ impl LocalProjectInput {
         let reference = reference_input.read(directory, &input.source, &profile, stop)?;
         let analyzer = input.analyzer.read(directory, stop)?;
         let libraries = match input.library {
-            Some(library) => directory
-                .read_lua_inventory(
-                    &library.root,
-                    &library.files,
-                    ProjectFileRole::Library,
-                    stop,
-                )
-                .map_err(acquisition_error)?,
+            Some(library) => library.read(directory, stop)?,
             None => Vec::new(),
         };
         super::cancelled(stop)?;

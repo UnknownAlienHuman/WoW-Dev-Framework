@@ -5,8 +5,8 @@
 //!
 //! `wow-project` owns project configuration, source inventory, analyzer-report
 //! binding, source handles, generation derivation, atomic publication, and
-//! read-only views. It does not discover files, execute Lua, infer platform
-//! truth from analyzer observations, or publish partial candidate state.
+//! read-only views. It discovers Library Lua only beneath a configured root;
+//! it never executes Lua or infers platform truth from analyzer observations.
 
 mod analyzer;
 mod configuration;

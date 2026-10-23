@@ -33,10 +33,9 @@ mod numbers;
 mod type_declarations;
 pub(crate) use lowering::{CaptureBudget, CapturedCallable};
 
-const MAX_FILES: usize = 4096;
+use wow_core::library_limits::{MAX_FILE_BYTES, MAX_FILES, MAX_TOTAL_BYTES as MAX_LIBRARY_BYTES};
+
 const MAX_UNITS: usize = 65_536;
-const MAX_LIBRARY_BYTES: usize = 64 * 1024 * 1024;
-const MAX_FILE_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct SourceLink {

@@ -420,8 +420,13 @@ impl LocalProjectInput {
                 .into_iter()
                 .map(ProjectInputFile::into_workspace_input)
                 .collect(),
-            LuaWorkspaceLimits::new(1024, 4096, 1024 * 1024, 16 * 1024 * 1024)
-                .map_err(|_| invalid("invalid Library limits"))?,
+            LuaWorkspaceLimits::new(
+                wow_core::library_limits::MAX_FILES as u64,
+                4096,
+                wow_core::library_limits::MAX_FILE_BYTES as u64,
+                wow_core::library_limits::MAX_TOTAL_BYTES as u64,
+            )
+            .map_err(|_| invalid("invalid Library limits"))?,
         )
         .map_err(|_| invalid("Library input was rejected"))?;
         let bundle = ProjectInputBundle::closed(configuration, main, vec![libraries])

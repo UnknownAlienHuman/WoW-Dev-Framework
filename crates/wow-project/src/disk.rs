@@ -1,4 +1,5 @@
-//! Read-only acquisition of explicitly listed local inputs. No directory scan.
+//! Read-only acquisition below configured roots, including bounded Lua Library discovery.
+mod library;
 mod pinned;
 mod source_manifest;
 pub use pinned::PinnedLuaSource;
@@ -98,8 +99,8 @@ impl ProjectDiskFile {
 }
 
 /// A registered local input directory, retained by handle, not by its host name.
-/// Only explicit JSON artifacts and Lua inventories can be read through this port.
-/// No host path, raw handle, write, enumeration or process capability is exposed.
+/// JSON artifacts, explicit Lua inventories and a configured Library can be read.
+/// No host path, raw handle, write or process capability is exposed.
 pub struct ProjectInputDirectory {
     directory: Dir,
 }
@@ -238,7 +239,19 @@ impl ProjectInputDirectory {
         stop: &AtomicBool,
     ) -> ProjectResult<Vec<ProjectInputFile>> {
         checkpoint(stop)?;
-        if files.is_empty() || files.len() > DISK_INVENTORY_MAX_FILES {
+        let (max_files, max_file_bytes, max_total_bytes) = match role {
+            ProjectFileRole::Library => (
+                wow_core::library_limits::MAX_FILES,
+                wow_core::library_limits::MAX_FILE_BYTES,
+                wow_core::library_limits::MAX_TOTAL_BYTES,
+            ),
+            ProjectFileRole::FirstPartyMain => (
+                DISK_INVENTORY_MAX_FILES,
+                DISK_SOURCE_MAX_BYTES,
+                DISK_INVENTORY_MAX_BYTES,
+            ),
+        };
+        if files.is_empty() || files.len() > max_files {
             return Err(failure(
                 ProjectErrorCode::InvalidInputInventory,
                 "invalid source inventory size",
@@ -267,8 +280,8 @@ impl ProjectInputDirectory {
         let mut output = Vec::with_capacity(files.len());
         for file in files {
             checkpoint(stop)?;
-            let remaining = DISK_INVENTORY_MAX_BYTES - total;
-            let bytes = directory.read(file, remaining.min(DISK_SOURCE_MAX_BYTES), stop)?;
+            let remaining = max_total_bytes - total;
+            let bytes = directory.read(file, remaining.min(max_file_bytes), stop)?;
             total += bytes.len();
             let text = String::from_utf8(bytes).map_err(|_| {
                 failure(
