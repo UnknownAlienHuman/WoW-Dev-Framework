@@ -24,7 +24,7 @@ mod owned;
 mod references;
 use framing::{Limits, read_frame, write_frame};
 
-const HELP: &str = "wow lsp --transport stdio --profile <lsp-3.18-stdio-v1|lsp-3.18-stdio-owned-v1> --host <explicit.json>\nPrivate Lua diagnostics and explicitly selected local navigation over one registered workspace. Owned mode adds foreground tickets, cooperative request cancellation and bounded delivery. Published dependencies, Reference, Graph, Rules and runtime are not evaluated. See apps/wow/LSP.md.\n";
+const HELP: &str = "wow lsp --transport stdio --profile <lsp-3.18-stdio-v1|lsp-3.18-stdio-owned-v1> --host <explicit.json>\nPrivate Lua diagnostics and explicitly selected local navigation over one registered workspace. Owned mode adds foreground tickets, cooperative request cancellation and bounded delivery. Published dependencies, Reference, Graph, Rules and runtime are not evaluated. See docs/FRONTENDS.md for current limitations and target behavior.\n";
 pub(super) fn run(args: Vec<OsString>) -> u8 {
     if args.len() == 2 && args[1] == "--help" {
         return if std::io::stdout().lock().write_all(HELP.as_bytes()).is_ok() {

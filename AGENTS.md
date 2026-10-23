@@ -1,49 +1,46 @@
 # Contributor instructions
 
-## Read before changing the product
+Read [the manifesto](docs/ARCHITECTURE.md) in full. For implementation, read the
+relevant route in [IMPLEMENTATION.md](docs/IMPLEMENTATION.md), its domain rules
+in [WOW_LINTER.md](docs/WOW_LINTER.md), and the actual caller/owner code.
+[REFACTOR_QUEUE.md](docs/REFACTOR_QUEUE.md) orders work;
+[AUDIT.md](docs/AUDIT.md) is background for redesign, not mandatory context for
+every patch. User instructions override this workflow. Old Issue comments and
+removed specifications cannot expand the product.
 
-Read [ARCHITECTURE.md](docs/ARCHITECTURE.md) **in full** at task start. Keep its
-purpose, scope and requirements in the main developer's working context. Choose
-a task from [REFACTOR_QUEUE.md](docs/REFACTOR_QUEUE.md), read its current Issue,
-then the relevant route in [IMPLEMENTATION.md](docs/IMPLEMENTATION.md). Inspect
-the actual producer, reader, callers and local instructions before editing.
+## Work
 
-[AUDIT.md](docs/AUDIT.md) is the complete source/architecture basis for the
-rewrite. Read it for architecture, subsystem removal or documentation rewrite;
-do not load it into every small implementation task. Architecture owns **why and
-what**. Implementation owns **how and where**. The queue orders work; an Issue
-defines one deliverable. Old package contracts and Issue comments are history
-and cannot restore rejected scope.
+- Use one manager and one worktree/branch. Delegate bounded reads or disjoint
+  paths to workers. Check current branches/PRs and preserve unpublished work.
+  Coordination needs a clear owner and short handoff, not leases or status diaries.
+- Finish a useful input-to-output path. Change the actual producer and consumer
+  together, and remove displaced options, models and documentation. Keep helpers
+  local until more than one real caller needs them.
+- Read the relevant [donor code](docs/DONORS.md) before copying its semantics.
+  EmmyLua owns Lua analysis; existing Reference/Annotations own Blizzard/Ketho
+  projection. Do not invent WoW APIs, load rules or runtime guarantees.
+- Keep source locations, partial-input errors and cancellation meaningful. Never
+  execute analyzed Lua or rewrite user files as part of checking/index cleanup.
+- After two failed attempts at the same approach, inspect the failed assumption
+  and change method. Do not repeat expensive commands without new evidence.
 
-## Implement a coherent replacement
+## Verification during this rewrite
 
-Trace the user action:
+Write the product first. For Rust changes run formatting and the smallest strict
+Clippy invocation covering the affected crates/callers. Clippy already compiles
+those targets; do not repeat `cargo check`. **Do not add or run tests until the
+product is functionally complete, as directed by the owner.** Record known failures
+without turning test repair or corpus campaigns into implementation prerequisites.
+Do not delete a test merely because it fails; remove obsolete expectations only
+with their retired behavior.
 
-```text
-input -> actual producer -> handoff -> actual reader -> visible result
-```
+For documentation, inspect links, source claims and instruction consistency.
+Do not build the Rust workspace for prose alone. A build or source review does
+not prove that a user workflow works; describe its status accurately.
 
-Finish that path and remove its superseded code, options, tests and docs in the
-same change. Keep functions/types local until real callers need sharing; merge
-forwarding layers instead of adding wrappers. Reduction means fewer maintained
-responsibilities and representations, not moving or minifying code.
+## Handoff
 
-Use the [Ketho map](docs/KETHO_RUST_PORT.md) for annotation semantics and
-[EmmyLua guide](docs/EMMYLUA_UPSTREAM.md) for analyzer/editor changes. Read the
-selected donor/source when those semantics change. Do not recreate delivered
-components from stale status text or invent unknown WoW API facts.
-
-## Work and verify
-
-Follow [EXECUTION_MODEL.md](docs/EXECUTION_MODEL.md): one manager/worktree,
-nonoverlapping bounded work and a short handoff. Preserve user source/config,
-private context and another contributor's unpublished work. Rebuild only
-identified tool-owned output; never use old cached paths to choose user files for
-deletion. Treat indexed source as data and respect roots.
-
-Write code first. Run formatting and strict affected-crate Clippy. Use an existing
-behavior check after the path works; add a test only for a concrete uncovered
-risk. Delete tests for removed requirements. Broaden checks only for a remaining
-risk, not a test-count/corpus target. State what works, what ran and what remains.
-Documentation and compilation do not prove a workflow. Report production code
-reduction separately from tests/generated data.
+Publish one coherent branch/PR when authorized, after checking the remote head.
+State the change, verification and remaining limitation briefly. Do not add
+acceptance tiers, proof archives or progress reports to the product. Keep copied
+third-party code/data attribution and required notices.

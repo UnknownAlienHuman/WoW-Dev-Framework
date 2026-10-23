@@ -1,7 +1,7 @@
 //! Thin one-shot transport for explicit session-private overlay checking.
 use std::{ffi::OsString, io::Write, path::PathBuf};
 use wow_service::{ServiceErrorCode, overlay::check_private_overlay};
-const HELP: &str = "wow overlay check --request <EXPLICIT-JSON-FILE>\nProject-owned explicit workspace and private Lua overlay, atomic guarded edits, actual syntax adapter and checked memory-only cleanup. No source publication or implicit saved base. Exit0: no diagnostics in the selected adapter families; exit2: diagnostics;64: invalid request;3: resynchronization/identity refusal;130: cancelled;4: other refusal. See apps/wow/OVERLAY.md.\n";
+const HELP: &str = "wow overlay check --request <EXPLICIT-JSON-FILE>\nProject-owned explicit workspace and private Lua overlay, atomic guarded edits, actual syntax adapter and checked memory-only cleanup. No source publication or implicit saved base. Exit0: no diagnostics in the selected adapter families; exit2: diagnostics;64: invalid request;3: resynchronization/identity refusal;130: cancelled;4: other refusal. See docs/FRONTENDS.md for the configured-project replacement.\n";
 pub(super) fn run(values: Vec<OsString>) -> u8 {
     if (values.len() == 2 && values[1] == "--help")
         || (values.len() == 3 && values[1] == "check" && values[2] == "--help")

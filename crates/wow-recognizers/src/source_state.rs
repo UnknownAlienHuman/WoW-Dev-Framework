@@ -862,7 +862,7 @@ const W6_NEW_LIBRARY_CALLABLE: &str = "LibStub.NewLibrary";
 const W6_ACEADDON_EMBED_CALLABLE: &str = "AceAddon.EmbedLibrary";
 const W6_ACEADDON_MAJOR: &str = "AceAddon-3.0";
 
-// Normative relation ids from RULE_FAMILIES.md section 6.
+// Legacy relation IDs; retained semantics are described in docs/WOW_LINTER.md.
 const W6_REQUIRE_RELATION: &str = "lua_requires_library";
 const W6_NEW_RELATION: &str = "lua_declares_library";
 const W6_EMBED_RELATION: &str = "lua_embeds_library";

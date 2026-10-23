@@ -1,6 +1,6 @@
 //! Owned stdio for the explicit foreground execution profile.
 //! Acquisition, readiness and all I/O stay on one App thread. No OS handle is
-//! passed to the semantic worker. See apps/wow/LSP_IO_SAFETY.md.
+//! passed to the semantic worker. See docs/FRONTENDS.md for protocol boundaries.
 use std::io;
 
 #[cfg(unix)]

@@ -1,93 +1,89 @@
-# Rewrite queue
+# Implementation order
 
-The [manifesto](ARCHITECTURE.md) defines scope, [AUDIT.md](AUDIT.md) records the
-source diagnosis, and [IMPLEMENTATION.md](IMPLEMENTATION.md) defines the target
-owners. This file is the only ordered queue; Issues define bounded deliverables.
+The [manifesto](ARCHITECTURE.md) defines the product. This is the only ordered
+queue; [IMPLEMENTATION.md](IMPLEMENTATION.md) supplies code routes and
+[WOW_LINTER.md](WOW_LINTER.md) supplies behavior. Existing Issue numbers identify
+related work, not permission to restore historical contracts or test campaigns.
 
-## Phase 0 — truthful instructions
+## 1. A useful ordinary addon check
 
-1. Keep root `README`, `AGENTS`, Architecture, Audit, Implementation, Queue,
-   Completion and Execution as the canonical set.
-2. Reconcile #191/#125 and active workflow Issues with current `main`.
-3. Move useful source/coordinate/TOC/XML facts from old package notes, then delete
-   E1–E7/platform contracts, historical gates and broken links. Owner: #112.
-4. Repair the #232 negative-test/validation-phase regressions while touching the
-   Project replay path; do not restore removed schemas.
+Related: [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/200),
+[#201](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/201),
+[#197](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/197).
 
-## Phase 1 — generated Library to useful addon check
+Connect root/TOC/flavor/Library input to the existing shared Emmy session and
+public CLI. Initialize Lua51/STD; preserve upstream message/code/severity/range
+and remove the four-code allowlist. Select checks before doing their work.
+Return known findings separately from input/analysis limitations. Remove
+compatibility-report and Project publication requirements from this path.
 
-| Order | Issue | Deliverable |
-| --- | --- | --- |
-| 1 | [#201](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/201) | Workflow packages Lua; public-executable probes replace the removed example producer and verifier. Shared regular-file checks cover TOC/API/catalogs. Finish real Library loading and batch/cancellation handling. |
-| 2 | [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/200) | Root/flavor/TOC/Library configuration, matching finite limits and upstream Lua 5.1 stdlib. |
-| 3 | #201 / [#198](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/198) | Preserve upstream diagnostic message/code/severity/range; configured Project path used by CLI/LSP. |
-| 4 | #201 / [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | Select checks before provider work; separate findings from requested-scope completeness. |
-| 5 | [#109](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/109) | Changed/deleted Lua and TOC/XML/load selection update the same owner without stale results. |
+The first usable result is a typed addon check with an existing Library. It
+requires neither a persistent source index nor completion of all old cleanup.
 
-Acceptance: the supported builder output loads directly; CLI valid/invalid typed
-Library calls differ at the addon line with the real message and severity; one
-missing/ambiguous input is honest.
+## 2. Correct Blizzard declarations for that check
 
-## Phase 2 — direct persisted source search
+Related: #200/#201; reuse the delivered builder and native Ketho port.
 
-| Order | Issue | Deliverable |
-| --- | --- | --- |
-| 1 | [#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131) | One current SQLite schema for source identity, files/text, symbols/spans and useful relations; no replay hydration. |
-| 2 | [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169) | Direct body/symbol FTS/query; remove nested SQLite/hex/JSON and self-sizing pagination along this path. |
-| 3 | [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122) | Matching indexed text -> readable path/range/fenced excerpt; remove pack/render wrapping. |
-| 4 | [#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106) / [#117](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117) | User CLI for body, symbol and useful TOC/XML navigation. |
-| 5 | [#109](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/109) / [#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113) | No stale rows after changes; measure and fix the first real bottleneck once. |
+Separate client flavor from API environment; handle member-level `SecureOnly`.
+Model `MayReturnNothing`, mixin relations and relevant restriction metadata.
+Keep unresolved types/omissions visible. Use one source-to-Library pipeline,
+consistent reader limits, batched cancellable Git reads and a simple metadata/map
+handoff. Do not recreate the removed example producer or `/1` verifier.
 
-Acceptance: after restart, find a body-only term and symbol, return the matching
-excerpt, and remove hits after change/delete.
+## 3. Correct project context and changes
 
-## Phase 3 — remove general platforms from real consumers
+Related: [#109](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/109),
+[#117](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117).
 
-| Issue | Replacement |
-| --- | --- |
-| [#195](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/195) | Direct typed relations instead of generic fact/pack/plan/matcher handoff. |
-| [#107](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/107) | Reuse loaded Library/callable origins; remove graph requalification and proof DTOs. |
-| [#111](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111) | Delete generic Store object/lifecycle, backup, retention, GC, quarantine, recovery and replacement after direct index readers move. |
-| [#194](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194) | Plain results and one serialization; remove remaining self-identity/fixed-point paths from actual callers. |
-| [#112](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112) | One current representation per retained workflow; delete exclusive formats/tests/docs. |
+Connect TOC/XML/dependency selection, addon chunk namespace, supported handler
+contexts and precise virtual-source maps to the same owner. Distinguish cosmetic
+metadata from unknown load conditions. Handle changed/deleted files and changed
+load/Library selections without stale results. Retain conservative semantic
+reindexing until a narrower invalidation scheme is demonstrably correct.
 
-Do not finish every cleanup before a workflow. Attach each deletion to the caller
-that makes it obsolete.
+## 4. Small WoW checks and editor/agent reuse
 
-## Phase 4 — collapse frontends onto the same product operations
+Related: [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103),
+[#195](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/195),
+[#107](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/107),
+[#198](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/198),
+[#199](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/199).
 
-- [#197](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/197):
-  reduce the public CLI from the current internal Graph/Project/Search/Context
-  platform to Library generation, configured addon check and direct index/search
-  with readable context; keep finite user-meaningful defaults only.
-- [#198](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/198):
-  one standard LSP stdio adapter to the configured check and retained indexed
-  navigation owners; standard empty results and positions, no parallel Lua engine
-  or profile family.
-- [#199](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/199):
-  one standard MCP profile with useful read-only check/search/context tools;
-  accept bounded extension metadata and ignore valid unknown notifications.
-- [#125](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/125):
-  close only after all three advertised workflows run through their public
-  entrypoints and the corresponding scoped evidence exists.
+Use direct typed checks for supported API context, widget/template, event/callback
+and restricted-use cases. API absence and runtime safety must not be guessed.
+Replace the one-file LSP path with the configured project; expose only useful
+read-only MCP operations. Keep standard framing, empty results and document
+versions. Remove generic pack/matcher/proof and frontend profile wrappers as
+these consumers move. #103 owns useful recognizer/check selection, not a new
+engine; early execution selection belongs to the check route above.
 
-## Delivered components — do not rebuild
+## 5. Direct source lookup and remaining platform removal
 
-- #193: one Project Main+Library Emmy analysis.
-- #202: one statement-catalog parse.
-- #204: one final annotation emission.
-- #196: supported native generation entrypoint.
-- #203: native literals, no Wasm bridge.
-- Core E0 envelopes, one-shot registries, Reference Pack administration,
-  lineage/comparison and Project catalog/replay tag ladders are removed.
+Related: [#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131),
+[#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169),
+[#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122),
+[#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
 
-Delivered components may still have broken handoffs. Fix the handoff; do not
-recreate their superseded implementations.
+Store current files/body text/symbols/useful relations in one SQLite database.
+Read after reopen without rebuilding analysis; return readable matching excerpts.
+Remove nested databases, replay recapture, self-sizing pages and Context packs.
+The known remaining fingerprint code is removal work with its consumers under
+[#118](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118), not an
+already-deleted subsystem or a reason to repair its historical product.
 
-## Work rule
+Attach remaining Store lifecycle/DTO/format cleanup
+([#111](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111),
+[#194](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194),
+[#112](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112)) to the
+reader it replaces. Measure the actual index/query path when it is usable
+([#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113)); do not
+invent performance targets from line counts.
 
-One manager/worktree, one bounded Issue. Read Architecture, the selected
-Implementation route, actual callers and donor. Change code first, run formatting
-and affected strict Clippy, then one proportional consumer check when the path is
-available. Remove displaced options/tests/docs. No legacy fallback, new schema
-family, certification framework or all-history campaign.
+## Working policy
+
+One manager/worktree, bounded delegation, code first, formatting and affected
+strict Clippy. Tests are deferred until functional completion by owner direction;
+then reconcile relevant known failures and exercise the advertised workflows.
+The supplied audit's test failures remain evidence, not instructions to restore
+retired scope. A component or compilation pass alone never completes
+[#125](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/125).

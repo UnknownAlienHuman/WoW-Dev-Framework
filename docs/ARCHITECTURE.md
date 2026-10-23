@@ -1,65 +1,73 @@
-# Project manifesto
+# A WoW linter built on EmmyLua
 
-WoW Dev Framework helps addon developers understand Blizzard APIs, check their
-Lua code, and find the source they need. Its foundation is **EmmyLua and a native
-Rust port of Ketho's annotation pipeline**. The purpose is a useful development
-tool that remains easy to understand, change and finish.
+WoW Dev Framework helps authors and coding agents build correct World of Warcraft
+addons. Its main product is a **WoW-aware Lua linter**: EmmyLua checks the language
+and types; Blizzard source and Ketho's annotation work supply the game contracts;
+a small WoW layer checks addon loading and constraints that ordinary Lua analysis
+cannot express.
 
-## What the product must deliver
+## Required result
 
-- Generate a usable `.lua` annotation library for the selected Blizzard source
-  and client flavor, preserving the useful meaning of Ketho's output.
-- Check an addon with EmmyLua and that library; explain actual problems at their
-  source locations.
-- Search Blizzard UI and addon source for symbols, text and relevant TOC/XML
-  relationships; return readable excerpts and navigation to the original code.
+An author selects an addon, a client flavor and a compatible annotation Library.
+The tool reads its TOC, Lua and XML, then reports useful diagnostics at the actual
+source locations. Messages explain the problem and retain the upstream code and
+severity. The same project analysis serves CLI, editor and agent requests.
 
-These workflows must work from ordinary project inputs without VS Code. CLI is
-the complete local entry point; focused stdio LSP/MCP access serves the same
-workflows. General Lua language intelligence belongs to upstream EmmyLua.
+The product must cover:
 
-## Principles
+- Lua syntax and type checking against the selected Blizzard API, including
+  parameters, multiple returns, nilability, callbacks, widgets and mixins;
+- TOC/XML file selection, dependency declarations, ordered loading and embedded
+  Lua, with precise locations and explicit unknowns;
+- API availability in the selected client and execution context, plus supported
+  event, callback and restriction checks;
+- changes to source, Library or load selection without stale diagnostics;
+- generation of ordinary `.lua` annotation files from selected Blizzard source;
+- source lookup for explaining a diagnostic: declarations, readable excerpts and
+  useful TOC/XML relations. Persistent search is auxiliary and must not delay or
+  become a prerequisite for addon checking.
 
-- **Useful behavior earns its cost.** Every feature and component must serve a
-  current developer task. Existing code, an old plan or a test does not justify
-  keeping a feature. Finish the useful workflow before adding adjacent features.
-- **Reuse the substance.** Keep EmmyLua's engine and Ketho's domain behavior.
-  Port only the integration the product needs; do not reproduce an editor,
-  language server, interpreter or general tooling platform.
-- **One clear implementation.** A responsibility has one cohesive implementation.
-  Remove redundant representations, forwarding layers and configuration. The
-  goal is understandable behavior with fewer moving parts, not a line quota or
-  compressed code. A small layer can still be unnecessary.
-- **Replace and remove.** There is one current internal model. Derived indexes
-  and annotations are disposable and regenerable; old caches and fixtures do
-  not create a backward-compatibility obligation. User source and configuration
-  remain intact. History belongs in Git, not disabled alternatives or archives.
-- **Evidence follows behavior.** Validate the result a developer relies on.
-  Tests and reports help establish that result; their count, signatures or
-  completion statuses are not product features.
+[WOW_LINTER.md](WOW_LINTER.md) defines the domain behavior and its limits.
+[IMPLEMENTATION.md](IMPLEMENTATION.md) defines how to build it.
 
-## Requirements that matter
+## Design principles
 
-Setup uses understandable source roots, flavor, TOC and library paths with
-useful defaults. Common operations must stay responsive, reuse work and update
-results when source changes. Output preserves the selected source and accurate
-locations; incomplete or unsupported analysis is visible. Static analysis does
-not claim runtime, combat or taint safety.
+**EmmyLua is the language engine.** Reuse its public parser, semantic model,
+configuration and diagnostics. Do not implement another Lua type checker. Reuse
+Ketho's useful annotation semantics through the existing Rust port; extend them
+where Blizzard metadata needed by the linter is not represented.
 
-Source is read without executing it. Respect configured roots and user files,
-bound work and output, and allow cancellation. Editors and agents receive valid
-protocol responses. The product needs no Lua, Node, Python or VS Code runtime.
+**Keep a direct path from input to useful output.** One configured project,
+one analysis session, plain typed API/load facts and plain findings. A helper or
+crate exists because actual callers need it. The current crate count is not a
+target architecture; wrappers, duplicated models and generic platforms are not
+preserved merely because they already exist.
 
-## Outside the product
+**Make correctness local and explainable.** A rule names the source fact and
+program operation behind its finding. Unknown data is not an absent API. A
+partial library cannot make a check look clean. Static analysis does not certify
+combat, taint, secret-value safety or arbitrary dynamic Lua execution.
 
-No internal legacy compatibility or migration platform; cryptographic result
-proofs, signed/governed packs or certification system; historical lineage,
-promotion or fingerprint platform; external model/provider framework; Wasm
-algorithm plugins; generic backup/retention administration; daemon/HTTP hosting;
-custom installer, self-updater or release executor. These are removed scope,
-not unfinished obligations to carry into the next plan.
+**Reuse work without inventing infrastructure.** Load declarations once per
+session, share parsed data, update changed files and query a normal SQLite index
+when needed. Prefer a correct conservative rebuild to stale incremental results.
+Bounds and cancellation protect responsiveness; no speedup is claimed without
+measurement of the actual user operation.
 
-[IMPLEMENTATION.md](IMPLEMENTATION.md) owns code placement, reuse and the
-replacement approach. The [queue](REFACTOR_QUEUE.md) orders work. This manifesto
-is the developer's standing product context; old package specifications cannot
-expand it. [ADR-058](DECISIONS.md) records the scope change.
+**Replace, then remove.** Keep useful code and domain knowledge; replace broken
+handoffs and delete their displaced implementations and instructions. Derived
+libraries and indexes can be rebuilt. User source, configuration and unpublished
+work remain intact. Git keeps history; old specifications are not current scope.
+
+## Boundaries
+
+The product runs locally in Rust, without a Lua, Node, Python or VS Code runtime.
+Read source as data; do not execute it. CLI is the complete entry point; focused
+stdio LSP/MCP adapters reuse its operations. General Lua editor features remain
+with upstream EmmyLua.
+
+No certification or cryptographic result platform, schema-version ladder,
+Reference Pack governance, generic graph/recognizer/plugin framework, historical
+lineage/fingerprints, backup/retention administration, daemon/HTTP service,
+provider framework or installer/updater is required. Ordinary source revisions,
+cache invalidation, file bounds and database transactions remain useful.

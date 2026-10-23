@@ -1,27 +1,28 @@
-# `wow-reference-builder`
+# Native annotation generator
 
-Supported native Blizzard API annotation generator. It reads exact objects from
-a local `wow-ui-source` Git revision, ingests APIDocumentation through
-`wow-reference`, projects Ketho-compatible EmmyLua files through
-`wow-annotations`, and writes an ordinary new directory.
+Existing command at `c36a058`:
 
 ```text
-wow-reference-builder generate <checkout> <ref> <GeneratedApi.toc>   <environment> <new-output-directory>   [--corrections <reviewed.json>]   [--alias-catalog <checkout> <ref> <resource.lua>]...
+wow-reference-builder generate <checkout> <ref> <GeneratedApi.toc> <environment> <new-output-directory>
+  [--corrections <reviewed.json>]
+  [--alias-catalog <checkout> <ref> <resource.lua>]...
 ```
 
-The destination must not exist. Output is generated `.lua` files plus a bounded
-`source-report.json` with selected input identities, omissions and source maps;
-it does not duplicate source or generated Lua text. Exit `3` means useful partial
-output, `0` means complete projection, `2` is usage, `5` is generation failure,
-and `6` is cancellation.
-The command reads committed Git blobs and never executes donor Lua.
+Read local committed Git blobs, parse restricted APIDocumentation data through
+Reference, and emit ordinary `.lua` files plus `source-report.json`. The output
+directory must not exist. Source and generated stubs are never executed.
 
-There is no pack, signing, publication journal, validation/rebuild-compare
-lifecycle, installer, migration path or compatibility command. Generated output
-is derived and may be rebuilt from source, corrections and alias catalogs.
+Current exits: 0 projected, 3 partial output, 2 arguments, 5 generation failure,
+6 observed cancellation, 8 signal-handler setup failure. Inspect reported input
+failures/omissions; exit 0 does not prove API coverage or a working addon.
 
-Application consumer cases live in `tests/consumers.rs` and execute this binary,
-not an included example producer. The actual addon Library-reader/CLI handoff
-remains separate integration work. External EmmyLua/LuaLS probes are explicit
-and ignored by default; see
-[consumer probes](../../docs/ANNOTATION_CONSUMER_PROBES.md).
+**Known selection defect:** the current `environment` is compared only to a
+system-level API field. Old `Mainline` examples conflate client flavor with API
+environment, and member `SecureOnly` overrides are missed. This command is an
+existing development entry point, not the finished target source-selection UX.
+See [Audit](../../docs/AUDIT.md) and [Implementation](../../docs/IMPLEMENTATION.md#native-annotation-generation).
+
+Application probe sources use this executable; their existence is not an
+executed builder-to-addon result. The old copied producer and `/1` verifier are
+already removed. The target `wow library build` reuses this pipeline. Emitter
+semantics and donors are in [Ketho/native projection](../../docs/KETHO_RUST_PORT.md).
