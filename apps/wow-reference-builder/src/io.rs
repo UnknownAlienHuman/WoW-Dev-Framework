@@ -19,6 +19,29 @@ pub(super) fn validate_path(path: &str) -> Result<(), &'static str> {
     }
     Ok(())
 }
+/// Read an exact regular tree entry, not a symlink's stored target text.
+pub(super) fn read_file(
+    root: &Path,
+    revision: &str,
+    path: &str,
+    limit: usize,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    validate_path(path)?;
+    let entry = git(root, &["ls-tree", "-z", revision, "--", path], 8192)?;
+    let entry = std::str::from_utf8(&entry)?;
+    if !(entry.starts_with("100644 blob ") || entry.starts_with("100755 blob "))
+        || !entry.ends_with(&format!("\t{path}\0"))
+        || entry.matches('\0').count() != 1
+    {
+        return Err("source input must be an exact regular Git blob".into());
+    }
+    git(
+        root,
+        &["cat-file", "blob", &format!("{revision}:{path}")],
+        limit,
+    )
+}
+
 pub(super) fn write_new(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut file = fs::OpenOptions::new()
         .create_new(true)

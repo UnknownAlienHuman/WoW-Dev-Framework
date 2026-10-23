@@ -26,7 +26,7 @@ pub(super) fn prepare(input: &Path) -> Result<Value> {
         catalog_root.join("Types.lua"),
         "not committed annotations\n",
     )?;
-    if source::driver::run(vec![
+    if source::run_builder(vec![
         source_root.into_os_string(),
         revision.clone().into(),
         "API.toc".into(),
@@ -91,7 +91,7 @@ fn verify(input: &Path, revision: &str, catalog_revision: &str) -> Result<()> {
     )?;
     let report: Value = serde_json::from_slice(&fs::read(input.join("source-report.json"))?)?;
     if expected.projection != "projected_with_sidecars"
-        || report["schema"] != "wow-native-source-build/1"
+        || report["schema"] != "wow-native-source-build/2"
         || report["revision"] != revision
         || report["selector"] != revision
         || report["environment"] != "Mainline"
@@ -103,7 +103,24 @@ fn verify(input: &Path, revision: &str, catalog_revision: &str) -> Result<()> {
         || report["input_failures"] != json!([])
         || report["source_order"] != json!(["API.lua"])
         || report["toc"] != json!({"path":"API.toc","sha256":source_digest(b"API.lua\n")})
-        || report["library"] != serde_json::to_value(&expected)?
+        || report["alias_inputs"]
+            != json!([{
+                "revision": catalog_revision,
+                "path": "Types.lua",
+                "sha256": source_digest(CATALOG.as_bytes()),
+            }])
+        || report["annotation_files"]
+            != json!(
+                expected
+                    .files
+                    .iter()
+                    .map(|file| {
+                        json!({"path": file.path, "sha256": file.sha256,
+                "bytes": file.text.len(), "mappings": file.mappings})
+                    })
+                    .collect::<Vec<_>>()
+            )
+        || report["projection_issues"] != json!([])
     {
         return Err("catalog driver output does not match the exact committed fixture".into());
     }
@@ -150,15 +167,13 @@ mod tests {
             "not committed annotations\n"
         );
         let report: Value = serde_json::from_slice(&fs::read(input.join("source-report.json"))?)?;
-        assert_eq!(report["library"]["aliases"]["source"]["text"], CATALOG);
         assert_eq!(
-            report["library"]["aliases"]["outcomes"][0]["status"],
-            "emitted"
+            report["alias_inputs"][0]["sha256"],
+            source_digest(CATALOG.as_bytes())
         );
-        assert_eq!(
-            report["library"]["aliases"]["outcomes"][1]["status"],
-            "emitted"
-        );
+        let text = fs::read_to_string(input.join("aliases-0001.lua"))?;
+        assert!(text.contains("---@alias ProbeChoice \"FIRST\"|\"SECOND\""));
+        assert!(text.contains("---@alias OptionalProbeChoice"));
         Ok(())
     }
 
@@ -173,7 +188,7 @@ mod tests {
             .ok_or("catalog revision")?;
         assert!(verify(&input, revision, revision).is_err());
         let report: Value = serde_json::from_slice(&fs::read(input.join("source-report.json"))?)?;
-        let file = report["library"]["files"]
+        let file = report["annotation_files"]
             .as_array()
             .ok_or("files")?
             .iter()

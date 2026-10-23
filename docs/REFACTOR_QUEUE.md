@@ -18,7 +18,7 @@ owners. This file is the only ordered queue; Issues define bounded deliverables.
 
 | Order | Issue | Deliverable |
 | --- | --- | --- |
-| 1 | [#201](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/201) | Workflow now packages Lua without the old verifier. Finish real Library loading; remove the old producer/verifier/helpers; fix regular-file/batch/cancellation handling. |
+| 1 | [#201](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/201) | Workflow packages Lua; public-executable probes replace the removed example producer and verifier. Shared regular-file checks cover TOC/API/catalogs. Finish real Library loading and batch/cancellation handling. |
 | 2 | [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/200) | Root/flavor/TOC/Library configuration, matching finite limits and upstream Lua 5.1 stdlib. |
 | 3 | #201 / [#198](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/198) | Preserve upstream diagnostic message/code/severity/range; configured Project path used by CLI/LSP. |
 | 4 | #201 / [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103) | Select checks before provider work; separate findings from requested-scope completeness. |

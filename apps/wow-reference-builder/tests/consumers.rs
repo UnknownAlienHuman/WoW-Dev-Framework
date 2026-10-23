@@ -9,7 +9,7 @@ use serde_json::json;
 use std::fs;
 
 #[test]
-#[ignore = "requires both explicitly approved consumer executables; mandatory in the consumer CI job"]
+#[ignore = "requires both explicitly supplied consumer executables"]
 fn both_consumers_interpret_generated_library() -> Result<()> {
     let executables = [
         Executable::approved(Consumer::Emmy)?,

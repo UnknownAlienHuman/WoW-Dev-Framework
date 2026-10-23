@@ -15,16 +15,15 @@ cargo run -p wow-reference-builder -- generate \
   /path/to/wow-ui-source <resolved-ref> \
   Interface/AddOns/Blizzard_APIDocumentationGenerated/Blizzard_APIDocumentationGenerated.toc \
   Mainline /path/to/new-output --corrections /path/to/reviewed-corrections.json
-cargo xtask verify-library /path/to/new-output --require-input-complete
 ```
 
-Without the optional flag, no pack is discovered and the existing v3 report is
-unchanged. With a pack, the library emits v4 including the canonical correction
-set/digest and one outcome per record. The source-build envelope remains v1.
-Expired, rejected or conflicted corrections make the projection and driver result
-partial (exit 3), even when the ordinary projection-issue list is empty.
-Malformed packs fail before creating the output directory. Artifact verification
-checks set identity and outcome/status consistency, not external review authority.
+Without the optional flag, no correction pack is discovered. The public builder
+always writes `source-report.json` in the current `/2` shape, alongside generated
+Lua; correction applications are in `corrections`, not an embedded Library.
+Expired, rejected or conflicted corrections make the projection partial (exit
+3), even when the projection-issue list is empty. Malformed packs fail before
+output creation. The obsolete `verify-library` command is removed; inspect
+reported input failures and outcomes, and use the real Library consumer.
 
 ## Supported operations
 
@@ -48,8 +47,8 @@ emitter profile; this feature does not establish named-type closure.
 ## Pack data
 
 `CorrectionSet` is strict JSON: `/1` retains the field/receiver contract; `/2`
-also admits `widget_base`. Both keep these fields and the existing v4 library
-report (catalog/bridge selection still chooses v5/v6):
+also admits `widget_base`. Both keep these fields; internal projection variants
+are not separate public builder report formats:
 
 | Field | Meaning |
 |---|---|
@@ -99,7 +98,8 @@ compiled widget inventory or permanently supported Blizzard build is introduced.
 
 The executable schema examples and source-to-renderer checks are in
 [`tests/corrections.rs`](../crates/wow-annotations/tests/corrections.rs); Git-driver
-regressions also exercise JSON input and final v4 output.
+cases in the builder application exercise JSON input, partial outcomes and
+emitted Lua.
 
 ## Guards and outcomes
 

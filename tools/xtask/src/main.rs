@@ -1,6 +1,5 @@
 //! Repository maintenance only; not an alternate product/service implementation.
 mod git;
-mod library;
 mod manifest;
 mod repository;
 mod skill;
@@ -11,7 +10,7 @@ mod tests;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-const USAGE: &str = "cargo xtask check [--root DIR]\ncargo xtask sync-skill --check|--write [--root DIR]\ncargo xtask check-source CHECKOUT BRANCH\ncargo xtask update-source CHECKOUT BRANCH --expected-head SHA\ncargo xtask materialize-source REQUEST.json\ncargo xtask materialize-source-api REQUEST.json\ncargo xtask manifest CHECKOUT REF SELECTOR OUTPUT\ncargo xtask verify-manifest MANIFEST CHECKOUT [CURRENT_REF]\ncargo xtask verify-library OUTPUT [--require-input-complete]";
+const USAGE: &str = "cargo xtask check [--root DIR]\ncargo xtask sync-skill --check|--write [--root DIR]\ncargo xtask check-source CHECKOUT BRANCH\ncargo xtask update-source CHECKOUT BRANCH --expected-head SHA\ncargo xtask materialize-source REQUEST.json\ncargo xtask materialize-source-api REQUEST.json\ncargo xtask manifest CHECKOUT REF SELECTOR OUTPUT\ncargo xtask verify-manifest MANIFEST CHECKOUT [CURRENT_REF]";
 fn main() -> ExitCode {
     match run(std::env::args_os().skip(1).collect()) {
         Ok(code) => ExitCode::from(code),
@@ -66,10 +65,6 @@ fn run(args: Vec<std::ffi::OsString>) -> Result<u8> {
         }
         ["verify-manifest", file, root, rest @ ..] if rest.len() <= 1 => {
             manifest::verify(Path::new(file), Path::new(root), rest.first().copied())
-        }
-        ["verify-library", root] => library::verify(Path::new(root), false),
-        ["verify-library", root, "--require-input-complete"] => {
-            library::verify(Path::new(root), true)
         }
         _ => Err(USAGE.into()),
     }

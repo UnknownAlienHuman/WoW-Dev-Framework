@@ -1,5 +1,5 @@
 //! Explicit multi-file annotation resources; moving refs resolve once per input.
-use super::io::{git, validate_path};
+use super::io::{git, read_file, validate_path};
 use std::{
     collections::{BTreeMap, BTreeSet, btree_map::Entry},
     ffi::OsStr,
@@ -80,19 +80,7 @@ pub(super) fn read(
         if cancelled.load(Ordering::Relaxed) {
             return Err("alias acquisition cancelled".into());
         }
-        let entry = git(&root, &["ls-tree", "-z", &revision, "--", path], 8192)?;
-        let entry = std::str::from_utf8(&entry)?;
-        if !(entry.starts_with("100644 blob ") || entry.starts_with("100755 blob "))
-            || !entry.ends_with(&format!("\t{path}\0"))
-            || entry.matches('\0').count() != 1
-        {
-            return Err("alias resource must be an exact regular Git blob".into());
-        }
-        let bytes = git(
-            &root,
-            &["cat-file", "blob", &format!("{revision}:{path}")],
-            256 * 1024,
-        )?;
+        let bytes = read_file(&root, &revision, path, 256 * 1024)?;
         total_bytes += bytes.len();
         if total_bytes > MAX_CATALOG_BYTES {
             return Err("alias catalog aggregate byte limit".into());
