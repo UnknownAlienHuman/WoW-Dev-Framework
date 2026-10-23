@@ -2,6 +2,7 @@
 pub mod catalog;
 mod catalog_source;
 pub mod fixture;
+mod generation;
 pub mod mutations;
 pub mod package;
 mod paths;

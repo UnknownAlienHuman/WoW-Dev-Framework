@@ -22,11 +22,13 @@ fn git_toc_receipt_and_emitted_bytes_survive_dirty_source_files() -> Result<()> 
         "uncommitted.lua\n"
     );
     validate(&report, &input, &revision, SOURCE_FILES)?;
-    assert!(array(&report["library"]["files"])?.iter().any(|file| {
-        file["text"]
-            .as_str()
-            .is_some_and(|text| text.contains("function C_Probe.Read(id) end"))
-    }));
+    let mut found = false;
+    for file in array(&report["annotation_files"])? {
+        let name = file["path"].as_str().ok_or("missing file")?;
+        let text = fs::read_to_string(input.join(name))?;
+        found |= text.contains("function C_Probe.Read(id) end");
+    }
+    assert!(found);
     Ok(())
 }
 
@@ -45,22 +47,22 @@ fn partial_stale_missing_and_duplicate_receipts_cannot_pass() -> Result<()> {
         ("/source_order", json!([])),
         ("/input_failures", json!([{}])),
         ("/toc/sha256", json!("sha256:wrong")),
-        ("/library/revision", json!("0".repeat(40))),
-        ("/library/projection", json!("partial")),
-        ("/library/issues", json!([{}])),
-        ("/library/sources", json!([])),
-        ("/library/sources/0/sha256", json!("sha256:wrong")),
-        ("/library/files", json!([])),
-        ("/library/files/0/mappings", json!([])),
-        ("/library/files/0/sha256", json!("sha256:wrong")),
-        ("/library/files/0/path", json!("../foreign.lua")),
-        ("/library/files/0/mappings/0/generated/end", json!(u64::MAX)),
+        ("/projection_issues", json!([{}])),
+        ("/source_inputs", json!([])),
+        ("/source_inputs/0/bytes", json!(u64::MAX)),
+        ("/source_inputs/0/sha256", json!("sha256:wrong")),
+        ("/annotation_files", json!([])),
+        ("/annotation_files/0/mappings", json!([])),
+        ("/annotation_files/0/bytes", json!(u64::MAX)),
+        ("/annotation_files/0/sha256", json!("sha256:wrong")),
+        ("/annotation_files/0/path", json!("../foreign.lua")),
+        ("/annotation_files/0/mappings/0/generated/end", json!(u64::MAX)),
         (
-            "/library/files/0/mappings/0/source/sha256",
+            "/annotation_files/0/mappings/0/source/sha256",
             json!("sha256:wrong"),
         ),
         (
-            "/library/files/0/mappings/0/source/span/end",
+            "/annotation_files/0/mappings/0/source/span/end",
             json!(u64::MAX),
         ),
     ] {
@@ -73,11 +75,9 @@ fn partial_stale_missing_and_duplicate_receipts_cannot_pass() -> Result<()> {
             "{pointer}"
         );
     }
-    for field in ["sources", "files"] {
+    for field in ["source_inputs", "annotation_files"] {
         let mut changed = report.clone();
-        let items = changed["library"][field]
-            .as_array_mut()
-            .ok_or("missing array")?;
+        let items = changed[field].as_array_mut().ok_or("missing array")?;
         items.push(items[0].clone());
         assert!(validate(&changed, &input, &revision, SOURCE_FILES).is_err());
     }
@@ -88,7 +88,7 @@ fn partial_stale_missing_and_duplicate_receipts_cannot_pass() -> Result<()> {
 fn changed_missing_or_unreported_artifacts_reject() -> Result<()> {
     let (workspace, report, revision) = build()?;
     let input = workspace.path.join("input");
-    let name = report["library"]["files"][0]["path"]
+    let name = report["annotation_files"][0]["path"]
         .as_str()
         .ok_or("missing file")?;
     let path = input.join(name);

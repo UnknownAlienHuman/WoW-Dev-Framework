@@ -30,7 +30,6 @@ cargo xtask materialize-source /path/to/request.json
 cargo xtask materialize-source-api /path/to/request.json
 cargo xtask manifest /path/to/wow-ui-source HEAD live /path/to/new-manifest.json
 cargo xtask verify-manifest /path/to/manifest.json /path/to/wow-ui-source HEAD
-cargo xtask verify-library /path/to/native-output --require-input-complete
 ```
 
 These are existing developer commands. Use them only for the selected source or
@@ -42,13 +41,9 @@ operation. Preserve dirty/diverged checkouts and respect auto/prompt/never mode.
 Do not execute indexed source, hooks or repository scripts, or blindly delete an
 interrupted/foreign operation's files.
 
-`verify-library` checks the current native artifact/report's recorded files and
-source maps. It does not prove every annotation's meaning in an editor. Use the
-[consumer guide](../../docs/ANNOTATION_CONSUMER_PROBES.md) only for relevant
-semantics. Missing/partial input is not a clean complete library.
-
-Some commands still implement old import/report versions, hashes and VM-specific
-verification. That is existing code awaiting #112/#196/#203, not a compatibility
-or VM support commitment. Remove obsolete validators with their producer/callers;
-do not add another report version or test matrix to preserve them. Native
-literal generation and useful source/output checks remain.
+The obsolete `/1` `verify-library` command and its format-specific validators
+are removed. Generated files are consumed by the public builder's application
+probes and the actual Library reader; see the
+[consumer guide](../../docs/ANNOTATION_CONSUMER_PROBES.md). Missing/partial input
+is not a clean complete Library. Do not recreate an artifact-certification layer
+or convert the current report back to a discarded format.

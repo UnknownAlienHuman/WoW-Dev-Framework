@@ -1,10 +1,8 @@
-use super::*;
-use std::{
-    env,
-    process::{Command, Stdio},
-};
+//! Public builder cases retained from the removed example driver.
+use std::{env, ffi::OsString, fs, sync::atomic::AtomicBool};
+use wow_reference::native::{ingest_document, source_digest};
 fn run(args: Vec<OsString>) -> Result<bool, Box<dyn std::error::Error>> {
-    super::run(args)
+    super::source::run_builder(args)
 }
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -22,9 +20,10 @@ impl Fixture {
         ));
         fs::create_dir(&path)?;
         let fixture = Self(path);
-        fixture.command(&["init", "--initial-branch=main"])?;
-        fixture.command(&["config", "user.name", "Native Test"])?;
-        fixture.command(&["config", "user.email", "test@example.invalid"])?;
+        fs::create_dir(fixture.0.join("home"))?;
+        fs::create_dir(fixture.0.join("hooks"))?;
+        fs::write(fixture.0.join("home/.gitconfig"), "")?;
+        fixture.command(&["init", "--initial-branch=main", "--template="])?;
         fs::write(fixture.0.join("API.toc"), "API.lua\n")?;
         fs::write(
             fixture.0.join("API.lua"),
@@ -35,19 +34,10 @@ impl Fixture {
         Ok(fixture)
     }
     fn command(&self, args: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
-        if !Command::new("git")
-            .arg("-C")
-            .arg(&self.0)
-            .args(args)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()?
-            .success()
-        {
-            return Err("test git setup failed".into());
-        }
+        super::source::git(&self.0, args)?;
         Ok(())
     }
+
     fn args(&self, output: &str) -> Vec<OsString> {
         vec![
             self.0.clone().into_os_string(),
@@ -114,10 +104,9 @@ fn correction_file(
     stale: bool,
 ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     use wow_reference::native_corrections::*;
-    let revision = String::from_utf8(git(&fixture.0, &["rev-parse", "HEAD"], 128)?)?
-        .trim()
-        .to_owned();
-    let source = String::from_utf8(git(&fixture.0, &["show", "HEAD:API.lua"], LIMIT)?)?;
+    let revision = super::source::git(&fixture.0, &["rev-parse", "HEAD"])?;
+    let revision = revision.trim().to_owned();
+    let source = super::source::git(&fixture.0, &["show", "HEAD:API.lua"])?;
     let document = ingest_document(
         &revision,
         "API.lua",
@@ -178,11 +167,7 @@ fn explicit_reviewed_correction_flows_through_git_driver() -> Result<(), Box<dyn
     let report: serde_json::Value =
         serde_json::from_slice(&fs::read(fixture.0.join("corrected/source-report.json"))?)?;
     assert_eq!(
-        report["library"]["schema"],
-        "wow-native-annotation-library/4"
-    );
-    assert_eq!(
-        report["library"]["corrections"]["applications"][0]["status"],
+        report["corrections"]["applications"][0]["status"],
         "applied"
     );
     assert!(
@@ -202,7 +187,7 @@ fn expired_correction_makes_driver_partial_and_keeps_original_value()
     let report: serde_json::Value =
         serde_json::from_slice(&fs::read(fixture.0.join("expired/source-report.json"))?)?;
     assert_eq!(
-        report["library"]["corrections"]["applications"][0]["status"],
+        report["corrections"]["applications"][0]["status"],
         "expired"
     );
     assert_eq!(report["status"], "partial");
@@ -242,12 +227,12 @@ fn native_git_driver_emits_source_bound_local_receiver_class()
     assert!(text.contains("function SyntheticObjectAPI:Show() end"));
     let report: serde_json::Value =
         serde_json::from_slice(&fs::read(fixture.0.join("out/source-report.json"))?)?;
-    let maps = report["library"]["files"][0]["mappings"]
+    let maps = report["annotation_files"][0]["mappings"]
         .as_array()
         .ok_or("missing maps")?;
     assert_eq!(maps.len(), 2);
     assert_eq!(maps[0]["source"]["path"], "API.lua");
-    assert_eq!(report["library"]["negative_authority"], false);
+    assert_eq!(report["negative_authority"], false);
     Ok(())
 }
 fn alias_args(source: &Fixture, donor: &Fixture, output: &str) -> Vec<OsString> {
@@ -279,22 +264,14 @@ fn alias_git_driver_binds_exact_committed_resource_not_dirty_worktree()
     assert!(!run(alias_args(&fixture, &donor, "out"))?);
     let report: serde_json::Value =
         serde_json::from_slice(&fs::read(fixture.0.join("out/source-report.json"))?)?;
-    let library = &report["library"];
-    assert_eq!(library["schema"], "wow-native-annotation-library/5");
-    assert_ne!(
-        library["revision"],
-        library["aliases"]["source"]["revision"]
-    );
-    assert_eq!(
-        library["aliases"]["authority"],
-        "external_annotation_overlay"
-    );
-    assert_eq!(library["aliases"]["outcomes"][0]["status"], "emitted");
+    assert_eq!(report["schema"], "wow-native-source-build/2");
+    assert_ne!(report["revision"], report["alias_inputs"][0]["revision"]);
+    assert_eq!(report["alias_inputs"][0]["path"], "Aliases.lua");
     assert!(
         fs::read_to_string(fixture.0.join("out/aliases-0001.lua"))?
             .contains("---@alias ExternalValue number|string")
     );
-    assert!(!serde_json::to_string(library)?.contains(donor.0.to_str().ok_or("path")?));
+    assert!(!serde_json::to_string(&report)?.contains(donor.0.to_str().ok_or("path")?));
     assert!(run(alias_args(&fixture, &donor, "out")).is_err());
     Ok(())
 }
@@ -321,14 +298,10 @@ fn alias_driver_and_correction_flags_compose_in_either_order()
             fixture.0.join(output).join("source-report.json"),
         )?)?;
         assert_eq!(
-            report["library"]["schema"],
-            "wow-native-annotation-library/5"
-        );
-        assert_eq!(
-            report["library"]["corrections"]["applications"][0]["status"],
+            report["corrections"]["applications"][0]["status"],
             "applied"
         );
-        reports.push(report["library"].clone());
+        reports.push(report);
     }
     assert_eq!(reports[0], reports[1]);
     Ok(())
@@ -390,5 +363,22 @@ fn alias_git_symlink_is_not_an_annotation_resource() -> Result<(), Box<dyn std::
     donor.command(&["commit", "-m", "symlink input"])?;
     assert!(run(alias_args(&fixture, &donor, "out")).is_err());
     assert!(!fixture.0.join("out").exists());
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn toc_and_api_symlinks_reject_even_when_target_text_is_valid_input()
+-> Result<(), Box<dyn std::error::Error>> {
+    for path in ["API.toc", "API.lua"] {
+        let fixture = Fixture::new()?;
+        let target_text = fs::read_to_string(fixture.0.join(path))?;
+        fs::remove_file(fixture.0.join(path))?;
+        std::os::unix::fs::symlink(target_text, fixture.0.join(path))?;
+        fixture.command(&["add", path])?;
+        fixture.command(&["commit", "-m", "symlink with parseable blob text"])?;
+        assert!(run(fixture.args("out")).is_err());
+        assert!(!fixture.0.join("out").exists());
+    }
     Ok(())
 }

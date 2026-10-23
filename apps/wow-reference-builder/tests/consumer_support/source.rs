@@ -1,10 +1,23 @@
-//! Test-owned Git/TOC input for the real native driver, not another extractor.
+//! Committed fixture inputs for the supported builder executable.
 use super::{Result, source_report};
 use serde_json::Value;
 use std::{collections::BTreeSet, ffi::OsString, fs, path::Path, process::Command};
 
-#[path = "../../examples/support/mod.rs"]
-pub(super) mod driver;
+pub(super) fn run_builder(args: Vec<OsString>) -> Result<bool> {
+    let output = Command::new(env!("CARGO_BIN_EXE_wow-reference-builder"))
+        .arg("generate")
+        .args(args)
+        .output()?;
+    match output.status.code() {
+        Some(0) => Ok(false),
+        Some(3) => Ok(true),
+        code => Err(format!(
+            "builder failed ({code:?}): {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into()),
+    }
+}
 
 const TOC: &str = "API.toc";
 
@@ -55,7 +68,7 @@ pub(super) fn prepare(output: &Path, sources: &[(&str, &str)]) -> Result<()> {
     // The production driver must read committed blobs, not these dirty files.
     fs::write(checkout.join(TOC), "uncommitted.lua\n")?;
     fs::write(checkout.join(sources[0].0), "not committed documentation\n")?;
-    let partial = driver::run(vec![
+    let partial = run_builder(vec![
         checkout.into_os_string(),
         "HEAD".into(),
         TOC.into(),

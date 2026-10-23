@@ -20,8 +20,8 @@ as recorded in [`THIRD_PARTY_NOTICES.md`](../crates/wow-annotations/THIRD_PARTY_
 | `Annotations/Core/Widget/...` | `wow-annotations/src/native.rs`; `wow-reference/src/native_corrections/inheritance.rs` | Source-bound class/alias and explicit guarded single-parent corrections. |
 | Generated/source navigation | `wow-annotations/src/navigation/`; [consumer probes](ANNOTATION_CONSUMER_PROBES.md) | Maps and representative semantic-consumer checks. |
 
-Reuse these owners; the supported application must be the single source-to-library
-composition. The test-only duplicate driver remains to be removed (see below). Do not
+Reuse these owners; the supported application is the single source-to-library
+composition. Application probes invoke its executable. Do not
 add a second importer/parser, Lua/Node/Wasm runtime, custom full Lua language
 server, or a separate pipeline/report format for every optional feature.
 `wow-emmy` uses EmmyLua's public semantic-analysis APIs; upstream LSP handlers
@@ -54,19 +54,18 @@ cargo run --locked -p wow-reference-builder -- generate \
 
 Corrections and alias catalogs are independent optional inputs; catalogs may
 repeat. Refs resolve once; missing Git objects must be materialized explicitly.
-Alias catalogs already check regular-file tree modes; TOC/API source reads do not.
-Reuse that existing check in #201. Cancellation checkpoints also do not yet
-interrupt a blocked Git child.
+TOC, API and alias inputs share the existing exact regular-file tree check.
+Symlink target text is not admitted as source. Git reads remain per-file;
+cancellation checkpoints do not yet interrupt a blocked Git child.
 The output directory must be new. Exit codes: 0 projected, 3 partial, 2 arguments,
 5 generation failure, 6 observed cancellation, 8 signal-handler setup failure.
 `source-report.json` is written last. A partial report does not prove unsupported
 or missing declarations absent. #196 delivered this command; #201 connects and
 verifies the actual generator-to-addon check workflow. The [handoff review](BLIZZARD_API_REFERENCE.md#current-handoff-gap)
-records the remaining mismatch: `verify-library` and semantic probes still
-consume the old driver's report. The workflow now bypasses that obsolete
-verifier and uploads the generated Lua directories; addon-reader acceptance is
-still pending. Do not claim old probes validate this producer or restore its
-old payload.
+records the remaining integration work. The old producer and `/1` verifier are
+removed; the workflow uploads generated Lua and application probes use the public
+builder. Full configured addon-check acceptance and matching maximum-size limits
+remain pending. Do not restore embedded Lua reports to satisfy old assertions.
 
 Generate the library once; regenerate derived files when source, corrections,
 catalogs or projection semantics change. #204 delivered renderer-owned declaration

@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::Serialize;
 use wow_reference::native::{NativeError, ingest_document, source_digest};
 
-use io::{git, validate_path, write_new};
+use io::{git, read_file, validate_path, write_new};
 
 const LIMIT: usize = 1024 * 1024;
 const TOTAL_LIMIT: usize = 64 * LIMIT;
@@ -161,11 +161,7 @@ fn generate(
         return Err("invalid source environment".into());
     }
 
-    let toc_bytes = git(
-        root,
-        &["cat-file", "blob", &format!("{revision}:{toc_path}")],
-        LIMIT,
-    )?;
+    let toc_bytes = read_file(root, revision, toc_path, LIMIT)?;
     let toc = std::str::from_utf8(&toc_bytes)?.trim_start_matches('\u{feff}');
     let parent = toc_path.rsplit_once('/').map_or("", |value| value.0);
     let mut paths = Vec::new();
@@ -202,11 +198,7 @@ fn generate(
     let mut total = 0usize;
     for path in &paths {
         checkpoint(stop)?;
-        let bytes = git(
-            root,
-            &["cat-file", "blob", &format!("{revision}:{path}")],
-            LIMIT,
-        )?;
+        let bytes = read_file(root, revision, path, LIMIT)?;
         total = total.checked_add(bytes.len()).ok_or("source byte limit")?;
         if total > TOTAL_LIMIT {
             return Err("source corpus exceeds byte limit".into());

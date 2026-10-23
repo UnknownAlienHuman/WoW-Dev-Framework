@@ -48,16 +48,18 @@ callers move; do not create replacement frameworks.
 
 ### Replacement
 
-Read exact regular-file tree entries using a bounded batch/tree Git operation.
-Thread stop state through child I/O and reap the child. Parse/normalize/project
+TOC/API/catalog reads now share exact regular-file tree checking. Replace the
+per-file Git processes with bounded batch/tree reads; thread stop state through
+child I/O and reap the child. Parse/normalize/project
 once and write ordinary `.lua` files. The report contains selected source/ref/
 flavor, admitted/failed inputs, limitations and mappings consumed by later
 navigation—nothing else.
 
 The real Library reader must accept every successful output within the same
-published limits. Application-level checks invoke this producer. Delete the old
-example producer, duplicated Git/catalog helpers, stale `/1` verifier,
-compatibility/certification reports and unconsumed artifact identities.
+published limits. Application probes now invoke this executable; the old example
+producer, duplicate Git/catalog helpers and `/1` verifier are removed. This is
+not proof of actual addon Library loading. Remove compatibility/certification
+reports and unconsumed artifact identities as their real consumers switch.
 
 ### Observable check
 
@@ -173,7 +175,6 @@ upstream EmmyLua server. Follow [FRONTENDS.md](FRONTENDS.md) for protocol detail
 ## Code that must disappear with its replacement
 
 - annotation and Emmy compatibility/certification reports and probe binaries;
-- duplicate annotation producer/verifier and producer-only fixtures;
 - evidence-heavy local input variants and user-facing IDs/digests/contracts;
 - Project replay hydration/recapture and companion proof reconstruction;
 - generic Store object/catalog, nested Search database and backup/retention/

@@ -19,3 +19,9 @@ The command reads committed Git blobs and never executes donor Lua.
 There is no pack, signing, publication journal, validation/rebuild-compare
 lifecycle, installer, migration path or compatibility command. Generated output
 is derived and may be rebuilt from source, corrections and alias catalogs.
+
+Application consumer cases live in `tests/consumers.rs` and execute this binary,
+not an included example producer. The actual addon Library-reader/CLI handoff
+remains separate integration work. External EmmyLua/LuaLS probes are explicit
+and ignored by default; see
+[consumer probes](../../docs/ANNOTATION_CONSUMER_PROBES.md).

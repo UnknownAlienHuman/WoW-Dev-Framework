@@ -1,4 +1,4 @@
-//! Narrow fixture receipt checks; not the general artifact verifier or E1-C.
+//! Fixture-specific checks of the public report, files and source mappings.
 use super::Result;
 use serde_json::{Value, json};
 use std::{
@@ -19,8 +19,7 @@ pub(super) fn validate(
         .map(|(name, _)| format!("{name}\n"))
         .collect::<String>();
     let order = sources.iter().map(|(name, _)| *name).collect::<Vec<_>>();
-    let library = &report["library"];
-    if report["schema"] != "wow-native-source-build/1"
+    if report["schema"] != "wow-native-source-build/2"
         || report["revision"] != revision
         || report["selector"] != "HEAD"
         || report["environment"] != "Mainline"
@@ -32,24 +31,19 @@ pub(super) fn validate(
         || report["candidate_files"] != json!(sources.len())
         || report["admitted_files"] != json!(sources.len())
         || report["input_failures"] != json!([])
-        || library["schema"] != "wow-native-annotation-library/3"
-        || library["revision"] != revision
-        || library["projection"] != "projected_with_sidecars"
-        || library["negative_authority"] != false
-        || library["issues"] != json!([])
+        || report["alias_inputs"] != json!([])
+        || report["projection_issues"] != json!([])
     {
         return Err("incomplete or mismatched source build receipt".into());
     }
     let expected: BTreeMap<_, _> = sources.iter().copied().collect();
     let mut seen = BTreeSet::new();
-    for source in array(&library["sources"])? {
+    for source in array(&report["source_inputs"])? {
         let path = source["path"].as_str().ok_or("missing source path")?;
         let text = expected.get(path).ok_or("unexpected source document")?;
         if !seen.insert(path)
-            || source["revision"] != revision
             || source["sha256"] != source_digest(text.as_bytes())
-            || source["source_bytes"] != json!(text.len())
-            || array(&source["registrations"])?.is_empty()
+            || source["bytes"] != json!(text.len())
         {
             return Err("source document identity mismatch".into());
         }
@@ -57,7 +51,7 @@ pub(super) fn validate(
     if seen.len() != expected.len() {
         return Err("missing source document".into());
     }
-    let files = array(&library["files"])?;
+    let files = array(&report["annotation_files"])?;
     if files.is_empty() {
         return Err("empty generated library".into());
     }
@@ -73,9 +67,9 @@ pub(super) fn validate(
         {
             return Err("invalid or duplicate generated filename".into());
         }
-        let text = file["text"].as_str().ok_or("missing generated text")?;
+        let text = fs::read_to_string(root.join(name))?;
         if file["sha256"] != source_digest(text.as_bytes())
-            || fs::read(root.join(name))? != text.as_bytes()
+            || file["bytes"] != json!(text.len())
         {
             return Err("generated file bytes or digest mismatch".into());
         }
@@ -84,7 +78,7 @@ pub(super) fn validate(
             return Err("unmapped generated file".into());
         }
         for mapping in mappings {
-            span(&mapping["generated"], text)?;
+            span(&mapping["generated"], &text)?;
             let link = &mapping["source"];
             let path = link["path"].as_str().ok_or("missing mapped source")?;
             let source = expected.get(path).ok_or("unknown mapped source")?;

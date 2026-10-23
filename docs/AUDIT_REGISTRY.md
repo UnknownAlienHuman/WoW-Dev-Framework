@@ -4,8 +4,8 @@
 This register records inspected code, evidence, remaining gaps and corrections.
 Do not load the whole register into every implementation task.
 
-**Latest inspected baseline:** `0c46e48bc7bf0018e95940dd946d9b43fb162955`,
-2026-10-22. Untouched rows retain their earlier evidence; this date does not
+**Latest inspected baseline:** `99aea062a6173548cff9882dc14b52c44496fe36`,
+2026-10-23. Untouched rows retain their earlier evidence; this date does not
 revalidate every function. Historical detail lives in Git, not repeated diaries.
 
 ## Evidence levels
@@ -25,7 +25,8 @@ Evidence keys:
   baseline `4f429d5e`, delivered in #239.
 - **D**: [frontend operation inventory](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/0c46e48bc7bf0018e95940dd946d9b43fb162955/docs/AUDIT_REGISTRY.md#2026-10-22--frontend-operation-inventory),
   baseline `12056d72`, delivered in #240.
-- **E**: current generator-workflow and cancellation recheck at `0c46e48b`, below.
+- **E**: generator-workflow/cancellation recheck at `0c46e48b`, delivered in #241.
+- **F**: public producer and Library-reader handoff at `99aea062`, below.
 
 ## Coverage and outstanding work
 
@@ -36,10 +37,10 @@ execution. Issues contain implementation tasks, not extra audit gates.
 | --- | --- | --- | --- | --- |
 | Workspace ownership | S | N/A | A: all 16 manifests, dependencies, public entrypoints and large clusters; Audit package table. | Not a semantic review of every function. Recheck changed owners. |
 | Canonical documentation | S | N/A | A: root AGENTS/README, Architecture, Implementation, Queue, Completion, umbrella Issues. | Old owner notes and Issue bodies still need reconciliation (#112). |
-| Native acquisition | S | U | A/E: builder `src/{lib,io,catalogs}.rs`, native Reference and annotation projection. | TOC/API regular-file mode, bounded batch reading, blocking Git-child cancellation (#201). |
+| Native acquisition | S | U | A/E: builder `src/{lib,io,catalogs}.rs`, native Reference and annotation projection. | F applies shared regular-file checking to TOC/API/catalogs. Batch reading and blocking Git-child cancellation remain (#201). |
 | Ketho semantics | P | U | A: pinned default/false/zero, arrays/stride, callbacks, receiver/order and mapping rules. | Selected-catalog/flavor parity and real source corpus not exercised. |
 | Builder -> workflow artifact | S | U | E: `/2` producer, `/1` verifier calls and report-only upload. Calls removed; Lua directories now packaged. | Hosted workflow/artifact download not exercised. Shell-only checks below are not R. |
-| Builder -> addon Library | S | U | A/E: old `consumer_support/source.rs` driver and reader ceilings; emitter and actual reader remain disconnected. | Supported producer -> real reader -> addon diagnostic; reconcile limits; remove old driver/verifier (#201/#200). |
+| Builder -> addon Library | S | U | F: application probes now launch the public executable and inspect emitted files/maps. Old driver/verifier removed. | Probe execution, real Project Library reading, full CLI check and matching maximum-size limits remain (#201/#200). |
 | Normal addon configuration | S | U | A: Service disk/native/host inputs and CLI selectors. | Root/flavor/TOC/Library configuration and discovery (#200/#197). |
 | Main+Library analysis | S | P | A: shared Project analyzer delivered in #193; cold callers traced. | Actual CLI valid/invalid typed calls; all update/load-selection paths. |
 | Diagnostic transport | S | U | A/E: `syntax/analyzer.rs`, Service projection, LSP diagnostics. Four-code filter/message loss/severity coercion remain. | Preserve upstream meaning through public check/LSP (#201/#198). |
@@ -80,43 +81,55 @@ linked immutable reviews.
 | D / CLI | Status/check 2; native/source/overlay 5; graph 9; project 6; search 31; context 12; transport capability dump 1. | Reduce to generation, configured check and direct index/search/context, not aliases for every old route. |
 | D / Protocols | Two LSP and two MCP profiles wrap private operation registries; MCP exposes status/context-inspect rather than the target workflows. | Thin standard adapters to surviving operations; no second Lua engine or profile matrix. |
 
-## E — generator handoff and cancellation correction
+## E — workflow repair and cancellation correction (#241)
 
-Inspected the complete public builder `src/{lib,io,catalogs}.rs`,
-`tools/xtask/src/library.rs`, `.github/workflows/current-source-bundle.yml`,
-`wow-annotations/tests/consumer_support/{source,source_report}.rs`, and Emmy
-`src/session.rs` plus `src/syntax/analyzer.rs`.
+At `0c46e48b`, source-bundle `/1` verifier calls were removed; Lua directories are
+uploaded, input failures reject and partial warnings survive. Fourteen stub-based
+shell cases passed. No real builder/hosted workflow was exercised in that pass.
+#135 was already closed: session passes stop, collector polls between files and
+conversion, and `Cancelled` survives mapping. The older audit repeated a stale
+Issue as a current defect. No per-file preemption is claimed.
 
-**Workflow repair:** removed two calls feeding `/2` output to the obsolete `/1`
-verifier. Both steps still warn on exit 3 and reject `input_failures != []`.
-A success-only artifact now includes both generated Lua directories and reports;
-the separate diagnostics artifact remains `always()`. The old verifier/test
-producer, actual Library reader, incompatible limits and Git I/O gaps are not
-fixed by this workflow change.
+## F — supported producer replaces the test copy
 
-**Audit correction:** #135 was closed on 2026-10-14. Current
-`session.rs::{analyze_member_call_session_with_local_flow,collect}` pass stop;
-`collect_registered` checks it before/after each file and within conversion;
-`map_syntax_error` preserves `Cancelled`. The prior audit repeated an obsolete
-issue body as a present defect. A per-call token snapshots stop; this is not
-in-flight preemption of synchronous upstream work. Git child cancellation is a
-different, still-open gap. No native cancellation test was rerun here.
+**Inspected at `99aea062`:** public builder `src/{lib,io,catalogs}.rs`, old
+`wow-annotations/examples/support/` driver and every consumer-support module,
+`tools/xtask/src/library{.rs,/}`, xtask dispatch/help, Project
+`disk.rs::read_lua_inventory` and `inventory.rs`, plus source-bundle workflow and
+consumer/correction/Ketho/automation guides. No Ketho lowering algorithm changed.
 
-**Executed, narrow evidence:** workflow YAML parsed; every embedded script passed
-`bash -n`; both changed generation blocks ran with stub Git/Cargo and real
-shell/jq for exit 0, exit 3, input failure, generation failure, absent report,
-missing field and null field. All 14 control-flow cases behaved as intended.
-This is not builder or hosted-workflow execution. Relative file links and diff
-whitespace were checked. Build-gate outcome belongs to the implementing PR.
+**Change:** application probes moved to `apps/wow-reference-builder/tests` and
+launch Cargo's built public executable. Assertions consume actual Lua files and
+current `/2` metadata/maps, not a restored embedded Library. Existing correction,
+catalog, partial/no-clobber and source-map cases move with their producer; lower
+renderer/type/map cases stay in annotations. The obsolete example driver, its
+Git/catalog copies and the command-only `/1` verifier subtree are removed.
+The alias regular-file tree check moves into `io::read_file`, also used by TOC
+and API inputs. The existing symlink case is extended to parseable TOC/API target
+text; no source/donor execution is introduced. Git remains per-file and blocking.
+The real Project reader was inspected but not switched or executed. Application
+output probes do not establish normal `wow check` or maximum-size compatibility.
+The next consumer change must exercise that actual reader, not another verifier.
 
-**Not executed:** public builder, real Library loading, real donor corpus, hosted
-artifact download, full Rust suite, Windows/editor sessions, benchmarks. No
-coverage row was promoted to R in this pass.
+**New instruction defect:** `.github/README.md` still claimed a removed `ci.yml`,
+Wasm parity and automatic external-checker jobs. The actual three workflow files
+do not implement those claims; the note and stale correction commands are fixed.
+
+**Checks:** local reference/dependency/diff review. Rust/Cargo are unavailable in
+the local container; remote Quick results belong to the PR. Moving or compiling
+cases is not execution. Public builder probes, external checkers and the actual
+Project reader have not been run in this pass.
+
+**Still open:** ordinary addon configuration and diagnostics, public maximum-size
+handoff, batch/cancellable Git I/O, external
+EmmyLua/LuaLS probes, full donor corpus and real-addon execution. No row is
+promoted to R on the strength of moving tests or compiling them.
 
 ## Next review / implementation boundary
 
-1. #201/#200: supported producer -> actual Library reader -> addon diagnostic;
-   move useful old-producer checks and reconcile finite limits before deleting it.
+1. #201/#200: exercise supported producer -> actual Project Library reader;
+   reconcile finite limits and complete normal configuration -> addon diagnostic.
+   Do not recreate the removed producer or verifier.
 2. #112: extract remaining coordinate/TOC/XML facts, delete obsolete owner notes
    and repair the seven known Store links without restoring deleted E2 contracts.
 3. Add exact command/input/result only when a real public workflow runs. Recheck
