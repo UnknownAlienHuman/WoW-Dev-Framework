@@ -1,11 +1,8 @@
-# Crate contribution guidance
+# Crate guidance
 
 Follow root [AGENTS.md](../AGENTS.md). Use the
-[implementation map](../docs/IMPLEMENTATION.md#code-ownership) and selected
-Issue to find the current owner, real caller and donor.
-
-Keep parsing/normalization/analysis/SQL in their existing cohesive owner.
-Applications may call one owner directly; Service composes multi-owner work.
-Keep dependencies acyclic: owners do not depend on Service or applications.
-Do not add a crate, shared type or forwarding adapter solely to preserve an
-old diagram. Replace obsolete paths and their exclusive tests/docs together.
+[implementation map](../docs/IMPLEMENTATION.md#code-ownership) and actual callers.
+Keep Lua analysis in Emmy, Blizzard normalization in Reference, emission in
+Annotations, load facts in Project and SQL in Store. Applications can call a
+single cohesive owner directly; Service is for genuine composition. Keep
+acyclic dependencies and delete forwarding layers that add no behavior.

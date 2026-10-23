@@ -1,6 +1,6 @@
 # WoW Dev Framework
 
-Read `AGENTS.md` and the complete `docs/ARCHITECTURE.md` manifesto first.
-Use the selected Issue and relevant `docs/IMPLEMENTATION.md` route for code and
-donors. `.agents/skills/wow-dev/SKILL.md` is the canonical skill; its discovery
-copies are synchronized with `cargo xtask sync-skill --write`.
+Read `AGENTS.md` and the complete `docs/ARCHITECTURE.md` first. Use the relevant
+`docs/IMPLEMENTATION.md` route, `docs/WOW_LINTER.md` and actual donor/code paths.
+The canonical skill is `.agents/skills/wow-dev/SKILL.md`; synchronize its three
+discovery copies with `cargo xtask sync-skill --write` when it changes.

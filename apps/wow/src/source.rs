@@ -12,7 +12,7 @@ use wow_service::{
     source_reference::read_local_source_reference,
 };
 
-const HELP: &str = "wow source census --config <source-census.json> [--format json|text]\nwow source reference --config <source-reference.json> [--format json|text]\n\nCensus measures one explicit local manifest with native TOC/XML owners and optional package loads. Reference projects pinned generated API into an owner-derived profile, generation and callable view. Partial coverage exits 2; acquisition/identity/budget failures exit 4. See apps/wow/SOURCE_CENSUS.md and SOURCE_REFERENCE.md.\n";
+const HELP: &str = "wow source census --config <source-census.json> [--format json|text]\nwow source reference --config <source-reference.json> [--format json|text]\n\nCensus measures one explicit local manifest with native TOC/XML owners and optional package loads. Reference projects pinned generated API into an owner-derived profile, generation and callable view. Partial coverage exits 2; acquisition/identity/budget failures exit 4. Legacy surfaces; replacement: docs/IMPLEMENTATION.md.\n";
 
 #[derive(Clone, Copy)]
 enum Operation {

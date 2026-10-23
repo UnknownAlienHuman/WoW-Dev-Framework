@@ -1,43 +1,203 @@
 # CLI, editors and agents
 
-CLI is the primary complete user path. Current commands are in
-[apps/wow](../apps/wow/README.md); normal root/TOC/library configuration remains
-#200. The workflows are in the [manifesto](ARCHITECTURE.md#what-the-product-must-deliver);
-their code routes are in [implementation](IMPLEMENTATION.md).
+This document separates the product target from the implementation at the
+reviewed `c36a058` baseline. The target follows the [architecture](ARCHITECTURE.md)
+and [implementation routes](IMPLEMENTATION.md); the [audit](AUDIT.md) and
+[queue](REFACTOR_QUEUE.md) describe remaining work. No public workflow is
+considered complete until its ordinary input reaches its real reader and useful
+result.
 
-## EmmyLua
+## Target user operations
 
-Use the upstream analysis engine and standard language server for general Lua
-features. Its LSP handlers are private to `emmylua_ls`, while the semantic API
-is exposed by `emmylua_code_analysis`. See [EMMYLUA_UPSTREAM.md](EMMYLUA_UPSTREAM.md).
-Generated Ketho-style libraries are ordinary `.lua` analysis files that can be
-loaded independently of VS Code. Do not copy a complete LSP implementation.
+The CLI is the complete local entry point. It must work offline from local
+project/source files and a local annotation Library, without a VS Code extension,
+Lua interpreter, remote service, or internal project IDs. It does not execute
+source files or rewrite user source/configuration.
 
-## Framework stdio surfaces
+The ordinary check accepts an addon root, optional TOC selection, client flavor,
+and Library directory. Defaults should discover an unambiguous TOC and use
+reasonable bounded work/output limits. Missing, ambiguous, unsupported, or
+partially analyzed inputs must be visible. The ordinary path must not require a
+compatibility report, probe report, contract ID, digest, generation ID, receipt,
+or budget JSON.
 
-| Surface | Current recipe | Required behavior |
-| --- | --- | --- |
-| LSP | [LSP.md](../apps/wow/LSP.md) | Correct document versions/positions, real diagnostics/navigation, supported capabilities only. |
-| MCP | `wow mcp --transport stdio --profile mcp-2025-11-25-stdio-v1` | Fixed useful read-only tools over the same local data; no generic invocation API. |
+CLI, LSP, and MCP are adapters to the same configured check owner and result
+model. Search and readable source context may be exposed through those same
+frontends as their backing index becomes available. General Lua completion,
+hover, and other language features remain with upstream EmmyLua; see
+[EMMYLUA_UPSTREAM.md](EMMYLUA_UPSTREAM.md).
 
-Selected standards are [LSP 3.18](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/specification/),
-[MCP 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
-and [JSON-RPC 2.0](https://www.jsonrpc.org/specification). Ordinary LSP no-match
-results use the method's null/empty shape. Valid unknown MCP notifications get
-no response and do not end the session; initialization metadata is extensible
-within input bounds. #198/#199 correct current deviations.
+Source navigation includes a compact outline and direct relationships around
+an exact selected hit, not just a prose summary. Select the addon, Blizzard UI
+revision/flavor or API contract scope; equal names in different scopes remain
+different results. A complete empty result differs from an unavailable index,
+partial input or truncated output. The [query behavior](IMPLEMENTATION.md#small-navigation-operations)
+defines these operations without the former Context pack/profile machinery.
 
-Keep unsaved buffers in memory, source locations tied to the actual document
-version, cancellation and bounded framing/output. Do not expose source writes or
-claim unsupported features. Runtime capability negotiation remains useful;
-content-addressed registries, a host schema per feature combination, response
-journals and replay streams are being removed. Internal old inputs can reject
-with a current example instead of a backward-compatibility adapter.
+Target command shapes (names and flags may still change):
 
-## Removed hosting scope
+```text
+wow library build --source <checkout> --ref <ref> --flavor <flavor> [--toc <path>] --out <dir>
+wow check [--config wowdev.json] [--root <addon>] [--toc <path>] [--flavor <flavor>] [--library <dir>]
+wow index --source <checkout> --ref <ref> --flavor <flavor> --db <path>
+wow search --db <path> <query>
+wow context --db <path> --hit <id>
+wow lsp --transport stdio
+wow mcp --transport stdio
+```
 
-No daemon, HTTP transport, background service, provider/plugin host, installation
-or update client is required. The old E7 protocol/release plans are superseded
-by ADR-058. Current stdio code still contains extra lifecycle machinery; remove
-it with its callers under #194/#112/#200. Follow [TEST_STRATEGY.md](TEST_STRATEGY.md)
-for one real request sequence when a protocol behavior changes.
+The optional target `wowdev.json` keeps ordinary setup in one small file.
+Directory paths from this file use its directory; CLI directory paths use cwd.
+Relative `toc` paths use the resolved addon root. The
+[configuration rules](IMPLEMENTATION.md#ordinary-configuration) define root
+defaults, explicit flavor/Library input, unambiguous TOC selection and dependency
+discovery. Library/flavor flags may be omitted only when the config supplies them.
+
+```json
+{
+  "root": "./",
+  "toc": "MyAddon.toc",
+  "flavor": "retail",
+  "library": ["../WoWLibrary"],
+  "dependency_roots": ["../SharedAddons"],
+  "checks": []
+}
+```
+
+The config is optional for default checking when the basic CLI options are
+provided. Optional `emmy_diagnostics` uses the pinned upstream diagnostic object;
+`fail_on` defaults to `error`. Optional positive `target_interface` enables
+version compatibility checking when the selected Library supplies no target.
+Unknown target Interface is not inferred from the addon TOC. Dependency roots
+and selected checks are optional; no Project IDs or generated reports are part
+of this configuration. Repeated CLI `--library` options replace the configured
+array. Advanced diagnostic settings belong in this same file.
+
+The first CLI slice runs Lua/type diagnostics with no WoW rules by default.
+Empty `checks` does not disable Emmy diagnostics. A recognized but unavailable
+requested WoW check produces an explicit limitation and exit `2`, retaining
+independent findings; an unknown check name is a configuration error, exit `64`.
+Supported mapped XML remains selected, while missing chunk/handler context or
+unavailable input is reported for the affected scope. See the
+[first-slice boundary](IMPLEMENTATION.md#first-implementation-slice) before
+claiming that the full addon workflow is complete.
+
+## Check results and command status
+
+The target result keeps findings separate from completeness. A finding is a
+problem reported at the addon source; incomplete analysis describes what could
+not be checked or which input/capability was unavailable. Partial coverage must
+not erase a finding or manufacture a clean result. JSON output carries both
+fields explicitly; text output states both in readable terms.
+
+Completeness covers the requested checks and source scope. A disabled secret
+check must not make a completed Lua/type check partial; unavailable metadata for
+an enabled API-context check must. The current native path adds an unconditionally
+degraded annotation component, and the status reducer considers every partial
+component capability. The [source trace](AUDIT.md#check-completeness-is-not-scoped-to-requested-work)
+explains why early rule selection alone does not fix the resulting exit status.
+
+The target CLI failure threshold defaults to Error. Its exit policy is:
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Requested analysis completed; no enabled diagnostic at or above the configured failure threshold was reported. |
+| `1` | Requested analysis completed; at least one enabled diagnostic reached the configured failure threshold. |
+| `2` | Analysis was incomplete or a requested input/capability was unavailable; retain and report any findings too. |
+| `64` | Command usage or configuration is invalid. |
+| `130` | The user cancelled the operation. |
+| `4` | Unexpected internal, serialization, or output failure. |
+
+Warnings and lower-severity findings are still rendered even when they do not
+reach the configured failure threshold. Findings and incompleteness remain
+separately inspectable in JSON regardless of exit code. The target policy does
+not claim that all diagnostics or runtime semantics are currently supported.
+Static results do not prove that an addon loads, that an event or callback
+fires, or that code is safe in combat or under taint restrictions.
+
+At `c36a058`, `wow status` and `wow check` require `--config`; checking also
+requires a Project ID and accepts internal generation, file, and rule selectors.
+The executable exposes many materialized-input and platform commands. Those are
+development-era surfaces, not the target interface. Inspect the current command
+list with `cargo run --locked -p wow-cli --bin wow -- --help`; use that output
+for current syntax until ordinary root/TOC/flavor/Library configuration lands.
+The current output mapping is implemented in
+[`apps/wow/src/output.rs`](../apps/wow/src/output.rs); it is not the target
+policy above.
+
+## Locations and document updates
+
+Locations must identify the exact source content analyzed. Internally, source
+ranges use UTF-8 byte offsets over the captured bytes; displayed line and column
+positions are derived from that content. LSP positions must use the negotiated
+encoding (UTF-16 when that is the protocol default), and every diagnostic must
+be associated with the document version that produced it. Do not apply an old
+range to changed text.
+
+The pinned Emmy diagnostic range uses Unicode scalar columns even though its
+Rust type is LSP-shaped. Keep the existing conversion to UTF-8 bytes before
+converting to the client's encoding; forwarding its `character` field directly
+would give wrong positions after non-BMP characters. The existing overlay index
+handles UTF-8/UTF-16, CRLF and the final empty line. Preserve its boundary checks
+and the same captured text through the shared-project rewrite; see
+[the Emmy adapter](EMMYLUA_UPSTREAM.md#diagnostics-and-source-locations).
+
+Unsaved editor buffers stay in memory. Ordered edits and document versions are
+validated before updating the shared owner. A stale, rejected, or cancelled
+analysis must not publish diagnostics or edits over a newer document version.
+
+LSP document versions must increase, but gaps are valid: version 3 followed by 5
+must not require resynchronization solely because 4 was not sent. Ordered edits
+within a notification apply to successive intermediate text states. Keep exact
+text/snapshot guards and reject stale versions; internal revision counters must
+not redefine the client's version sequence. The baseline
+`overlay/state.rs::change_document` incorrectly requires `current + 1`, and the
+Service adapter marks a rejected change as requiring resynchronization. See
+the pinned official [versioned-document definition](https://github.com/microsoft/language-server-protocol/blob/baf2db31b5fb314a8f358f9a839d3c66e9d98734/_specifications/lsp/3.18/types/versionedTextDocumentIdentifier.md)
+and [audit](AUDIT.md#lsp-rejects-valid-version-gaps).
+
+Cancellation is cooperative: report it only when the operation observes it, and
+do not claim that a synchronous analyzer call can be preempted. Keep work,
+framing, and output bounded. Relevant current implementation lives under
+[`crates/wow-service/src/frontend/lsp`](../crates/wow-service/src/frontend/lsp)
+and Project update ownership under
+[`crates/wow-project/src`](../crates/wow-project/src).
+
+## Stdio protocol behavior
+
+LSP 3.18 uses JSON-RPC messages with `Content-Length` headers and CRLF header
+lines; the body is UTF-8 JSON. Stdout contains framed protocol messages only.
+Logs and startup errors belong on stderr. Return the method's standard
+empty/null shape when a valid request has no result, and return protocol errors
+for unsupported methods rather than fabricating empty success. See the
+[LSP 3.18 specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.18/specification/).
+
+MCP 2025-11-25 stdio uses one UTF-8 JSON-RPC message per line. Stdout is reserved
+for protocol traffic. A valid unknown notification receives no response and
+must not terminate the session. Accept bounded extensible metadata, and expose
+only tools the selected implementation actually supports. Both adapters
+preserve request/response framing, bounded input/output, clean shutdown, and
+cooperative cancellation where the owner observes it. See the
+[MCP stdio transport specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#stdio).
+
+Two current reader defects must be fixed during this move. An evaluated empty
+same-file reference result becomes `-32001` in `lsp/references.rs`; preserve the
+owner's result state and return the standard empty shape. In `mcp.rs`, unknown
+notifications close the session and method-specific parsers reject permitted
+`params._meta` (initialization accepts it only when empty). Keep the existing
+frame/depth limits while accepting protocol metadata. The
+[source traces](AUDIT.md#lsp-loses-a-successful-empty-reference-result) distinguish
+these defects from unsupported operations and unevaluated definition results.
+
+Plain CLI JSON commands likewise return one result with the matching command
+status; human logs belong on stderr. Serialization/output failure must not
+trigger a second success-shaped result. Do not replay or retry a completed
+mutation merely because writing its response failed.
+
+These are target requirements, not claims that the current frontends meet them.
+At `c36a058`, LSP requires an explicit host and selects one of private profiles;
+MCP exposes older profile-specific tools. Current LSP implementation and framing
+are in [`apps/wow/src/lsp.rs`](../apps/wow/src/lsp.rs) and
+[`crates/wow-service/src/frontend/lsp`](../crates/wow-service/src/frontend/lsp);
+MCP dispatch is in [`apps/wow/src/mcp.rs`](../apps/wow/src/mcp.rs) and its
+Service adapter under [`crates/wow-service/src/frontend`](../crates/wow-service/src/frontend).

@@ -1,56 +1,59 @@
 # WoW Dev Framework
 
-Rust tooling for WoW addon development, built around **upstream EmmyLua** and a
-native Rust port of **Ketho's annotation pipeline**.
+A **World of Warcraft addon linter**, written in Rust on top of
+[EmmyLua](https://github.com/EmmyLuaLs/emmylua-analyzer-rust), Blizzard's API/UI
+source and the useful annotation semantics from
+[Ketho](https://github.com/Ketho/vscode-wow-api).
 
-The intended product has three workflows:
+The goal is to catch Lua/type errors and WoW-specific mistakes while an addon is
+being written: API calls, optional/multiple returns, callbacks, widgets, TOC/XML
+loading and supported restrictions. Generated libraries remain ordinary `.lua`
+files. Source lookup helps explain a finding without requiring a separate
+platform before the linter can run.
 
-1. generate an ordinary `.lua` annotation Library for selected Blizzard
-   source/ref/flavor;
-2. check an addon with that Library and report useful diagnostics at its source;
-3. index Blizzard/addon source and search text, symbols and useful TOC/XML
-   relationships with readable excerpts.
+## Current status
 
-The repository is undergoing a major simplification. Useful analysis and
-annotation components exist, but the public producer/reader/CLI handoffs are not
-yet complete. Do not treat compilation or the presence of internal graph/search
-commands as a finished user workflow.
+The repository is being simplified. At reviewed baseline `c36a058`:
 
-## Current source of truth
+- a public native annotation generator and a shared Main+Library Emmy session
+  exist;
+- ordinary addon setup, complete diagnostic transport and editor reuse still need
+  work; the current adapter drops most Emmy diagnostics and their messages;
+- Blizzard metadata needed by the linter is only partly modeled. In particular,
+  callable-level `Environment` and `MayReturnNothing` need attention;
+- persisted source search still uses the old replay/storage architecture.
 
-- [Architecture](docs/ARCHITECTURE.md) — product manifesto and excluded scope.
-- [Audit](docs/AUDIT.md) — complete source/architecture basis for the rewrite.
-- [Implementation](docs/IMPLEMENTATION.md) — target owners and replacement routes.
-- [Queue](docs/REFACTOR_QUEUE.md) — ordered work and current Issues.
-- [Completion](docs/PROJECT_COMPLETION_MATRIX.md) — exercised user behavior only.
+These are implemented components, not a finished addon checker. The
+[verified audit](docs/AUDIT.md) separates inspected code, the supplied Claude
+review and behavior that has not been run. The [review register](docs/AUDIT_REGISTRY.md)
+accounts for every old document, its useful ideas, code evidence and open questions.
 
-## Build the current workspace
+## Current executable entry points
 
 ```sh
-cargo build --locked -p wow-cli --bin wow
 cargo run --locked -p wow-cli --bin wow -- --help
+cargo run --locked -p wow-reference-builder -- --help
 ```
 
-The current executable still exposes many internal materialized inputs, IDs,
-profiles and lifecycle commands from the superseded platform. The rewrite is
-replacing them with ordinary root/TOC/flavor/Library/database inputs. Current
-internal recipes are documented only for development; they are not the target UX.
+The existing generator's exact interface is documented in
+[its README](apps/wow-reference-builder/README.md). The planned simple `wow check`
+and `wow library build` interfaces are described in
+[FRONTENDS.md](docs/FRONTENDS.md); their examples are target behavior, not commands
+already delivered by this documentation change.
 
-Generated annotations are ordinary Lua analysis files. Source is parsed, never
-executed. User source and configuration must not be rewritten or deleted by
-index/cache cleanup.
+## Development documentation
 
-## Scope discipline
+- [Architecture](docs/ARCHITECTURE.md): purpose, requirements and boundaries.
+- [WoW linting behavior](docs/WOW_LINTER.md): the actual language/game semantics.
+- [Implementation](docs/IMPLEMENTATION.md): existing code to reuse and replacement paths.
+- [Donors](docs/DONORS.md): specific modules, ideas and reuse boundaries.
+- [Queue](docs/REFACTOR_QUEUE.md): the next useful implementation slices.
 
-Keep EmmyLua's engine, Ketho's useful behavior and direct SQLite/FTS queries.
-Remove redundant representations and platforms that do not serve the three
-workflows: internal legacy/migrations, cryptographic proof/certification,
-governed packs, lineage/promotion, Wasm plugins, generic backup/retention,
-daemon/HTTP, provider frameworks and custom installer/updater/release systems.
-
-Contributors start with [AGENTS.md](AGENTS.md).
+Contributors start with [AGENTS.md](AGENTS.md). The full guide index is
+[docs/README.md](docs/README.md). Historical platform specifications are retained
+in Git history, not as competing instructions in the working tree.
 
 ## License
 
-Framework-owned code is MIT. Preserve required third-party notices and the
-licenses that apply to Blizzard and other selected input data.
+Framework-owned code is MIT. Preserve third-party notices; Blizzard/Ketho input
+material retains its own provenance and applicable terms.

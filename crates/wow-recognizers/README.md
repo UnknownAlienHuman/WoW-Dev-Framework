@@ -1,37 +1,10 @@
-# `wow-recognizers`
+# Useful source relationships
 
-`wow-recognizers` maps normalized Emmy, TOC, and XML facts to useful structural
-relationships. It does not parse source, branch on addon identity, execute Lua,
-run diagnostics, or publish project generations. Source owners retain original
-files and spans; the graph owner validates and stores proposals.
+Reuse: Direct typed extraction consumed by addon checks and source navigation.
 
-## Executable routes
+Keep relevant event/hook/callable/widget/TOC/XML facts. Remove the generic
+JSON pack/plan/matcher path; an event-like string alone does not establish
+which callback system is used.
 
-The crate currently contains a bounded registry/matcher and source adapters for
-captured calls, constructions, mixins, scripts, signals, state, TOC, and XML.
-Start with the selected adapter in `src/source_*.rs`, then follow its caller in
-Project/Service and the graph proposal handoff. For common CLI behavior, use
-[`wow graph build`](../../apps/wow/GRAPH_BUILD.md), which runs the existing
-source-to-recognizer-to-graph route. Do not add a second parser or independently
-reconstruct source facts here.
-
-The active slices include direct-call, XML script-assignment, SavedVariables
-access, and selected `CreateFrame` construction recognition. These are static
-observations with source bindings; dynamic dispatch, effective mixin behavior,
-frame existence, lifecycle, protection, and runtime execution remain unknown.
-Confidence and coverage must not be strengthened by the matcher.
-
-## Pending reduction
-
-The crate still carries broader registry, pack, partition, and evaluation
-machinery inherited from the previous platform plan. Its reduction is pending in
-the refactoring queue; these layers are not already removed, and their historical
-corpus/checksum gates are not prerequisites. Preserve relationships that a
-current search, navigation or diagnostic path consumes; generic matcher shape
-is not a compatibility obligation.
-
-[#195's starting route](../../docs/IMPLEMENTATION.md#typed-source-relationships)
-replaces State Core's fixed-pack execution and Service's repeated reconstruction
-with direct typed mapping. Remove their exclusive pack/evaluation assertions
-while retaining the located root/path and unresolved-input behavior. #103
-separately removes unused rule capabilities and their fixture-ID inventory.
+See [Implementation](../../docs/IMPLEMENTATION.md#code-ownership),
+[WoW behavior](../../docs/WOW_LINTER.md) and [Audit](../../docs/AUDIT.md).

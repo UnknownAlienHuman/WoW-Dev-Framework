@@ -1,24 +1,16 @@
 # Repository automation
 
-The maintained workflows are:
+Current workflows:
 
-- `quick-check.yml`: repository policy, Rust formatting, workspace compilation
-  and strict Clippy. Its source archive identifies the checked tree; it is not
-  proof of the public workflows or a semantic-consumer test run.
-- `current-source-bundle.yml`: selects current Gethe/Ketho input, generates Lua,
-  warns on partial projection, rejects omitted source inputs and uploads both
-  generated directories. It no longer runs the incompatible `/1` verifier.
-- `branch-hygiene.yml`: guarded cleanup of merged ancestor branches; it does not
-  merge code or discard unreconciled work.
+- `quick-check.yml`: repository checks, formatting, `cargo check` and strict
+  Clippy, plus exact-head/source archive steps. It does not run the test suite.
+  The duplicate compile/archive ceremony is not a requirement of the new design.
+- `current-source-bundle.yml`: generates and uploads Lua from selected sources,
+  rejects input failures and reports partial projection. Its old `Mainline`
+  environment default does not solve the API-context defect in the [audit](../docs/AUDIT.md).
+- `branch-hygiene.yml`: guarded cleanup of merged ancestor branches.
 
-Build/source jobs have read-only GitHub permissions. Branch hygiene alone has
-contents-write access. Preserve dirty/diverged checkouts and user files.
-
-There is no current `ci.yml`, Wasm parity matrix or automatic external-checker
-consumer matrix. The explicit EmmyLua/LuaLS probe is now owned by
-`cargo test -p wow-reference-builder --test consumers`; follow the
-[consumer guide](../docs/ANNOTATION_CONSUMER_PROBES.md) for its inputs and limits.
-Do not describe an unexecuted probe or a removed workflow as passing coverage.
-
-No interpreter setup, self-modifying source payload or hidden publication step
-belongs in product CI. `cargo xtask check` enforces the native repository policy.
+This documentation rewrite does not change those workflows. Green Quick is
+build evidence, not working addon/API coverage. The owner's current validation
+policy is in [AGENTS.md](../AGENTS.md). Do not add test/coverage/certification jobs
+as a prerequisite to the product-first implementation.

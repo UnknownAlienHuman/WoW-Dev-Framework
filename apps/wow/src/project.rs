@@ -28,7 +28,7 @@ const HELP: &str = concat!(
     "wow project read --store-root <directory> --store-generation current|<generation-id> [--format json|text]\n",
     "wow project reconcile --store-root <directory> --operation-id <id> [--format json|text]\n",
     "wow project recover --store-root <directory> [--domain-current] [--format json|text]\n\n",
-    "Publish retains exact Main/Library inputs and the full native graph chain. Update applies explicit final physical Lua inputs against the exact retained base. Read acquires one leased project/graph pair; TOC/XML/package replay is supported for reads/publication. Reconcile observes the original operation. Partial coverage exits 2. See apps/wow/LIVE_PROJECT.md.\n",
+    "Publish retains exact Main/Library inputs and the full native graph chain. Update applies explicit final physical Lua inputs against the exact retained base. Read acquires one leased project/graph pair; TOC/XML/package replay is supported for reads/publication. Reconcile observes the original operation. Partial coverage exits 2. Legacy surface; replacement: docs/IMPLEMENTATION.md.\n",
     "Recover observes physical store state without initialization, repair, activation or domain approval. Validated/not-applicable coverage exits 0; incomplete/unverified exits 2; invalid/corrupt exits 4; cancellation exits 130.\n",
     "--domain-current also replays the exact observed Current through native Project/Graph owners and retains physical evidence on failure. Other generations receive no domain verdict.\n",
 );

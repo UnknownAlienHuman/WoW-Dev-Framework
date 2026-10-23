@@ -1,14 +1,10 @@
-# `wow-reference-builder`
+# Library generator
 
-Follow root `AGENTS.md`, `docs/ARCHITECTURE.md`, and
-`docs/IMPLEMENTATION.md#native-annotation-generation`.
+Follow root [AGENTS.md](../../AGENTS.md), the full
+[manifesto](../../docs/ARCHITECTURE.md) and the relevant
+[implementation route](../../docs/IMPLEMENTATION.md).
 
-This app owns only command parsing, bounded local Git reads and writing a new
-output directory. `wow-reference` owns source facts; `wow-annotations` owns
-projection and rendering. Keep the single `generate` workflow direct.
-
-Do not add pack manifests, operation journals, signatures, promotion states,
-backup/restore, installers, compatibility commands or another parser. Preserve
-explicit revision/TOC/environment selection, non-execution of donor Lua,
-cancellation, finite input/output bounds, partial-result reporting and new-only
-output.
+Own argument parsing, bounded source reads and new-directory output. Reference
+owns data normalization; Annotations owns emission. Preserve exact revision,
+flavor/API-context distinction, source maps and explicit omissions. Do not
+execute donor code or add a second generator/certification path.
