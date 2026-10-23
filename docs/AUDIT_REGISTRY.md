@@ -4,7 +4,7 @@
 This register records inspected code, evidence, remaining gaps and corrections.
 Do not load the whole register into every implementation task.
 
-**Latest inspected baseline:** `99aea062a6173548cff9882dc14b52c44496fe36`,
+**Latest inspected baseline:** `0f905991bc2481c2735441040d868ced5a98a087`,
 2026-10-23. Untouched rows retain their earlier evidence; this date does not
 revalidate every function. Historical detail lives in Git, not repeated diaries.
 
@@ -26,7 +26,8 @@ Evidence keys:
 - **D**: [frontend operation inventory](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/0c46e48bc7bf0018e95940dd946d9b43fb162955/docs/AUDIT_REGISTRY.md#2026-10-22--frontend-operation-inventory),
   baseline `12056d72`, delivered in #240.
 - **E**: generator-workflow/cancellation recheck at `0c46e48b`, delivered in #241.
-- **F**: public producer and Library-reader handoff at `99aea062`, below.
+- **F**: public producer and Library-reader handoff at `99aea062`, delivered in #242.
+- **G**: configured Library discovery and acquisition/workspace limits at `0f905991`, below.
 
 ## Coverage and outstanding work
 
@@ -40,8 +41,8 @@ execution. Issues contain implementation tasks, not extra audit gates.
 | Native acquisition | S | U | A/E: builder `src/{lib,io,catalogs}.rs`, native Reference and annotation projection. | F applies shared regular-file checking to TOC/API/catalogs. Batch reading and blocking Git-child cancellation remain (#201). |
 | Ketho semantics | P | U | A: pinned default/false/zero, arrays/stride, callbacks, receiver/order and mapping rules. | Selected-catalog/flavor parity and real source corpus not exercised. |
 | Builder -> workflow artifact | S | U | E: `/2` producer, `/1` verifier calls and report-only upload. Calls removed; Lua directories now packaged. | Hosted workflow/artifact download not exercised. Shell-only checks below are not R. |
-| Builder -> addon Library | S | U | F: application probes now launch the public executable and inspect emitted files/maps. Old driver/verifier removed. | Probe execution, real Project Library reading, full CLI check and matching maximum-size limits remain (#201/#200). |
-| Normal addon configuration | S | U | A: Service disk/native/host inputs and CLI selectors. | Root/flavor/TOC/Library configuration and discovery (#200/#197). |
+| Builder -> addon Library | S | U | F/G: public producer; Project directory discovery is wired into disk/TOC/package/platform Library loading. Shared producer/acquisition/workspace ceilings. | Public builder -> configured addon behavior is not run. Full CLI setup/diagnostics and downstream analysis/publication limits remain (#201/#200). |
+| Normal addon configuration | S | U | A/G: disk Library input needs only `root`; explicit subsets remain for actual mixed-tree inputs. | Normal addon root/flavor/TOC setup, evidence removal and stdlib are unfinished (#200/#197). |
 | Main+Library analysis | S | P | A: shared Project analyzer delivered in #193; cold callers traced. | Actual CLI valid/invalid typed calls; all update/load-selection paths. |
 | Diagnostic transport | S | U | A/E: `syntax/analyzer.rs`, Service projection, LSP diagnostics. Four-code filter/message loss/severity coercion remain. | Preserve upstream meaning through public check/LSP (#201/#198). |
 | Emmy cancellation | S | U | E corrects A: both session paths pass stop; collector checks before/after files and during conversion; typed cancellation survives. #135 is closed. | No fresh runtime witness. Per-file preemption, registration and Git-child cancellation are separate boundaries. |
@@ -125,11 +126,38 @@ handoff, batch/cancellable Git I/O, external
 EmmyLua/LuaLS probes, full donor corpus and real-addon execution. No row is
 promoted to R on the strength of moving tests or compiling them.
 
+## G — load a configured Lua Library directory
+
+**Inspected at `0f905991`:** Project `disk.rs`, `disk/pinned.rs`, inventory and
+analyzer Library handoff; Service `local/{disk_input,input,platform_input}.rs`;
+annotation `native.rs`; existing combined/platform Library selectors. Checked
+cap-std's directory API before using the existing held-root/no-follow owner.
+
+**Implemented:** `ProjectInputDirectory::read_lua_library` discovers sorted Lua
+paths below an explicit root and reuses inventory byte/encoding/collision reads.
+Traversal has entry/depth/file ceilings and cancellation checks; reports and
+other ordinary non-Lua files are ignored. No generator report/checkout is needed.
+Service disk, TOC, package and platform inputs use it when `library.files` is
+omitted. Existing explicit subsets remain where Main and Library share a physical
+tree; a failed discovery never retries another mode. No new schema or converter.
+
+`wow-core::library_limits` is used by the annotation producer, Project Library
+reader and Service Library workspace: 4,096 files / 8 MiB per file / 64 MiB total,
+unchanged from the producer's previous bounds. Main limits are unchanged.
+**Separate gap:** replay still limits aggregate retained source to 32 MiB;
+binding/report outputs have their own limits. Matching this acquisition boundary
+does not prove maximum-size checking or publication. Do not indiscriminately
+increase those budgets; direct stored reads remain #131.
+
+**Checks:** source/caller review and local diff/link checks. No Rust runtime,
+public builder-to-addon run or maximum-size corpus run was executed here.
+Remote compilation/Clippy results belong to the implementing PR. Runtime stays U.
+
 ## Next review / implementation boundary
 
-1. #201/#200: exercise supported producer -> actual Project Library reader;
-   reconcile finite limits and complete normal configuration -> addon diagnostic.
-   Do not recreate the removed producer or verifier.
+1. #201/#200: exercise supported producer -> configured Library -> addon;
+   finish ordinary addon setup and diagnostic transport. Acquisition limits now
+   match, but downstream budgets remain separate. Do not rebuild the removed driver.
 2. #112: extract remaining coordinate/TOC/XML facts, delete obsolete owner notes
    and repair the seven known Store links without restoring deleted E2 contracts.
 3. Add exact command/input/result only when a real public workflow runs. Recheck

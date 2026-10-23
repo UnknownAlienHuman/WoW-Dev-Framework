@@ -43,8 +43,9 @@ projection losses and conflicts; successful composition grants no runtime or
 full-platform negative authority.
 
 `load_context` is optional and uses the existing validated TOC context. Optional
-`library` has the existing disk inventory shape
-`{"root":"logical-root","files":[<ProjectDiskFile>,...]}`. Absence means an
+`library` selects `{"root":"library-directory"}` with bounded Lua discovery;
+an optional nonempty `files` list selects only those relative paths. See
+[Library input](FILES_INPUT.md#main-and-library). Absence means an
 actually empty Library snapshot. It inserts no dummy Lua or generated annotation
 and does not establish annotation or external Library completeness.
 

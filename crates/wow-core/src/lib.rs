@@ -16,6 +16,7 @@ pub mod finding;
 pub mod generation;
 pub mod ids;
 mod integrity;
+pub mod library_limits;
 pub mod profile;
 pub mod source;
 

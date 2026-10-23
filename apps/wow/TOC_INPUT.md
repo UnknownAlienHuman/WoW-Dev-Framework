@@ -15,7 +15,8 @@ This fragment is the `main` object, not a complete configuration. `profile`,
 `reference_view`, `analyzer`, `library`, and project identities remain required.
 `main.toc` optionally accepts the same digest/length pair as other source files.
 The old inline and explicit-file schemas are unchanged. No config may combine a
-TOC with a manual Main inventory. Library remains explicit and separate.
+TOC with a manual Main inventory. Library stays separate and can be selected by
+its directory alone; see [Library discovery](FILES_INPUT.md#main-and-library).
 
 ## Implemented load projection
 

@@ -1,5 +1,5 @@
-//! Resolve only the explicit files in a local configuration. File acquisition is
-//! owned by wow-project; profile, reference and analyzer semantics stay with owners.
+//! Resolve configured Main inputs and a Lua Library directory. File acquisition
+//! belongs to Project; profile, reference and analyzer semantics stay with owners.
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 
@@ -84,8 +84,25 @@ pub(super) struct DiskAnalyzer {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct DiskInventory {
-    pub(super) root: String,
-    pub(super) files: Vec<ProjectDiskFile>,
+    root: String,
+    #[serde(default)]
+    files: Option<Vec<ProjectDiskFile>>,
+}
+
+impl DiskInventory {
+    pub(super) fn read(
+        &self,
+        directory: &ProjectInputDirectory,
+        stop: &AtomicBool,
+    ) -> ServiceResult<Vec<wow_project::ProjectInputFile>> {
+        match &self.files {
+            Some(files) => {
+                directory.read_lua_inventory(&self.root, files, ProjectFileRole::Library, stop)
+            }
+            None => directory.read_lua_library(&self.root, stop),
+        }
+        .map_err(acquisition_error)
+    }
 }
 
 #[derive(Deserialize)]
@@ -103,7 +120,7 @@ pub(super) struct MainInventory {
 impl LocalProjectInput {
     /// Read one explicit config and its declared inputs. The selected config's
     /// parent is registered once; all manifest paths are relative to that handle.
-    /// Inline inputs remain supported; neither schema scans a directory or writes.
+    /// Disk Library inputs discover Lua files below their configured root; no writes.
     pub fn from_config_path(path: &Path, stop: &AtomicBool) -> ServiceResult<Self> {
         super::cancelled(stop)?;
         let parent = path
@@ -211,14 +228,7 @@ impl LocalProjectInput {
             .map_err(|_| invalid("reference artifact was rejected"))?;
         let analyzer = input.analyzer.read(directory, stop)?;
         let (main, load_plan) = input.main.read(directory, &profile, stop)?;
-        let library = directory
-            .read_lua_inventory(
-                &input.library.root,
-                &input.library.files,
-                ProjectFileRole::Library,
-                stop,
-            )
-            .map_err(acquisition_error)?;
+        let library = input.library.read(directory, stop)?;
         super::cancelled(stop)?;
         Self::assemble_with_load_plan(
             ProjectMetadata {
@@ -283,14 +293,7 @@ impl LocalProjectInput {
             .into_namespaced_main()
             .map_err(acquisition_error)?;
         let (main, load_plan, main_plan) = package_input.into_parts();
-        let library = directory
-            .read_lua_inventory(
-                &input.library.root,
-                &input.library.files,
-                ProjectFileRole::Library,
-                stop,
-            )
-            .map_err(acquisition_error)?;
+        let library = input.library.read(directory, stop)?;
         super::cancelled(stop)?;
         Self::assemble_with_package_load(
             ProjectMetadata {

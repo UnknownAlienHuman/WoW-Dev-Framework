@@ -19,7 +19,7 @@ Declaration-only, signature-only and combined selection share this one family.
 | `reference_view` | Pinned exact validated ReferenceView artifact |
 | `analyzer` | Existing declaration with pinned compatibility_report, accepted_pin_id, configuration_digest, contract_id, fixture_contract_id and library_contract_id |
 | `main` | Explicit root and nonempty files inventory of physical Main Lua |
-| `library` | Independent explicit root and nonempty files inventory of analyzer Library Lua |
+| `library` | Independent root for bounded Lua discovery; optional nonempty `files` selects a subset |
 | `physical_function_declarations` | Optional `wow-emmy/physical-function-declaration-syntax/1` (DeclaredSyntaxV1) |
 | `physical_function_signatures` | Optional `wow-emmy/physical-function-indexed-types/1` (IndexedTypesV1) |
 | `hook_target_recipe` | Optional `hook_target_literals_v1`, with an explicit `function_call_budget` |
@@ -31,7 +31,8 @@ unpinned entries capture exact read bytes, while pinned entries refuse drift.
 All paths resolve relative to the registered config directory under the existing
 bounded no-follow file reader. Main and Library are genuine separate native
 roles; Library type information does not turn Library declarations into Main.
-No directory scan, source execution, second parser or source acquisition follows.
+Library discovery is confined to its configured root; no Lua execution or second
+parser is introduced.
 
 Unknown/duplicate fields, explicit null recipe fields, unknown recipe strings,
 body-shape declaration selection and an empty selection refuse. This family
@@ -96,6 +97,7 @@ the admitted configuration, then preflights it, as the existing selected route
 does. Direct input/store operations still require exact request recipe matching.
 
 Existing source, analyzer, replay, store and output budgets/cancellation remain in
-force. No cap increase or automatic compatibility fallback is part of this route.
+force. Library acquisition uses the shared ceilings in [FILES_INPUT.md](FILES_INPUT.md);
+there is no automatic fallback after acquisition or analysis fails.
 Full E3/Tier A/X and client/runtime qualification remain open under
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122).
