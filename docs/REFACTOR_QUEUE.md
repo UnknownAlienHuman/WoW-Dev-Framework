@@ -19,9 +19,18 @@ Return known findings separately from input/analysis limitations. Remove
 compatibility-report and Project publication requirements from this path.
 Derive completeness from selected-check dependencies; the current global
 component reducer makes native checks partial independently of their findings.
+Keep an explicitly selected TOC when its Interface differs: change the current
+`load/toc.rs::parse` early rejection into a compatibility diagnostic while
+retaining usable file records. Do not silently select another TOC or flavor.
 
 The first usable result is a typed addon check with an existing Library. It
 requires neither a persistent source index nor completion of all old cleanup.
+Its [scope and input selection](IMPLEMENTATION.md#first-implementation-slice)
+are explicit: Lua/type diagnostics over admitted selected physical and mapped
+XML units, with no WoW rule enabled by default. Missing chunk/handler context
+and unsupported XML-only input remain visible limitations until item 3;
+API/Secret checks are connected after their semantic fixes in item 4. Do not
+advertise this first slice as the completed WoW addon workflow.
 
 ## 2. Correct Blizzard declarations for that check
 

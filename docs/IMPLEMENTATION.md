@@ -30,9 +30,33 @@ do not depend on Service or applications.
 ### Ordinary configuration
 
 Use one small public configuration: addon root, optional explicit TOC, client
-flavor, Library directories, optional dependency roots and selected checks. CLI
-values override file values; relative paths are resolved from that config file.
-Without a config, the explicit root (or documented cwd default) supplies discovery.
+flavor, Library directories, optional dependency roots and selected checks.
+Resolve it once before acquiring source:
+
+- CLI values override file values. Relative CLI directory paths use the process
+  working directory; relative file-config directory paths use the config's
+  directory. The root defaults to the config's directory, or cwd without a config.
+  A relative TOC path is always relative to the resolved addon root.
+- Require an explicit flavor and at least one explicitly selected local Library
+  directory, supplied by CLI or config. Do not infer flavor from a folder name,
+  find a different Library silently, download data or regenerate declarations.
+- An explicit TOC remains selected even when its Interface metadata differs.
+  Report that compatibility problem without switching TOCs. Without an explicit
+  TOC, inspect the addon root and select only an unambiguous candidate under the
+  supported flavor rules; otherwise list candidates and require selection.
+  Current Project loading takes explicit TOCs, so this small discovery adapter is
+  work to implement, not an existing loader capability.
+- Dependency roots are explicitly supplied AddOns-like parent directories.
+  Acquire only named TOC dependencies and their transitive dependencies from
+  those directories, then pass the selected packages to the existing load owner.
+  Reject ambiguous name matches. Absent optional dependencies are nonblocking;
+  missing required dependencies limit the affected analysis. Do not add every
+  nearby addon, and do not treat a dependency directory as an annotation Library.
+- Omitted or empty `checks` selects no WoW rule; Lua diagnostics still follow
+  upstream diagnostic settings. Unknown check names are configuration errors.
+  A recognized check whose implementation or required input is unavailable is
+  reported unavailable, while independent Lua findings remain usable.
+
 There is no user-supplied Project ID, generation, compatibility report, digest,
 profile matrix or budget JSON. Reuse serde and existing path readers.
 
@@ -42,7 +66,27 @@ flavor, game/glue loading and `SecureOnly` API metadata. Incompatible Library
 metadata is an actionable configuration error; a plain user Library without it
 still supports typing with the affected domain checks explicitly unavailable.
 
+### First implementation slice
+
+Queue item 1 delivers offline Lua/type diagnostics with an existing Library,
+one configured Main/Library/STD session and the ordinary CLI result. Reuse the
+current ordered TOC/package selection and already supported mapped XML units;
+do not replace them with a recursive collection of every Lua file. No WoW rule
+is enabled by default in this first slice. API/Secret checks become selectable
+as functioning checks after their binding and uncertainty handling is repaired
+in queue item 4; merely executing the old providers does not satisfy that work.
+
+Full addon chunk context, implicit XML handler context, XML-only admission and
+selected-load updates are completed in queue item 3. Until then, unsupported
+input or missing context must be an explicit limitation of the affected scope;
+do not drop those units and report a complete addon check. Preserve useful
+independent diagnostics. Item 1 can finish a useful language-checking path, but
+it does not complete the full WoW addon workflow or retire these requirements.
+
 ### One direct check operation
+
+The complete operation below includes the later context and WoW-check work;
+the first slice above defines the initial implementation boundary.
 
 1. Resolve config and selected TOC/dependencies; capture bounded source bytes.
 2. Reuse the load parser for ordered Lua/XML selection. Treat unsupported load

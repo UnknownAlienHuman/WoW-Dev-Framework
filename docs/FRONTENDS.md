@@ -38,7 +38,7 @@ Target command shapes (names and flags may still change):
 
 ```text
 wow library build --source <checkout> --ref <ref> --flavor <flavor> [--toc <path>] --out <dir>
-wow check [--config wowdev.json] [--root <addon>] [--toc <path>] [--flavor <flavor>] --library <dir>
+wow check [--config wowdev.json] [--root <addon>] [--toc <path>] [--flavor <flavor>] [--library <dir>]
 wow index --source <checkout> --ref <ref> --flavor <flavor> --db <path>
 wow search --db <path> <query>
 wow context --db <path> --hit <id>
@@ -46,8 +46,12 @@ wow lsp --transport stdio
 wow mcp --transport stdio
 ```
 
-The optional target `wowdev.json` keeps ordinary setup in one small file. Paths
-are resolved relative to the config file's directory:
+The optional target `wowdev.json` keeps ordinary setup in one small file.
+Directory paths from this file use its directory; CLI directory paths use cwd.
+Relative `toc` paths use the resolved addon root. The
+[configuration rules](IMPLEMENTATION.md#ordinary-configuration) define root
+defaults, explicit flavor/Library input, unambiguous TOC selection and dependency
+discovery. Library/flavor flags may be omitted only when the config supplies them.
 
 ```json
 {
@@ -56,13 +60,22 @@ are resolved relative to the config file's directory:
   "flavor": "retail",
   "library": "../WoWLibrary",
   "dependency_roots": ["../SharedAddons"],
-  "checks": ["api-exists"]
+  "checks": []
 }
 ```
 
 The config is optional when equivalent CLI options are provided. Dependency
 roots and selected checks are optional; no Project IDs or generated reports are
 part of this target configuration.
+
+The first CLI slice runs Lua/type diagnostics with no WoW rules by default.
+Empty `checks` does not disable Emmy diagnostics. A recognized but unavailable
+requested WoW check produces an explicit limitation and exit `2`, retaining
+independent findings; an unknown check name is a configuration error, exit `64`.
+Supported mapped XML remains selected, while missing chunk/handler context or
+unavailable input is reported for the affected scope. See the
+[first-slice boundary](IMPLEMENTATION.md#first-implementation-slice) before
+claiming that the full addon workflow is complete.
 
 ## Check results and command status
 
