@@ -103,15 +103,23 @@ fn verify(input: &Path, revision: &str, catalog_revision: &str) -> Result<()> {
         || report["input_failures"] != json!([])
         || report["source_order"] != json!(["API.lua"])
         || report["toc"] != json!({"path":"API.toc","sha256":source_digest(b"API.lua\n")})
-        || report["alias_inputs"] != json!([{
-            "revision": catalog_revision,
-            "path": "Types.lua",
-            "sha256": source_digest(CATALOG.as_bytes()),
-        }])
-        || report["annotation_files"] != json!(expected.files.iter().map(|file| {
-            json!({"path": file.path, "sha256": file.sha256,
+        || report["alias_inputs"]
+            != json!([{
+                "revision": catalog_revision,
+                "path": "Types.lua",
+                "sha256": source_digest(CATALOG.as_bytes()),
+            }])
+        || report["annotation_files"]
+            != json!(
+                expected
+                    .files
+                    .iter()
+                    .map(|file| {
+                        json!({"path": file.path, "sha256": file.sha256,
                 "bytes": file.text.len(), "mappings": file.mappings})
-        }).collect::<Vec<_>>())
+                    })
+                    .collect::<Vec<_>>()
+            )
         || report["projection_issues"] != json!([])
     {
         return Err("catalog driver output does not match the exact committed fixture".into());

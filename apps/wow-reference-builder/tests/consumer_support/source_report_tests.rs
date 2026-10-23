@@ -56,7 +56,10 @@ fn partial_stale_missing_and_duplicate_receipts_cannot_pass() -> Result<()> {
         ("/annotation_files/0/bytes", json!(u64::MAX)),
         ("/annotation_files/0/sha256", json!("sha256:wrong")),
         ("/annotation_files/0/path", json!("../foreign.lua")),
-        ("/annotation_files/0/mappings/0/generated/end", json!(u64::MAX)),
+        (
+            "/annotation_files/0/mappings/0/generated/end",
+            json!(u64::MAX),
+        ),
         (
             "/annotation_files/0/mappings/0/source/sha256",
             json!("sha256:wrong"),

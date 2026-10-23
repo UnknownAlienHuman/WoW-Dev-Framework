@@ -35,7 +35,11 @@ pub(super) fn read_file(
     {
         return Err("source input must be an exact regular Git blob".into());
     }
-    git(root, &["cat-file", "blob", &format!("{revision}:{path}")], limit)
+    git(
+        root,
+        &["cat-file", "blob", &format!("{revision}:{path}")],
+        limit,
+    )
 }
 
 pub(super) fn write_new(path: &Path, bytes: &[u8]) -> std::io::Result<()> {

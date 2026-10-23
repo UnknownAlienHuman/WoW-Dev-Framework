@@ -68,9 +68,7 @@ pub(super) fn validate(
             return Err("invalid or duplicate generated filename".into());
         }
         let text = fs::read_to_string(root.join(name))?;
-        if file["sha256"] != source_digest(text.as_bytes())
-            || file["bytes"] != json!(text.len())
-        {
+        if file["sha256"] != source_digest(text.as_bytes()) || file["bytes"] != json!(text.len()) {
             return Err("generated file bytes or digest mismatch".into());
         }
         let mappings = array(&file["mappings"])?;
