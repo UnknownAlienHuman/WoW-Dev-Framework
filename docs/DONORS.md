@@ -93,3 +93,14 @@ ideas and comparison points only. The `loader.lua`/`xmleval.lua` execution path
 models a client-like runtime, including addon chunk arguments `(addonName,
 privateTable)`; the linter must read source and model only the statically
 supported namespace relationship. Do not run Ketho or Wowless Lua loaders.
+
+The inspected loader gives `SuppressLocalTableRef` its own branch and allocates
+bootstrap environments separately. Its XML evaluator passes addon arguments to
+external Lua, compiles known handlers with their script parameters, and loads
+free inline Script bodies through a different call. Those distinctions prevent
+a universal private-table or handler-vararg rule. Gethe's selected
+[`Blizzard_RecruitAFriend.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_RecruitAFriend/Blizzard_RecruitAFriend.toc)
+confirms actual use of `SuppressLocalTableRef`; the comparative implementation
+does not independently prove every client runtime detail. The framework's
+[context adapter](EMMYLUA_UPSTREAM.md#addon-chunk-context) supports explicit load
+kinds and leaves unsupported special environments limited.

@@ -22,6 +22,12 @@ component reducer makes native checks partial independently of their findings.
 Keep an explicitly selected TOC when its Interface differs: change the current
 `load/toc.rs::parse` early rejection into a compatibility diagnostic while
 retaining usable file records. Do not silently select another TOC or flavor.
+Implement the [concrete configuration rules](IMPLEMENTATION.md#ordinary-configuration):
+initial retail/Mainline selection, explicit ambiguity handling, optional target
+Interface, upstream `emmy_diagnostics` and default Error threshold. Acquire only
+the selected dependency closure. Preserve located malformed-XML failures and
+independent usable inputs instead of turning every failed unit into invalid
+configuration; recognize the reviewed `Dep` dependency spelling in both readers.
 
 The first usable result is a typed addon check with an existing Library. It
 requires neither a persistent source index nor completion of all old cleanup.
@@ -61,6 +67,11 @@ reindexing until a narrower invalidation scheme is demonstrably correct.
 Allow XML-only input through the physical-inventory boundary. Reuse the existing
 single-TOC/package inline analysis and maps; implement the separate per-addon
 chunk context rather than mistaking package path prefixes for that context.
+Use the [mapped helper design](EMMYLUA_UPSTREAM.md#addon-chunk-context) only for
+supported chunk contexts, mark its synthetic calls as context-only, and keep XML
+handler signatures and special Blizzard environments separate. Bind adapter
+versions in both load routes' configuration keys while retaining the existing
+final snapshot/replay identity checks.
 
 Remove the stale `InlineLuaNotAnalyzed` file-closure blocker for supported
 extracted bodies without claiming implicit handler context is already complete.
@@ -84,8 +95,10 @@ the former limits the affected check, while the latter remains an input error.
 Replace the one-file LSP path with the configured project; expose only useful
 read-only MCP operations. Keep standard framing, empty results and increasing
 LSP document versions, including valid gaps. Remove generic pack/matcher/proof
-and frontend profile wrappers as
-these consumers move. #103 owns useful recognizer/check selection, not a new
+and frontend profile wrappers as these consumers move. Preserve evaluated-empty
+references, accept bounded MCP metadata, and ignore valid unknown notifications.
+Keep original error causes and locations through analyzer/frontend projection.
+#103 owns useful recognizer/check selection, not a new
 engine; early execution selection belongs to the check route above.
 
 ## 5. Direct source lookup and remaining platform removal
@@ -100,6 +113,10 @@ Read after reopen without rebuilding analysis; return readable matching excerpts
 Remove nested databases, replay recapture, self-sizing pages and Context packs.
 Keep the useful outline/direct-neighbor query, exact scope selection and
 empty/partial/truncated result distinctions in the direct implementation.
+Reuse existing direct retained-shard SQL reads, opt-in Reference documentation
+search, one-scan neighbor batching and exact source-excerpt validation. Add actual
+SQL interruption, empty-index handling and transactional changed/deleted rows.
+Preserve primary errors alongside cleanup failures instead of replacing them.
 The known remaining fingerprint code is removal work with its consumers under
 [#118](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118), not an
 already-deleted subsystem or a reason to repair its historical product.

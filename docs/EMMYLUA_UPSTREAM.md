@@ -32,7 +32,7 @@ source. Keep the roles explicit:
 - **STD** supplies Lua language declarations. It is upstream-provided input,
   not user source, a WoW API catalog, or a source location to project into Main.
 
-For ordinary addon analysis, set the runtime to Lua 5.1, enable diagnostics,
+For ordinary addon analysis, set the runtime to Lua 5.1, enable diagnostics by default,
 then call `init_std_lib(None)` once before registering Main and Library inputs.
 At the pinned revision, this loads embedded resources without extracting them
 to disk. `EmmyLuaAnalysis::new()` alone loads no standard declarations, and
@@ -66,6 +66,18 @@ and reuse them on refresh. The application owns target selection, WoW checks
 and the exit threshold; Emmy owns language diagnostics and their configuration.
 Keep Lua 5.1 explicit for this target. A configuration change that affects
 analysis must invalidate the corresponding results, including editor caches.
+
+The target `wowdev.json` supplies optional `emmy_diagnostics`, directly decoded
+as the pinned [`EmmyrcDiagnostic`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/config/configs/diagnostics.rs):
+`enable`, `disable`, `enables`, `globals`, `globalsRegex`, `severity` and
+`diagnosticInterval`. Missing fields retain upstream defaults; the interval is
+an editor scheduling value and has no effect on a one-shot check. Invalid typed
+values are configuration errors. Start from `Emmyrc::default`, replace only its
+diagnostics and set runtime Lua51; apply that configuration to the shared owner.
+This does not load another workspace or silently discover `.emmyrc` files.
+The upstream [`load_configs`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/config/config_loader.rs)
+logs and skips invalid files or returns defaults after a typed decoding error;
+that behavior would hide an explicit configuration failure in this operation.
 
 Currently `syntax/analyzer.rs::build_registered`, the shared constructor in
 `references.rs`, and `flow.rs::build_analysis` each create `Emmyrc::default`.
@@ -105,6 +117,52 @@ cancellation must not appear as a clean diagnostic result.
 Diagnostics are static evidence. They do not prove runtime behavior, combat
 safety, taint safety, or that a selected API is available in every client
 flavor.
+
+## Addon chunk context
+
+The pinned [`infer_literal_expr`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/semantic/infer/mod.rs)
+returns a homogeneous `any...` for unbound chunk ellipsis. The workspace API has
+no WoW chunk-argument setting. A prelude that merely declares two globals does
+not make `local arbitraryName, arbitraryTable = ...` use them.
+
+For ordinary selected addon Lua chunks, implement this narrow adapter:
+
+1. Create one analysis-only Library unit per addon containing one stable private
+   table and a helper that returns the addon-name literal followed by that table.
+   Allocate the table outside the helper. Expose the helper as an analysis-only
+   global resolvable from its Main chunks. Choose names that cannot collide
+   with identifiers in the selected source/Library; rebuild the context on changes.
+2. Use Emmy's AST to identify ellipsis expressions owned by the chunk, including
+   those inside top-level control flow. In an in-memory virtual copy, replace each
+   with a call to its addon's helper. Do not touch nested function varargs, comments,
+   strings, or user files. Keep each file as a separate lexical chunk.
+3. Preserve unchanged text as identity map segments and map each replacement
+   expression to the original ellipsis span. Compose these maps with existing XML
+   mappings where applicable. All semantic facts and navigation must refer to the
+   same analysis view; never combine original offsets with transformed syntax.
+4. Mark generated helper declarations/calls as context-only origins and filter
+   them from user call/reference/API/flow facts and output. A source map alone
+   cannot make a synthetic call a user operation. Wrapper-only problems become
+   context-analysis problems; mapped user problems retain their original location.
+
+This is a **design inference from the pinned source**, not implemented or executed
+support. [`unwrapp_return_type`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/semantic/infer/infer_call/mod.rs)
+retains a multi-result call in a final expression position and selects its first
+slot otherwise. A table identity in the second result is retained inside that
+multi-result value; the direct table-return instance conversion is a different
+branch. [`set_index_expr_owner`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/compilation/analyzer/lua/stats.rs)
+attaches fields to the referenced table identity. These are the existing mechanisms
+to reuse, with actual cross-file typing and mappings verified when the implemented
+workflow can be exercised. No second Lua type engine is needed.
+
+Do not apply this two-argument model to every XML body or Blizzard-owned load
+context. Give an XML handler implicit parameters only when the exact script
+element has a source-verified signature; an inline load script is a different
+unit. `SuppressLocalTableRef`, secure-environment and bootstrap
+directives also need explicit selected-source treatment. Unsupported contexts
+remain limited rather than receiving a fabricated non-nil private table. See
+[load context boundaries](WOW_LINTER.md#4-toc-and-xml-form-the-load-model) and
+the comparative [Wowless loader](DONORS.md#wowless).
 
 ## Updates and invalidation
 

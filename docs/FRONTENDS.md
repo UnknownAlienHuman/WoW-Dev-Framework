@@ -58,15 +58,20 @@ discovery. Library/flavor flags may be omitted only when the config supplies the
   "root": "./",
   "toc": "MyAddon.toc",
   "flavor": "retail",
-  "library": "../WoWLibrary",
+  "library": ["../WoWLibrary"],
   "dependency_roots": ["../SharedAddons"],
   "checks": []
 }
 ```
 
-The config is optional when equivalent CLI options are provided. Dependency
-roots and selected checks are optional; no Project IDs or generated reports are
-part of this target configuration.
+The config is optional for default checking when the basic CLI options are
+provided. Optional `emmy_diagnostics` uses the pinned upstream diagnostic object;
+`fail_on` defaults to `error`. Optional positive `target_interface` enables
+version compatibility checking when the selected Library supplies no target.
+Unknown target Interface is not inferred from the addon TOC. Dependency roots
+and selected checks are optional; no Project IDs or generated reports are part
+of this configuration. Repeated CLI `--library` options replace the configured
+array. Advanced diagnostic settings belong in this same file.
 
 The first CLI slice runs Lua/type diagnostics with no WoW rules by default.
 Empty `checks` does not disable Emmy diagnostics. A recognized but unavailable
@@ -92,7 +97,7 @@ degraded annotation component, and the status reducer considers every partial
 component capability. The [source trace](AUDIT.md#check-completeness-is-not-scoped-to-requested-work)
 explains why early rule selection alone does not fix the resulting exit status.
 
-The target CLI exit policy is:
+The target CLI failure threshold defaults to Error. Its exit policy is:
 
 | Exit | Meaning |
 | --- | --- |
@@ -174,6 +179,15 @@ only tools the selected implementation actually supports. Both adapters
 preserve request/response framing, bounded input/output, clean shutdown, and
 cooperative cancellation where the owner observes it. See the
 [MCP stdio transport specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#stdio).
+
+Two current reader defects must be fixed during this move. An evaluated empty
+same-file reference result becomes `-32001` in `lsp/references.rs`; preserve the
+owner's result state and return the standard empty shape. In `mcp.rs`, unknown
+notifications close the session and method-specific parsers reject permitted
+`params._meta` (initialization accepts it only when empty). Keep the existing
+frame/depth limits while accepting protocol metadata. The
+[source traces](AUDIT.md#lsp-loses-a-successful-empty-reference-result) distinguish
+these defects from unsupported operations and unevaluated definition results.
 
 Plain CLI JSON commands likewise return one result with the matching command
 status; human logs belong on stderr. Serialization/output failure must not

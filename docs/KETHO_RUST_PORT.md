@@ -84,11 +84,11 @@ Preserve the useful strict behavior of
 keys and sparse/nil-bearing arrays are rejected; explicit false nilability and
 raw defaults remain distinct from missing values. Unsupported kinds and
 unresolved symbolic values must not silently become `any`. There is a narrower
-loss to inspect when changing a consumer: absent collections currently become
-empty vectors in typed facts, although raw source remains available. Whether
-that distinction affects a particular diagnostic or completeness decision has
-not been established; do not introduce a general metadata registry to repair a
-consumer that has not been identified.
+loss: absent collections become empty vectors in typed facts, although raw
+source remains available. The traced annotation and native-view consumers do
+not establish a required absent-versus-empty distinction for these collections.
+Keep the raw fact available; do not introduce a general metadata registry for
+an unobserved consumer requirement.
 
 Do not equate Ketho compatibility with these semantics being implemented: its
 reviewed emitter does not handle all of them. `DependencyOrderedTables` was not
@@ -134,6 +134,13 @@ all such APIs merely because an exact annotation is unavailable. For a mixed
 group, only use a supported conservative form with an explicit loss, or report
 the signature as unsupported. Do not present either outcome as exact typing.
 
+For `MayReturnNothing`, the source-supported conservative projection is to make
+each declared result slot nullable while retaining the callable-level fact.
+It loses the correlation that the entire return row is absent together. The
+pinned `return_overload` parser requires at least one type; an empty annotation
+is not a supported zero-result overload. Keep that loss visible instead of
+emitting invented syntax or an unconditional non-null return.
+
 ## Corrections and supplemental declarations
 
 Generated Blizzard tables are the source facts. Explicit corrections can repair
@@ -172,6 +179,16 @@ declarations named by retained type atoms. Neither that attachment nor a resolve
 Reference candidate proves the whole emitted Library has no missing types.
 Reuse these mechanisms; report unresolved dependencies where they affect an
 emitted declaration instead of adding another general type-resolution engine.
+Alias dependency closure is transitive; the type-declaration attachment follows
+direct callable/alias type atoms, not recursively every class field. It is an
+origin sidecar, while Emmy sees the registered Library text for actual typing.
+The traced consumer does not require a second recursive sidecar closure.
+
+The current `current-source-bundle.yml` passes six explicitly named Ketho type
+catalogs to `catalogs.rs::read`. It does not scan all of `Annotations/Core/Type`
+or enforce the old full-tree drift gate. Keep selected resources and their
+revision visible; add a catalog because a retained declaration needs it, not
+because a historical inventory document described a larger platform.
 
 For a concrete mixin case, Blizzard's
 [`C_AuctionHouse.CalculateItemDeposit`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_APIDocumentationGenerated/AuctionHouseDocumentation.lua)

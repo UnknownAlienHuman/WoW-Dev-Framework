@@ -31,6 +31,8 @@ do not depend on Service or applications.
 
 Use one small public configuration: addon root, optional explicit TOC, client
 flavor, Library directories, optional dependency roots and selected checks.
+Optional `target_interface`, `emmy_diagnostics` and `fail_on` supply compatibility,
+upstream diagnostic settings and the exit threshold; they are not separate profiles.
 Resolve it once before acquiring source:
 
 - CLI values override file values. Relative CLI directory paths use the process
@@ -40,18 +42,55 @@ Resolve it once before acquiring source:
 - Require an explicit flavor and at least one explicitly selected local Library
   directory, supplied by CLI or config. Do not infer flavor from a folder name,
   find a different Library silently, download data or regenerate declarations.
+  `library` is a nonempty array of paths in JSON; repeated `--library` options
+  replace that array. These directories supply declarations, not files to execute.
 - An explicit TOC remains selected even when its Interface metadata differs.
   Report that compatibility problem without switching TOCs. Without an explicit
   TOC, inspect the addon root and select only an unambiguous candidate under the
   supported flavor rules; otherwise list candidates and require selection.
   Current Project loading takes explicit TOCs, so this small discovery adapter is
   work to implement, not an existing loader capability.
+- The first supported public flavor is `retail`, with `mainline` accepted as an
+  alias and normalized once. Its source family is `Mainline`. Automatic discovery
+  considers the addon root's exact `<addon>.toc` and `<addon>_Mainline.toc` names;
+  if both exist, require an explicit TOC instead of guessing client precedence.
+  Reject case-folded duplicates. Other flavor/condition mappings need their own
+  source-backed entries before being advertised; an explicit path does not make
+  an unsupported flavor supported. Classic remains planned work, not an inferred
+  synonym for every non-retail client. Never choose the highest Interface value.
+  The ordinary in-game global addon context supplies
+  `game_types["mainline"] = true`, `family = "Mainline"`, `location = Game` and
+  `environment = Global` to the existing `TocLoadContext`. Unlisted game aliases,
+  `game` and `text_locale`
+  remain unknown unless separately selected and supported. Do not infer them
+  from the host locale, Interface number or folder spelling. Secure/glue/special
+  loads do not inherit this ordinary context silently.
+- `target_interface` is an optional positive integer. Use it when explicitly
+  supplied, otherwise use a compatible selected Library's recorded target if
+  available. Conflicting Library targets or an explicit incompatible target are
+  configuration errors. Without either, compatibility is unknown: basic typing
+  still works, but do not infer the target from the TOC being checked or use zero.
+  Represent this absence in the ordinary load input instead of forcing the old
+  positive-only `ProfileIdentity` to contain a fabricated target. Missing target
+  information limits only checks that actually need it.
 - Dependency roots are explicitly supplied AddOns-like parent directories.
   Acquire only named TOC dependencies and their transitive dependencies from
   those directories, then pass the selected packages to the existing load owner.
   Reject ambiguous name matches. Absent optional dependencies are nonblocking;
   missing required dependencies limit the affected analysis. Do not add every
   nearby addon, and do not treat a dependency directory as an annotation Library.
+  Pass only selected TOCs and the relevant dependency closure to acquisition.
+  The old package-universe reader also reads unselected variants and unrelated
+  supplied packages; their existence, encoding or size must not become a
+  prerequisite for checking the chosen flavor.
+- `emmy_diagnostics` is the pinned upstream `EmmyrcDiagnostic` object, using its
+  camelCase field names and defaults. Deserialize it directly into that type;
+  malformed codes, severities or values are configuration errors. Set it on the
+  one framework-owned `Emmyrc` with runtime Lua51. Do not discover another config
+  or use the lenient upstream file loader. An omitted object enables default
+  upstream diagnostics. `diagnosticInterval` affects editor scheduling only.
+- `fail_on` defaults to `error` and accepts `error`, `warning`, `information` or
+  `hint`. It changes the exit threshold, not diagnostic collection or severity.
 - Omitted or empty `checks` selects no WoW rule; Lua diagnostics still follow
   upstream diagnostic settings. Unknown check names are configuration errors.
   A recognized check whose implementation or required input is unavailable is
@@ -133,6 +172,14 @@ Reuse physical Lua files and the existing XML virtual-unit path in one analysis.
 entity/newline maps and separate pieces across XML comments/CDATA delimiters.
 Adding callback context must not replace this with a second inline-Lua parser.
 
+Keep acquisition failures local when selection is still meaningful. A malformed
+included XML unit must carry its path and best available parser range, leave its
+dependent closure incomplete, and preserve already captured independent Lua/XML
+units. The current `Loader::expand` propagates that parse error for the whole
+input, while `local/disk_input.rs::acquisition_error` loses its source fields.
+Fix both boundaries. Invalid request/root selection and unsafe paths still need
+explicit refusal; do not recover by reading outside configured roots.
+
 Remove the assumption that Main needs a physical `.lua` file. The current
 single-TOC loader, package Main conversion and `ProjectInputInventory::build`
 reject an empty physical inventory before XML units can supply the program.
@@ -142,13 +189,34 @@ Represent an empty language scope explicitly; never require a dummy source file
 or confuse it with failed acquisition.
 
 Path prefixes such as `packages/<addon>/...` prevent file collisions; they do not
-model WoW chunk arguments. Add one shared private-table context per selected
-addon and a separate lexical chunk scope per file. The addon-name/namespace
-values must reach top-level `...` through a supported Emmy integration, preserving
+model WoW chunk arguments. For supported ordinary external Lua chunks, add one
+shared private-table context per selected addon and a separate lexical chunk
+scope per file. Special load kinds follow their explicit context or remain
+limited; see [the load boundaries](WOW_LINTER.md#4-toc-and-xml-form-the-load-model).
+The addon-name/namespace values must reach top-level `...` through a supported
+Emmy integration, preserving
 declared load order and source maps. Dependency addons keep their own private
 tables; their selected globals can still provide context. Explicit local names
 for these values are arbitrary. Do not recognize them by the spelling `ns`,
 `addonName` or a filename, and do not rewrite unrelated nested varargs.
+
+The pinned Emmy treats an unbound chunk `...` as `any...`; adding a workspace or
+prepending an unrelated declaration does not type its two positions. The chosen
+adapter is a source-mapped virtual expression replacement, described in
+[Emmy chunk context](EMMYLUA_UPSTREAM.md#addon-chunk-context): one stable private
+table and generated two-result helper per addon, with only chunk-owned ellipsis
+expressions replaced in memory. This is a source-supported implementation design,
+not delivered context support. All diagnostics, navigation and WoW-fact readers
+must use the same transformed view and original-source maps.
+
+Keep TOC execution order as separate load data. Emmy's workspace indexing order
+does not simulate chunk execution, prove initialization before use, or make a
+conditionally loaded global available at every runtime point.
+
+Share a finite reviewed dependency-key table between TOC parsing and package
+projection. The selected Blizzard `Blizzard_FrameXMLBase.toc` uses `## Dep:`,
+which both current key lists miss. Preserve that dependency and its condition;
+do not classify every unknown metadata key as another dependency alias.
 
 ### Updates
 
@@ -173,6 +241,10 @@ for callers explicitly asking for those views.
 Poll cancellation between files/stages and before publication. The synchronous
 upstream per-file analysis cannot currently be interrupted mid-call. Do not hide
 that fact behind a cancellation token or a timeout that leaves work running.
+Include selected XML/context adapter versions in configuration/cache identity for
+both standalone and package loads. Current package configuration omits the XML
+constants, although its final analyzer/report identities and replay recapture
+already bind them; this is not evidence of a stale final result.
 
 ## Native annotation generation
 
@@ -276,6 +348,12 @@ Negative findings need complete, unconflicted evidence for the particular
 selected domain; an empty partial result does not prove absence. A general
 Graph engine is unnecessary for these ordinary typed distinctions.
 
+The current native completeness check covers the selected APIDocumentation
+manifest. It does not prove that this manifest lists all Blizzard globals,
+undocumented APIs or Lua UI exports. State that a name is absent from the selected
+contract or unresolved in the selected environment; stronger runtime-absence
+wording needs stronger evidence. Keep this scope in the finding's data and text.
+
 ## Blizzard UI index, search and context
 
 This is the next useful feature after addon checking, not its storage backend.
@@ -290,11 +368,26 @@ that search mode; SQL binding alone does not make a raw `MATCH` expression liter
 Do not promise arbitrary substring/regex matching from FTS. Reuse SQLite features
 instead of building a search federation.
 
+Reuse the current useful query paths. `Service::durable_query_shard` already
+opens a retained search shard and queries it without Project/Emmy hydration.
+The opt-in Reference documentation inventory also indexes normalized Blizzard
+documentation text in its label column. The missing body index concerns actual
+Lua/source text; do not claim all existing search is name-only or rebuild these
+working SQL readers. The current graph `neighbors_batch` likewise shares one
+physical edge scan, despite its conservative per-query logical budget.
+
 Update changed/deleted rows transactionally, including their FTS entries and
 relations. Reopening a database performs SQL reads, without Emmy/Graph hydration
 or re-generating a Library. Return path, range and bounded plain snippets from
 the matching stored text. A direct-file excerpt is permitted only when its content
 matches the indexed revision. Never apply stale spans to newer disk contents.
+
+Make query cancellation real at the database boundary: row/output limits do not
+bound the time spent inside a synchronous SQLite statement or lock wait. The
+current `SearchStoreReader` has no stop/deadline or SQLite interruption hook.
+Use the connection's interruption/progress mechanism and bounded lock waiting,
+with cancellation checks before and after reads. Keep an interrupted query
+distinct from complete zero matches; do not publish partially built success.
 
 ### Small navigation operations
 
@@ -316,6 +409,8 @@ possible versus resolved edges; a path is a navigation witness, not a new fact.
 
 Keep matches and query coverage separate. Complete zero matches, missing index,
 incomplete relevant input and output truncation are distinguishable outcomes.
+An acquired empty source set is a valid empty index, not missing/corrupt input;
+the old shard builder's nonempty-document guard must not become this contract.
 Do not import the old continuation receipts, profile DSL, pack identities or
 token-pruning platform to represent these states. Retain complete result items
 when a limit is reached rather than cutting a declaration or source mapping in
@@ -352,6 +447,13 @@ JSON does not establish valid paths, source spans, target selection, references
 or an executable owner. Validate these once at the real boundary, then use typed
 values internally. Keep useful shared `wow-core` geometry/source-map checks;
 remove duplicated envelopes without accepting unchecked serialized state.
+
+Preserve failure cause and source location through the same boundary. Current
+session adapters collapse most syntax/local-flow failures into `NativeFailure`,
+and Context cleanup can replace an earlier semantic error with a generic close
+failure. Keep the primary failure with a secondary cleanup problem when both
+occur. A failed close cannot publish success or cause a mutation to be retried.
+This requires ordinary typed errors, not the former lease/error-code platform.
 
 ## Completion and verification
 

@@ -27,7 +27,7 @@ workspace does not establish that this check works.
 | Generate a Library | Public generator and useful native projection exist; source metadata/filtering gaps remain. |
 | Check an ordinary addon | Shared Main+Library exists; normal setup/stdlib, useful diagnostics and direct frontend wiring remain unfinished. |
 | Refresh/editor check | Conservative updates exist; LSP overlay is one-file and some TOC/package update routes remain unsupported. |
-| Query source after restart | Useful selection/SQL/excerpt code exists; direct body search without replay reconstruction is not delivered. |
+| Query source after restart | Retained-shard SQL queries already work without analyzer hydration; ordinary body-text indexing and current-row updates remain to implement. |
 
 No addon workflow, performance benchmark or test suite was run in this review.
 The owner directs implementation before tests. The local shell did not expose
@@ -48,9 +48,9 @@ Links point to current files; conclusions here are tied to the baseline above.
 | Git I/O is repeated and blocking | [`io.rs`](../apps/wow-reference-builder/src/io.rs) runs `ls-tree` and `cat-file` for each file | Batch exact regular-file reads and propagate cancellation through child I/O. |
 | Compatibility/certification wrappers remain | [`wow-emmy/compatibility.rs`](../crates/wow-emmy/src/compatibility.rs), [`wow-annotations/compatibility.rs`](../crates/wow-annotations/src/compatibility.rs) | Remove through real readers; Cargo pins and useful input validation remain. |
 | XML inline context is incomplete | [`xml_lua.rs`](../crates/wow-project/src/xml_lua.rs) explicitly records `not_evaluated_unwrapped_source` for implicit receivers | Preserve mappings and add only supported handler/chunk contexts. |
-| Reads rebuild analysis | [`replay/mod.rs`](../crates/wow-project/src/replay/mod.rs) uses `hydrate_owner` and recapture comparison | Store/query current rows; checking itself needs no persistence. |
+| Native replay reads rebuild analysis | [`replay/mod.rs`](../crates/wow-project/src/replay/mod.rs) uses `hydrate_owner` and recapture comparison; [`Service::durable_query_shard`](../crates/wow-service/src/search.rs) instead reads a retained SQL shard directly | Remove hydration where the reader needs stored data; preserve the already direct SQL reader. Checking itself needs no persistence. |
 | SQLite is nested in hex/JSON | [`wow-store/src/search/mod.rs`](../crates/wow-store/src/search/mod.rs) serializes/deserializes the inner SQLite image | One directly queried database. The implementation is in Store, not Search. |
-| FTS does not index source bodies | The same file creates FTS on `owner_metadata_label`; document ID is UNINDEXED | Index body text and keep exact symbol lookup separately. |
+| FTS does not index Lua source bodies | Store indexes `owner_metadata_label`; [`reference/documentation.rs`](../crates/wow-search/src/reference/documentation.rs) can place normalized Blizzard documentation in it | Preserve the opt-in documentation lane; add actual source body text and separate exact symbol lookup. |
 | Four query families self-measure | [`federation/pagination.rs`](../crates/wow-search/src/federation/pagination.rs), `entities/query`, `reference/query`, `file_set/retrieval` repeat eight-pass sizing | Plain bounded results; no embedded self-size/hash fixed point. |
 | Source excerpts are escaped unreadably | [`render.rs`](../crates/wow-context/src/render.rs) Unicode-escapes ASCII punctuation | Render matching source as source, with only transport-appropriate escaping. |
 | Old lifecycle and fingerprint code is active | [`wow-store/src/project/mod.rs`](../crates/wow-store/src/project/mod.rs), [`graph/fingerprints`](../crates/wow-project/src/graph/fingerprints), [`xml_fingerprints.rs`](../crates/wow-project/src/graph/xml_fingerprints.rs) | Delete with obsolete consumers; do not claim the subsystem is already removed. |
@@ -276,6 +276,40 @@ maps already exist, but implicit handler receivers are explicitly unevaluated.
 machinery into generation; make load uncertainty local and add supported chunk/
 handler context. Preserve UTF-8 spans, XML mapping pieces and load order.
 
+### A failed XML unit aborts independent source acquisition
+
+[`load/xml.rs::parse`](../crates/wow-project/src/load/xml.rs) turns malformed XML
+into a generic `InvalidInputInventory` without its source path/parser range.
+[`Loader::expand`](../crates/wow-project/src/load/mod.rs) propagates that failure
+for the whole load, whereas a missing declared target is a located issue that
+allows traversal to continue. Independent captured Lua therefore cannot reach
+the analyzer through this failed acquisition.
+[`disk_input.rs::acquisition_error`](../crates/wow-service/src/local/disk_input.rs)
+also forwards the message without Project path/file fields and maps most such
+errors to `InvalidConfiguration`.
+
+**Decision:** preserve the failed unit's path, best available range and dependent
+scope; keep usable independent diagnostics. Invalid selection and unsafe paths
+remain explicit refusals. Do not invent successful XML interpretation to recover.
+
+### A selected Blizzard dependency spelling is missed
+
+The pinned
+[`Blizzard_FrameXMLBase.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_FrameXMLBase/Blizzard_FrameXMLBase.toc)
+uses `## Dep:` for SharedXML dependencies and a conditional Plunderstorm dependency.
+Both [`toc.rs::parse`](../crates/wow-project/src/load/toc.rs) and
+[`package_closure.rs::project_metadata`](../crates/wow-project/src/load/package_closure.rs)
+recognize `dependencies`, `requireddeps`, `dependson` and `optionaldeps`, but not
+`dep`. It remains unknown metadata and produces no dependency edge. Share one
+finite reviewed alias table between parsing and projection.
+
+Separately, [`acquisition.rs::read_selected`](../crates/wow-project/src/load/package_closure/acquisition.rs)
+reads unselected TOC variants, and package acquisition precedes reachability.
+That serves the old explicit-universe contract. The new ordinary adapter must
+pass only the selected TOCs and relevant dependency closure, so unrelated addons
+or unused variants cannot block the chosen target. The precise discovery and
+unknown-Interface policy is in [ordinary configuration](IMPLEMENTATION.md#ordinary-configuration).
+
 ### XML-only input is refused before its Lua can be analyzed
 
 [`load/mod.rs`](../crates/wow-project/src/load/mod.rs) rejects `TocLoadPurpose::Main`
@@ -313,6 +347,14 @@ or mapped virtual declarations. Path prefixes are not a substitute. Do not infer
 that namespace from local variable spelling, turn all globals into per-file
 locals, or reinterpret varargs inside unrelated nested functions.
 
+Pinned Emmy treats unbound chunk ellipsis as homogeneous `any...`. The
+[chosen mapped-helper adapter](EMMYLUA_UPSTREAM.md#addon-chunk-context) uses its
+existing multi-result/table-identity inference; it is a source-supported design,
+not implemented support. Exact handler signatures, free inline Script bodies,
+external chunks, `SuppressLocalTableRef` and secure/bootstrap contexts remain
+distinct. The reviewed Gethe and Wowless evidence does not justify injecting the
+same non-null private table into every XML body.
+
 ### XML syntax work and load completeness disagree
 
 [`load/xml.rs::parse`](../crates/wow-project/src/load/xml.rs) adds a blocking
@@ -344,6 +386,15 @@ label alone is not evidence that package inline Lua is skipped.
 context. Remove the stale blanket blocker for recognized/extracted bodies;
 keep actual unsupported context and malformed input visible at the right scope.
 
+The package-only configuration omits the standalone XML adapter constants, but
+the deeper identity trace closes the suspected stale-result question:
+`xml_lua::finish` and `xml_bindings/packages::finish_packages` hash their adapter
+versions; [`analyzer.rs`](../crates/wow-project/src/analyzer.rs) includes those
+report IDs; the final snapshot includes that analyzer ID. Replay rebuilds them
+and requires original IDs plus exact recapture equality. Include the versions
+in the simpler configuration/cache key too; a stale final/replayed result was
+not established by this pre-analysis asymmetry.
+
 ### LSP rejects valid version gaps
 
 [`overlay/state.rs::change_document`](../crates/wow-project/src/overlay/state.rs)
@@ -362,6 +413,58 @@ This is a source/protocol mismatch; no editor session was executed.
 stale-result rejection while accepting increasing client versions. Internal
 revisions and client versions are different values. Do not carry the old
 exact-next-version requirement into the replacement frontend.
+
+### LSP loses a successful empty reference result
+
+[`local_references.rs`](../crates/wow-emmy/src/local_references.rs) can return
+`ResolvedLocal` with zero spans when `includeDeclaration=false` and the selected
+local has no references in its admitted index. The
+[Service reader](../crates/wow-service/src/frontend/lsp/references.rs) accepts
+that result, but the [App reader](../apps/wow/src/lsp/references.rs) returns
+`-32001` whenever `locations` is empty. Preserve evaluated-empty separately from
+not-evaluated or failed analysis, then use the standard
+[reference response](https://github.com/microsoft/language-server-protocol/blob/baf2db31b5fb314a8f358f9a839d3c66e9d98734/_specifications/lsp/3.18/language/references.md).
+This is a traced branch, not an editor reproduction. Definition's absent target
+currently comes from `NotEvaluated`/parse failure; the same stronger claim is not
+established for that method.
+
+### MCP rejects permitted metadata and closes unknown notifications
+
+[`McpServer::handle_message`](../apps/wow/src/mcp.rs) closes with code 2 on an
+unknown id-less notification after its special cases. `initialize_params` permits
+only an empty `params._meta`; `tools_call` and `resources_read` reject `_meta`,
+and list methods require empty params. This is separate from strict top-level
+JSON-RPC envelope parsing. The
+[MCP metadata contract](https://modelcontextprotocol.io/specification/2025-11-25/basic#_meta)
+allows additional metadata; retain frame/depth bounds while accepting it.
+Default MCP serves status and its opt-in host serves Context inspection, not
+ordinary addon check/search. Its synchronous Context operation also has no wire
+cancellation. These actual readers need to move to the shared operation.
+
+### Query and cleanup boundaries still lose useful guarantees
+
+[`SearchStoreReader`](../crates/wow-store/src/search/mod.rs) has row limits and
+parameterized literal FTS queries, but no stop/deadline input or SQLite
+interruption/progress hook. Outer checkpoints and busy timeouts cannot preempt
+the synchronous statement. Add that boundary to direct source queries; no
+latency or performance failure was measured here. The current shard also rejects
+zero documents, which is distinct from querying an existing shard with zero hits.
+The replacement index must represent successfully acquired empty input.
+
+[`with_checked_context_read`](../crates/wow-service/src/context/operation.rs)
+closes read and Store before delivery, but a close failure replaces even an
+earlier semantic error with `InternalContractViolation`. Preserve the primary
+problem and secondary cleanup failure without publishing success or retrying the
+operation. Similarly, [`session.rs`](../crates/wow-emmy/src/session.rs) reduces
+non-cancellation syntax/local-flow errors to `NativeFailure` before Project and
+Service map them again. Keep actionable cause/stage/location in ordinary errors;
+the old exhaustive taxonomy and lease machinery need not survive.
+
+The review also corrected two overstatements: direct `durable_query_shard` does
+not hydrate Project/Emmy, and `neighbors_batch` scans edges once despite reserving
+`queries × edges` logical work. Reference Search explicitly validates decoded
+Reference data in [`reference/validation.rs`](../crates/wow-search/src/reference/validation.rs).
+Remove wrappers through those real callers while retaining their working checks.
 
 ### Planned behavior is still planned
 
@@ -384,6 +487,7 @@ that every load or update operation is absent. Keep them visible in the
 | Builder/reader maximum capacity is solved | Only acquisition/output ceilings align. Replay aggregate and graph requalification limits still differ; public maximum-size checking was not demonstrated. |
 | Emmy cancellation is absent | Incorrect as a blanket claim. Stop checks exist around files/conversion; pinned synchronous per-file analysis and blocking Git-child I/O have separate limitations. |
 | CI runs no `cargo test` | Confirmed from `quick-check.yml`. It runs repository checks, fmt, `cargo check` and Clippy, with extra exact-head/archive machinery. Under current owner policy, tests are deferred; green CI still means build evidence only. |
+| `xtask check` does not check skill synchronization | Incorrect. [`main.rs::run`](../tools/xtask/src/main.rs) calls `repository::check` and then `skill::sync(..., false)` to compare all three discovery copies. Reading the first function alone missed this caller. Markdown links/reachability are not checked by that command. The earlier rewritten tooling README repeated this error and is corrected. |
 | 1,085 passed / 13 failed / 23 ignored, about 42 minutes | **Reported by the supplied review**, not independently rerun and no raw run log supplied here. Keep the reported failures visible; do not relabel them current verified results. |
 | Five #232 regressions are rejection-phase assertions | Source review supports the decode/hydrate mismatch and early `?` exit examples. See `live_project/tests.rs`, `local/platform_input/tests.rs`, `tests/empty_packages.rs`, and `primary_callable_replay.rs`. No claim that invalid input is accepted at final admission. |
 | Delete the other eight failing tests immediately | Rejected as a blanket recommendation after source inspection of all eight. Four Context tests mix frozen bytes with useful identity/bounds/privacy checks; the fifth freezes IDs/progressive behavior. The signature case expects rejection at store open instead of configuration admission; two other cases retain a writer-lock owner across a second open. See the [13-case register](AUDIT_REGISTRY.md#the-13-failures-reported-by-claude). Exact failing instructions remain unverified without logs. No test edits/runs. |
@@ -426,8 +530,8 @@ The typed-local receiver path is now traced through the pinned analyzer and the
 rule consumer; an executed reproduction and coverage of other shadowing forms
 remain open. `FallbackType` lowering has no located occurrence in the selected
 generated corpus and is not a confirmed current-corpus defect. The package-only
-configuration identity omits the XML adapter-profile field, but no stale-result
-or cache consequence was established; do not turn that bookkeeping observation
-into a new profile/version platform. Keep these limits separate from the
+configuration asymmetry has now been traced through final identity and replay;
+their downstream checks prevent the simple version-substitution path. Keep
+unexecuted behavior separate from the
 source-traced findings above. Update the relevant register row when evidence
 changes; a separate audit framework is unnecessary.

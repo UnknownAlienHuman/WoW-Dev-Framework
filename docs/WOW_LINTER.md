@@ -56,6 +56,15 @@ sharing within one addon must not merge their lexical locals or all addon
 namespaces. The current package path prefix provides file identity only. The
 traced Main/Library inputs do not yet bind chunk arguments to a per-addon table.
 
+That default context applies only where the selected load unit justifies it.
+The reviewed Blizzard
+[RecruitAFriend TOC](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_RecruitAFriend/Blizzard_RecruitAFriend.toc)
+contains `SuppressLocalTableRef: 1`; other selected source uses secure load
+environments. These are not cosmetic metadata. The comparative Wowless loader
+also treats suppressed tables and bootstrap contexts separately. Preserve the
+directives and leave unsupported context unknown instead of injecting the same
+non-nil private table into every Blizzard-owned chunk.
+
 SavedVariables names come from the selected TOC. Declaration does not make their
 contents non-nil before initialization, provide a complete schema, or justify
 reading the user's saved-variable files. Bundled Ace/LibStub libraries are normal
@@ -100,8 +109,8 @@ neighbor; the resulting library is explicitly partial.
 
 ## 4. TOC and XML form the load model
 
-Use one selected compatible TOC. Discover automatically only when selection is
-unambiguous; otherwise list candidates. Keep declared file order and nested XML
+Use one explicitly or unambiguously selected TOC and assess compatibility
+separately. Otherwise list candidates. Keep declared file order and nested XML
 include/script order. Sorting files for deterministic storage must not change
 load semantics. Normalize separators for lookup while retaining original spans;
 report missing paths, case collisions, cycles and invalid references.
@@ -137,9 +146,13 @@ only from selected data. XML inheritance, lexical containment and runtime object
 parentage are different relationships. Unknown templates or dynamically selected
 mixins do not establish a missing method.
 
-Inline Lua needs the callback context justified by its XML script kind: implicit
-receiver and parameters, when known, plus addon namespace. The current unwrapped
-inline analysis does not provide this context. Synthetic wrappers must have
+Inline Lua needs the context justified by its exact XML script kind. Supply a
+handler receiver and callback parameters only when that element's signature is
+source-verified; otherwise leave that context unknown. A free inline `Script`
+body and an external Lua chunk are different units. Do not replace a
+handler's `...` with addon arguments or assume every inline body receives the
+external chunk's private table. The current unwrapped inline analysis does not
+provide these contexts. Synthetic wrappers must have
 source maps; wrapper-only errors must not be reported against invented user
 locations. XML entities/newline transformations can map a virtual range to
 multiple original spans. Use the actual mapping; never add one constant offset.
