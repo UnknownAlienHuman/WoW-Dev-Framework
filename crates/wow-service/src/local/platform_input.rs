@@ -4,7 +4,8 @@ use std::{sync::Arc, sync::atomic::AtomicBool};
 
 use serde::Deserialize;
 use wow_project::{
-    PlatformGraphProfile, ProjectBudgetPolicy, ProjectId, ProjectSourceOriginId, ProjectWorkspaceId,
+    PlatformGraphProfile, ProjectBudgetPolicy, ProjectId, ProjectSourceOriginId,
+    ProjectWorkspaceId,
     disk::{ManifestedPlatformInput, ProjectDiskFile, ProjectInputDirectory},
     load::{
         ProjectPackageInput, TocLoadContext,

@@ -1,45 +1,43 @@
-# Explicit disk input acquisition
+# Rooted disk input acquisition
 
-The E0-D source-acquisition adapter is `wow-project::disk`, separate from the
-immutable source registry. It does not extend E0 into scanning or TOC/XML parsing.
-The separate `wow-project::load` E2-C acquisition slice reuses this reader for a
-selected TOC/XML closure; see [TOC_INPUT.md](../../apps/wow/TOC_INPUT.md).
+`wow-project::disk` owns read-only file acquisition. Service selects inputs and
+passes the resulting typed files to Project/Emmy. Application code does not open
+Lua files itself. The separate [TOC reader](../../apps/wow/TOC_INPUT.md) uses this
+same file reader for its selected load closure.
 
-`ProjectInputDirectory::open` registers the **explicitly selected** directory.
-The private directory capability only exposes bounded configuration/artifact reads
-and `read_lua_inventory`. It cannot expose an OS handle, write, enumerate, spawn or
-resolve a moving source selector. The service coordinates this port and passes
-only retained typed inputs to the existing project/analyzer owners. Application
-code depends only on `wow-service`.
+## Selection and reading
 
-`ProjectDiskFile` names a canonical portable relative path. An optional expected
-source digest/length pair pins source bytes; JSON metadata artifacts require that
-pair. Paths and inventory collisions are admitted before source acquisition.
-`read_lua_inventory` assigns the caller's explicit Main/Library role and returns
-`ProjectInputFile` values with digests computed by the existing source-identity
-implementation. `into_workspace_input` transfers an admitted Library file to
-Emmy without reopening the filesystem or copying its source body.
+`ProjectInputDirectory::open` registers an explicit directory. Below it:
 
-## Dependency decision
+- `read_lua_inventory` reads a caller-selected nonempty Main or Library subset;
+- `read_lua_library` discovers `.lua` files beneath a configured Library root;
+- configuration/artifact readers retain their own finite transport ceilings.
 
-Add `cap-std` and `cap-fs-ext` major 4 to this owner only, with actual resolved
-versions retained in Cargo.lock. Use directory-relative no-follow opens rather
-than canonicalize/check-prefix followed by an ambient open, which races path
-replacement. These dependencies implement the platform adapter; framework code
-remains `forbid(unsafe_code)`. No new framework dependency edge is introduced.
-Only `fs::Dir` and read-only operations are used, not dependency network/write APIs.
-Full supply-chain/release acceptance remains separate from a successful build.
+Library discovery sorts relative paths before reading, ignores ordinary non-Lua
+files and rejects links/special files, empty output and case-colliding Lua paths.
+It is limited to 16,384 directory entries and 32 directory levels. The producer,
+Library acquisition and Service Library workspace use `wow-core::library_limits`:
+4,096 files, 8 MiB per file, 64 MiB total. Main keeps its existing 1,024 / 1 MiB /
+16 MiB bounds. Analyzer-output and replay budgets are separate.
 
-## Error and identity boundary
+Explicit `ProjectDiskFile` entries may carry an expected source digest/length
+pair. Directory discovery needs only a root, not per-file metadata or a generator
+report. Both selections use the same UTF-8/path/collision/byte admission and
+return `ProjectInputFile` values. `into_workspace_input` transfers Library text
+to Emmy without reopening the filesystem.
 
-Acquisition failures use Inventory phase and fixed messages: `SourceReadFailed`,
-`SourceBudgetExceeded`, `SourceChangedDuringRead`, `SourceReadCancelled`, plus the
-existing missing-file/path/encoding/digest/length/case-collision codes. Failed or
-cancelled loading returns no partial inventory. No host path enters an error,
-configuration identity, file ID, project generation or source registry.
+## Filesystem and error boundary
 
-This is a read-byte snapshot, not atomic multi-file or Git-revision provenance.
-Read caps, no-follow behavior, cancellation and exact format are documented in
-[the application schema](../../apps/wow/FILES_INPUT.md). Persistent publication,
-filesystem watching, complete-addon enumeration and source update remain outside
-this port. Existing embedded input APIs remain available without host access.
+Reuse the existing `cap-std`/`cap-fs-ext` held-directory and no-follow opens; do not
+canonicalize/check a path and then reopen it through an ambient absolute path.
+No raw handle, write or process capability is exposed. Cancellation is checked
+between directory entries and file-read chunks. Source is never executed.
+
+Errors retain the existing Inventory codes and fixed messages. Failed or
+cancelled acquisition returns no partial successful inventory. User files and
+configuration are not changed. This captures bytes per file, not an atomic
+multi-file snapshot or Git-revision proof; concurrent tree changes may fail.
+
+See [the input guide](../../apps/wow/FILES_INPUT.md) for current Service fields.
+Ordinary addon configuration, diagnostic transport and persisted direct reads
+remain separate work; adding Library discovery does not complete those workflows.

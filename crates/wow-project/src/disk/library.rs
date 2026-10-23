@@ -1,4 +1,6 @@
-use super::{ProjectDiskFile, ProjectInputDirectory, checkpoint, failure, read_error, validate_path};
+use super::{
+    ProjectDiskFile, ProjectInputDirectory, checkpoint, failure, read_error, validate_path,
+};
 use crate::{ProjectErrorCode, ProjectFileRole, ProjectInputFile, ProjectResult};
 use cap_fs_ext::DirExt;
 use cap_std::fs::Dir;
@@ -76,7 +78,9 @@ fn collect(
                     "Library directory exceeds the nesting budget",
                 ));
             }
-            let child = directory.open_dir_nofollow(name).map_err(|_| read_error())?;
+            let child = directory
+                .open_dir_nofollow(name)
+                .map_err(|_| read_error())?;
             collect(&child, &format!("{path}/"), depth + 1, entries, files, stop)?;
         } else {
             if files.len() == wow_core::library_limits::MAX_FILES {

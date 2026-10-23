@@ -130,7 +130,8 @@ promoted to R on the strength of moving tests or compiling them.
 
 **Inspected at `0f905991`:** Project `disk.rs`, `disk/pinned.rs`, inventory and
 analyzer Library handoff; Service `local/{disk_input,input,platform_input}.rs`;
-annotation `native.rs`; existing combined/platform Library selectors. Checked
+annotation `native.rs`, Project `library_view.rs` and Service graph Library
+requalification; existing combined/platform Library selectors. Checked
 cap-std's directory API before using the existing held-root/no-follow owner.
 
 **Implemented:** `ProjectInputDirectory::read_lua_library` discovers sorted Lua
@@ -145,9 +146,12 @@ tree; a failed discovery never retries another mode. No new schema or converter.
 reader and Service Library workspace: 4,096 files / 8 MiB per file / 64 MiB total,
 unchanged from the producer's previous bounds. Main limits are unchanged.
 **Separate gap:** replay still limits aggregate retained source to 32 MiB;
-binding/report outputs have their own limits. Matching this acquisition boundary
-does not prove maximum-size checking or publication. Do not indiscriminately
-increase those budgets; direct stored reads remain #131.
+binding/report outputs have their own limits. `library_view.rs` and Service
+`native_library_input.rs` still apply the old limits on graph requalification,
+not this ordinary Library acquisition route (#107 removes that regeneration).
+Matching acquisition does not prove maximum-size checking, graph use or
+publication. Do not indiscriminately increase those budgets; direct stored reads
+remain #131.
 
 **Checks:** source/caller review and local diff/link checks. No Rust runtime,
 public builder-to-addon run or maximum-size corpus run was executed here.
