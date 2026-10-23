@@ -6,9 +6,11 @@
 [`e7aa82019dc298e0351c7159d60c2a9b916b9b67`](https://github.com/Gethe/wow-ui-source/commit/e7aa82019dc298e0351c7159d60c2a9b916b9b67),
 commit labeled 12.1.5 (70529), 2026-10-22.
 
-This replaces the competing audit/coverage/completion documents. It records
-verified decisions and useful remaining gaps, not a progress diary. The supplied
-Claude review is `AUDIT_REVIEW_2026-10-23.md`, reviewing the same project commit.
+This records source-verified findings and their implementation consequences.
+The [review register](AUDIT_REGISTRY.md) separately accounts for every baseline
+Markdown file, preserved ideas, code traces and remaining questions. Reading a
+document is not verification of its implementation. The supplied Claude review
+is `AUDIT_REVIEW_2026-10-23.md`, reviewing the same project commit.
 Implementation is in [IMPLEMENTATION.md](IMPLEMENTATION.md), ordered work in
 [REFACTOR_QUEUE.md](REFACTOR_QUEUE.md).
 
@@ -91,6 +93,74 @@ list of argument positions, and a restriction flag does not prove call-site
 illegality. The existing narrow first-return secret/predicate projection in
 [`native_view.rs`](../crates/wow-reference/src/native_view.rs) remains useful.
 
+### Stride packs and nilable contents
+
+These are additional source-traced defects, with concrete current-Blizzard
+inputs. They were not established by merely counting documents or comparing
+the generator to Ketho.
+
+**Repeated groups are rejected.**
+[`C_ArtifactUI.GetMetaPowerInfo`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_APIDocumentationGenerated/ArtifactUIDocumentation.lua)
+declares three return fields with `StrideIndex` 1, 2 and 3. Its Blizzard UI
+consumer, `MetaPowerTooltipHelper` in
+[`Blizzard_ArtifactUI.lua`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_ArtifactUI/Blizzard_ArtifactUI.lua),
+iterates the results in groups of three. The source therefore establishes
+repeated ordered triples for this API.
+
+[`native/fields.rs::convert`](../crates/wow-annotations/src/native/fields.rs)
+collapses each positive index to `variadic = true`.
+[`ketho.rs::validate_fields`](../crates/wow-annotations/src/ketho.rs)
+allows that flag only on the last field. The first field therefore fails;
+`native.rs` records `renderer_InvalidVariadic` and omits the callable while
+retaining independent valid declarations. No generator run is claimed here.
+
+**Nullable contents are lost.**
+[`C_EquipmentSet.GetItemIDs`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_APIDocumentationGenerated/EquipmentManagerDocumentation.lua)
+declares `MayReturnNothing`, a `table` with `InnerType = number`,
+`Nilable = false`, and `NilableContents = true`. The same contents flag appears
+on `GetIgnoredSlots` and `GetItemLocations`, and on the argument/return packs
+of [`C_AddOnProfiler.MeasureCall`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_APIDocumentationGenerated/AddOnProfilerDocumentation.lua).
+`native_model.rs::FieldFact` has no contents-nilability field;
+[`ketho/callbacks.rs::field_type`](../crates/wow-annotations/src/ketho/callbacks.rs)
+builds the array from `InnerType` without it. The typed projection loses the
+distinction even though raw metadata survives. Do not infer an executed
+consumer error, or a non-nil `LuaValueVariant` alias, from that loss alone.
+
+**Decision:** preserve numeric pack positions and element nilability in the
+existing typed model. Use source-supported Emmy lowering, document any loss of
+tuple correlation, and keep unsupported signatures explicit. Callable
+zero-result alternatives, nullable containers and nullable elements are
+independent. [The projection guide](KETHO_RUST_PORT.md) owns this behavior.
+
+### Retained metadata is not a consumer handoff
+
+`NativeLibrary.sources` retains raw field values. Its `metadata_sidecars`
+contains field names and source links, not typed semantic values; the builder
+includes them in `source-report.json`. Moreover,
+[`local/native_artifact/wire.rs::LibraryBinding`](../crates/wow-service/src/local/native_artifact/wire.rs)
+deserializes `metadata_sidecars` as `IgnoredAny`. This is evidence about that
+reader, not a claim that every restriction fact is unused: the separate narrow
+`native_view` secret projection exists.
+
+**Decision:** pass the selected typed context/restriction/origin fields through
+the ordinary Library reader. A generated Lua Library must be usable without
+the original checkout; missing optional metadata limits only affected checks.
+Keeping a raw sidecar or reparsing the original source is not completion of
+this producer-to-consumer path.
+
+### Analyzer settings are not yet shared configuration
+
+[`syntax/analyzer.rs::build_registered`](../crates/wow-emmy/src/syntax/analyzer.rs),
+the shared constructor in [`references.rs`](../crates/wow-emmy/src/references.rs),
+and [`flow.rs::build_analysis`](../crates/wow-emmy/src/flow.rs) each construct
+`Emmyrc::default`, force Lua51 and set their own diagnostics toggle. A caller's
+resolved diagnostic policy is not threaded through these constructors.
+
+**Decision:** one configured analyzer owner for CLI, updates and editor checks.
+Keep upstream diagnostics, selection of WoW checks and the CLI failure threshold
+as separate controls. Reusing Emmy's configuration API is a target requirement,
+not a capability established by the current fixed defaults.
+
 ### Standard Lua typing is not the WoW runtime
 
 Pinned Emmy has embedded STD declarations and no WoW preset or standard-module
@@ -110,6 +180,61 @@ maps already exist, but implicit handler receivers are explicitly unevaluated.
 machinery into generation; make load uncertainty local and add supported chunk/
 handler context. Preserve UTF-8 spans, XML mapping pieces and load order.
 
+### XML syntax work and load completeness disagree
+
+[`load/xml.rs::parse`](../crates/wow-project/src/load/xml.rs) adds a blocking
+`InlineLuaNotAnalyzed` issue for nonempty text, CDATA and entity events.
+The same XML index can extract a supported inline handler body, and
+[`xml_lua.rs::prepare`](../crates/wow-project/src/xml_lua.rs) passes it into
+virtual Lua syntax analysis. The legacy issue is not reconciled with that work:
+`ProjectLoadPlan::external_files_complete` remains false, Service exposes
+`project.load_files.resolved = Partial`, and package projection can add
+`PackageFileClosurePartial`. See
+[`load/mod.rs`](../crates/wow-project/src/load/mod.rs),
+[`package_closure.rs`](../crates/wow-project/src/load/package_closure.rs) and
+[`local/projection.rs`](../crates/wow-service/src/local/projection.rs).
+
+This does **not** by itself block the native XML census. XML records explicitly
+set `file_enumeration_complete = true`; its independent consumer uses that
+flag and its own source checks, not the legacy issue list. Nor does successful
+syntax analysis establish implicit handler receiver or runtime semantics.
+
+**Decision:** distinguish file closure, syntax analysis and supported handler
+context. Remove the stale blanket blocker for recognized/extracted bodies;
+keep actual unsupported context and malformed input visible at the right scope.
+
+### LSP rejects valid version gaps
+
+[`overlay/state.rs::change_document`](../crates/wow-project/src/overlay/state.rs)
+requires `current.client_version.checked_add(1) == Some(version)` after its
+exact-replay case. The
+[`Service LSP adapter`](../crates/wow-service/src/frontend/lsp.rs)
+marks any rejected change as requiring resynchronization and clears diagnostics.
+Thus a valid change from version 3 to 5 is rejected solely for the gap.
+
+The official
+[LSP versioned-document definition](https://github.com/microsoft/language-server-protocol/blob/baf2db31b5fb314a8f358f9a839d3c66e9d98734/_specifications/lsp/3.18/types/versionedTextDocumentIdentifier.md)
+requires increasing versions and explicitly allows nonconsecutive values.
+This is a source/protocol mismatch; no editor session was executed.
+
+**Decision:** preserve exact text/snapshot guards, ordered edit application and
+stale-result rejection while accepting increasing client versions. Internal
+revisions and client versions are different values. Do not carry the old
+exact-next-version requirement into the replacement frontend.
+
+### Planned behavior is still planned
+
+[`wow-rules/src/lib.rs`](../crates/wow-rules/src/lib.rs) lists only API existence
+and a narrow local secret-operation rule as active providers. Callback annotation
+generation does not implement event-registration/handler validation or the
+broader interprocedural summaries described by older plans.
+[`LiveProjectStore::update`](../crates/wow-service/src/live_project/operations.rs)
+also explicitly rejects TOC/package-selected load
+configurations before updating; fresh project construction and lower-level
+update machinery exist. These are bounded current limitations, not evidence
+that every load or update operation is absent. Keep them visible in the
+[implementation order](REFACTOR_QUEUE.md).
+
 ## Reconciliation of the supplied Claude review
 
 | Claim/recommendation | Review decision |
@@ -120,21 +245,26 @@ handler context. Preserve UTF-8 spans, XML mapping pieces and load order.
 | CI runs no `cargo test` | Confirmed from `quick-check.yml`. It runs repository checks, fmt, `cargo check` and Clippy, with extra exact-head/archive machinery. Under current owner policy, tests are deferred; green CI still means build evidence only. |
 | 1,085 passed / 13 failed / 23 ignored, about 42 minutes | **Reported by the supplied review**, not independently rerun and no raw run log supplied here. Keep the reported failures visible; do not relabel them current verified results. |
 | Five #232 regressions are rejection-phase assertions | Source review supports the decode/hydrate mismatch and early `?` exit examples. See `live_project/tests.rs`, `local/platform_input/tests.rs`, `tests/empty_packages.rs`, and `primary_callable_replay.rs`. No claim that invalid input is accepted at final admission. |
-| Delete the other eight failing tests immediately | Too broad. Retire each with the removed behavior after checking its consumers. A failing fingerprint/XML case is not disposable solely because of its name. No test edits/runs in this documentation change. |
+| Delete the other eight failing tests immediately | Rejected as a blanket recommendation after source inspection of all eight. Four Context tests mix frozen bytes with useful identity/bounds/privacy checks; the fifth freezes IDs/progressive behavior. The signature case expects rejection at store open instead of configuration admission; two other cases retain a writer-lock owner across a second open. See the [13-case register](AUDIT_REGISTRY.md#the-13-failures-reported-by-claude). Exact failing instructions remain unverified without logs. No test edits/runs. |
 | Earlier reviewers wrongly claimed Rust unavailable | Tool availability differs by environment. Claude having Cargo does not disprove an earlier container limitation. |
 | 329 Markdown files, 18 PLATFORM docs | 329 tracked Markdown files confirmed at baseline; the exact `docs/PLATFORM_*.md` glob has 16. Reachability depends on scan roots/link parsing; do not treat the reported reachability count as a semantic review of every file. |
 
 ## Documentation disposition
 
-Historical E1/E2/E3/E7/platform contracts, old app recipes, duplicate audit/status
+Historical E1/E2/E3/E7/platform contracts, old app recipes, duplicate status
 matrices, glossary/gates and migration/proof plans are removed from the active
-tree. Root/owner instructions now route to the manifesto, behavior, implementation,
-donors and short owner guides. Package READMEs only identify current code/reuse.
+tree. Their useful ideas and the limits of source verification are accounted
+for in the [review register](AUDIT_REGISTRY.md), with links to the exact old
+revision. Root/owner instructions route to the manifesto, behavior, implementation,
+donors and short owner guides. Package READMEs identify current code/reuse.
 
 Preserved domain knowledge: source/flavor/context distinction, ordered TOC/XML
 loading, dependency ambiguity, Main/Library/STD roles, exact UTF-8/virtual ranges,
 Ketho type/callback/default/mapping semantics, events versus custom callbacks,
-SavedVariables limits and narrow secret-flow constraints. These live once in
+SavedVariables limits and narrow secret-flow constraints. The second reading
+also restores explicit configuration ownership, deletion invalidation, semantic
+admission after decoding, simple outline/neighborhood operations and query
+scope/coverage distinctions. These live once in
 [WOW_LINTER.md](WOW_LINTER.md), [KETHO_RUST_PORT.md](KETHO_RUST_PORT.md) and
 [EMMYLUA_UPSTREAM.md](EMMYLUA_UPSTREAM.md).
 
@@ -151,4 +281,10 @@ Real addon diagnostics, whole-source type closure, precise consumer compatibilit
 all conditional TOC/XML cases, editor sessions, local-flow rule completeness,
 maximum-size behavior and performance remain unexecuted. This does not block a
 coherent implementation plan, but it does block claims of full working coverage.
-Recheck only the relevant changed path; do not create another audit framework.
+The possible API-absence false positive for a locally shadowed `C_*` receiver
+remains a hypothesis: the fallback branch is suspicious, but the pinned
+analyzer's exact resolution outcome has not been established. `FallbackType`
+lowering also has no located occurrence in the selected generated corpus; it
+is not a confirmed current-corpus defect. Keep these questions separate from
+the source-traced findings above. Update the relevant register row when evidence
+changes; a separate audit framework is unnecessary.

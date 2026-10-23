@@ -37,6 +37,10 @@ with their retired behavior.
 For documentation, inspect links, source claims and instruction consistency.
 Do not build the Rust workspace for prose alone. A build or source review does
 not prove that a user workflow works; describe its status accurately.
+When reconciling old documentation or an audit, update the relevant entries in
+[the review register](docs/AUDIT_REGISTRY.md). Keep document reading, source
+tracing and executed verification distinct; do not turn it into a gate for
+unrelated implementation changes.
 
 ## Handoff
 

@@ -27,6 +27,13 @@ frontends as their backing index becomes available. General Lua completion,
 hover, and other language features remain with upstream EmmyLua; see
 [EMMYLUA_UPSTREAM.md](EMMYLUA_UPSTREAM.md).
 
+Source navigation includes a compact outline and direct relationships around
+an exact selected hit, not just a prose summary. Select the addon, Blizzard UI
+revision/flavor or API contract scope; equal names in different scopes remain
+different results. A complete empty result differs from an unavailable index,
+partial input or truncated output. The [query behavior](IMPLEMENTATION.md#small-navigation-operations)
+defines these operations without the former Context pack/profile machinery.
+
 Target command shapes (names and flags may still change):
 
 ```text
@@ -105,6 +112,17 @@ range to changed text.
 Unsaved editor buffers stay in memory. Ordered edits and document versions are
 validated before updating the shared owner. A stale, rejected, or cancelled
 analysis must not publish diagnostics or edits over a newer document version.
+
+LSP document versions must increase, but gaps are valid: version 3 followed by 5
+must not require resynchronization solely because 4 was not sent. Ordered edits
+within a notification apply to successive intermediate text states. Keep exact
+text/snapshot guards and reject stale versions; internal revision counters must
+not redefine the client's version sequence. The baseline
+`overlay/state.rs::change_document` incorrectly requires `current + 1`, and the
+Service adapter marks a rejected change as requiring resynchronization. See
+the pinned official [versioned-document definition](https://github.com/microsoft/language-server-protocol/blob/baf2db31b5fb314a8f358f9a839d3c66e9d98734/_specifications/lsp/3.18/types/versionedTextDocumentIdentifier.md)
+and [audit](AUDIT.md#lsp-rejects-valid-version-gaps).
+
 Cancellation is cooperative: report it only when the operation observes it, and
 do not claim that a synchronous analyzer call can be preempted. Keep work,
 framing, and output bounded. Relevant current implementation lives under
@@ -128,6 +146,11 @@ only tools the selected implementation actually supports. Both adapters
 preserve request/response framing, bounded input/output, clean shutdown, and
 cooperative cancellation where the owner observes it. See the
 [MCP stdio transport specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#stdio).
+
+Plain CLI JSON commands likewise return one result with the matching command
+status; human logs belong on stderr. Serialization/output failure must not
+trigger a second success-shaped result. Do not replay or retry a completed
+mutation merely because writing its response failed.
 
 These are target requirements, not claims that the current frontends meet them.
 At `c36a058`, LSP requires an explicit host and selects one of private profiles;

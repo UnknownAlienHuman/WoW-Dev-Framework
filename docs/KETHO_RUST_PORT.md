@@ -36,7 +36,8 @@ consumes the files directly.
 - System, namespace and ScriptObject ownership; exact receiver style and ordered
   arguments/returns. A colon receiver changes the call signature.
 - `bool`, `cstring`, `luaIndex` and selected named aliases; arrays from `InnerType`;
-  nullable/union/tuple precedence and terminal stride packs.
+  nullable/union/tuple precedence and the currently represented single terminal
+  stride field. Multi-position repeated groups need the correction below.
 - Present defaults including `false` and zero. Never decide whether a default
   exists with Lua/Rust truthiness shortcuts.
 - Callback argument and return order; distinction between the legacy
@@ -67,6 +68,8 @@ not cover several meaningful fields from the reviewed Blizzard revision:
 | --- | --- |
 | Callable `Environment` | Inherit/override the system context explicitly; exclude or mark secure-only members for ordinary addon analysis. |
 | `MayReturnNothing` | Preserve the callable's zero-result alternative; non-nil individual return types do not cancel it. |
+| `NilableContents` | Preserve nullable table elements or repeated-pack values separately from `Nilable` on the field itself. |
+| Numeric `StrideIndex` | Keep each position within the repeated group, alongside any fixed prefix. Do not reduce every positive value to `variadic = true`. |
 | Field `Mixin` | Preserve the association and resolve it from selected declarations; do not assume arbitrary mixins form a single inheritance chain. |
 | `SecretArguments`, `SecretValue`, restriction/hook flags | Preserve typed optional metadata and origins for relevant direct rules/advisories. Unknown values remain raw and uninterpreted. |
 
@@ -82,6 +85,44 @@ found in the inspected generated Blizzard corpus; do not prioritize speculative
 support over fields actually present. The current-source observations and
 example APIs are recorded in [AUDIT.md](AUDIT.md).
 
+In the current path, `native/fields.rs::convert` turns positive stride indices
+into booleans, while `ketho.rs::validate_fields` permits a variadic field only at
+the end. Thus a valid source group with indices 1, 2, 3 is rejected with
+`renderer_InvalidVariadic`. Preserve the source group in the existing model;
+choose only a lowering supported by the pinned Emmy consumer. A conservative
+variadic union can lose ordering/correlation and must be identified as such.
+Do not invent an annotation that appears precise but the consumer cannot read.
+
+Likewise, a nullable array element is different from a nullable array. The
+existing `ketho/callbacks.rs::field_type` appends `[]` to `InnerType`, and the
+field's optional marker is applied outside it. Carry `NilableContents` into
+the element type before constructing the array/pack. Preserve parentheses and
+mapped type atoms. `MayReturnNothing` remains a separate callable-level fact.
+
+### What the pinned Emmy consumer can represent
+
+The pinned
+[type parser](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_parser/src/grammar/doc/types.rs)
+and [type lowering](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/compilation/analyzer/doc/infer_type.rs)
+were inspected, along with its
+[return annotation guide](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/docs/emmylua_doc/annotations_EN/return.md).
+This establishes source support, not an executed generated-Library check:
+
+| Form | Meaning / limit |
+| --- | --- |
+| `table<number, number \| nil>` | Nil is in the value type; distinct from `table<number, number> \| nil`, which permits the table itself to be nil. The parser and `infer_special_generic_type` preserve the type arguments. |
+| `(number \| nil)[]` | The parser builds an array of the parenthesized union; `infer_type` keeps the union inside `LuaArrayType`. Preserve that precedence when extending the existing array renderer. |
+| `---@return number ...` | One homogeneous variadic return type, represented as `VariadicType::Base`. It does not retain the cardinality or field correlation of repeated triples. |
+| `---@return_overload` | Supports finite correlated return rows and documented generic tails. It is not evidence of a repeating heterogeneous group or an empty zero-result row. |
+
+No direct representation of repeated heterogeneous stride groups was established
+in the inspected APIs. For `GetMetaPowerInfo`, all three values are numbers, so
+a homogeneous number tail is a possible conservative type projection while
+the group-of-three metadata remains separate. Record that loss; do not reject
+all such APIs merely because an exact annotation is unavailable. For a mixed
+group, only use a supported conservative form with an explicit loss, or report
+the signature as unsupported. Do not present either outcome as exact typing.
+
 ## Corrections and supplemental declarations
 
 Generated Blizzard tables are the source facts. Explicit corrections can repair
@@ -90,6 +131,12 @@ declarations can fill a known gap. They must not silently override conflicting
 Blizzard facts or each other. Keep exact selected source, expected old value,
 replacement and reason. If a target changes, retain the original and report the
 unapplied correction. Unknown input does not become a guessed correction.
+
+Keep correction acceptance separate from final declaration emission. A guarded
+receiver rename can be accepted while the resulting class later conflicts with
+another selected name and cannot be emitted. Report both outcomes and the
+omission; `Applied` alone must not be presented as a successfully generated API.
+An accepted replacement equal to the old value is not itself a defect.
 
 Current correction JSON and its guards live in
 [`native_corrections.rs`](../crates/wow-reference/src/native_corrections.rs) and
@@ -110,6 +157,15 @@ its selected base is representable; otherwise report the missing relation.
 Emit normal inert `.lua` declarations once. Keep extra API context/restriction
 facts and source maps beside them when a real consumer needs them. A user-supplied
 plain Lua Library remains supported for types without a generator certificate.
+
+Metadata is useful only if the check reader receives it. At the baseline,
+sidecars contain field names/source links; values remain in raw documents.
+`local/native_artifact/wire.rs::LibraryBinding` deserializes `metadata_sidecars`
+as `IgnoredAny`; raw-field retention in `source-report.json` does not establish
+typed WoW semantics. Emit and read only the typed context, restriction and
+origin fields selected checks use. Read these beside the
+generated Lua without reopening the original checkout or regenerating facts.
+Absent metadata disables the affected WoW check, not ordinary Lua typing.
 
 Mappings refer to exact source bytes and declaration/member ranges. Keep
 original source, corrected value and generated span distinct. Generated

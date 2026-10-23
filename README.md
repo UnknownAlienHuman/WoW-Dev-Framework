@@ -23,9 +23,10 @@ The repository is being simplified. At reviewed baseline `c36a058`:
   callable-level `Environment` and `MayReturnNothing` need attention;
 - persisted source search still uses the old replay/storage architecture.
 
-These are implemented components, not a finished addon checker. The concise
+These are implemented components, not a finished addon checker. The
 [verified audit](docs/AUDIT.md) separates inspected code, the supplied Claude
-review and behavior that has not been run.
+review and behavior that has not been run. The [review register](docs/AUDIT_REGISTRY.md)
+accounts for every old document, its useful ideas, code evidence and open questions.
 
 ## Current executable entry points
 

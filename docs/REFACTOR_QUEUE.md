@@ -12,7 +12,8 @@ Related: [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/20
 [#197](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/197).
 
 Connect root/TOC/flavor/Library input to the existing shared Emmy session and
-public CLI. Initialize Lua51/STD; preserve upstream message/code/severity/range
+public CLI. Resolve one analyzer configuration, initialize Lua51/STD, and
+preserve upstream message/code/severity/range
 and remove the four-code allowlist. Select checks before doing their work.
 Return known findings separately from input/analysis limitations. Remove
 compatibility-report and Project publication requirements from this path.
@@ -25,10 +26,16 @@ requires neither a persistent source index nor completion of all old cleanup.
 Related: #200/#201; reuse the delivered builder and native Ketho port.
 
 Separate client flavor from API environment; handle member-level `SecureOnly`.
-Model `MayReturnNothing`, mixin relations and relevant restriction metadata.
+Model `MayReturnNothing`, `NilableContents`, ordered repeated stride groups,
+mixin relations and relevant restriction metadata.
 Keep unresolved types/omissions visible. Use one source-to-Library pipeline,
 consistent reader limits, batched cancellable Git reads and a simple metadata/map
 handoff. Do not recreate the removed example producer or `/1` verifier.
+
+The concrete current-source cases are `C_ArtifactUI.GetMetaPowerInfo` (repeated
+triples) and `C_EquipmentSet.GetItemIDs` (zero results versus nullable table
+contents). Connect the small metadata handoff to the Library reader; leaving it
+as an ignored raw sidecar does not finish this step.
 
 ## 3. Correct project context and changes
 
@@ -41,6 +48,11 @@ metadata from unknown load conditions. Handle changed/deleted files and changed
 load/Library selections without stale results. Retain conservative semantic
 reindexing until a narrower invalidation scheme is demonstrably correct.
 
+Remove the stale `InlineLuaNotAnalyzed` file-closure blocker for supported
+extracted bodies without claiming implicit handler context is already complete.
+Connect the TOC/package-selected update path, which currently refuses live
+updates, to selection/context rebuilding.
+
 ## 4. Small WoW checks and editor/agent reuse
 
 Related: [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103),
@@ -52,8 +64,9 @@ Related: [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/10
 Use direct typed checks for supported API context, widget/template, event/callback
 and restricted-use cases. API absence and runtime safety must not be guessed.
 Replace the one-file LSP path with the configured project; expose only useful
-read-only MCP operations. Keep standard framing, empty results and document
-versions. Remove generic pack/matcher/proof and frontend profile wrappers as
+read-only MCP operations. Keep standard framing, empty results and increasing
+LSP document versions, including valid gaps. Remove generic pack/matcher/proof
+and frontend profile wrappers as
 these consumers move. #103 owns useful recognizer/check selection, not a new
 engine; early execution selection belongs to the check route above.
 
@@ -67,6 +80,8 @@ Related: [#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/13
 Store current files/body text/symbols/useful relations in one SQLite database.
 Read after reopen without rebuilding analysis; return readable matching excerpts.
 Remove nested databases, replay recapture, self-sizing pages and Context packs.
+Keep the useful outline/direct-neighbor query, exact scope selection and
+empty/partial/truncated result distinctions in the direct implementation.
 The known remaining fingerprint code is removal work with its consumers under
 [#118](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118), not an
 already-deleted subsystem or a reason to repair its historical product.

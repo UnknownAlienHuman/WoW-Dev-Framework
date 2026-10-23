@@ -59,6 +59,22 @@ the target baseline. EmmyLua also exposes configured dialect extensions, but
 the framework should enable one only when selected source establishes the need.
 Lua 5.1 parsing does not establish WoW API or runtime behavior.
 
+## Configuration belongs to the shared owner
+
+Resolve the supported upstream diagnostic settings before creating the analysis
+and reuse them on refresh. The application owns target selection, WoW checks
+and the exit threshold; Emmy owns language diagnostics and their configuration.
+Keep Lua 5.1 explicit for this target. A configuration change that affects
+analysis must invalidate the corresponding results, including editor caches.
+
+Currently `syntax/analyzer.rs::build_registered`, the shared constructor in
+`references.rs`, and `flow.rs::build_analysis` each create `Emmyrc::default`.
+The first two enable diagnostics and the last disables them. This is an
+implementation limitation, not configurable behavior. Pass the resolved
+configuration through the shared session instead of introducing a separate
+settings engine or another copy of the analyzer. Preserve upstream diagnostic
+directives where the pinned analyzer supports them.
+
 ## Diagnostics and source locations
 
 Use upstream diagnostics on Main while the same analysis has Library and STD

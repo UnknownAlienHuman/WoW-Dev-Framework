@@ -2,7 +2,8 @@
 
 Read the [manifesto](ARCHITECTURE.md) and [WoW behavior](WOW_LINTER.md).
 This is the target implementation, not an inventory of promises already delivered.
-Current source evidence is in [AUDIT.md](AUDIT.md); order is in the
+Current source evidence is in [AUDIT.md](AUDIT.md), with document-by-document
+coverage in the [review register](AUDIT_REGISTRY.md); order is in the
 [queue](REFACTOR_QUEUE.md). Reuse working algorithms and remove their platform
 wrappers through the actual callers.
 
@@ -64,6 +65,14 @@ use upstream diagnostic configuration and only justified narrow WoW suppressions
 Keep STD/Library origins distinct from Main findings. Details and exact donor APIs
 are in [EMMYLUA_UPSTREAM.md](EMMYLUA_UPSTREAM.md).
 
+Resolve analyzer settings once and pass them to this session and its updates.
+The current syntax, reference and local-flow constructors each make their own
+`Emmyrc::default`; they do not implement a caller-selected diagnostic policy.
+Remove those independent defaults as the callers move. Keep three controls
+distinct: upstream diagnostic configuration, selected WoW checks, and the CLI
+failure threshold. A threshold changes the exit decision, not which messages
+exist; disabling one WoW check must not suppress unrelated Emmy diagnostics.
+
 ### Updates
 
 Keep immutable source bytes/version for each published result. Reuse VFS/syntax
@@ -73,6 +82,16 @@ TOC/XML/dependency/Library changes rebuild selection/context before reanalysis.
 A failed or cancelled refresh cannot advertise an old snapshot as current.
 For LSP, new document versions supersede older work and stale diagnostics are
 cleared/replaced only for the appropriate version.
+
+Load membership and analyzer membership must change together. Removing a file
+also removes its declarations, virtual units, maps, dependent findings and index
+rows. A TOC variant/dependency change can change the entire selected file set;
+an XML include can change selected units, while template/inheritance changes
+can change widget and handler context.
+The current `LiveProjectStore::update` rejects TOC/package-selected projects:
+connect a fresh load-plan rebuild to the shared check instead of treating the
+existing physical-file update route as complete. Keep old immutable views only
+for callers explicitly asking for those views.
 
 Poll cancellation between files/stages and before publication. The synchronous
 upstream per-file analysis cannot currently be interrupted mid-call. Do not hide
@@ -105,7 +124,8 @@ Extend `native_model` and the existing emitter, not a second model/renderer:
 - distinguish flavor selection from API environment; apply member restrictions
   as well as system restrictions so `SecureOnly` functions cannot leak through
   an `All` parent into ordinary-addon declarations;
-- model `MayReturnNothing`, field `Mixin`, member environment and the secret/
+- model `MayReturnNothing`, `NilableContents`, numeric stride-group positions,
+  field `Mixin`, member environment and the secret/
   restriction fields actually present in the selected source;
 - preserve defaults, receiver style, arrays, callbacks, ordered result packs,
   enum/open-string distinctions and explicit widget bases;
@@ -127,6 +147,15 @@ Use the existing `source-report.json` boundary while simplifying it. Generated
 Lua alone remains a valid type Library; richer WoW checks can consume the small
 metadata alongside it. No report is a prerequisite to basic third-party Library
 loading and no hidden runtime reconstruction is required to read API facts.
+
+Implement this handoff in the actual Library reader. Today the native artifact
+wire reader discards `metadata_sidecars` with `IgnoredAny`; recording raw metadata
+in the builder is not sufficient. Those sidecars are field-name/source links;
+the values still live in raw documents. Emit the few typed fields needed by
+selected checks and decode them in the reader, validating target/declaration
+references and keeping origins.
+Unsupported fields remain explicit losses. Do not require a full Reference
+snapshot, original source checkout or a second generation pass to use them.
 
 Corrections identify an exact symbol/field, expected old value, replacement and
 source/reason. Apply only to the selected target; conflicts or changed inputs
@@ -155,6 +184,14 @@ Type checks must not depend on an optional secret/event or source-search feature
 If a downstream pass needs only three fields, pass those fields rather than the
 whole Project/Graph/Reference publication model.
 
+Retain the semantics hidden inside those wrappers: a recorded name is not a
+resolved callable; `UsesApi` is not necessarily a call; a possible relationship
+does not become definite through traversal. Keep dependency/load direction and
+source order. XML containment, inheritance and object parentage stay distinct.
+Negative findings need complete, unconflicted evidence for the particular
+selected domain; an empty partial result does not prove absence. A general
+Graph engine is unnecessary for these ordinary typed distinctions.
+
 ## Blizzard UI index, search and context
 
 This is the next useful feature after addon checking, not its storage backend.
@@ -175,6 +212,37 @@ or re-generating a Library. Return path, range and bounded plain snippets from
 the matching stored text. A direct-file excerpt is permitted only when its content
 matches the indexed revision. Never apply stale spans to newer disk contents.
 
+### Small navigation operations
+
+Preserve the useful behavior of the former Map/Skeleton/Context documents as
+direct queries over these tables and existing Emmy facts:
+
+| Operation | Result and boundary |
+| --- | --- |
+| Outline | Selected package/TOC/files or a file's declarations, with useful load order and source locations. A directory inventory is not a claim of runtime reachability. |
+| Exact symbol lookup | Matching declarations in an explicit scope. Keep equal names from the addon, Blizzard UI and API Library as distinct candidates. |
+| Context around a hit | Its matching source excerpt, declaration and direct callers/references/load or type relations that are actually known. Default to direct neighbors with finite count/text limits; report truncation. |
+| Text search | Documented token/phrase matching over indexed source and documentation, with exact selected revision/flavor and deterministic ordering. |
+
+Select the addon snapshot, Blizzard source revision/flavor, or API contract
+scope explicitly. A source observation and an API contract have different
+meaning even when their names match. Do not silently rebind an old selection to
+new current data. If deeper expansion is needed, bound it explicitly and preserve
+possible versus resolved edges; a path is a navigation witness, not a new fact.
+
+Keep matches and query coverage separate. Complete zero matches, missing index,
+incomplete relevant input and output truncation are distinguishable outcomes.
+Do not import the old continuation receipts, profile DSL, pack identities or
+token-pruning platform to represent these states. Retain complete result items
+when a limit is reached rather than cutting a declaration or source mapping in
+half. Add pagination only when a caller needs it.
+
+Source is quoted data for editors and agents. Render readable code, choosing a
+Markdown fence that cannot be closed by the body; escape transport syntax once
+and handle unsafe control characters in display labels. Preserve the captured
+source and its ranges separately. Source comments and documentation cannot
+override tool instructions or become executable commands.
+
 Remove nested SQLite/hex/JSON, replay recapture, object lifecycle, retained-result
 journals, self-sizing cursors and Context pack/map/skeleton machinery as these
 readers switch. Start with a finite limit and ordinary ordered results; add
@@ -186,6 +254,12 @@ A check returns diagnostics, analysis problems and selected target information.
 A source query returns located hits. Serialize once at the CLI/LSP/MCP boundary;
 no self-hash, frozen bytes, proof manifest or output-size fixed point. Share
 behavior, not a generic invocation registry. See [FRONTENDS.md](FRONTENDS.md).
+
+Simplifying wire formats must preserve admission checks. Successfully decoding
+JSON does not establish valid paths, source spans, target selection, references
+or an executable owner. Validate these once at the real boundary, then use typed
+values internally. Keep useful shared `wow-core` geometry/source-map checks;
+remove duplicated envelopes without accepting unchecked serialized state.
 
 ## Completion and verification
 

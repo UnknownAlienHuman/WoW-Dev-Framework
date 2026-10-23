@@ -1,7 +1,8 @@
 # What the WoW linter must understand
 
 This is intended behavior, not a claim that the current code implements every
-row. The [audit](AUDIT.md) identifies existing gaps; the
+row. The [audit](AUDIT.md) identifies existing gaps and the
+[review register](AUDIT_REGISTRY.md) records what was actually checked; the
 [implementation guide](IMPLEMENTATION.md) maps them to code. Sources and reusable
 algorithms are linked in [DONORS.md](DONORS.md).
 
@@ -61,10 +62,10 @@ explicit adapter can establish it.
 | Blizzard fact | Required treatment |
 | --- | --- |
 | Ordered `Arguments` / `Returns` | Preserve order, Lua multiple-result behavior and receiver style. Let EmmyLua check types and argument counts. |
-| `Type`, `InnerType`, `Nilable` | Preserve aliases, arrays/unions and nilability. Missing metadata and explicit `false` are different. |
+| `Type`, `InnerType`, `Nilable`, `NilableContents` | Preserve aliases, arrays/unions, container nilability and element/pack-slot nilability separately. Missing metadata and explicit `false` are different. |
 | `Default` | Preserve `false`, zero and empty string as present values. Do not use truthiness to decide optionality. |
 | `MayReturnNothing` | Keep the callable's zero-result alternative, even when individual return fields say `Nilable = false`. At assignment, absent results become nil. |
-| `StrideIndex` / varargs | Preserve the declared pack structure and ordering. Unsupported packs are visible projection gaps. |
+| `StrideIndex` / varargs | Preserve the fixed prefix, ordered repeated group and each position within it. A positive index is not merely a boolean variadic flag. Unsupported packs are visible projection gaps. |
 | `CallbackType`, event payload | Preserve ordered parameters and returns. A callback name alone is not a complete signature. |
 | Structure fields and `Mixin` | Retain the data type and explicit mixin relation; do not flatten guessed inheritance or duplicate every method. |
 | `ScriptObject`, widget bases | Use explicit reviewed class/receiver/base relationships. Folder or type-name similarity does not prove inheritance. |
@@ -73,8 +74,17 @@ explicit adapter can establish it.
 
 The reviewed Ketho emitter is a useful donor, but it does not lower all of this
 metadata. In particular, `MayReturnNothing`, member `Environment`, `Mixin` and
-several restriction fields require work in this project. See
+several restriction fields require work in this project, as do multi-position
+stride packs and `NilableContents`. See
 [Ketho/native projection](KETHO_RUST_PORT.md).
+
+For example, the selected Blizzard source gives `GetMetaPowerInfo` three return
+fields with `StrideIndex` 1, 2 and 3; the current emitter rejects that shape.
+`C_EquipmentSet.GetItemIDs` has both `MayReturnNothing` and a non-nil table whose
+contents may be nil. These are three separate questions: whether results exist,
+whether the returned table is nil, and whether an indexed element is nil. The
+[source traces](AUDIT.md#stride-packs-and-nilable-contents) identify the input and
+the current losses. Do not flatten them into one optional marker.
 
 Use EmmyLua's supported types/overloads. If the engine cannot express correlated
 optional returns, retain that fact and use a documented conservative projection
@@ -101,6 +111,13 @@ Cosmetic/custom TOC metadata must not mark all type checking incomplete. An
 unknown directive that can change loading affects the load-dependent checks.
 Keep selected, excluded and unresolved files distinct. Report a Lua file omitted
 from the load plan only when that warning is useful and its exclusion is proven.
+
+Track file discovery, XML parsing, inline Lua analysis and handler-context
+support separately. An extracted handler body must not keep a blanket
+`InlineLuaNotAnalyzed` blocker on file closure after its syntax has been
+analyzed. Unsupported handler context can still limit the relevant semantic
+check. Inventory membership also differs from load reachability: finding a file
+under a configured root does not prove that the selected addon loads it.
 
 Use the existing quick-xml parser and source maps. Resolve `Include`/external
 `Script`, template inheritance, widget types, script handlers and explicit mixins
@@ -131,6 +148,11 @@ Start with types, load integrity and API context. Add each remaining check as a
 small direct function over existing typed facts. Select checks **before** their
 work runs. Share relevant facts, not a JSON recognizer-pack compiler or a plugin
 registry. An unrequested rule cannot make a completed type check partial.
+
+At the reviewed baseline, the active rule providers are only API existence and
+a narrow local secret-value operation check. Event payload/handler validation,
+broader callback summaries and widget checks in this table are work to deliver;
+generating a callback annotation does not connect a registration site to a handler.
 
 ## 6. Secret values and protected behavior
 
@@ -171,3 +193,10 @@ facts that depend on it. Initially retain the correct conservative semantic
 rebuild. Publish a coherent new result after success; never serve an old result
 as current after a failed update. Source search uses matching indexed text, not
 old offsets applied to modified disk contents.
+
+Deletion must remove obsolete declarations, load membership, virtual Lua units,
+source maps, check results and search rows together. If the effect of a change
+is unknown, rebuild the smallest containing scope known to be safe. An older
+immutable result may remain available as explicitly old data; it cannot satisfy
+a request for the new text. Client LSP versions increase but need not be
+consecutive; internal revisions must not impose that extra protocol constraint.

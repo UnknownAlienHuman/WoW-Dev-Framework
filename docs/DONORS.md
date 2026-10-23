@@ -56,6 +56,9 @@ and policy. At this source revision, for example,
 
 Ketho-specific compatibility gaps to check against the current Rust owner:
 
+- Repeated `StrideIndex` groups and `NilableContents` occur in the selected
+  source. The Blizzard consumer of `GetMetaPowerInfo` demonstrates repeated
+  triples; preserving a single terminal vararg does not cover that shape.
 - `Mixin` annotations describe composition; do not substitute a guessed single
   parent relationship.
 - `MayReturnNothing` is distinct metadata about a callable's return behavior.
@@ -69,6 +72,16 @@ When extending the native path, trace the selected source field into its Rust
 fact, projection and consumer before deciding that the behavior is supported.
 Retain raw evidence and report unsupported forms as partial or unknown rather
 than silently dropping their meaning.
+
+For annotation syntax, use the pinned Emmy
+[parser](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_parser/src/grammar/doc/types.rs),
+[type lowering](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/compilation/analyzer/doc/infer_type.rs)
+and [return guide](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/docs/emmylua_doc/annotations_EN/return.md).
+Nullable element types and homogeneous variadic returns have source support;
+an exact repeated heterogeneous tuple form was not established. The
+[projection guide](KETHO_RUST_PORT.md#what-the-pinned-emmy-consumer-can-represent)
+records the verified forms and remaining limit. Do not invent syntax or a new
+type engine to fill that gap.
 
 ## Wowless
 

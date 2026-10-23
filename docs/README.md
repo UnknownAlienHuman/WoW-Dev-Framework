@@ -14,6 +14,7 @@ intended replacement and identify known gaps explicitly.
 | How is EmmyLua configured and updated? | [EmmyLua](EMMYLUA_UPSTREAM.md) |
 | How do users, editors and agents access it? | [CLI/LSP/MCP](FRONTENDS.md) |
 | What did the audit establish? | [Verified audit](AUDIT.md) |
+| Which old documents and code paths were checked, and what remains open? | [Review register](AUDIT_REGISTRY.md) |
 | How do contributors work? | [AGENTS.md](../AGENTS.md) |
 
 Package READMEs are navigation to code, not separate product specifications.
