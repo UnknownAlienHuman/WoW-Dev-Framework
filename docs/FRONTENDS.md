@@ -72,6 +72,13 @@ not be checked or which input/capability was unavailable. Partial coverage must
 not erase a finding or manufacture a clean result. JSON output carries both
 fields explicitly; text output states both in readable terms.
 
+Completeness covers the requested checks and source scope. A disabled secret
+check must not make a completed Lua/type check partial; unavailable metadata for
+an enabled API-context check must. The current native path adds an unconditionally
+degraded annotation component, and the status reducer considers every partial
+component capability. The [source trace](AUDIT.md#check-completeness-is-not-scoped-to-requested-work)
+explains why early rule selection alone does not fix the resulting exit status.
+
 The target CLI exit policy is:
 
 | Exit | Meaning |
@@ -108,6 +115,14 @@ positions are derived from that content. LSP positions must use the negotiated
 encoding (UTF-16 when that is the protocol default), and every diagnostic must
 be associated with the document version that produced it. Do not apply an old
 range to changed text.
+
+The pinned Emmy diagnostic range uses Unicode scalar columns even though its
+Rust type is LSP-shaped. Keep the existing conversion to UTF-8 bytes before
+converting to the client's encoding; forwarding its `character` field directly
+would give wrong positions after non-BMP characters. The existing overlay index
+handles UTF-8/UTF-16, CRLF and the final empty line. Preserve its boundary checks
+and the same captured text through the shared-project rewrite; see
+[the Emmy adapter](EMMYLUA_UPSTREAM.md#diagnostics-and-source-locations).
 
 Unsaved editor buffers stay in memory. Ordered edits and document versions are
 validated before updating the shared owner. A stale, rejected, or cancelled

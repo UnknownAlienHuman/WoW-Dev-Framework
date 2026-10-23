@@ -79,6 +79,17 @@ Reuse that substance without its proof/partition scaffolding. It is not a
 complete interpretation of conditional returns, every return slot or secret
 structure fields.
 
+Preserve the useful strict behavior of
+[`native_model.rs`](../crates/wow-reference/src/native_model.rs): duplicate object
+keys and sparse/nil-bearing arrays are rejected; explicit false nilability and
+raw defaults remain distinct from missing values. Unsupported kinds and
+unresolved symbolic values must not silently become `any`. There is a narrower
+loss to inspect when changing a consumer: absent collections currently become
+empty vectors in typed facts, although raw source remains available. Whether
+that distinction affects a particular diagnostic or completeness decision has
+not been established; do not introduce a general metadata registry to repair a
+consumer that has not been identified.
+
 Do not equate Ketho compatibility with these semantics being implemented: its
 reviewed emitter does not handle all of them. `DependencyOrderedTables` was not
 found in the inspected generated Blizzard corpus; do not prioritize speculative
@@ -152,6 +163,26 @@ from filenames, shorten names by convention or copy all transitive methods.
 Unknown/conflicting bases remain unresolved. Only emit an inherited type when
 its selected base is representable; otherwise report the missing relation.
 
+Keep three existing mechanisms distinct. The selected alias catalogs are parsed
+with Emmy and combined before dependency validation; `aliases/callable.rs` keeps
+the reachable alias definitions used by a callable. Reference's optional
+`native_view/type_resolution.rs` records exact source-type candidates and
+ambiguity. The annotation `native/type_declarations.rs` attaches uniquely emitted
+declarations named by retained type atoms. Neither that attachment nor a resolved
+Reference candidate proves the whole emitted Library has no missing types.
+Reuse these mechanisms; report unresolved dependencies where they affect an
+emitted declaration instead of adding another general type-resolution engine.
+
+For a concrete mixin case, Blizzard's
+[`C_AuctionHouse.CalculateItemDeposit`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_APIDocumentationGenerated/AuctionHouseDocumentation.lua)
+accepts `Type = "ItemLocation"` with `Mixin = "ItemLocationMixin"`.
+The separate [`ItemLocation.lua`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_ObjectAPI/Mainline/ItemLocation.lua)
+defines the constructor and mixin methods. `FieldFact` and `native/fields.rs`
+currently retain the type but omit the typed mixin association. A selected
+supplemental declaration may supply useful methods independently; this does not
+mean the generated descriptor's relationship has been preserved. Keep that
+relationship and its origin without treating every mixin as inheritance.
+
 ## Output and source locations
 
 Emit normal inert `.lua` declarations once. Keep extra API context/restriction
@@ -166,6 +197,16 @@ typed WoW semantics. Emit and read only the typed context, restriction and
 origin fields selected checks use. Read these beside the
 generated Lua without reopening the original checkout or regenerating facts.
 Absent metadata disables the affected WoW check, not ordinary Lua typing.
+
+Source-map support also has a specific consumer boundary. `NavigationIndex`
+supports exact bidirectional lookups, including external source scopes. The
+old `native_library_input` requalification path rebuilds maps from retained
+generation input and checks their identities; it does not read a ready-to-use
+map directly from an ordinary Library directory. `NativeApiTargetResolver`
+accepts a unique Blizzard declaration mapping and refuses external-alias or
+other-precision mappings for that API-target operation. Preserve those checks
+and honest unsupported outcomes. Wire useful maps into direct Library reads
+without regenerating the Library or relabeling an alias as a Blizzard API.
 
 Mappings refer to exact source bytes and declaration/member ranges. Keep
 original source, corrected value and generated span distinct. Generated

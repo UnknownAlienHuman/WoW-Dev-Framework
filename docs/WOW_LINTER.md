@@ -51,6 +51,11 @@ file's lexical scope. Generated context must map back to user source and never
 be written into addon files. The [Wowless loader reference](DONORS.md#wowless)
 is a useful comparison for this integration, not runtime proof.
 
+Keep the private table distinct for each addon, including selected dependencies;
+sharing within one addon must not merge their lexical locals or all addon
+namespaces. The current package path prefix provides file identity only. The
+traced Main/Library inputs do not yet bind chunk arguments to a per-addon table.
+
 SavedVariables names come from the selected TOC. Declaration does not make their
 contents non-nil before initialization, provide a complete schema, or justify
 reading the user's saved-variable files. Bundled Ace/LibStub libraries are normal
@@ -119,6 +124,13 @@ analyzed. Unsupported handler context can still limit the relevant semantic
 check. Inventory membership also differs from load reachability: finding a file
 under a configured root does not prove that the selected addon loads it.
 
+An addon may contain XML with inline Lua and no physical `.lua` file. Analyze
+those virtual units and retain load/template diagnostics even when there is no
+language body. The current Main admission rejects an empty physical inventory;
+it must be corrected before the existing inline-analysis path can handle this
+case. A successfully selected empty language scope and failed source acquisition
+must remain different outcomes.
+
 Use the existing quick-xml parser and source maps. Resolve `Include`/external
 `Script`, template inheritance, widget types, script handlers and explicit mixins
 only from selected data. XML inheritance, lexical containment and runtime object
@@ -149,10 +161,25 @@ small direct function over existing typed facts. Select checks **before** their
 work runs. Share relevant facts, not a JSON recognizer-pack compiler or a plugin
 registry. An unrequested rule cannot make a completed type check partial.
 
+Apply that boundary to result status as well as execution. Report which selected
+check/file lacks necessary evidence. General component health, unsupported
+optional features and missing metadata for a disabled check are not by themselves
+limitations of the requested analysis. Keep actual input losses and enabled-check
+limitations visible; do not achieve a clean status by discarding them.
+
 At the reviewed baseline, the active rule providers are only API existence and
 a narrow local secret-value operation check. Event payload/handler validation,
 broader callback summaries and widget checks in this table are work to deliver;
 generating a callback annotation does not connect a registration site to a handler.
+
+Before attributing a use to a WoW API, establish its receiver binding and selected
+API origin through Emmy. A local with the same `C_*` spelling can have an unrelated
+concrete type. The current spelling-based consumer can misclassify its missing
+member; [the audit](AUDIT.md#a-typed-local-receiver-can-enter-wow-api-absence-checking)
+traces this conditional path. Exact catalog absence alone cannot fix a wrong
+binding. Keep unknown provenance unknown and preserve ordinary Lua diagnostics.
+The existing API rule covers direct static member calls, with a receiver-name
+filter; it does not establish global-function or namespace-alias coverage.
 
 ## 6. Secret values and protected behavior
 
@@ -168,6 +195,14 @@ use; a similarly named variable, a guard after use, copying, `pcall`, conversion
 or formatting does not itself prove permission to inspect it. Conditional
 secrecy, unknown aliasing/calls and unsupported control flow remain unknown.
 Do not turn absence of a supported finding into a runtime-safety certificate.
+
+Distinguish unresolved semantics from invalid facts. A correctly linked local
+initializer may still have an unresolved member call. The current Secret
+consumer can treat this as a fact-graph error when matching restriction metadata
+exists; [the source trace](AUDIT.md#an-unresolved-secret-producer-is-treated-as-a-broken-fact-graph)
+describes the condition. Report the affected check/use as not evaluated while
+retaining real rejection of stale or inconsistent identities. Missing restriction
+rows in a partial catalog do not establish unrestricted behavior.
 
 Keep this metadata separate from the ordinary number/string/boolean type model;
 secret values are not assumed to be wrapper objects. Do not build a parallel

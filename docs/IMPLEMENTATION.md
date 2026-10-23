@@ -73,6 +73,39 @@ distinct: upstream diagnostic configuration, selected WoW checks, and the CLI
 failure threshold. A threshold changes the exit decision, not which messages
 exist; disabling one WoW check must not suppress unrelated Emmy diagnostics.
 
+Derive completeness from the requested checks and their actual input dependencies.
+The current `local/projection.rs::components` has no selected-check input and
+marks native annotation input degraded unconditionally; `service.rs::derive_status`
+then treats any partial component capability as a partial check. Fix this along
+with early check selection. Keep real limitations with the affected check/file;
+an unused secret-analysis capability or an auxiliary navigation limitation must
+not prevent a completed type check from returning its normal outcome.
+
+### Load units and addon context
+
+Reuse physical Lua files and the existing XML virtual-unit path in one analysis.
+`xml_lua::prepare` already handles both a single TOC and reachable package plans;
+`analyzer.rs` adds those units to the shared Main/Library session. Preserve its
+entity/newline maps and separate pieces across XML comments/CDATA delimiters.
+Adding callback context must not replace this with a second inline-Lua parser.
+
+Remove the assumption that Main needs a physical `.lua` file. The current
+single-TOC loader, package Main conversion and `ProjectInputInventory::build`
+reject an empty physical inventory before XML units can supply the program.
+Select analysis units after load parsing: XML-only addons with inline Lua still
+need analysis, and a selected load-only/template package still has load facts.
+Represent an empty language scope explicitly; never require a dummy source file
+or confuse it with failed acquisition.
+
+Path prefixes such as `packages/<addon>/...` prevent file collisions; they do not
+model WoW chunk arguments. Add one shared private-table context per selected
+addon and a separate lexical chunk scope per file. The addon-name/namespace
+values must reach top-level `...` through a supported Emmy integration, preserving
+declared load order and source maps. Dependency addons keep their own private
+tables; their selected globals can still provide context. Explicit local names
+for these values are arbitrary. Do not recognize them by the spelling `ns`,
+`addonName` or a filename, and do not rewrite unrelated nested varargs.
+
 ### Updates
 
 Keep immutable source bytes/version for each published result. Reuse VFS/syntax
@@ -184,6 +217,13 @@ Type checks must not depend on an optional secret/event or source-search feature
 If a downstream pass needs only three fields, pass those fields rather than the
 whole Project/Graph/Reference publication model.
 
+An API rule needs the original receiver binding, not just its spelling and a
+member-resolution flag. Extend/query the existing Emmy fact boundary so a typed
+local named `C_*` cannot be mistaken for the selected API namespace. Reuse exact
+Reference lookup and its conflict/partial/absence distinctions. Alias or dynamic
+provenance that Emmy cannot establish stays unknown; do not add string-based
+alias chasing or a second resolver.
+
 Retain the semantics hidden inside those wrappers: a recorded name is not a
 resolved callable; `UsesApi` is not necessarily a call; a possible relationship
 does not become definite through traversal. Keep dependency/load direction and
@@ -254,6 +294,14 @@ A check returns diagnostics, analysis problems and selected target information.
 A source query returns located hits. Serialize once at the CLI/LSP/MCP boundary;
 no self-hash, frozen bytes, proof manifest or output-size fixed point. Share
 behavior, not a generic invocation registry. See [FRONTENDS.md](FRONTENDS.md).
+
+Preserve the useful old diagnostic-presentation rule: two messages are related
+only when their source, semantic operation and cause establish the relation.
+Keep distinct findings and their origins; presentation grouping must not change
+severity, completeness or the exit decision. The current local check supplies
+no causal relations to `presentation::build`, so the existence of that graph
+does not establish working root-cause folding. A plain related-diagnostic field
+is sufficient when a real producer provides the evidence.
 
 Simplifying wire formats must preserve admission checks. Successfully decoding
 JSON does not establish valid paths, source spans, target selection, references

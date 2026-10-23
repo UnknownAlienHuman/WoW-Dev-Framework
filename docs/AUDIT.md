@@ -44,6 +44,7 @@ Links point to current files; conclusions here are tied to the baseline above.
 | Most diagnostics and messages are lost | `accepted_code` in the analyzer admits four codes; [`syntax.rs`](../crates/wow-emmy/src/syntax.rs) has no message; normalized severity is Error | Preserve code/message/actual severity/range. Upstream severity is retained as metadata today, so it is the displayed/normalized severity that is wrong. |
 | LSP bypasses project context | [`overlay/state.rs`](../crates/wow-project/src/overlay/state.rs) builds one-file input; [`diagnostics.rs`](../crates/wow-service/src/frontend/lsp/diagnostics.rs) emits constant prose | Call the configured Main+Library operation with unsaved buffers. |
 | Selected rules run before filtering | [`engine.rs`](../crates/wow-rules/src/engine.rs) runs both providers; [`projection.rs`](../crates/wow-service/src/local/projection.rs) filters evaluations afterward | Select before execution; keep unrelated rule failures out of type-check completeness. |
+| Check status aggregates unrelated capabilities | The same projection builds all component capabilities; [`service.rs::derive_status`](../crates/wow-service/src/service.rs) treats any partial capability as a partial check | Derive completeness from requested checks and their inputs, retaining the actual limitations. |
 | Git I/O is repeated and blocking | [`io.rs`](../apps/wow-reference-builder/src/io.rs) runs `ls-tree` and `cat-file` for each file | Batch exact regular-file reads and propagate cancellation through child I/O. |
 | Compatibility/certification wrappers remain | [`wow-emmy/compatibility.rs`](../crates/wow-emmy/src/compatibility.rs), [`wow-annotations/compatibility.rs`](../crates/wow-annotations/src/compatibility.rs) | Remove through real readers; Cargo pins and useful input validation remain. |
 | XML inline context is incomplete | [`xml_lua.rs`](../crates/wow-project/src/xml_lua.rs) explicitly records `not_evaluated_unwrapped_source` for implicit receivers | Preserve mappings and add only supported handler/chunk contexts. |
@@ -169,6 +170,101 @@ host APIs resolve. **Decision:** keep type information and platform availability
 distinct; check resolved symbols against selected WoW facts. Workspace ignore
 settings do not filter `init_std_lib`. See [the verified donor APIs](EMMYLUA_UPSTREAM.md).
 
+### Check completeness is not scoped to requested work
+
+[`local/projection.rs::check_context`](../crates/wow-service/src/local/projection.rs)
+filters returned rule evaluations, but its `components` call has no selected-rule
+argument. That projection includes secret-rule capability state independently
+of selection. For either native source or retained-artifact input it also adds
+`wow-annotations` as `Degraded` with a `Partial` capability unconditionally.
+
+[`service.rs::derive_status`](../crates/wow-service/src/service.rs) examines every
+component and every capability, then chooses `Partial` ahead of findings/clean.
+[`local/response.rs`](../crates/wow-service/src/local/response.rs) and
+[`apps/wow/src/output.rs`](../apps/wow/src/output.rs) map that to CLI exit 2.
+Consequently a successful native check reaches partial status regardless of the
+selected rule's result. This follows the source branches; no command was run.
+It does not establish that all its analysis is unusable or that findings vanish.
+
+**Decision:** select work before execution and derive completeness from the
+checks/files requested and their actual dependencies. Preserve limitations of
+enabled checks, lost inputs and cancellation. Do not fix this by declaring every
+component complete. The old requirement to retain raw findings alongside
+blockers remains useful; optional component health is not a global clean gate.
+
+### A typed local receiver can enter WoW API absence checking
+
+The earlier shadowing hypothesis is now narrowed by the pinned Emmy source.
+[`references.rs::reference_resolution`](../crates/wow-emmy/src/references.rs)
+records receiver spelling and `Resolved`/`Possible`/`Unresolved`, without the
+receiver's lexical declaration identity. A missing member on a concrete `Ref`
+or `Def` type becomes `Unresolved`; broad/table-literal types remain `Possible`.
+[`engine.rs::api_lookup_key_parts`](../crates/wow-rules/src/engine.rs) admits an
+API namespace by that receiver spelling.
+
+At the pinned Emmy revision,
+[`infer_name_expr`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/semantic/infer/infer_name.rs)
+uses a local declaration before global lookup, and the
+[local-type lookup](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/semantic/infer/narrow/mod.rs)
+can return its concrete annotated type.
+[`get_index_decl_type`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/semantic/mod.rs)
+returns `infer_index_expr(...).ok()`; a missing member on that type follows
+[`FieldNotFound`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/semantic/infer/infer_index/mod.rs).
+The separate [semantic-declaration lookup](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/semantic/semantic_info/infer_expr_semantic_decl.rs)
+also has no member to return when the class and its bases lack it.
+
+This establishes a conditional false-positive path: a local named like a selected
+API namespace, but typed as an unrelated class, has a missing class member;
+the adapter labels it `Unresolved`, and the rule queries the same-spelled WoW
+namespace. If that API partition proves the key absent and the relevant input
+gates are complete, the rule emits an API-absence finding about the local use.
+The ordinary Lua member error can be valid while that WoW attribution is wrong.
+This is a source-derived control-flow conclusion, not an executed Lua example.
+The simple untyped `{}` example does not establish the same path.
+
+The exact lookup itself preserves useful boundaries:
+[`ReferenceView::lookup`](../crates/wow-reference/src/deterministic_view.rs)
+returns conflicts before records, permits positive records under partial
+coverage, and only a complete selected partition can prove absence. Native
+projection additionally requires the admitted corpus closure and no blocking
+API loss. Preserve those checks; they cannot compensate for a wrong receiver.
+
+**Decision:** carry or query Emmy's lexical binding and selected API origin before
+making a WoW claim. Unknown provenance stays unresolved; do not implement another
+name-resolution engine. The current producer collects direct static member
+calls, and the rule's spelling filter skips namespace aliases. This is not full
+global/member/alias availability coverage.
+
+### An unresolved Secret producer is treated as a broken fact graph
+
+The member-call producer in
+[`references.rs`](../crates/wow-emmy/src/references.rs) emits a fact for each
+supported direct member call, including `Possible` and `Unresolved` references.
+[`flow.rs::direct_member_initializer`](../crates/wow-emmy/src/flow.rs) joins a
+local initializer to that exact call/reference without requiring `Resolved`.
+These are coherent facts about incomplete semantic knowledge.
+
+In [`engine.rs::evaluate_secret`](../crates/wow-rules/src/engine.rs), an exact
+matching restriction record first makes the producer spelling relevant. The
+next combined guard treats both a non-resolved reference and mismatched
+call/reference/path/digest identities as `RuleFactReferenceGraphInvalid`. This
+happens before collecting the binding's operations and their capability gates.
+Consequently, if the selected restriction metadata recognizes a producer but
+Emmy does not resolve its member call, the rule execution can fail instead of
+reporting the affected use as not evaluated. This conditional source path was
+traced; a selected-corpus example and observed diagnostics were not executed.
+
+The identity checks have a different purpose. The normal constructor joins the
+call to the reference it actually emitted, and Project validates the shared
+Main/member/flow reports and Library bindings. No normal path producing those
+identity mismatches was established.
+
+**Decision:** retain rejection of malformed or stale fact identities. Handle
+semantic uncertainty as a limitation of the relevant check/use, preserve other
+findings, and establish the producer's actual API binding before applying secret
+metadata. A missing row in the intentionally partial restriction partition is
+not authoritative evidence that a producer has no restrictions.
+
 ### TOC and XML need source-specific context
 
 The builder separately scans document-TOC lines; Project's richer
@@ -179,6 +275,43 @@ maps already exist, but implicit handler receivers are explicitly unevaluated.
 **Decision:** share the useful selection parser without importing Project/Graph
 machinery into generation; make load uncertainty local and add supported chunk/
 handler context. Preserve UTF-8 spans, XML mapping pieces and load order.
+
+### XML-only input is refused before its Lua can be analyzed
+
+[`load/mod.rs`](../crates/wow-project/src/load/mod.rs) rejects `TocLoadPurpose::Main`
+when `loader.files` is empty, even if the parsed XML index contains inline Lua.
+[`package_closure.rs::into_namespaced_main`](../crates/wow-project/src/load/package_closure.rs)
+rejects an all-empty physical Lua inventory after selecting reachable packages;
+[`inventory.rs::ProjectInputInventory::build`](../crates/wow-project/src/inventory.rs)
+also requires physical files. These boundaries precede XML virtual-unit analysis.
+
+The selected Blizzard
+[`Blizzard_ChatBubble.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_ChatBubble/Blizzard_ChatBubble.toc)
+lists only [`ChatBubbleTemplates.xml`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_ChatBubble/ChatBubbleTemplates.xml),
+which contains an inline `OnLoad` body and no external Lua/include. This is a
+real source shape, not an executed failure report; separate Interface admission
+can reject that original TOC earlier. A package with no physical Lua can coexist
+with other packages supplying physical files, so the gap is not a claim that
+every XML-only package is excluded from a larger analysis.
+
+**Decision:** admit selected load facts and the actual physical/virtual language
+units. An XML-only addon must not need an artificial `.lua` file. An empty
+language scope, an unsupported handler context and failed acquisition are
+different states.
+
+### Package path identity does not model addon chunk arguments
+
+`into_namespaced_main` gives files paths such as `packages/<package>/<path>`;
+it retains source bytes and isolates file identities. The traced
+[`analyzer.rs`](../crates/wow-project/src/analyzer.rs) registers those physical
+bytes and XML-derived units without an addon-name/private-table input. No
+producer-to-consumer chunk-context binding was found in Project/Emmy.
+
+**Decision:** preserve lexical file scopes and model a shared private table
+within each addon, separately for dependencies, through supported Emmy context
+or mapped virtual declarations. Path prefixes are not a substitute. Do not infer
+that namespace from local variable spelling, turn all globals into per-file
+locals, or reinterpret varargs inside unrelated nested functions.
 
 ### XML syntax work and load completeness disagree
 
@@ -198,6 +331,14 @@ This does **not** by itself block the native XML census. XML records explicitly
 set `file_enumeration_complete = true`; its independent consumer uses that
 flag and its own source checks, not the legacy issue list. Nor does successful
 syntax analysis establish implicit handler receiver or runtime semantics.
+
+The deeper trace confirms that `xml_lua::prepare` handles both single-TOC and
+package load plans. For reachable or conditionally reachable packages it collects
+inline units and `analyzer.rs` feeds them into the same Main/Library session.
+`xml_index/inline.rs` retains entity spellings, XML newline transformations and
+discontinuous source pieces around comments/CDATA; mapped spans are validated
+against captured XML. Preserve this working mechanism. A partial capability
+label alone is not evidence that package inline Lua is skipped.
 
 **Decision:** distinguish file closure, syntax analysis and supported handler
 context. Remove the stale blanket blocker for recognized/extracted bodies;
@@ -281,10 +422,12 @@ Real addon diagnostics, whole-source type closure, precise consumer compatibilit
 all conditional TOC/XML cases, editor sessions, local-flow rule completeness,
 maximum-size behavior and performance remain unexecuted. This does not block a
 coherent implementation plan, but it does block claims of full working coverage.
-The possible API-absence false positive for a locally shadowed `C_*` receiver
-remains a hypothesis: the fallback branch is suspicious, but the pinned
-analyzer's exact resolution outcome has not been established. `FallbackType`
-lowering also has no located occurrence in the selected generated corpus; it
-is not a confirmed current-corpus defect. Keep these questions separate from
-the source-traced findings above. Update the relevant register row when evidence
+The typed-local receiver path is now traced through the pinned analyzer and the
+rule consumer; an executed reproduction and coverage of other shadowing forms
+remain open. `FallbackType` lowering has no located occurrence in the selected
+generated corpus and is not a confirmed current-corpus defect. The package-only
+configuration identity omits the XML adapter-profile field, but no stale-result
+or cache consequence was established; do not turn that bookkeeping observation
+into a new profile/version platform. Keep these limits separate from the
+source-traced findings above. Update the relevant register row when evidence
 changes; a separate audit framework is unnecessary.

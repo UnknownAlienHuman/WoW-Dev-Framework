@@ -17,6 +17,8 @@ preserve upstream message/code/severity/range
 and remove the four-code allowlist. Select checks before doing their work.
 Return known findings separately from input/analysis limitations. Remove
 compatibility-report and Project publication requirements from this path.
+Derive completeness from selected-check dependencies; the current global
+component reducer makes native checks partial independently of their findings.
 
 The first usable result is a typed addon check with an existing Library. It
 requires neither a persistent source index nor completion of all old cleanup.
@@ -47,6 +49,9 @@ contexts and precise virtual-source maps to the same owner. Distinguish cosmetic
 metadata from unknown load conditions. Handle changed/deleted files and changed
 load/Library selections without stale results. Retain conservative semantic
 reindexing until a narrower invalidation scheme is demonstrably correct.
+Allow XML-only input through the physical-inventory boundary. Reuse the existing
+single-TOC/package inline analysis and maps; implement the separate per-addon
+chunk context rather than mistaking package path prefixes for that context.
 
 Remove the stale `InlineLuaNotAnalyzed` file-closure blocker for supported
 extracted bodies without claiming implicit handler context is already complete.
@@ -63,6 +68,10 @@ Related: [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/10
 
 Use direct typed checks for supported API context, widget/template, event/callback
 and restricted-use cases. API absence and runtime safety must not be guessed.
+Bind API uses through Emmy lexical/source identity before exact absence lookup;
+the current typed-local shadowing path can misattribute a Lua member error.
+Separate unresolved Secret producer semantics from malformed fact identities;
+the former limits the affected check, while the latter remains an input error.
 Replace the one-file LSP path with the configured project; expose only useful
 read-only MCP operations. Keep standard framing, empty results and increasing
 LSP document versions, including valid gaps. Remove generic pack/matcher/proof

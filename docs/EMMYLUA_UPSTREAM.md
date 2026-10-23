@@ -84,6 +84,17 @@ Keep UTF-8 half-open spans and convert coordinates only at the protocol edge.
 Map diagnostics for virtual XML-derived Lua back through the existing source
 mapping; never emit a synthetic STD or Library path as an addon location.
 
+The pinned upstream's `lsp_types::Range` is not already in the editor's negotiated
+encoding. [`LineIndex::get_line_col`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_parser/src/text/line_index.rs)
+counts Unicode scalar values, and
+[`LuaDocument::to_lsp_range`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/vfs/document.rs)
+copies those columns into the range. The current
+[`syntax/coordinates.rs`](../crates/wow-emmy/src/syntax/coordinates.rs) correctly
+interprets that source contract and converts to UTF-8 bytes. Preserve it, then
+use Project's snapshot-bound overlay index for UTF-8/UTF-16 client positions.
+Do not normalize CRLF or count graphemes under the original content identity.
+This chain was inspected at source level; an editor session was not exercised.
+
 Use upstream diagnostic configuration to disable a diagnostic only when the
 selected WoW environment gives a concrete reason. Do not gate all findings on
 a framework allowlist of approved codes, replace upstream messages with generic
@@ -122,6 +133,15 @@ completion, definition, references, rename, signature help, symbols, and its
 own general diagnostics. Its handler modules are private implementation, not
 an importable SDK. Do not copy the complete server handler stack into this
 framework.
+
+The existing [`navigation.rs`](../crates/wow-emmy/src/navigation.rs) and
+[`local_references.rs`](../crates/wow-emmy/src/local_references.rs) already use
+`find_decl(..., NoTrace)` and native declaration/reference identities for narrow
+same-file lexical queries. Their Service consumers preserve the captured text
+and negotiated positions. Retain those useful algorithms where needed; they are
+not whole-project definition/reference support, and their current constructors
+still create separate one-file analyses. Move callers to the shared configured
+owner instead of rebuilding a language server or searching identifiers by text.
 
 The framework's focused stdio LSP and MCP interfaces should serve the same WoW
 project workflows as the CLI, including useful project diagnostics and source
