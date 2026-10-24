@@ -363,9 +363,7 @@ pub(crate) fn virtual_root(snapshot_id: &str) -> PathBuf {
 
 fn diagnostic_code(code: Option<&NumberOrString>) -> (EmmySyntaxDiagnosticKind, Box<str>) {
     match code {
-        Some(NumberOrString::String(value)) => {
-            (diagnostic_kind(value), value.as_str().into())
-        }
+        Some(NumberOrString::String(value)) => (diagnostic_kind(value), value.as_str().into()),
         Some(NumberOrString::Number(value)) => (
             EmmySyntaxDiagnosticKind::Other,
             value.to_string().into_boxed_str(),
