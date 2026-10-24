@@ -28,7 +28,7 @@ pub struct LspDiagnostic {
     pub severity: u8,
     pub code: Box<str>,
     pub source: &'static str,
-    pub message: &'static str,
+    pub message: Box<str>,
     pub data: LspDiagnosticData,
 }
 /// The selected profile carries its exact owner binding even for empty and
@@ -207,7 +207,7 @@ impl LspFrontend {
                 severity,
                 code: diagnostic.upstream_code().into(),
                 source: "wow-emmy/private-syntax",
-                message: "Diagnostic from the selected local syntax adapter family",
+                message: diagnostic.message().into(),
                 data: LspDiagnosticData {
                     binding_id: binding.id.clone(),
                     original: diagnostic.clone(),
