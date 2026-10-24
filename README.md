@@ -5,28 +5,36 @@ A **World of Warcraft addon linter**, written in Rust on top of
 source and the useful annotation semantics from
 [Ketho](https://github.com/Ketho/vscode-wow-api).
 
-The goal is to catch Lua/type errors and WoW-specific mistakes while an addon is
-being written: API calls, optional/multiple returns, callbacks, widgets, TOC/XML
-loading and supported restrictions. Generated libraries remain ordinary `.lua`
-files. Source lookup helps explain a finding without requiring a separate
-platform before the linter can run.
+The product should catch Lua/type errors and selected WoW-specific mistakes while
+an addon is being written: API calls, optional/multiple returns, callbacks,
+widgets, TOC/XML loading and supported restrictions. Generated libraries remain
+ordinary `.lua` files. Source lookup serves diagnostics and development; it is
+not a prerequisite for checking an addon.
 
 ## Current status
 
-The repository is being simplified. At reviewed baseline `c36a058`:
+The documentation/source audit was consolidated in PR #244. The authoritative
+live checkpoint is [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md); the baseline
+[audit](docs/AUDIT.md) remains tied to the commit it names.
 
-- a public native annotation generator and a shared Main+Library Emmy session
-  exist;
-- ordinary addon setup, complete diagnostic transport and editor reuse still need
-  work; the current adapter drops most Emmy diagnostics and their messages;
-- Blizzard metadata needed by the linter is only partly modeled. In particular,
-  callable-level `Environment` and `MayReturnNothing` need attention;
-- persisted source search still uses the old replay/storage architecture.
+On current `main` after PR #250:
 
-These are implemented components, not a finished addon checker. The
-[verified audit](docs/AUDIT.md) separates inspected code, the supplied Claude
-review and behavior that has not been run. The [review register](docs/AUDIT_REGISTRY.md)
-accounts for every old document, its useful ideas, code evidence and open questions.
+- PR #246 preserves configured Emmy diagnostic codes, exact messages, severities
+  and source ranges instead of filtering to four families;
+- PR #247 provides one configured Main + Library + optional virtual Emmy owner,
+  fixes Lua 5.1, initializes embedded STD once, and separates diagnostics-only
+  collection from requested semantic collection;
+- PR #248 provides `wow-service::addon_check`, a direct snapshot-to-result path
+  that does not construct the old Reference/Rules/publication/graph/store stack;
+- PR #249 distinguishes compiled Emmy provenance from compatibility-report
+  evidence, so the direct path need not fabricate report hashes;
+- PR #250 requires exact Main snapshot identity for configured-owner reuse.
+
+These are lower-level implemented components, not a usable public addon checker.
+The ordinary root/TOC/flavor/Library acquisition path, CLI wiring, XML source
+projection, addon chunk/private-table context, verified XML handler context,
+WoW metadata/rule repairs, project-aware LSP reuse and direct source index/search
+remain open. No end-to-end addon or editor workflow is marked observed.
 
 ## Current executable entry points
 
@@ -36,22 +44,26 @@ cargo run --locked -p wow-reference-builder -- --help
 ```
 
 The existing generator's exact interface is documented in
-[its README](apps/wow-reference-builder/README.md). The planned simple `wow check`
-and `wow library build` interfaces are described in
-[FRONTENDS.md](docs/FRONTENDS.md); their examples are target behavior, not commands
-already delivered by this documentation change.
+[its README](apps/wow-reference-builder/README.md). The simple `wow check`, index
+and search interfaces in [FRONTENDS.md](docs/FRONTENDS.md) are target behavior
+until their ordinary inputs reach the delivered lower owners.
 
 ## Development documentation
 
+- [Current status](docs/CURRENT_STATUS.md): implemented slices, open handoffs and
+  verification level.
 - [Architecture](docs/ARCHITECTURE.md): purpose, requirements and boundaries.
-- [WoW linting behavior](docs/WOW_LINTER.md): the actual language/game semantics.
-- [Implementation](docs/IMPLEMENTATION.md): existing code to reuse and replacement paths.
-- [Donors](docs/DONORS.md): specific modules, ideas and reuse boundaries.
-- [Queue](docs/REFACTOR_QUEUE.md): the next useful implementation slices.
+- [WoW linting behavior](docs/WOW_LINTER.md): language/game semantics.
+- [Implementation](docs/IMPLEMENTATION.md): existing code to reuse and target
+  producer-to-consumer paths.
+- [Implementation trace register](docs/IMPLEMENTATION_TRACE_REGISTER.md):
+  post-merge source traces, implementation evidence and unexecuted observations.
+- [Donors](docs/DONORS.md): pinned modules, ideas and reuse boundaries.
+- [Queue](docs/REFACTOR_QUEUE.md): the next coherent implementation slices.
 
 Contributors start with [AGENTS.md](AGENTS.md). The full guide index is
-[docs/README.md](docs/README.md). Historical platform specifications are retained
-in Git history, not as competing instructions in the working tree.
+[docs/README.md](docs/README.md). Historical platform specifications remain in
+Git history, not as competing instructions in the working tree.
 
 ## License
 

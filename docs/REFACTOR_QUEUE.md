@@ -1,149 +1,155 @@
 # Implementation order
 
-The [manifesto](ARCHITECTURE.md) defines the product. This is the only ordered
-queue; [IMPLEMENTATION.md](IMPLEMENTATION.md) supplies code routes and
-[WOW_LINTER.md](WOW_LINTER.md) supplies behavior. Existing Issue numbers identify
-related work, not permission to restore historical contracts or test campaigns.
+Read [current status](CURRENT_STATUS.md) before taking an item. The
+[manifesto](ARCHITECTURE.md) defines the product,
+[IMPLEMENTATION.md](IMPLEMENTATION.md) defines the target owners, and
+[WOW_LINTER.md](WOW_LINTER.md) defines domain behavior. This file is the only
+ordered queue. Issue history cannot restore removed platform contracts.
 
-## 1. A useful ordinary addon check
+A queue item is complete only when its actual input reaches its real reader and
+visible result. A component build is not a user observation.
+
+## 1. First usable ordinary addon check
 
 Related: [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/200),
 [#201](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/201),
 [#197](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/197).
 
-Connect root/TOC/flavor/Library input to the existing shared Emmy session and
-public CLI. Resolve one analyzer configuration, initialize Lua51/STD, and
-preserve upstream message/code/severity/range
-and remove the four-code allowlist. Select checks before doing their work.
-Return known findings separately from input/analysis limitations. Remove
-compatibility-report and Project publication requirements from this path.
-Derive completeness from selected-check dependencies; the current global
-component reducer makes native checks partial independently of their findings.
-Keep an explicitly selected TOC when its Interface differs: change the current
-`load/toc.rs::parse` early rejection into a compatibility diagnostic while
-retaining usable file records. Do not silently select another TOC or flavor.
-Implement the [concrete configuration rules](IMPLEMENTATION.md#ordinary-configuration):
-initial retail/Mainline selection, explicit ambiguity handling, optional target
-Interface, upstream `emmy_diagnostics` and default Error threshold. Acquire only
-the selected dependency closure. Preserve located malformed-XML failures and
-independent usable inputs instead of turning every failed unit into invalid
-configuration; recognize the reviewed `Dep` dependency spelling in both readers.
+### Delivered prerequisites — do not repeat
+
+| PR | Delivered lower boundary | Remaining limitation |
+| --- | --- | --- |
+| #246 | all configured Emmy diagnostics retain code, exact message, severity and byte range; standalone Lua 5.1 STD is initialized | transitional LSP is still one-file |
+| #247 | `ConfiguredAnalyzerSession` over exact Main, Library and optional virtual snapshots; caller diagnostics; one embedded STD; diagnostics-only versus explicit semantic collection | it consumes snapshots, not ordinary project configuration |
+| #248 | direct `wow-service::addon_check::check_addon`, findings plus limitations, no legacy Reference/Rules/publication/graph/store stack | no root/TOC/Library acquisition or CLI adapter; context remains partial |
+| #249 | compiled Emmy identity without fabricated compatibility-report hashes | legacy publication/replay remains report-backed while it has callers |
+| #250 | exact Main identity in immutable-owner reuse admission | no retained public CLI owner yet |
+
+These are implemented in `main`, with exact-head runs #418, #422, #425, #440
+and #445 respectively. None is an observed addon workflow.
+
+### Remaining item-1 path
+
+Connect the ordinary user operation without rebuilding those owners:
+
+```text
+root / explicit-or-unambiguous TOC / retail flavor / Library paths
+  -> selected required and available optional dependency closure
+  -> exact bounded physical inputs and mapped XML units
+  -> existing ConfiguredAnalyzerSession
+  -> existing wow-service addon_check
+  -> CLI text/JSON diagnostics, limitations and exit status
+```
+
+The implementation slice must:
+
+1. add the small ordinary configuration DTO and CLI/config-file precedence;
+2. extract a load target containing flavor, optional target Interface and
+   `TocLoadContext`, rather than requiring `ProfileIdentity`;
+3. select only the requested TOC and relevant dependency closure; recognize the
+   reviewed `Dep` spelling and reject ambiguity explicitly;
+4. reuse `ProjectInputDirectory` and `ProjectInputFile` safety/bounds without
+   constructing `ProjectInputInventory` or publication configuration;
+5. split pure XML-unit/map preparation from the publication wrapper;
+6. preserve independent captured units and located failure when one included XML
+   file is malformed;
+7. pass exact Main/Library/virtual snapshots to `check_addon`;
+8. render actual code/message/severity/location plus scoped limitations;
+9. apply the documented failure threshold and `0/1/2/64/130/4` exit policy;
+10. record the first exact command/input/result only after it is actually run.
+
+The first usable result remains a Lua/type check. Empty or omitted `checks` means
+no WoW rule while Emmy diagnostics remain enabled. Missing chunk or XML-handler
+context remains an explicit limitation; it is not silently converted to clean.
 
 ### Source-traced replacement boundary
 
-The existing executable check path is a transitional platform path, not the
-owner to extend for the new public operation:
+The existing executable check path is transitional and must not be extended:
 
-- `apps/wow/src/args.rs` binds the CLI directly to `LocalCommand`;
+- `apps/wow/src/args.rs` binds the CLI to `LocalCommand`;
 - `LocalProjectInput::assemble_with_platform` and `LocalProjectBackend` require
-  Reference, analyzer-compatibility and Project publication state;
-- `Service::check` treats `wow-reference` and `wow-rules` as mandatory healthy
-  components even for a type-only request;
-- `local/projection.rs::check_context` expands an empty rule selection to every
-  registry descriptor, while the target empty `checks` means no WoW rule;
-- `GenericFinding` has no explanatory message, and current text output primarily
-  renders internal component/capability identities and JSON fragments.
+  Reference, analyzer compatibility and Project publication state;
+- generic `Service::check` treats Reference and Rules as mandatory even for
+  type-only work;
+- `local/projection.rs::check_context` expands empty rule selection to every
+  registered rule;
+- the old component/capability result is not the delivered direct diagnostic
+  result.
 
-Factor one direct configured addon-check owner in the existing crates. It reuses
-bounded Project acquisition/load selection and the shared Emmy mechanisms, but
-constructs Reference/Rules only for explicitly selected WoW checks. Its public
-result contains target information, source diagnostics and scoped limitations.
-Do not fabricate an empty `ReferenceView`, compatibility report, RuleRegistry or
-Project generation to satisfy old constructors, and do not translate old global
-component health into the new result. Keep the old local Service route only for
-transitional callers, then delete it with those callers.
+Do not fabricate empty `ReferenceView`, RuleRegistry, compatibility reports,
+Project generations or proof identities to satisfy those constructors. Do not
+wrap the new result inside the old result. Move callers, then delete the route.
 
-#### Exact owner split
+### Exact owner split
 
-Implement the direct route without a new crate or reverse dependency:
+- **`wow-project`** owns bounded acquisition, small load target, TOC/dependency
+  selection, exact physical files and pure XML virtual units/maps. Legacy profile
+  and publication wrappers adapt while old callers exist.
+- **`wow-emmy`** already owns `ConfiguredAnalyzerSession`, compiled provenance,
+  Lua 5.1, embedded STD and optional semantic collection. Extend it only for a
+  demonstrated missing analyzer seam; do not create another session.
+- **`wow-service`** already owns `addon_check` and its direct result. Add ordinary
+  configuration resolution and selected WoW-check dependencies there; do not
+  reintroduce global component health.
+- **`wow-cli`** owns arguments, config precedence, cancellation, rendering and
+  exit policy only.
+- **LSP/MCP** later adapt to the same Service owner and exact project state.
 
-- **`wow-project` owns acquisition and load preparation.** Reuse
-  `ProjectInputDirectory`, `ProjectInputFile`, TOC/package resolution and XML
-  source maps. `ProjectInputFile` is already a useful exact-byte handoff to
-  `LuaWorkspaceFileInput`; do not require `ProjectInputInventory::build`, which
-  pulls in the publication configuration and rejects virtual-only programs.
-- **Extract a small load target in `wow-project::load`.** It carries flavor,
-  optional target Interface and `TocLoadContext`. The current public TOC reader
-  accepts only `ProfileIdentity` and binds its digest into the plan; legacy
-  profile callers become adapters to the new target. The direct check must not
-  invent profile IDs, source digests or schema versions when the user supplied
-  only a flavor and optional Interface.
-- **Extract pure XML-unit preparation from `wow-project::xml_lua`.** It consumes
-  the selected load/package plans, exact captured bytes, compiled analyzer
-  identity and direct limits. The current `prepare` function also requires the
-  entire `ProjectConfiguration`, generation IDs, capability budgets and
-  publication identity. Keep a legacy wrapper that adds those receipts for old
-  callers; do not carry them into the direct result.
-- **`wow-emmy::session` owns one configurable native engine.** Promote the
-  existing registered Main/Library/virtual owner, accept the resolved Emmy
-  configuration, set Lua 5.1, initialize embedded STD once, and collect syntax
-  unconditionally with member/flow/call facts only when a selected check needs
-  them. Do not instantiate independent syntax/reference/flow analyses.
-- **The direct session uses the compiled backend internally.** The current
-  `EmmyBackendIdentity` requires compatibility-report and surface hashes even
-  though runtime pin validation compares only crate name/version/revision/tree.
-  Do not fabricate hashes. Provide a compiled identity/direct-workspace path in
-  `wow-emmy`; retain the report-derived identity only for legacy replay/probe
-  callers until they are removed.
-- **`wow-service` owns the use case and public DTOs.** An `addon_check` module
-  resolves ordinary configuration, calls Project preparation and the Emmy
-  session, optionally invokes selected WoW checks, and returns diagnostics plus
-  scoped limitations. It does not depend on generic component health or
-  publication status.
-- **`wow-cli` owns only transport concerns:** arguments/config-file precedence,
-  text/JSON rendering, cancellation wiring and exit policy. LSP/MCP later call
-  the same Service owner rather than rebuilding analysis.
+## 2. Correct Blizzard declarations used by the check
 
-The first usable result is a typed addon check with an existing Library. It
-requires neither a persistent source index nor completion of all old cleanup.
-Its [scope and input selection](IMPLEMENTATION.md#first-implementation-slice)
-are explicit: Lua/type diagnostics over admitted selected physical and mapped
-XML units, with no WoW rule enabled by default. Missing chunk/handler context
-and unsupported XML-only input remain visible limitations until item 3;
-API/Secret checks are connected after their semantic fixes in item 4. Do not
-advertise this first slice as the completed WoW addon workflow.
+Related: #200/#201; reuse the public builder and existing native Ketho port.
 
-## 2. Correct Blizzard declarations for that check
+Separate client flavor, game/glue load context and API member environment. Model
+and carry through the actual consumer:
 
-Related: #200/#201; reuse the delivered builder and native Ketho port.
+- member-level `SecureOnly` and other reviewed environment facts;
+- `MayReturnNothing` as a zero-result alternative;
+- `NilableContents` separately from container nilability;
+- numeric ordered repeated `StrideIndex` groups;
+- mixin relationships and selected restriction/origin facts;
+- unresolved or unrepresentable forms as located limitations, not silent `any`.
 
-Separate client flavor from API environment; handle member-level `SecureOnly`.
-Model `MayReturnNothing`, `NilableContents`, ordered repeated stride groups,
-mixin relations and relevant restriction metadata.
-Keep unresolved types/omissions visible. Use one source-to-Library pipeline,
-consistent reader limits, batched cancellable Git reads and a simple metadata/map
-handoff. Do not recreate the removed example producer or `/1` verifier.
+Concrete reviewed cases are `C_ArtifactUI.GetMetaPowerInfo` and
+`C_EquipmentSet.GetItemIDs`. Keep one `source-report.json` producer/consumer DTO.
+The ordinary reader must consume optional exact typed metadata/maps; plain Lua
+Libraries remain valid for type checking and limit only checks that need the
+manifest.
 
-The concrete current-source cases are `C_ArtifactUI.GetMetaPowerInfo` (repeated
-triples) and `C_EquipmentSet.GetItemIDs` (zero results versus nullable table
-contents). Connect the small metadata handoff to the Library reader; leaving it
-as an ignored raw sidecar does not finish this step.
+Replace per-file blocking Git calls with one bounded selected batch read and
+truthful child cancellation/reaping. Do not restore the removed example producer,
+old `/1` verifier, another converter or certification platform.
 
-## 3. Correct project context and changes
+## 3. Correct addon/XML context and updates
 
 Related: [#109](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/109),
 [#117](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117).
 
-Connect TOC/XML/dependency selection, addon chunk namespace, supported handler
-contexts and precise virtual-source maps to the same owner. Distinguish cosmetic
-metadata from unknown load conditions. Handle changed/deleted files and changed
-load/Library selections without stale results. Retain conservative semantic
-reindexing until a narrower invalidation scheme is demonstrably correct.
-Allow XML-only input through the physical-inventory boundary. Reuse the existing
-single-TOC/package inline analysis and maps; implement the separate per-addon
-chunk context rather than mistaking package path prefixes for that context.
-Use the [mapped helper design](EMMYLUA_UPSTREAM.md#addon-chunk-context) only for
-supported chunk contexts, mark its synthetic calls as context-only, and keep XML
-handler signatures and special Blizzard environments separate. Bind adapter
-versions in both load routes' configuration keys while retaining the existing
-final snapshot/replay identity checks.
+Use the same configured owner for:
 
-Remove the stale `InlineLuaNotAnalyzed` file-closure blocker for supported
-extracted bodies without claiming implicit handler context is already complete.
-Connect the TOC/package-selected update path, which currently refuses live
-updates, to selection/context rebuilding.
+- physical Lua and mapped XML-derived Lua;
+- XML-only addons without a dummy physical file;
+- one shared private table per supported ordinary addon and separate lexical
+  chunks per file;
+- exact source-verified XML handler parameters;
+- distinct suppressed-private-table, secure, bootstrap and free-inline contexts;
+- exact virtual-to-XML mappings, including entities and discontinuous pieces.
 
-## 4. Small WoW checks and editor/agent reuse
+The mapped helper design in
+[EMMYLUA_UPSTREAM.md](EMMYLUA_UPSTREAM.md#addon-chunk-context) remains a design
+until executed. Synthetic helper calls/declarations are context-only and must not
+become user API/flow facts or diagnostics.
+
+A physical file delta may reuse an owner only when selected membership, load
+context, Library identity and analyzer configuration are unchanged. TOC/XML/
+dependency/Library/config changes rebuild selection and owner cold. Deletion or
+rename removes declarations, virtual units, maps, diagnostics and index rows
+coherently. Failed/cancelled candidates never advertise an old result as current.
+
+Remove the stale blanket `InlineLuaNotAnalyzed` blocker for supported extracted
+bodies without claiming handler semantics. Connect the currently rejected
+TOC/package-selected live-update route to selection/context rebuilding.
+
+## 4. Small WoW checks and frontend reuse
 
 Related: [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103),
 [#195](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/195),
@@ -151,54 +157,61 @@ Related: [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/10
 [#198](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/198),
 [#199](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/199).
 
-Use direct typed checks for supported API context, widget/template, event/callback
-and restricted-use cases. API absence and runtime safety must not be guessed.
-Bind API uses through Emmy lexical/source identity before exact absence lookup;
-the current typed-local shadowing path can misattribute a Lua member error.
-Separate unresolved Secret producer semantics from malformed fact identities;
-the former limits the affected check, while the latter remains an input error.
-Replace the one-file LSP path with the configured project; expose only useful
-read-only MCP operations. Keep standard framing, empty results and increasing
-LSP document versions, including valid gaps. Remove generic pack/matcher/proof
-and frontend profile wrappers as these consumers move. Preserve evaluated-empty
-references, accept bounded MCP metadata, and ignore valid unknown notifications.
-Keep original error causes and locations through analyzer/frontend projection.
-#103 owns useful recognizer/check selection, not a new
-engine; early execution selection belongs to the check route above.
+Enable only direct typed checks with explicit dependencies. Before API existence
+is enabled, carry/query the original Emmy lexical binding and selected API origin;
+a local named `C_*` is not a Blizzard namespace by spelling. Before Secret use is
+enabled, separate unresolved producer semantics from malformed/stale fact
+identity. Unknown provenance remains unknown.
 
-## 5. Direct source lookup and remaining platform removal
+LSP keeps overlay text/version/coordinate ownership but passes exact overrides to
+the configured project owner. Accept increasing version gaps, reject stale
+results, and return standard empty/null results. General Lua completion/hover/
+definition/references remain upstream EmmyLua unless a WoW-specific persisted
+navigation operation is required.
 
-Related: [#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131),
+MCP keeps one standard stdio profile, bounded extensible metadata, valid unknown
+notification behavior and only implemented useful tools. CLI/LSP/MCP serialize
+the same Service results; no profile/registry/proof platform.
+
+## Direct source lookup and remaining platform removal
+
+**Order: 5.** Related:
+[#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131),
 [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169),
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122),
 [#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
 
-Store current files/body text/symbols/useful relations in one SQLite database.
-Read after reopen without rebuilding analysis; return readable matching excerpts.
-Remove nested databases, replay recapture, self-sizing pages and Context packs.
-Keep the useful outline/direct-neighbor query, exact scope selection and
-empty/partial/truncated result distinctions in the direct implementation.
-Reuse existing direct retained-shard SQL reads, opt-in Reference documentation
-search, one-scan neighbor batching and exact source-excerpt validation. Add actual
-SQL interruption, empty-index handling and transactional changed/deleted rows.
-Preserve primary errors alongside cleanup failures instead of replacing them.
-The known remaining fingerprint code is removal work with its consumers under
-[#118](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118), not an
-already-deleted subsystem or a reason to repair its historical product.
+After addon checking is useful, store one current selected source set in normal
+SQLite tables: sources, files with body text, symbols with spans and only the
+relations consumed by navigation. Query after restart without Project/Emmy/Graph
+replay. FTS indexes body text; exact names use a separate lookup. Return readable
+source from the indexed exact text with path/range/revision/flavor.
 
-Attach remaining Store lifecycle/DTO/format cleanup
+Preserve existing useful direct retained-shard SQL, opt-in Reference documentation
+search, one-scan neighbor batching and exact excerpt checks. Add real SQLite
+interruption/bounded lock waiting, valid empty indexes, transactional updates and
+primary-error preservation through cleanup.
+
+Remove nested SQLite/hex/JSON, replay recapture, fixed-point pagination, Context
+packs, response journals, generic lifecycle and proof/fingerprint machinery only
+as their real readers move. Do not replace them with another universal store,
+graph, result envelope or RAG platform.
+
+Attach Store/format cleanup
 ([#111](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111),
 [#194](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194),
 [#112](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112)) to the
-reader it replaces. Measure the actual index/query path when it is usable
-([#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113)); do not
-invent performance targets from line counts.
+reader it replaces. Measure the necessary real workflow under
+[#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113); do not
+invent targets from code size.
 
 ## Working policy
 
 One manager/worktree, bounded delegation, code first, formatting and affected
-strict Clippy. Tests are deferred until functional completion by owner direction;
-then reconcile relevant known failures and exercise the advertised workflows.
-The supplied audit's test failures remain evidence, not instructions to restore
-retired scope. A component or compilation pass alone never completes
-[#125](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/125).
+strict Clippy. Tests remain deferred until functional completion by owner
+direction. Do not use that policy to call compile/Clippy a product pass.
+
+Update [CURRENT_STATUS.md](CURRENT_STATUS.md) when merged code changes the next
+work, and [IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md)
+when source evidence changes a boundary or an exact workflow becomes observed.
+The baseline register is not a recurring progress diary.
