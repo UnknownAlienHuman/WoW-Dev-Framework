@@ -8,6 +8,8 @@
 
 pub mod bindings;
 pub mod compatibility;
+pub mod configuration;
+pub mod configured_session;
 pub mod document_symbols;
 pub mod flow;
 pub mod function_calls;
@@ -23,6 +25,11 @@ pub mod workspace;
 pub use compatibility::{
     EmmyCompatibilityError, EmmyCompatibilityErrorCode, EmmyCompatibilityResult,
     backend_identity_from_report,
+};
+pub use configuration::{DiagnosticSeveritySetting, EmmyAnalysisConfiguration, EmmyrcDiagnostic};
+pub use configured_session::{
+    ConfiguredAnalyzerSession, ConfiguredDiagnosticReports, ConfiguredSemanticReports,
+    ConfiguredSessionError, ConfiguredSessionErrorCode, ConfiguredSessionResult,
 };
 pub use flow::{
     EmmyControlFlowFact, EmmyControlFlowRelationKind, EmmyGuardFact, EmmyGuardKind,
