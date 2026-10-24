@@ -75,7 +75,10 @@ fn xml_pipeline_publishes_object_parentage_and_template_references() -> Result<(
     let binding = AnalyzerBindingDeclaration::new(
         "wow-emmy/e0-c/1",
         format!("emmy-pin:{EMMYLUA_REVISION}"),
-        identity.compatibility_report_sha256().to_owned(),
+        identity
+            .require_compatibility_report_evidence()?
+            .compatibility_report_sha256()
+            .to_owned(),
         ContentDigest::<CanonicalResult>::from_bytes([3; 32]),
         "wow-emmy/e0-c/1",
         "wow-emmy-e0-c-library-v1",

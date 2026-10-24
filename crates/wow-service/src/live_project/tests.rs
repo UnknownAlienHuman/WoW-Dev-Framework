@@ -78,7 +78,9 @@ fn input_bundle_with_budget(
     let binding = AnalyzerBindingDeclaration::new(
         "wow-emmy/e0-c/1",
         format!("emmy-pin:{EMMYLUA_REVISION}"),
-        backend.compatibility_report_sha256(),
+        backend
+            .require_compatibility_report_evidence()?
+            .compatibility_report_sha256(),
         ContentDigest::<CanonicalResult>::from_bytes([3; 32]),
         "wow-emmy/e0-c/1",
         "wow-emmy-e0-c-library-v1",

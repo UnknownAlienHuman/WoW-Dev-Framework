@@ -69,7 +69,10 @@ fn fixture_profile() -> TestResult<ProfileIdentity> {
 
 fn configuration() -> TestResult<ProjectConfiguration> {
     let backend = backend()?;
-    let compatibility_report_sha256 = backend.compatibility_report_sha256().to_owned();
+    let compatibility_report_sha256 = backend
+        .require_compatibility_report_evidence()?
+        .compatibility_report_sha256()
+        .to_owned();
     let analyzer_binding = AnalyzerBindingDeclaration::new(
         "wow-emmy/e0-c/1",
         format!("emmy-pin:{EMMYLUA_REVISION}"),

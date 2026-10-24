@@ -31,14 +31,15 @@ observation moves it to **observed**.
 | T04 | disk/Library bytes -> exact analyzer snapshots | traced | unexecuted |
 | T05 | XML load facts -> virtual Lua units/maps | traced | unexecuted |
 | T06 | Main/Library/virtual -> one configured Emmy owner | implemented in `main` by PR #247 | unexecuted |
-| T07 | compiled Emmy pin -> runtime identity | traced | unexecuted |
+| T07 | compiled Emmy pin -> runtime identity | implemented in PR #249; exact-head run #437 passed | unexecuted |
 | T08 | unsaved editor text -> project diagnostics | partially implemented | unexecuted |
 | T09 | source/config changes -> current diagnostics/index | traced | unexecuted |
 | T10 | builder output -> ordinary Library metadata/maps | traced | unexecuted |
 | T11 | addon chunk arguments -> mapped analysis context | traced design | unexecuted |
 | T12 | upstream diagnostic -> adapter DTO -> LSP payload | implemented in `main` by PR #246 | unexecuted |
 | T13 | caller diagnostic config -> optional semantic collectors | implemented in `main` by PR #247 | unexecuted |
-| T14 | exact snapshots -> direct Service result | implemented on feature branch | unexecuted |
+| T14 | exact snapshots -> direct Service result | implemented in `main` by PR #248 | unexecuted |
+| T15 | compiled pin/report evidence -> workspace identity -> legacy admission | implemented in PR #249; exact-head run #437 passed | unexecuted |
 
 ## Fixed decisions from T01–T11
 
@@ -101,12 +102,15 @@ virtual units/maps.
 
 ### T07 — compatibility-report hashes are not runtime analyzer validation
 
-`EmmyBackendIdentity` stores report/surface hashes, while compiled-backend
-validation actually compares crate, version, revision and tree.
+The original `EmmyBackendIdentity` required surface/report SHA values even though
+compiled-backend validation compared only crate, version, revision and tree.
+That forced a direct caller either to fabricate evidence or to depend on the
+old probe/report pipeline.
 
-**Decision:** the direct path derives the compiled analyzer identity and never
-fabricates report hashes. Retain report identities only for legacy replay/probe
-consumers until removal.
+**Decision:** one identity records exact compiled provenance; compatibility
+reports remain optional evidence for legacy publication/replay. Direct code must
+never invent report hashes. Legacy report-only callers are transitional and
+remain report-backed until their platform is removed.
 
 ### T08 — retain overlay state, replace its one-file analyzer
 
@@ -201,8 +205,8 @@ Clippy passed. No Service/CLI workflow was observed.
 
 ### T14 — direct Service result without the old platform
 
-`feat/direct-addon-check-service-2026-10-24` adds a first
-`wow-service::addon_check` operation over exact already-acquired snapshots. It:
+PR #248 (`d96c2fb`) added `wow-service::addon_check` over exact already-acquired
+snapshots. It:
 
 - creates only `ConfiguredAnalyzerSession`; no Reference, Rules, compatibility
   report, Project publication, graph, store or presentation graph;
@@ -213,13 +217,38 @@ Clippy passed. No Service/CLI workflow was observed.
 - maps typed cancellation/input/native failures to existing Service error
   families.
 
-This first slice is intentionally `Partial`: addon-name/private-table chunk
-arguments are not yet bound. When virtual units are supplied, exact XML source
-projection and handler parameters are also explicit limitations rather than
-silent omissions or fabricated user locations. The function accepts exact
-snapshots, not disk/TOC configuration; Project acquisition and CLI wiring remain
-T02–T05/T01 work. Build status must be recorded after the branch exact-head gate;
-no user workflow has been observed.
+The result is intentionally `Partial`: addon-name/private-table chunk arguments
+are not yet bound. Virtual input additionally reports missing exact XML source
+projection and handler parameters instead of fabricating locations. The function
+accepts exact snapshots; root/TOC/Library acquisition and CLI wiring remain open.
+Exact-head policy, formatting, compilation and strict Clippy passed. No addon or
+editor workflow was observed.
+
+### T15 — distinguish compiled provenance from compatibility evidence
+
+`feat/compiled-emmy-identity-2026-10-24` separates exact compiled provenance
+from compatibility-report evidence without weakening legacy admission:
+
+- `EmmyBackendIdentitySource` distinguishes `compiled_pin` from
+  `compatibility_report`;
+- `compiled` and `compiled_pinned` create exact crate/version/revision/tree
+  identities with no report digests;
+- report-backed `new` still validates both SHA-256 values;
+- report-backed serialization preserves its historical field shape; compiled
+  serialization emits an explicit source and omits report fields;
+- a paired borrowed evidence view prevents one report digest from being consumed
+  without the other;
+- legacy callers now request that evidence through a typed fallible boundary.
+  A compiled identity therefore returns `InvalidBackendIdentity`; it never
+  panics, aborts, or substitutes a sentinel/fabricated digest;
+- replay capture and existing Project/Service admission propagate or translate
+  that failure before constructing legacy publication state.
+
+`AnalyzerBindingDeclaration` and replay/publication remain report-backed through
+their existing construction path. The direct snapshot builder can bind the actual
+compiled pin without running or pretending to have run the compatibility probe.
+Exact-head run #437 passed repository policy, formatting, workspace compilation,
+strict Clippy and the tracked-file rewrite check. No user workflow has been observed.
 
 ## Executed observations still required
 

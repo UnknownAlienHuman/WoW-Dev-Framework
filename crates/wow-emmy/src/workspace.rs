@@ -77,15 +77,59 @@ impl std::error::Error for EmmyWorkspaceError {}
 /// Result type for explicit workspace construction.
 pub type EmmyWorkspaceResult<T> = Result<T, EmmyWorkspaceError>;
 
+/// Evidence source bound to an exact analyzer build identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EmmyBackendIdentitySource {
+    CompatibilityReport,
+    CompiledPin,
+}
+
+/// Borrowed compatibility-report evidence attached to a report-backed identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EmmyCompatibilityReportEvidence<'a> {
+    surface_sha256: &'a str,
+    compatibility_report_sha256: &'a str,
+}
+
 /// Exact analyzer build identity used by one analysis operation.
+///
+/// Report-backed identities keep their historical serialized shape. Compiled
+/// identities carry an explicit source marker and omit report digests instead
+/// of fabricating compatibility evidence.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct EmmyBackendIdentity {
     crate_name: Box<str>,
     crate_version: Option<Box<str>>,
     revision: Box<str>,
     tree: Box<str>,
-    surface_sha256: Box<str>,
-    compatibility_report_sha256: Box<str>,
+    #[serde(skip_serializing_if = "is_compatibility_report_source")]
+    source: EmmyBackendIdentitySource,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    surface_sha256: Option<Box<str>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    compatibility_report_sha256: Option<Box<str>>,
+}
+
+struct ValidatedBackendParts {
+    crate_name: Box<str>,
+    crate_version: Option<Box<str>>,
+    revision: Box<str>,
+    tree: Box<str>,
+}
+
+impl<'a> EmmyCompatibilityReportEvidence<'a> {
+    /// Deterministic public-surface digest from the compatibility report.
+    #[must_use]
+    pub const fn surface_sha256(self) -> &'a str {
+        self.surface_sha256
+    }
+
+    /// Self-digest of the compatibility report that authorized this identity.
+    #[must_use]
+    pub const fn compatibility_report_sha256(self) -> &'a str {
+        self.compatibility_report_sha256
+    }
 }
 
 impl EmmyBackendIdentity {
@@ -98,41 +142,63 @@ impl EmmyBackendIdentity {
         surface_sha256: impl Into<String>,
         compatibility_report_sha256: impl Into<String>,
     ) -> EmmyWorkspaceResult<Self> {
-        let crate_name = crate_name.into();
-        let crate_version = crate_version.map(Into::into);
-        let revision = revision.into();
-        let tree = tree.into();
+        let parts = validate_backend_parts(
+            crate_name.into(),
+            crate_version.map(Into::into),
+            revision.into(),
+            tree.into(),
+        )?;
         let surface_sha256 = surface_sha256.into();
         let compatibility_report_sha256 = compatibility_report_sha256.into();
-        if crate_name != ANALYZER_CRATE {
-            return Err(workspace_error(
-                EmmyWorkspaceErrorCode::InvalidBackendIdentity,
-                "unexpected analyzer crate identity",
-                None::<String>,
-            ));
-        }
-        if crate_version.as_deref().is_some_and(invalid_scalar) {
-            return Err(workspace_error(
-                EmmyWorkspaceErrorCode::InvalidBackendIdentity,
-                "analyzer crate version is invalid",
-                None::<String>,
-            ));
-        }
-        validate_object_id(&revision, None, "analyzer revision")?;
-        validate_object_id(&tree, Some(revision.len()), "analyzer tree")?;
         validate_sha256(&surface_sha256, "analyzer surface digest")?;
         validate_sha256(
             &compatibility_report_sha256,
             "analyzer compatibility report digest",
         )?;
         Ok(Self {
-            crate_name: crate_name.into_boxed_str(),
-            crate_version: crate_version.map(String::into_boxed_str),
-            revision: revision.into_boxed_str(),
-            tree: tree.into_boxed_str(),
-            surface_sha256: surface_sha256.into_boxed_str(),
-            compatibility_report_sha256: compatibility_report_sha256.into_boxed_str(),
+            crate_name: parts.crate_name,
+            crate_version: parts.crate_version,
+            revision: parts.revision,
+            tree: parts.tree,
+            source: EmmyBackendIdentitySource::CompatibilityReport,
+            surface_sha256: Some(surface_sha256.into_boxed_str()),
+            compatibility_report_sha256: Some(compatibility_report_sha256.into_boxed_str()),
         })
+    }
+
+    /// Creates one exact identity from the compiled crate/version/revision/tree
+    /// without claiming that a compatibility report authorized it.
+    pub fn compiled(
+        crate_name: impl Into<String>,
+        crate_version: Option<impl Into<String>>,
+        revision: impl Into<String>,
+        tree: impl Into<String>,
+    ) -> EmmyWorkspaceResult<Self> {
+        let parts = validate_backend_parts(
+            crate_name.into(),
+            crate_version.map(Into::into),
+            revision.into(),
+            tree.into(),
+        )?;
+        Ok(Self {
+            crate_name: parts.crate_name,
+            crate_version: parts.crate_version,
+            revision: parts.revision,
+            tree: parts.tree,
+            source: EmmyBackendIdentitySource::CompiledPin,
+            surface_sha256: None,
+            compatibility_report_sha256: None,
+        })
+    }
+
+    /// Exact identity of the analyzer compiled into this framework build.
+    pub fn compiled_pinned() -> EmmyWorkspaceResult<Self> {
+        Self::compiled(
+            ANALYZER_CRATE,
+            Some(crate::syntax::EMMYLUA_CODE_ANALYSIS_VERSION),
+            crate::syntax::EMMYLUA_REVISION,
+            crate::syntax::EMMYLUA_TREE,
+        )
     }
 
     /// Analyzer crate name.
@@ -159,16 +225,46 @@ impl EmmyBackendIdentity {
         &self.tree
     }
 
-    /// Deterministic public-surface digest from the compatibility report.
+    /// Evidence source attached to this exact build identity.
     #[must_use]
-    pub fn surface_sha256(&self) -> &str {
-        &self.surface_sha256
+    pub const fn source(&self) -> EmmyBackendIdentitySource {
+        self.source
     }
 
-    /// Self-digest of the compatibility report that authorized this identity.
+    /// Compatibility-report evidence when this identity came from a report.
     #[must_use]
-    pub fn compatibility_report_sha256(&self) -> &str {
-        &self.compatibility_report_sha256
+    pub fn compatibility_report_evidence(&self) -> Option<EmmyCompatibilityReportEvidence<'_>> {
+        match (
+            self.source,
+            self.surface_sha256.as_deref(),
+            self.compatibility_report_sha256.as_deref(),
+        ) {
+            (
+                EmmyBackendIdentitySource::CompatibilityReport,
+                Some(surface_sha256),
+                Some(compatibility_report_sha256),
+            ) => Some(EmmyCompatibilityReportEvidence {
+                surface_sha256,
+                compatibility_report_sha256,
+            }),
+            _ => None,
+        }
+    }
+
+    /// Requires report evidence for a legacy publication/replay caller.
+    ///
+    /// Direct compiled-pin callers must not use this boundary. Returning a typed
+    /// error keeps accidental cross-use explicit without a sentinel or panic.
+    pub fn require_compatibility_report_evidence(
+        &self,
+    ) -> EmmyWorkspaceResult<EmmyCompatibilityReportEvidence<'_>> {
+        self.compatibility_report_evidence().ok_or_else(|| {
+            workspace_error(
+                EmmyWorkspaceErrorCode::InvalidBackendIdentity,
+                "compatibility-report evidence is unavailable for a compiled-pin identity",
+                None::<String>,
+            )
+        })
     }
 }
 
@@ -493,6 +589,40 @@ impl LuaWorkspaceSnapshot {
             .ok()
             .map(|index| &self.files[index])
     }
+}
+
+fn is_compatibility_report_source(source: &EmmyBackendIdentitySource) -> bool {
+    *source == EmmyBackendIdentitySource::CompatibilityReport
+}
+
+fn validate_backend_parts(
+    crate_name: String,
+    crate_version: Option<String>,
+    revision: String,
+    tree: String,
+) -> EmmyWorkspaceResult<ValidatedBackendParts> {
+    if crate_name != ANALYZER_CRATE {
+        return Err(workspace_error(
+            EmmyWorkspaceErrorCode::InvalidBackendIdentity,
+            "unexpected analyzer crate identity",
+            None::<String>,
+        ));
+    }
+    if crate_version.as_deref().is_some_and(invalid_scalar) {
+        return Err(workspace_error(
+            EmmyWorkspaceErrorCode::InvalidBackendIdentity,
+            "analyzer crate version is invalid",
+            None::<String>,
+        ));
+    }
+    validate_object_id(&revision, None, "analyzer revision")?;
+    validate_object_id(&tree, Some(revision.len()), "analyzer tree")?;
+    Ok(ValidatedBackendParts {
+        crate_name: crate_name.into_boxed_str(),
+        crate_version: crate_version.map(String::into_boxed_str),
+        revision: revision.into_boxed_str(),
+        tree: tree.into_boxed_str(),
+    })
 }
 
 fn validate_path(candidate: String, max_path_bytes: u64) -> EmmyWorkspaceResult<String> {

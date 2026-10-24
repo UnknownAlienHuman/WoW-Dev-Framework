@@ -59,14 +59,17 @@ fn run(arguments: Vec<OsString>) -> Result<(), String> {
                     error.message()
                 )
             })?;
+            let evidence = identity
+                .require_compatibility_report_evidence()
+                .map_err(|error| error.to_string())?;
             let output = json!({
                 "status": "compatible",
                 "crate_name": identity.crate_name(),
                 "crate_version": identity.crate_version(),
                 "revision": identity.revision(),
                 "tree": identity.tree(),
-                "surface_sha256": identity.surface_sha256(),
-                "compatibility_report_sha256": identity.compatibility_report_sha256(),
+                "surface_sha256": evidence.surface_sha256(),
+                "compatibility_report_sha256": evidence.compatibility_report_sha256(),
             });
             print_json(&output)
         }
