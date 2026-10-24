@@ -19,10 +19,10 @@ Related: [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/20
 
 | PR | Delivered lower boundary | Remaining limitation |
 | --- | --- | --- |
-| #246 | all configured Emmy diagnostics retain code, exact message, severity and byte range; standalone Lua 5.1 STD is initialized | transitional LSP remains one-file |
-| #247 | `ConfiguredAnalyzerSession` over exact Main, Library and optional virtual snapshots; caller diagnostics; one embedded STD; diagnostics-only versus explicit semantic collection | snapshots are not ordinary project configuration/context |
+| #246 | configured Emmy diagnostics retain code, exact message, severity and byte range; standalone Lua 5.1 STD is initialized | transitional LSP remains one-file |
+| #247 | `ConfiguredAnalyzerSession` over exact Main, Library and optional virtual snapshots; caller diagnostics; one STD; explicit semantic collection | snapshots are not ordinary Project context |
 | #248 | direct `wow-service::addon_check::check_addon`, findings plus limitations, no legacy Reference/Rules/publication/graph/store stack | no root/TOC/Library acquisition or CLI adapter |
-| #249 | compiled Emmy identity without fabricated compatibility-report hashes | legacy report-backed callers remain transitional |
+| #249 | compiled Emmy identity without fabricated report hashes | legacy report-backed callers remain transitional |
 | #250 | exact Main identity in immutable-owner reuse admission | no retained public CLI owner |
 
 Exact-head runs #418, #422, #425, #440 and #445 passed. None is an observed addon
@@ -32,7 +32,7 @@ workflow.
 
 ```text
 root / TOC / flavor + product channel / Library paths
-  -> required/available optional dependencies + reverse load triggers
+  -> required/available optional dependencies + reverse triggers
   -> typed package/unit context + exact selected order
   -> implicit binding documents + bounded physical/XML/Library input
   -> existing ConfiguredAnalyzerSession
@@ -42,51 +42,54 @@ root / TOC / flavor + product channel / Library paths
 
 Implement in this order:
 
-1. add the small ordinary config DTO and CLI/config precedence;
+1. add the small ordinary configuration DTO and CLI/config precedence;
 2. extract a load target containing flavor, explicit product channel, optional
-   target Interface and `TocLoadContext`, without `ProfileIdentity`;
+   positive target Interface and `TocLoadContext`, without `ProfileIdentity`;
 3. use the finite dependency aliases: required `Dep`, `Dependencies`,
    `DependsOn`, `RequiredDep`, `RequiredDeps`; optional `OptionalDep`,
-   `OptionalDeps`; select only the requested relevant transitive closure;
-4. model package/per-unit `UseSecureEnvironment`, `LoadIntoEnvironment`,
+   `OptionalDeps`; select only relevant transitive closure;
+4. model `UseSecureEnvironment`, `LoadIntoEnvironment`,
    `SuppressLocalTableRef`, bootstrap and supported load-first/load-phase facts;
 5. model `OnlyBetaAndPTR` against explicit `Stable | Ptr | Beta`; retain
    `LoadWith` as a source-located reverse trigger, never a dependency;
-6. recognize bounded `DefaultState` lifecycle metadata without making an explicit
+6. parse official source `Interface: 0` as an unknown/sentinel compatibility
+   value rather than malformed input; retain `Secure` as source-backed
+   unsupported context until reviewed semantics exist—never alias it by name to
+   `UseSecureEnvironment` or another security model;
+7. recognize bounded `DefaultState` lifecycle metadata without making an explicit
    source check partial; add `SavedVariablesMachine` declaration scope while
-   continuing never to read user SavedVariables content;
-7. discover at most one exact `Bindings<suffix>.xml` under the held addon root,
-   and map `<Binding>` Lua as callback units with only source-verified `keystate`
-   context; absence is normal;
-8. fix tri-state predicate reduction so known allow/exclude results are not
+   never reading user SavedVariables content;
+8. discover at most one exact `Bindings<suffix>.xml` under the held addon root,
+   and map `<Binding>` Lua as callback units with only source-verified `keystate`;
+   absence is normal;
+9. fix tri-state predicate reduction so known allow/exclude results are not
    poisoned by irrelevant unknown aliases or gates;
-9. preserve exact package/TOC/XML/implicit-unit order and context in a validated
-   value beside path-sorted snapshots; never treat snapshot/Emmy registration
-   order as WoW runtime order;
-10. reuse `ProjectInputDirectory`/`ProjectInputFile` safety and bounds without
+10. preserve exact package/TOC/XML/callback order and context in a validated value
+    beside path-sorted snapshots; never treat Emmy registration order as runtime;
+11. reuse `ProjectInputDirectory`/`ProjectInputFile` safety and bounds without
     `ProjectInputInventory` or publication configuration;
-11. split pure XML/binding unit-map preparation from publication wrappers;
-12. preserve independent captured units and located failure when one included or
+12. split pure XML/binding unit-map preparation from publication wrappers;
+13. preserve independent captured units and located failure when one included or
     bindings XML document is malformed;
-13. admit physical-only, physical+virtual, XML-only and valid empty language
+14. admit physical-only, physical+virtual, XML-only and valid empty language
     scopes without a dummy Lua file;
-14. pass exact Main/Library/virtual snapshots plus validated context to the direct
+15. pass exact Main/Library/virtual snapshots plus validated context to the direct
     Service result;
-15. render actual code/message/severity/location plus scoped limitations and the
+16. render actual code/message/severity/location plus scoped limitations and the
     documented `0/1/2/64/130/4` exit policy;
-16. record the first exact command/input/result only after it is actually run.
+17. record the first exact command/input/result only after it is actually run.
 
 Empty/omitted `checks` selects no WoW rule while Emmy diagnostics remain enabled.
-Missing chunk, handler or binding callback context is an explicit limitation, not
-a clean result.
+Missing chunk, handler, binding or unresolved security context is an explicit
+limitation, not a clean result.
 
 Source evidence:
 
 - [TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md) — dependency aliases,
   secure/private-table context, tri-state predicates and selected order;
 - [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md) — product
-  channel, `LoadWith`, implicit bindings, `DefaultState` and machine
-  SavedVariables scope.
+  channel, reverse triggers, implicit bindings, known metadata and official
+  compatibility/security uncertainty.
 
 ### Source-traced replacement boundary
 
@@ -105,17 +108,19 @@ remove the route.
 
 ### Exact owner split
 
-- **`wow-project`** — ordinary config resolution, safe selected acquisition,
-  small load target, finite directive semantics, dependencies/triggers, product
-  channel, exact ordered context, implicit binding discovery and pure mapped XML/
-  binding units. Legacy profile/publication wrappers adapt while callers remain.
+- **`wow-project`** — config resolution, safe selected acquisition, small load
+  target, finite directive semantics, dependencies/triggers, product channel,
+  official Interface/security metadata, exact ordered context, implicit binding
+  discovery and pure mapped XML/binding units. Legacy profile/publication wrappers
+  adapt while callers remain.
 - **`wow-emmy`** — existing `ConfiguredAnalyzerSession`, compiled provenance,
   Lua 5.1, STD and requested semantic collection. Keep snapshots path-sorted and
-  add only demonstrated mapped context seams.
+  add only demonstrated mapped context seams; never invent unresolved `Secure`
+  behavior.
 - **`wow-service`** — existing `addon_check`; add config orchestration, validated
   load/context input and selected check dependencies.
 - **`wow-cli`** — arguments, config precedence, cancellation, rendering, exit.
-- **LSP/MCP** — later adapters to the same Service/project owner.
+- **LSP/MCP** — later adapters to the same Service/Project owner.
 
 ## 2. Correct Blizzard declarations used by the check
 
@@ -151,17 +156,19 @@ Use the same configured owner plus validated Project context for:
 - mapped `<Binding>` callbacks with `keystate`, distinct from top-level chunks;
 - suppressed private tables, package/per-unit secure overrides,
   bootstrap/load-first, free-inline and binding phases;
-- exact virtual-to-XML mappings including entities/discontinuous pieces.
+- exact virtual-to-XML mappings including entities/discontinuous pieces;
+- explicit limitations for unresolved `Secure` metadata rather than guessed
+  execution context.
 
 Synthetic helper/wrapper code is context-only and never becomes user API/flow
 facts or locations. Binding callbacks do not receive addon ellipsis semantics and
 are not inserted as top-level TOC execution.
 
 Reuse an owner incrementally only when selected membership, product channel,
-triggers, exact ordered context, Library identity and analyzer config are
-unchanged. TOC/XML/bindings/dependency/trigger/Library/channel/config changes
-rebuild selection/context cold. Delete/rename removes declarations, virtual units,
-maps, diagnostics and index rows together.
+Interface/security metadata, triggers, exact ordered context, Library identity and
+analyzer config are unchanged. TOC/XML/bindings/dependency/trigger/Library/
+channel/config changes rebuild selection/context cold. Delete/rename removes
+declarations, virtual units, maps, diagnostics and index rows together.
 
 Remove stale blanket `InlineLuaNotAnalyzed` only for supported extracted bodies;
 do not claim handler/binding context. Connect selected-load live updates to the
@@ -178,7 +185,9 @@ Related: [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/10
 Enable only direct typed checks with explicit dependencies. API existence requires
 original Emmy receiver binding and selected API origin; a local named `C_*` is
 not a Blizzard namespace. Secret checking separates coherent unresolved
-semantics from malformed/stale identities.
+semantics from malformed/stale identities. TOC `Secure` uncertainty is a separate
+Project context limitation and must not be conflated with API `SecureOnly` or
+Secret-value flow.
 
 LSP keeps overlay/version/coordinate ownership but passes exact overrides to the
 configured project. Accept increasing version gaps, reject stale results and use
@@ -196,7 +205,7 @@ Related: [#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/13
 After addon checking works, store one current selected source set in normal
 SQLite tables: sources, files with body text, symbols/spans and only consumed
 relations. Query after restart without Project/Emmy/Graph replay. FTS indexes body
-text; exact names use a separate lookup. Preserve exact source/revision/flavor/
+text; exact names use separate lookup. Preserve exact source/revision/flavor/
 channel/context.
 
 Reuse useful direct retained-shard SQL, opt-in Reference documentation search,
