@@ -144,8 +144,9 @@ impl ConfiguredAnalyzerSession {
             .map(|(snapshot, generation)| (snapshot, *generation))
     }
 
-    /// Admission check for retaining this owner. A changed diagnostic policy,
-    /// Library set, virtual snapshot or project generation requires a cold owner.
+    /// Admission check for retaining this owner. A changed Main snapshot,
+    /// diagnostic policy, Library set, virtual snapshot or project generation
+    /// requires a cold owner.
     #[must_use]
     pub fn compatible(
         &self,
@@ -172,8 +173,7 @@ impl ConfiguredAnalyzerSession {
             virtual_units.map(|(snapshot, generation)| (snapshot.snapshot_id(), generation));
 
         self.healthy
-            && self.main.backend() == main.backend()
-            && self.main.universe() == main.universe()
+            && self.main.snapshot_id() == main.snapshot_id()
             && expected_libraries == observed_libraries
             && expected_virtual == observed_virtual
             && self.configuration.equivalent(configuration)
