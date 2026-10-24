@@ -221,6 +221,7 @@ post-merge documentation defects:
 | D05 | Emmy guide said T06 remained open and linked an obsolete anchor | replaced with current owner contract and open adapters |
 | D06 | trace register cited runs #437/#442 | corrected to #440/#445 |
 | D07 | baseline audit environment note could be read as current verification | current status now states the baseline/audit distinction and supplied run evidence |
+| D08 | baseline register retained 31 links to headings renamed in the active implementation/frontend guides | repaired each destination by subject; `xtask check` now validates local Markdown paths and anchors |
 
 This reconciliation is documentation/source inspection. It does not change any
 T01–T16 runtime observation.

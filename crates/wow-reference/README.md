@@ -6,7 +6,8 @@ the useful typed callable/restriction projection in `native_view.rs`.
 Target: one source-linked API model. Standalone reference/topology products,
 proof identities and persistent publication are legacy removal work.
 
-See [Implementation](../../docs/IMPLEMENTATION.md#code-ownership),
-[WoW behavior](../../docs/WOW_LINTER.md) and [Audit](../../docs/AUDIT.md).
+See [current status](../../docs/CURRENT_STATUS.md),
+[Implementation](../../docs/IMPLEMENTATION.md#code-ownership) and
+[WoW behavior](../../docs/WOW_LINTER.md).
 
 Preserve [third-party notices](THIRD_PARTY_NOTICES.md).

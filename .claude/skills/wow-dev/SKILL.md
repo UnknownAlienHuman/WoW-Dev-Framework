@@ -5,9 +5,11 @@ description: Implement and review the WoW Dev Framework and its WoW-aware addon 
 
 # WoW development
 
-Read root `AGENTS.md` and all of `docs/ARCHITECTURE.md`. Use the relevant route in
-`docs/IMPLEMENTATION.md`, behavior in `docs/WOW_LINTER.md`, and concrete donor
-modules in `docs/DONORS.md`. Read only the owners and callers the task needs.
+Read `docs/CURRENT_STATUS.md`, root `AGENTS.md` and all of
+`docs/ARCHITECTURE.md`. Use the relevant route in `docs/IMPLEMENTATION.md`,
+behavior in `docs/WOW_LINTER.md`, and concrete donor modules in `docs/DONORS.md`.
+Read only the owners and callers the task needs; do not repeat a slice already
+recorded as implemented in the trace register.
 
 Reuse EmmyLua for Lua analysis and the existing Rust Reference/Annotations path
 for Blizzard/Ketho data. Keep client flavor, TOC load context and API execution

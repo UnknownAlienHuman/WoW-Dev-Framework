@@ -1,6 +1,7 @@
 //! Repository maintenance only; not an alternate product/service implementation.
 mod git;
 mod manifest;
+mod markdown;
 mod repository;
 mod skill;
 mod source_update;
@@ -33,6 +34,7 @@ fn run(args: Vec<std::ffi::OsString>) -> Result<u8> {
         ["check", rest @ ..] => {
             let root = repository_root(rest)?;
             repository::check(&root)?;
+            markdown::check(&root)?;
             if !skill::sync(&root, false)? {
                 return Ok(3);
             }
