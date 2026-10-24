@@ -2,12 +2,12 @@
 
 Read [current status](CURRENT_STATUS.md) before taking an item. The
 [manifesto](ARCHITECTURE.md) defines the product,
-[IMPLEMENTATION.md](IMPLEMENTATION.md) defines the target owners, and
-[WOW_LINTER.md](WOW_LINTER.md) defines domain behavior. This file is the only
-ordered queue. Issue history cannot restore removed platform contracts.
+[IMPLEMENTATION.md](IMPLEMENTATION.md) defines target owners, and
+[WOW_LINTER.md](WOW_LINTER.md) defines domain behavior. This is the only ordered
+queue. Issue history cannot restore removed platform contracts.
 
 A queue item is complete only when its actual input reaches its real reader and
-visible result. A component build is not a user observation.
+visible result. Compilation is not a user observation.
 
 ## 1. First usable ordinary addon check
 
@@ -19,153 +19,153 @@ Related: [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/20
 
 | PR | Delivered lower boundary | Remaining limitation |
 | --- | --- | --- |
-| #246 | all configured Emmy diagnostics retain code, exact message, severity and byte range; standalone Lua 5.1 STD is initialized | transitional LSP is still one-file |
-| #247 | `ConfiguredAnalyzerSession` over exact Main, Library and optional virtual snapshots; caller diagnostics; one embedded STD; diagnostics-only versus explicit semantic collection | it consumes snapshots, not ordinary project configuration or selected load context |
-| #248 | direct `wow-service::addon_check::check_addon`, findings plus limitations, no legacy Reference/Rules/publication/graph/store stack | no root/TOC/Library acquisition or CLI adapter; context remains partial |
-| #249 | compiled Emmy identity without fabricated compatibility-report hashes | legacy publication/replay remains report-backed while it has callers |
-| #250 | exact Main identity in immutable-owner reuse admission | no retained public CLI owner yet |
+| #246 | all configured Emmy diagnostics retain code, exact message, severity and byte range; standalone Lua 5.1 STD is initialized | transitional LSP remains one-file |
+| #247 | `ConfiguredAnalyzerSession` over exact Main, Library and optional virtual snapshots; caller diagnostics; one embedded STD; diagnostics-only versus explicit semantic collection | snapshots are not ordinary project configuration/context |
+| #248 | direct `wow-service::addon_check::check_addon`, findings plus limitations, no legacy Reference/Rules/publication/graph/store stack | no root/TOC/Library acquisition or CLI adapter |
+| #249 | compiled Emmy identity without fabricated compatibility-report hashes | legacy report-backed callers remain transitional |
+| #250 | exact Main identity in immutable-owner reuse admission | no retained public CLI owner |
 
-These are implemented in `main`, with exact-head runs #418, #422, #425, #440
-and #445 respectively. None is an observed addon workflow.
+Exact-head runs #418, #422, #425, #440 and #445 passed. None is an observed addon
+workflow.
 
 ### Remaining item-1 path
 
-Connect the ordinary user operation without rebuilding those owners:
-
 ```text
-root / explicit-or-unambiguous TOC / retail flavor / Library paths
-  -> selected required and available optional dependency closure
-  -> exact typed package/unit context and selected package/TOC/XML order
-  -> exact bounded physical inputs and mapped XML units
+root / TOC / flavor + product channel / Library paths
+  -> required/available optional dependencies + reverse load triggers
+  -> typed package/unit context + exact selected order
+  -> implicit binding documents + bounded physical/XML/Library input
   -> existing ConfiguredAnalyzerSession
   -> existing wow-service addon_check
   -> CLI text/JSON diagnostics, limitations and exit status
 ```
 
-The implementation slice must:
+Implement in this order:
 
-1. add the small ordinary configuration DTO and CLI/config-file precedence;
-2. extract a load target containing flavor, optional target Interface and
-   `TocLoadContext`, rather than requiring `ProfileIdentity`;
-3. use one finite reviewed dependency table: required `Dep`, `Dependencies`,
+1. add the small ordinary config DTO and CLI/config precedence;
+2. extract a load target containing flavor, explicit product channel, optional
+   target Interface and `TocLoadContext`, without `ProfileIdentity`;
+3. use the finite dependency aliases: required `Dep`, `Dependencies`,
    `DependsOn`, `RequiredDep`, `RequiredDeps`; optional `OptionalDep`,
-   `OptionalDeps`; select only the requested TOC/relevant transitive closure and
-   reject ambiguity explicitly;
-4. model package/per-unit execution context used by selected source:
-   `UseSecureEnvironment`, `LoadIntoEnvironment`, `SuppressLocalTableRef`,
-   bootstrap and supported load-first/load-phase facts;
-5. fix tri-state predicate reduction so known allow/exclude results are not
+   `OptionalDeps`; select only the requested relevant transitive closure;
+4. model package/per-unit `UseSecureEnvironment`, `LoadIntoEnvironment`,
+   `SuppressLocalTableRef`, bootstrap and supported load-first/load-phase facts;
+5. model `OnlyBetaAndPTR` against explicit `Stable | Ptr | Beta`; retain
+   `LoadWith` as a source-located reverse trigger, never a dependency;
+6. recognize bounded `DefaultState` lifecycle metadata without making an explicit
+   source check partial; add `SavedVariablesMachine` declaration scope while
+   continuing never to read user SavedVariables content;
+7. discover at most one exact `Bindings<suffix>.xml` under the held addon root,
+   and map `<Binding>` Lua as callback units with only source-verified `keystate`
+   context; absence is normal;
+8. fix tri-state predicate reduction so known allow/exclude results are not
    poisoned by irrelevant unknown aliases or gates;
-6. retain exact package/TOC/XML order in a validated context value beside the
-   path-sorted snapshots; never treat snapshot/Emmy registration order as WoW
-   runtime order;
-7. reuse `ProjectInputDirectory` and `ProjectInputFile` safety/bounds without
-   constructing `ProjectInputInventory` or publication configuration;
-8. split pure XML-unit/map preparation from the publication wrapper;
-9. preserve independent captured units and located failure when one included XML
-   file is malformed;
-10. pass exact Main/Library/virtual snapshots plus the validated context to the
-    direct Service path;
-11. render actual code/message/severity/location plus scoped limitations;
-12. apply the documented failure threshold and `0/1/2/64/130/4` exit policy;
-13. record the first exact command/input/result only after it is actually run.
+9. preserve exact package/TOC/XML/implicit-unit order and context in a validated
+   value beside path-sorted snapshots; never treat snapshot/Emmy registration
+   order as WoW runtime order;
+10. reuse `ProjectInputDirectory`/`ProjectInputFile` safety and bounds without
+    `ProjectInputInventory` or publication configuration;
+11. split pure XML/binding unit-map preparation from publication wrappers;
+12. preserve independent captured units and located failure when one included or
+    bindings XML document is malformed;
+13. admit physical-only, physical+virtual, XML-only and valid empty language
+    scopes without a dummy Lua file;
+14. pass exact Main/Library/virtual snapshots plus validated context to the direct
+    Service result;
+15. render actual code/message/severity/location plus scoped limitations and the
+    documented `0/1/2/64/130/4` exit policy;
+16. record the first exact command/input/result only after it is actually run.
 
-The first usable result remains a Lua/type check. Empty or omitted `checks` means
-no WoW rule while Emmy diagnostics remain enabled. Missing chunk or XML-handler
-context remains an explicit limitation; it is not silently converted to clean.
-The full source trace for steps 3–6 is
-[TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md).
+Empty/omitted `checks` selects no WoW rule while Emmy diagnostics remain enabled.
+Missing chunk, handler or binding callback context is an explicit limitation, not
+a clean result.
+
+Source evidence:
+
+- [TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md) — dependency aliases,
+  secure/private-table context, tri-state predicates and selected order;
+- [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md) — product
+  channel, `LoadWith`, implicit bindings, `DefaultState` and machine
+  SavedVariables scope.
 
 ### Source-traced replacement boundary
 
-The existing executable check path is transitional and must not be extended:
+The current executable check route is transitional:
 
-- `apps/wow/src/args.rs` binds the CLI to `LocalCommand`;
-- `LocalProjectInput::assemble_with_platform` and `LocalProjectBackend` require
-  Reference, analyzer compatibility and Project publication state;
-- generic `Service::check` treats Reference and Rules as mandatory even for
-  type-only work;
-- `local/projection.rs::check_context` expands empty rule selection to every
-  registered rule;
-- the old component/capability result is not the delivered direct diagnostic
-  result.
+- `apps/wow/src/args.rs` binds to `LocalCommand`;
+- `LocalProjectInput::assemble_with_platform`/`LocalProjectBackend` require
+  Reference, compatibility and Project publication state;
+- generic `Service::check` requires Reference/Rules for type-only work;
+- empty old rule selection expands to every registered rule;
+- the old component/capability result is not the direct diagnostic result.
 
-Do not fabricate empty `ReferenceView`, RuleRegistry, compatibility reports,
-Project generations or proof identities to satisfy those constructors. Do not
-wrap the new result inside the old result. Move callers, then delete the route.
+Do not fabricate empty Reference/Rules/report/Project objects, adapt the old
+result around the new one, or build another analyzer owner. Move callers, then
+remove the route.
 
 ### Exact owner split
 
-- **`wow-project`** owns bounded acquisition, small load target, finite directive
-  semantics, TOC/dependency selection, exact ordered package/unit context,
-  physical files and pure XML virtual units/maps. Legacy profile/publication
-  wrappers adapt while old callers exist.
-- **`wow-emmy`** already owns `ConfiguredAnalyzerSession`, compiled provenance,
-  Lua 5.1, embedded STD and optional semantic collection. Keep snapshots
-  path-sorted/content-addressed; add only the demonstrated mapped-context seam,
-  not another session or runtime emulator.
-- **`wow-service`** already owns `addon_check` and its direct result. Add ordinary
-  configuration resolution, validated load/context input and selected WoW-check
-  dependencies; do not reintroduce global component health.
-- **`wow-cli`** owns arguments, config precedence, cancellation, rendering and
-  exit policy only.
-- **LSP/MCP** later adapt to the same Service owner and exact project state.
+- **`wow-project`** — ordinary config resolution, safe selected acquisition,
+  small load target, finite directive semantics, dependencies/triggers, product
+  channel, exact ordered context, implicit binding discovery and pure mapped XML/
+  binding units. Legacy profile/publication wrappers adapt while callers remain.
+- **`wow-emmy`** — existing `ConfiguredAnalyzerSession`, compiled provenance,
+  Lua 5.1, STD and requested semantic collection. Keep snapshots path-sorted and
+  add only demonstrated mapped context seams.
+- **`wow-service`** — existing `addon_check`; add config orchestration, validated
+  load/context input and selected check dependencies.
+- **`wow-cli`** — arguments, config precedence, cancellation, rendering, exit.
+- **LSP/MCP** — later adapters to the same Service/project owner.
 
 ## 2. Correct Blizzard declarations used by the check
 
-Related: #200/#201; reuse the public builder and existing native Ketho port.
+Related: #200/#201; reuse the public builder and native Ketho port.
 
-Separate client flavor, game/glue load context and API member environment. Model
-and carry through the actual consumer:
+Carry through the real reader:
 
-- member-level `SecureOnly` and other reviewed environment facts;
+- member-level `SecureOnly` and reviewed environment facts;
 - `MayReturnNothing` as a zero-result alternative;
 - `NilableContents` separately from container nilability;
-- numeric ordered repeated `StrideIndex` groups;
-- mixin relationships and selected restriction/origin facts;
-- unresolved or unrepresentable forms as located limitations, not silent `any`.
+- ordered numeric repeated `StrideIndex` groups;
+- mixin/restriction/origin facts;
+- unresolved/unrepresentable forms as located limitations, never silent `any`.
 
-Concrete reviewed cases are `C_ArtifactUI.GetMetaPowerInfo` and
-`C_EquipmentSet.GetItemIDs`. Keep one `source-report.json` producer/consumer DTO.
-The ordinary reader must consume optional exact typed metadata/maps; plain Lua
-Libraries remain valid for type checking and limit only checks that need the
-manifest.
+Concrete cases are `C_ArtifactUI.GetMetaPowerInfo` and
+`C_EquipmentSet.GetItemIDs`. Keep one optional `source-report.json` DTO. Plain
+Lua Libraries remain valid for typing and limit only dependent checks.
 
-Replace per-file blocking Git calls with one bounded selected batch read and
-truthful child cancellation/reaping. Do not restore the removed example producer,
-old `/1` verifier, another converter or certification platform.
+Replace per-file Git processes with one bounded selected batch read and truthful
+child cancellation/reaping. Do not restore old producers/verifiers/converters.
 
-## 3. Correct addon/XML context and updates
+## 3. Correct addon/XML/binding context and updates
 
 Related: [#109](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/109),
 [#117](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117).
 
-Use the same configured owner plus the validated Project load/context value for:
+Use the same configured owner plus validated Project context for:
 
-- physical Lua and mapped XML-derived Lua;
-- XML-only addons without a dummy physical file;
-- one shared private table per supported ordinary addon and separate lexical
-  chunks per file;
-- exact source-verified XML handler parameters;
-- distinct suppressed-private-table, package-secure, per-unit environment
-  override, bootstrap/load-first and free-inline contexts;
-- exact virtual-to-XML mappings, including entities and discontinuous pieces.
+- physical Lua and mapped UI XML Lua;
+- XML-only addons;
+- one private table per supported ordinary addon and lexical chunks per file;
+- source-verified UI handler parameters;
+- mapped `<Binding>` callbacks with `keystate`, distinct from top-level chunks;
+- suppressed private tables, package/per-unit secure overrides,
+  bootstrap/load-first, free-inline and binding phases;
+- exact virtual-to-XML mappings including entities/discontinuous pieces.
 
-The mapped helper design in
-[EMMYLUA_UPSTREAM.md](EMMYLUA_UPSTREAM.md#addon-chunk-context) remains a design
-until executed. Synthetic helper calls/declarations are context-only and must not
-become user API/flow facts or diagnostics.
+Synthetic helper/wrapper code is context-only and never becomes user API/flow
+facts or locations. Binding callbacks do not receive addon ellipsis semantics and
+are not inserted as top-level TOC execution.
 
-A physical file delta may reuse an owner only when selected membership, exact
-ordered load context, Library identity and analyzer configuration are unchanged.
-TOC/XML/dependency/Library/config changes rebuild selection and owner cold.
-Deletion or rename removes declarations, virtual units, maps, diagnostics and
-index rows coherently. Failed/cancelled candidates never advertise an old result
-as current.
+Reuse an owner incrementally only when selected membership, product channel,
+triggers, exact ordered context, Library identity and analyzer config are
+unchanged. TOC/XML/bindings/dependency/trigger/Library/channel/config changes
+rebuild selection/context cold. Delete/rename removes declarations, virtual units,
+maps, diagnostics and index rows together.
 
-Remove the stale blanket `InlineLuaNotAnalyzed` blocker for supported extracted
-bodies without claiming handler semantics. Connect the currently rejected
-TOC/package-selected live-update route to selection/context rebuilding.
+Remove stale blanket `InlineLuaNotAnalyzed` only for supported extracted bodies;
+do not claim handler/binding context. Connect selected-load live updates to the
+same rebuild owner.
 
 ## 4. Small WoW checks and frontend reuse
 
@@ -175,61 +175,49 @@ Related: [#103](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/10
 [#198](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/198),
 [#199](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/199).
 
-Enable only direct typed checks with explicit dependencies. Before API existence
-is enabled, carry/query the original Emmy lexical binding and selected API origin;
-a local named `C_*` is not a Blizzard namespace by spelling. Before Secret use is
-enabled, separate unresolved producer semantics from malformed/stale fact
-identity. Unknown provenance remains unknown.
+Enable only direct typed checks with explicit dependencies. API existence requires
+original Emmy receiver binding and selected API origin; a local named `C_*` is
+not a Blizzard namespace. Secret checking separates coherent unresolved
+semantics from malformed/stale identities.
 
-LSP keeps overlay text/version/coordinate ownership but passes exact overrides to
-the configured project owner. Accept increasing version gaps, reject stale
-results, and return standard empty/null results. General Lua completion/hover/
-definition/references remain upstream EmmyLua unless a WoW-specific persisted
-navigation operation is required.
+LSP keeps overlay/version/coordinate ownership but passes exact overrides to the
+configured project. Accept increasing version gaps, reject stale results and use
+standard empty/null responses. MCP keeps one standard profile, bounded extension
+metadata, unknown-notification behavior and only implemented tools. CLI/LSP/MCP
+serialize common Service results.
 
-MCP keeps one standard stdio profile, bounded extensible metadata, valid unknown
-notification behavior and only implemented useful tools. CLI/LSP/MCP serialize
-the same Service results; no profile/registry/proof platform.
+## 5. Direct source lookup and platform removal
 
-## Direct source lookup and remaining platform removal
-
-**Order: 5.** Related:
-[#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131),
+Related: [#131](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131),
 [#169](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169),
 [#122](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122),
 [#106](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106).
 
-After addon checking is useful, store one current selected source set in normal
-SQLite tables: sources, files with body text, symbols with spans and only the
-relations consumed by navigation. Query after restart without Project/Emmy/Graph
-replay. FTS indexes body text; exact names use a separate lookup. Return readable
-source from the indexed exact text with path/range/revision/flavor.
+After addon checking works, store one current selected source set in normal
+SQLite tables: sources, files with body text, symbols/spans and only consumed
+relations. Query after restart without Project/Emmy/Graph replay. FTS indexes body
+text; exact names use a separate lookup. Preserve exact source/revision/flavor/
+channel/context.
 
-Preserve existing useful direct retained-shard SQL, opt-in Reference documentation
-search, one-scan neighbor batching and exact excerpt checks. Add real SQLite
-interruption/bounded lock waiting, valid empty indexes, transactional updates and
-primary-error preservation through cleanup.
+Reuse useful direct retained-shard SQL, opt-in Reference documentation search,
+one-scan neighbor batching and exact excerpt validation. Add real SQLite
+interruption/bounded lock wait, transactional updates and primary-error
+preservation.
 
 Remove nested SQLite/hex/JSON, replay recapture, fixed-point pagination, Context
-packs, response journals, generic lifecycle and proof/fingerprint machinery only
-as their real readers move. Do not replace them with another universal store,
-graph, result envelope or RAG platform.
+packs, journals, generic lifecycle and proof/fingerprint machinery only as real
+readers move. Do not create another universal store/graph/result/RAG platform.
 
-Attach Store/format cleanup
-([#111](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111),
-[#194](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194),
-[#112](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/112)) to the
-reader it replaces. Measure the necessary real workflow under
-[#113](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113); do not
-invent targets from code size.
+Attach Store/format cleanup (#111/#194/#112) to replaced readers. Measure the
+necessary actual workflow under #113, never code size.
 
 ## Working policy
 
 One manager/worktree, bounded delegation, code first, formatting and affected
 strict Clippy. Tests remain deferred until functional completion by owner
-direction. Do not use that policy to call compile/Clippy a product pass.
+direction; compile/Clippy is never a product pass.
 
 Update [CURRENT_STATUS.md](CURRENT_STATUS.md) when merged code changes the next
-work, and [IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md)
-when source evidence changes a boundary or an exact workflow becomes observed.
-The baseline register is not a recurring progress diary.
+work and [IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md)
+when evidence or an exact observed result changes. The baseline register is not a
+progress diary.
