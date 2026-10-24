@@ -20,9 +20,9 @@ PRs #246–#250 already delivered:
 - exact Main snapshot admission for configured-owner reuse.
 
 Do not reimplement those owners. The missing first public path is ordinary
-configuration/acquisition -> exact snapshots -> existing `check_addon` -> CLI
-rendering/exit status. None of the lower slices has been observed through an
-ordinary addon command.
+configuration/acquisition -> exact snapshots plus validated load/context data ->
+existing `check_addon` -> CLI rendering/exit status. None of the lower slices has
+been observed through an ordinary addon command.
 
 ## Code ownership
 
@@ -32,7 +32,7 @@ ordinary addon command.
 | API facts and corrections | `wow-reference/src/native{,_model,_corrections,_aliases}.rs` | preserve reviewed fields/origins; no persistent Reference requirement for type-only checking |
 | Annotation output | `wow-annotations/src/{native,ketho,aliases,literals}.rs`, `wow-ketho-literals` | one Lua render plus optional shared manifest/maps |
 | Lua analysis | `wow-emmy::ConfiguredAnalyzerSession`, existing session/reference/flow owners | reuse delivered owner; add only demonstrated context/update seams |
-| Addon/load model | `wow-project/src/{disk,load,xml_lua,xml_bindings,analyzer}.rs` | ordinary load target, selected acquisition and pure XML preparation without publication receipts |
+| Addon/load model | `wow-project/src/{disk,load,xml_lua,xml_bindings,analyzer}.rs` | ordinary load target, selected acquisition, typed unit context/order and pure XML preparation without publication receipts |
 | Direct check use case | `wow-service/src/addon_check.rs` | ordinary config/input orchestration and selected WoW checks |
 | CLI/LSP/MCP | `apps/wow/src`, `wow-service/src/frontend` | thin adapters to the same Service owners |
 | Optional current source index | `wow-store`, useful `wow-search` queries, exact excerpt helpers | one direct SQLite database over current selected data |
@@ -76,19 +76,25 @@ Resolution rules:
    family `Mainline`. Automatic discovery considers exact `<addon>.toc` and
    `<addon>_Mainline.toc`; if both exist, require selection. Reject case-folded
    duplicates. Do not choose by highest Interface.
-7. The ordinary in-game global context sets Mainline game type/family, Game
-   location and Global environment. Secure, glue, bootstrap and other contexts
-   require explicit support; do not inherit ordinary context silently.
+7. The ordinary in-game global target supplies Mainline game type/family and Game
+   location for selection. It does **not** force every selected unit to execute
+   globally: package `UseSecureEnvironment` and per-unit `LoadIntoEnvironment`
+   determine effective execution context where supported. Glue, bootstrap,
+   load-first, suppressed-private-table and other special contexts remain typed
+   facts or explicit limitations; never inherit ordinary context silently.
 8. Use explicit `target_interface` when supplied. Otherwise use compatible
    selected-Library metadata if present. Conflicting Library targets or explicit
    incompatibility are configuration errors. Without either, compatibility is
    unknown and only dependent checks are limited. Never infer the target from
    the addon TOC or fabricate zero.
 9. Dependency roots are AddOns-like parents. Acquire only named required and
-   available optional transitive dependencies. Reject ambiguous names. Missing
-   required dependencies limit affected analysis; absent optional dependencies
-   do not block it. Never add every neighboring addon or treat dependency roots
-   as annotation Libraries.
+   available optional transitive dependencies. Use one finite reviewed alias
+   table: required `Dep`, `Dependencies`, `DependsOn`, `RequiredDep`,
+   `RequiredDeps`; optional `OptionalDep`, `OptionalDeps`. Reject ambiguous names.
+   Missing required dependencies limit affected analysis; absent optional
+   dependencies do not block it. Never add every neighboring addon, accept
+   arbitrary metadata prefixes as dependencies or treat dependency roots as
+   annotation Libraries.
 10. Decode `emmy_diagnostics` directly as the pinned `EmmyrcDiagnostic` using its
     camelCase fields/defaults. Invalid values are configuration errors. Do not use
     lenient `.emmyrc` discovery. `diagnosticInterval` is editor scheduling only.
@@ -106,10 +112,13 @@ reports, digests, receipts or budget JSON.
 The first public slice is an offline Lua/type check with an existing Library:
 
 1. resolve ordinary config and selected TOC/dependencies;
-2. capture exact bounded physical files and supported mapped XML units;
-3. build the exact Main/Library/optional virtual snapshots accepted by the
-   delivered Service request;
-4. call `wow_service::addon_check::check_addon`;
+2. capture exact bounded physical files, supported mapped XML units and a typed
+   exact selected load/context receipt;
+3. build the exact path-sorted Main/Library/optional virtual snapshots accepted
+   by the delivered Service request without discarding the separate selected
+   package/TOC/XML order;
+4. call `wow_service::addon_check::check_addon` with snapshots and the validated
+   context available for limitations/later selected checks;
 5. render its diagnostics and limitations;
 6. apply the documented exit policy.
 
@@ -125,11 +134,13 @@ hydration, Reference or source regeneration.
 The final check, including later context and selected WoW rules, is:
 
 1. resolve ordinary configuration and supported target;
-2. select TOC, dependencies and load order;
-3. capture exact bounded physical/XML/Library input;
+2. select TOC, dependencies and exact package/TOC/XML unit order;
+3. capture exact bounded physical/XML/Library input and typed package/per-unit
+   execution context;
 4. prepare virtual units and maps;
-5. open or safely reuse one `ConfiguredAnalyzerSession`;
-6. supply supported addon chunk and XML handler context;
+5. open or safely reuse one `ConfiguredAnalyzerSession` over exact snapshots;
+6. validate the ordered context against snapshot role/path/content identity and
+   supply supported addon chunk and XML handler context;
 7. collect language diagnostics and only semantic facts needed by selected checks;
 8. run those checks directly;
 9. return exact target information, diagnostics and scoped limitations.
@@ -147,14 +158,43 @@ inline-Lua parser.
 
 The old package universe can read unselected variants and unrelated packages
 before reachability. The ordinary adapter supplies only the explicit or
-unambiguous TOC and relevant dependency closure. Share one finite reviewed
-metadata table between TOC parsing and package projection; include the selected
-Blizzard `Dep` spelling without treating arbitrary metadata as dependency aliases.
+unambiguous TOC and relevant dependency closure.
+
+Share one finite reviewed metadata/directive table between TOC parsing and
+package projection. It must cover the exact dependency aliases above plus typed
+semantics actually used by selected source:
+
+- package default execution environment from `UseSecureEnvironment`;
+- per-unit environment override from `LoadIntoEnvironment`;
+- private-table policy from `SuppressLocalTableRef`;
+- `LoadOnDemand`, bootstrap and supported load-first/load-phase facts;
+- source span, selection predicates and originating load record for each fact.
+
+Unknown cosmetic/custom metadata remains retained evidence without making
+unrelated language checking partial. Unknown metadata or clauses that can change
+selection, environment, namespace or order remain located limitations. Do not
+collapse all unknown directives into one global closure failure.
+
+Reduce selection predicates according to their operators:
+
+- an allow-list is included after any known match, excluded only when every value
+  is known false, otherwise unresolved;
+- an exclude-list is excluded after any known match, included only when every
+  value is known false, otherwise unresolved;
+- across conjunctive gates, known exclusion dominates unknown; unresolved remains
+  only when no gate already excludes the unit.
+
+Retain unknown predicates on their source records even when a different gate
+makes the unit definitely excluded. They must not poison the selected program,
+and a reachable unresolved unit must never be reported clean.
 
 A malformed included XML unit carries path and best available parser range,
 marks only its dependent scope incomplete, and preserves already captured
 independent units. Unsafe roots/paths and invalid target selection remain hard
 refusals. Do not recover by reading outside configured roots.
+
+The exact source trace and concrete Blizzard examples are in
+[TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md).
 
 #### Physical and virtual Main
 
@@ -166,6 +206,13 @@ Keep entity/newline mappings, XML source pieces and gaps around comments/CDATA.
 A virtual diagnostic is user-visible only after exact projection through those
 maps. Successful syntax analysis does not establish handler receiver/parameters
 or runtime execution.
+
+`LuaWorkspaceSnapshot` remains a canonical path-sorted source set. It is not the
+load-order owner. Project must pass a separate immutable validated context value
+that lists selected physical and virtual units in exact package/TOC/XML order and
+binds each entry to snapshot role, canonical path, content digest and source
+load-record/unit identity. Reject missing, foreign, duplicate or digest-mismatched
+entries. Do not claim that Emmy registration order emulates the WoW client.
 
 #### Addon chunk context
 
@@ -179,9 +226,11 @@ Use the source-mapped helper design in
 chunk-owned top-level ellipsis expressions in memory; preserve/compose maps; and
 mark helpers/calls context-only so they never become user API/flow facts.
 
-Keep external chunks, free inline Script bodies, verified handler signatures,
-`SuppressLocalTableRef`, secure and bootstrap contexts separate. Unsupported
-contexts remain limitations rather than receiving fabricated values.
+Derive that transformation only from the validated per-unit context. Keep
+external chunks, free inline Script bodies, verified handler signatures,
+`SuppressLocalTableRef`, package secure defaults, per-unit environment overrides
+and bootstrap/load-first contexts separate. Unsupported contexts remain
+limitations rather than receiving fabricated values.
 
 ### Updates
 
@@ -189,10 +238,10 @@ Keep immutable exact input identity for every result. Reuse a configured owner
 only when its exact compatibility contract holds.
 
 - A physical source delta may use incremental machinery only when selected
-  membership, load context, Library identity and analyzer configuration are
-  unchanged.
-- TOC/XML/dependency/Library/target/config changes rebuild selection/context and
-  owner cold.
+  membership, ordered load context, Library identity and analyzer configuration
+  are unchanged.
+- TOC/XML/dependency/Library/target/context/config changes rebuild
+  selection/context and owner cold.
 - Removing/renaming a file removes declarations, virtual units, maps,
   diagnostics and index rows together.
 - A failed, cancelled or stale candidate never advertises an old result as
@@ -314,7 +363,7 @@ statement.
 
 | Operation | Required result |
 | --- | --- |
-| Outline | selected package/TOC/files or file declarations with load order and source locations |
+| Outline | selected package/TOC/files or file declarations with exact load order and source locations |
 | Exact symbol lookup | distinct declarations in explicit addon/UI/API scope |
 | Context around a hit | matching exact excerpt, declaration and direct known load/reference/type relations with finite limits |
 | Text search | deterministic token/phrase matches over indexed bodies for exact selected revision/flavor |

@@ -14,7 +14,8 @@ Keep these selections distinct:
 | --- | --- |
 | Blizzard source revision | Exact content used to generate API facts; a moving branch is resolved once. |
 | Client flavor/game type | Which client variant and TOC/load conditions are selected. Never union Mainline and Classic declarations to make errors disappear. |
-| Game/Glue load context | Which UI code can load according to the selected TOC. A system named `Glue` does not determine this. |
+| Game/Glue load context | Which packages/units can be selected according to TOC conditions. A system named `Glue` does not determine this. |
+| Package/file execution context | Package secure/global default, per-unit override, private-table policy and supported bootstrap/load phase. Selection and execution environment are different facts. |
 | API execution context | Ordinary addon code by default. `SecureOnly` metadata is distinct from client flavor and must be considered at system **and member** scope. |
 | Main, dependencies and Library | Main is the addon under diagnosis; declared dependencies and libraries provide context. They are not arbitrary files found nearby. |
 
@@ -56,14 +57,22 @@ sharing within one addon must not merge their lexical locals or all addon
 namespaces. The current package path prefix provides file identity only. The
 traced Main/Library inputs do not yet bind chunk arguments to a per-addon table.
 
-That default context applies only where the selected load unit justifies it.
-The reviewed Blizzard
-[RecruitAFriend TOC](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_RecruitAFriend/Blizzard_RecruitAFriend.toc)
-contains `SuppressLocalTableRef: 1`; other selected source uses secure load
-environments. These are not cosmetic metadata. The comparative Wowless loader
-also treats suppressed tables and bootstrap contexts separately. Preserve the
-directives and leave unsupported context unknown instead of injecting the same
-non-nil private table into every Blizzard-owned chunk.
+That default context applies only where the exact selected load unit justifies it.
+The pinned Blizzard source contains all of these materially different cases:
+
+- [`Blizzard_RecruitAFriend.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_RecruitAFriend/Blizzard_RecruitAFriend.toc)
+  uses `SuppressLocalTableRef: 1`;
+- [`Blizzard_PingUI.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_PingUI/Blizzard_PingUI.toc)
+  uses package `UseSecureEnvironment: 1` and overrides one file with
+  `[LoadIntoEnvironment global]`;
+- [`Blizzard_ChatFrameBase.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_ChatFrameBase/Blizzard_ChatFrameBase.toc)
+  contains a per-file `[LoadIntoEnvironment secure]` and conditional `LoadFirst`.
+
+Selection context (`AllowLoadEnvironment`) is not execution context
+(`UseSecureEnvironment`/`LoadIntoEnvironment`). Preserve typed package defaults,
+per-unit overrides, private-table policy, bootstrap/load phase and their source
+spans. Unsupported context remains an explicit limitation instead of receiving
+the same non-nil private table/global environment everywhere.
 
 SavedVariables names come from the selected TOC. Declaration does not make their
 contents non-nil before initialization, provide a complete schema, or justify
@@ -110,21 +119,44 @@ neighbor; the resulting library is explicitly partial.
 ## 4. TOC and XML form the load model
 
 Use one explicitly or unambiguously selected TOC and assess compatibility
-separately. Otherwise list candidates. Keep declared file order and nested XML
-include/script order. Sorting files for deterministic storage must not change
-load semantics. Normalize separators for lookup while retaining original spans;
-report missing paths, case collisions, cycles and invalid references.
+separately. Otherwise list candidates. Keep declared package, dependency, TOC
+file and nested XML include/script order. Sorting files for deterministic storage
+or snapshot identity must not change or replace load semantics. Normalize
+separators for lookup while retaining original spans; report missing paths, case
+collisions, cycles and invalid references.
 
 Required and optional dependencies are different. Resolve only configured addon
-roots. An optional dependency being absent is not an error; an unknown required
-dependency prevents dependent availability claims. LoadOnDemand and conditional
-loading remain conditional. A TOC Interface mismatch is a compatibility diagnostic,
-not permission to abandon all useful analysis or guess another client.
+roots and one finite reviewed alias table:
+
+- required: `Dep`, `Dependencies`, `DependsOn`, `RequiredDep`, `RequiredDeps`;
+- optional: `OptionalDep`, `OptionalDeps`.
+
+An optional dependency being absent is not an error; an unknown required
+dependency prevents dependent availability claims. LoadOnDemand, load-first,
+bootstrap and conditional loading remain conditional. A TOC Interface mismatch
+is a compatibility diagnostic, not permission to abandon all useful analysis or
+guess another client.
+
+Reduce conditions by their actual boolean form. For an allow-list, any known
+match is sufficient; for an exclude-list, any known match excludes; unknown
+matters only when no known value determines the result. Across conjunctive gates,
+a known exclusion dominates an unknown gate. Retain the unknown predicate as
+source evidence even when the unit is definitely excluded, but do not let it
+poison the selected program. A reachable unresolved unit remains a limitation.
 
 Cosmetic/custom TOC metadata must not mark all type checking incomplete. An
-unknown directive that can change loading affects the load-dependent checks.
-Keep selected, excluded and unresolved files distinct. Report a Lua file omitted
-from the load plan only when that warning is useful and its exclusion is proven.
+unknown directive that can change loading, namespace, execution environment or
+order affects the load-dependent checks. Keep selected, excluded and unresolved
+files distinct. Report a Lua file omitted from the load plan only when that
+warning is useful and its exclusion is proven.
+
+`LuaWorkspaceSnapshot` is a path-sorted content-addressed source set. It is not
+the load-order owner. Pass a separate immutable validated context beside the
+snapshots with exact package/TOC/XML unit order, snapshot role/path/digest,
+originating load record/unit, addon identity, effective environment,
+private-table policy and supported phase. Reject missing, foreign, duplicate or
+digest-mismatched entries. Do not claim Emmy registration order reproduces WoW
+execution.
 
 Track file discovery, XML parsing, inline Lua analysis and handler-context
 support separately. An extracted handler body must not keep a blanket
@@ -146,16 +178,26 @@ only from selected data. XML inheritance, lexical containment and runtime object
 parentage are different relationships. Unknown templates or dynamically selected
 mixins do not establish a missing method.
 
+One malformed included XML document is a located failed unit, not permission to
+hide all independent Lua/XML input behind one generic configuration failure.
+Unsafe selected roots/paths and malformed selected TOC admission remain hard
+failures. Preserve already captured independent units and limit only the scope
+that depends on the failed include.
+
 Inline Lua needs the context justified by its exact XML script kind. Supply a
 handler receiver and callback parameters only when that element's signature is
 source-verified; otherwise leave that context unknown. A free inline `Script`
 body and an external Lua chunk are different units. Do not replace a
 handler's `...` with addon arguments or assume every inline body receives the
 external chunk's private table. The current unwrapped inline analysis does not
-provide these contexts. Synthetic wrappers must have
-source maps; wrapper-only errors must not be reported against invented user
-locations. XML entities/newline transformations can map a virtual range to
-multiple original spans. Use the actual mapping; never add one constant offset.
+provide these contexts. Synthetic wrappers must have source maps; wrapper-only
+errors must not be reported against invented user locations. XML entities/newline
+transformations can map a virtual range to multiple original spans. Use the
+actual mapping; never add one constant offset.
+
+The exact Project-source trace for dependency aliases, execution context,
+three-valued conditions and the order handoff is in
+[TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md).
 
 ## 5. Checks to deliver
 
@@ -236,11 +278,11 @@ Internally use UTF-8 half-open byte ranges tied to the exact text. Convert to
 editor positions once with the negotiated encoding and document version. Library
 or STD declarations are related locations, not fabricated Main-file spans.
 
-A changed/deleted file, TOC, XML include, dependency or Library must invalidate the
-facts that depend on it. Initially retain the correct conservative semantic
-rebuild. Publish a coherent new result after success; never serve an old result
-as current after a failed update. Source search uses matching indexed text, not
-old offsets applied to modified disk contents.
+A changed/deleted file, TOC, XML include, dependency, ordered load context or
+Library must invalidate the facts that depend on it. Initially retain the correct
+conservative semantic rebuild. Publish a coherent new result after success;
+never serve an old result as current after a failed update. Source search uses
+matching indexed text, not old offsets applied to modified disk contents.
 
 Deletion must remove obsolete declarations, load membership, virtual Lua units,
 source maps, check results and search rows together. If the effect of a change

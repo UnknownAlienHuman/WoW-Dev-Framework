@@ -2,21 +2,23 @@
 
 **Checked:** 2026-10-24  
 **Implementation code reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`  
-**Documentation reconciliation:** PR #251, `3ecf03b15bb4597daa5bcaa90d84224b23d0fffb`  
+**Documentation and active-Issue reconciliation:** PR #254, `338dcbec597ece5e4e296425b874ecc2203d2b8f`  
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 
 This is the authoritative current-state checkpoint. It does not replace the
 product specification in [ARCHITECTURE.md](ARCHITECTURE.md), the implementation
 design in [IMPLEMENTATION.md](IMPLEMENTATION.md), or the baseline source audit in
-[AUDIT.md](AUDIT.md). It prevents those baseline documents from being mistaken
-for a live progress report after implementation changes. PR #251 changed only
-documentation and active Issue instructions; runtime status remains the code
-reviewed through PR #250.
+[AUDIT.md](AUDIT.md). It prevents baseline evidence from being mistaken for live
+progress. Runtime status remains the code reviewed through PR #250; later
+reconciliation and source-trace work changes instructions, not delivered product
+behavior.
 
 ## Verification vocabulary
 
 - **baseline reviewed** — the source/document claim was checked at the commit
   named by the baseline audit;
+- **traced** — a named producer, handoff and consumer were followed far enough to
+  support the recorded decision;
 - **implemented** — code is present in `main` and passed the stated exact-head
   repository/format/compile/Clippy gate;
 - **observed** — an ordinary user command or protocol sequence was actually run
@@ -61,8 +63,7 @@ lifetime behavior.
 | T07/T15 / PR #249 | Compiled Emmy provenance is distinct from compatibility-report evidence; direct callers need not fabricate report hashes. Legacy report-backed admission remains explicit and fallible. | exact-head run #440 passed | unexecuted |
 | T16 / PR #250 | Reuse admission for the immutable configured owner requires the exact Main snapshot identity, plus the Library set, virtual identity/generation, and equivalent diagnostic configuration. | exact-head run #445 passed | unexecuted |
 
-The current lower-level language-check core therefore exists. The public product
-path does not.
+The lower-level language-check core exists. The public product path does not.
 
 ## Open path to the first usable command
 
@@ -71,7 +72,7 @@ The next coherent slice is:
 ```text
 ordinary CLI/config
   -> addon root, flavor, TOC and dependency selection
-  -> bounded exact Main/Library acquisition
+  -> exact typed load/context receipt plus bounded Main/Library acquisition
   -> mapped XML preparation
   -> existing ConfiguredAnalyzerSession
   -> existing wow-service::addon_check
@@ -82,7 +83,14 @@ The following remain open and must not be described as delivered:
 
 - normal root/TOC/flavor/Library configuration and ambiguity handling;
 - a small load target independent of `ProfileIdentity` and publication receipts;
-- selected dependency-closure acquisition, including reviewed `Dep` spelling;
+- selected dependency closure using the reviewed finite aliases `Dep`,
+  `Dependencies`, `DependsOn`, `RequiredDep`, `RequiredDeps`, `OptionalDep` and
+  `OptionalDeps`;
+- typed package/per-unit context for `UseSecureEnvironment`,
+  `LoadIntoEnvironment`, `SuppressLocalTableRef`, bootstrap/load-first and
+  supported load phases;
+- correct three-valued reduction of allow/exclude lists and combined gates;
+- a validated exact package/TOC/XML order handoff beside path-sorted snapshots;
 - preservation of independent units when one included XML file is malformed;
 - public `wow check` wiring, rendering, exit policy, and cancellation handoff;
 - XML-only Main admission and exact virtual-diagnostic projection to XML;
@@ -97,6 +105,14 @@ The following remain open and must not be described as delivered:
 - MCP metadata/unknown-notification behavior and reuse of the same Service owners;
 - direct source-body/symbol SQLite index, later-process query, readable context,
   and real SQL interruption.
+
+The new source trace is in
+[TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md). It confirms that the
+loader already computes useful records/order/maps, but the current handoff loses
+reviewed dependency spellings, secure/private-table execution facts and selected
+unit order before `check_addon`. `LuaWorkspaceSnapshot` remains correctly
+path-sorted for exact identity; it must not be repurposed as a runtime load-order
+model.
 
 `check_addon` currently consumes exact already-acquired snapshots and reports
 `Partial`: addon chunk context is unavailable, and virtual input additionally
@@ -124,24 +140,31 @@ The post-merge reread found and corrected real drift in the active documentation
 8. active umbrella/completion/configuration/CLI/LSP/MCP/result Issues still
    assigned already delivered #246–#250 work;
 9. the baseline register retained 31 local links to headings renamed during the
-   current-guide rewrite. Those anchors are repaired, and repository policy now
-   rejects missing local Markdown paths/anchors so Quick cannot silently pass the
-   same drift again.
+   current-guide rewrite. Repository policy now rejects missing local Markdown
+   paths/anchors;
+10. all 21 active Issue bodies were checked against current production callers;
+    #111, #118 and #131 were corrected in PR #254;
+11. the deeper T02–T05/T11 trace found missing TOC aliases/context and an ordered
+    load-handoff gap not previously recorded. These are now explicit post-baseline
+    findings rather than silently folded into the old audit.
 
-PR #251 corrected items 1–8 while preserving baseline audit evidence and all
-runtime rows as unobserved. The follow-up Markdown guard corrects item 9 and
-makes the same class of drift executable repository-policy failure.
+PRs #251–#254 corrected items 1–10 while preserving baseline evidence and all
+runtime rows as unobserved. Item 11 is recorded in the active trace documents and
+must be implemented through the actual Project-to-Service handoff.
 
 ## Readiness verdict
 
 - **Documentation baseline reconciliation:** complete.
-- **Post-merge documentation/current-Issue reconciliation:** complete, including
-  the local Markdown path/anchor guard.
-- **Known source-level architecture/error register:** complete for the retained
-  baseline requirements; new implementation findings belong in
-  [IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md).
-- **First implementation owner boundaries:** defined and partially implemented.
-- **First ordinary user workflow:** not yet implemented or observed.
+- **Post-merge documentation/current-Issue reconciliation:** complete through
+  PR #254, including the local Markdown path/anchor guard.
+- **Baseline source-level architecture/error register:** complete for the retained
+  baseline requirements.
+- **Current implementation source tracing:** active; new findings belong in
+  [IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md) and the
+  focused source trace linked above.
+- **First implementation owner boundaries:** defined and partially implemented;
+  the TOC/load-context receipt is now a mandatory missing boundary.
+- **First ordinary user workflow:** not implemented or observed.
 - **Project ready for blind execution without further tracing:** no. Each next
   slice must follow its actual producer, handoff, reader, and visible result and
   update the trace register when the boundary changes.

@@ -20,7 +20,7 @@ Related: [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/20
 | PR | Delivered lower boundary | Remaining limitation |
 | --- | --- | --- |
 | #246 | all configured Emmy diagnostics retain code, exact message, severity and byte range; standalone Lua 5.1 STD is initialized | transitional LSP is still one-file |
-| #247 | `ConfiguredAnalyzerSession` over exact Main, Library and optional virtual snapshots; caller diagnostics; one embedded STD; diagnostics-only versus explicit semantic collection | it consumes snapshots, not ordinary project configuration |
+| #247 | `ConfiguredAnalyzerSession` over exact Main, Library and optional virtual snapshots; caller diagnostics; one embedded STD; diagnostics-only versus explicit semantic collection | it consumes snapshots, not ordinary project configuration or selected load context |
 | #248 | direct `wow-service::addon_check::check_addon`, findings plus limitations, no legacy Reference/Rules/publication/graph/store stack | no root/TOC/Library acquisition or CLI adapter; context remains partial |
 | #249 | compiled Emmy identity without fabricated compatibility-report hashes | legacy publication/replay remains report-backed while it has callers |
 | #250 | exact Main identity in immutable-owner reuse admission | no retained public CLI owner yet |
@@ -35,6 +35,7 @@ Connect the ordinary user operation without rebuilding those owners:
 ```text
 root / explicit-or-unambiguous TOC / retail flavor / Library paths
   -> selected required and available optional dependency closure
+  -> exact typed package/unit context and selected package/TOC/XML order
   -> exact bounded physical inputs and mapped XML units
   -> existing ConfiguredAnalyzerSession
   -> existing wow-service addon_check
@@ -46,21 +47,34 @@ The implementation slice must:
 1. add the small ordinary configuration DTO and CLI/config-file precedence;
 2. extract a load target containing flavor, optional target Interface and
    `TocLoadContext`, rather than requiring `ProfileIdentity`;
-3. select only the requested TOC and relevant dependency closure; recognize the
-   reviewed `Dep` spelling and reject ambiguity explicitly;
-4. reuse `ProjectInputDirectory` and `ProjectInputFile` safety/bounds without
+3. use one finite reviewed dependency table: required `Dep`, `Dependencies`,
+   `DependsOn`, `RequiredDep`, `RequiredDeps`; optional `OptionalDep`,
+   `OptionalDeps`; select only the requested TOC/relevant transitive closure and
+   reject ambiguity explicitly;
+4. model package/per-unit execution context used by selected source:
+   `UseSecureEnvironment`, `LoadIntoEnvironment`, `SuppressLocalTableRef`,
+   bootstrap and supported load-first/load-phase facts;
+5. fix tri-state predicate reduction so known allow/exclude results are not
+   poisoned by irrelevant unknown aliases or gates;
+6. retain exact package/TOC/XML order in a validated context value beside the
+   path-sorted snapshots; never treat snapshot/Emmy registration order as WoW
+   runtime order;
+7. reuse `ProjectInputDirectory` and `ProjectInputFile` safety/bounds without
    constructing `ProjectInputInventory` or publication configuration;
-5. split pure XML-unit/map preparation from the publication wrapper;
-6. preserve independent captured units and located failure when one included XML
+8. split pure XML-unit/map preparation from the publication wrapper;
+9. preserve independent captured units and located failure when one included XML
    file is malformed;
-7. pass exact Main/Library/virtual snapshots to `check_addon`;
-8. render actual code/message/severity/location plus scoped limitations;
-9. apply the documented failure threshold and `0/1/2/64/130/4` exit policy;
-10. record the first exact command/input/result only after it is actually run.
+10. pass exact Main/Library/virtual snapshots plus the validated context to the
+    direct Service path;
+11. render actual code/message/severity/location plus scoped limitations;
+12. apply the documented failure threshold and `0/1/2/64/130/4` exit policy;
+13. record the first exact command/input/result only after it is actually run.
 
 The first usable result remains a Lua/type check. Empty or omitted `checks` means
 no WoW rule while Emmy diagnostics remain enabled. Missing chunk or XML-handler
 context remains an explicit limitation; it is not silently converted to clean.
+The full source trace for steps 3–6 is
+[TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md).
 
 ### Source-traced replacement boundary
 
@@ -82,15 +96,17 @@ wrap the new result inside the old result. Move callers, then delete the route.
 
 ### Exact owner split
 
-- **`wow-project`** owns bounded acquisition, small load target, TOC/dependency
-  selection, exact physical files and pure XML virtual units/maps. Legacy profile
-  and publication wrappers adapt while old callers exist.
+- **`wow-project`** owns bounded acquisition, small load target, finite directive
+  semantics, TOC/dependency selection, exact ordered package/unit context,
+  physical files and pure XML virtual units/maps. Legacy profile/publication
+  wrappers adapt while old callers exist.
 - **`wow-emmy`** already owns `ConfiguredAnalyzerSession`, compiled provenance,
-  Lua 5.1, embedded STD and optional semantic collection. Extend it only for a
-  demonstrated missing analyzer seam; do not create another session.
+  Lua 5.1, embedded STD and optional semantic collection. Keep snapshots
+  path-sorted/content-addressed; add only the demonstrated mapped-context seam,
+  not another session or runtime emulator.
 - **`wow-service`** already owns `addon_check` and its direct result. Add ordinary
-  configuration resolution and selected WoW-check dependencies there; do not
-  reintroduce global component health.
+  configuration resolution, validated load/context input and selected WoW-check
+  dependencies; do not reintroduce global component health.
 - **`wow-cli`** owns arguments, config precedence, cancellation, rendering and
   exit policy only.
 - **LSP/MCP** later adapt to the same Service owner and exact project state.
@@ -124,14 +140,15 @@ old `/1` verifier, another converter or certification platform.
 Related: [#109](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/109),
 [#117](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117).
 
-Use the same configured owner for:
+Use the same configured owner plus the validated Project load/context value for:
 
 - physical Lua and mapped XML-derived Lua;
 - XML-only addons without a dummy physical file;
 - one shared private table per supported ordinary addon and separate lexical
   chunks per file;
 - exact source-verified XML handler parameters;
-- distinct suppressed-private-table, secure, bootstrap and free-inline contexts;
+- distinct suppressed-private-table, package-secure, per-unit environment
+  override, bootstrap/load-first and free-inline contexts;
 - exact virtual-to-XML mappings, including entities and discontinuous pieces.
 
 The mapped helper design in
@@ -139,11 +156,12 @@ The mapped helper design in
 until executed. Synthetic helper calls/declarations are context-only and must not
 become user API/flow facts or diagnostics.
 
-A physical file delta may reuse an owner only when selected membership, load
-context, Library identity and analyzer configuration are unchanged. TOC/XML/
-dependency/Library/config changes rebuild selection and owner cold. Deletion or
-rename removes declarations, virtual units, maps, diagnostics and index rows
-coherently. Failed/cancelled candidates never advertise an old result as current.
+A physical file delta may reuse an owner only when selected membership, exact
+ordered load context, Library identity and analyzer configuration are unchanged.
+TOC/XML/dependency/Library/config changes rebuild selection and owner cold.
+Deletion or rename removes declarations, virtual units, maps, diagnostics and
+index rows coherently. Failed/cancelled candidates never advertise an old result
+as current.
 
 Remove the stale blanket `InlineLuaNotAnalyzed` blocker for supported extracted
 bodies without claiming handler semantics. Connect the currently rejected
