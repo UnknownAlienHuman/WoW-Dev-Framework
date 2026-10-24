@@ -7,6 +7,7 @@
 //! does not parse source, execute Lua, select a
 //! replacement generation, or reproduce lower-owner semantic algorithms.
 
+pub mod addon_check;
 mod backend;
 mod configuration;
 pub mod context;
@@ -25,6 +26,11 @@ mod service;
 pub mod source_census;
 pub mod source_reference;
 
+pub use addon_check::{
+    AddonCheckAnalysis, AddonCheckCompleteness, AddonCheckDiagnostic, AddonCheckLimitation,
+    AddonCheckLimitationCode, AddonCheckRequest, AddonCheckResult, AddonCheckScope,
+    AddonCheckSourceRole, AddonCheckVirtualInput, check_addon,
+};
 pub use backend::{OwnedServiceBackend, ServiceBackend, ServiceBackendStatus};
 pub use configuration::{
     DeferredOperation, ServiceBudgets, ServiceConfiguration, ServiceConfigurationBuilder,
