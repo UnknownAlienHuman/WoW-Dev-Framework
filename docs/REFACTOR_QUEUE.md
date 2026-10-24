@@ -53,6 +53,47 @@ Project generation to satisfy old constructors, and do not translate old global
 component health into the new result. Keep the old local Service route only for
 transitional callers, then delete it with those callers.
 
+#### Exact owner split
+
+Implement the direct route without a new crate or reverse dependency:
+
+- **`wow-project` owns acquisition and load preparation.** Reuse
+  `ProjectInputDirectory`, `ProjectInputFile`, TOC/package resolution and XML
+  source maps. `ProjectInputFile` is already a useful exact-byte handoff to
+  `LuaWorkspaceFileInput`; do not require `ProjectInputInventory::build`, which
+  pulls in the publication configuration and rejects virtual-only programs.
+- **Extract a small load target in `wow-project::load`.** It carries flavor,
+  optional target Interface and `TocLoadContext`. The current public TOC reader
+  accepts only `ProfileIdentity` and binds its digest into the plan; legacy
+  profile callers become adapters to the new target. The direct check must not
+  invent profile IDs, source digests or schema versions when the user supplied
+  only a flavor and optional Interface.
+- **Extract pure XML-unit preparation from `wow-project::xml_lua`.** It consumes
+  the selected load/package plans, exact captured bytes, compiled analyzer
+  identity and direct limits. The current `prepare` function also requires the
+  entire `ProjectConfiguration`, generation IDs, capability budgets and
+  publication identity. Keep a legacy wrapper that adds those receipts for old
+  callers; do not carry them into the direct result.
+- **`wow-emmy::session` owns one configurable native engine.** Promote the
+  existing registered Main/Library/virtual owner, accept the resolved Emmy
+  configuration, set Lua 5.1, initialize embedded STD once, and collect syntax
+  unconditionally with member/flow/call facts only when a selected check needs
+  them. Do not instantiate independent syntax/reference/flow analyses.
+- **The direct session uses the compiled backend internally.** The current
+  `EmmyBackendIdentity` requires compatibility-report and surface hashes even
+  though runtime pin validation compares only crate name/version/revision/tree.
+  Do not fabricate hashes. Provide a compiled identity/direct-workspace path in
+  `wow-emmy`; retain the report-derived identity only for legacy replay/probe
+  callers until they are removed.
+- **`wow-service` owns the use case and public DTOs.** An `addon_check` module
+  resolves ordinary configuration, calls Project preparation and the Emmy
+  session, optionally invokes selected WoW checks, and returns diagnostics plus
+  scoped limitations. It does not depend on generic component health or
+  publication status.
+- **`wow-cli` owns only transport concerns:** arguments/config-file precedence,
+  text/JSON rendering, cancellation wiring and exit policy. LSP/MCP later call
+  the same Service owner rather than rebuilding analysis.
+
 The first usable result is a typed addon check with an existing Library. It
 requires neither a persistent source index nor completion of all old cleanup.
 Its [scope and input selection](IMPLEMENTATION.md#first-implementation-slice)

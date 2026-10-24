@@ -28,16 +28,28 @@ state even for type-only analysis. Empty rule selection currently expands to all
 registered rule descriptors. This path is not the target owner and must not be
 kept alive with fabricated empty proof objects.
 
-The target check reuses the existing bounded Project acquisition/load code and
-factors one configured Main/Library/STD Emmy owner in the existing crates.
+The replacement follows the existing dependency direction:
+
+- `wow-project` reuses bounded disk/Library reading, exact `ProjectInputFile`
+  bytes, TOC/dependency resolution and XML maps, but exposes a small load target
+  with flavor, optional Interface and load context instead of requiring a full
+  `ProfileIdentity`/`ProjectConfiguration`;
+- `wow-emmy` owns one configurable Main/Library/STD/virtual session and an
+  internal compiled backend identity. Compatibility-report SHA values are not
+  user or Service inputs;
+- `wow-service` owns ordinary configuration, check orchestration, selected WoW
+  rule dependencies and the diagnostic/limitation result;
+- `wow-cli` owns argument precedence, cancellation, rendering and exit status.
+
 Reference/Rules are created only for explicitly selected WoW checks. The direct
 result carries source diagnostics and scoped limitations, uses
-document-version-aware locations, and requires no compatibility/probe reports or
-internal IDs. Human output prints the actual message/code/severity/location
-rather than component/capability identities and JSON fragments.
+document-version-aware locations, and requires no compatibility/probe reports,
+Project inventory/publication or internal IDs. Human output prints the actual
+message/code/severity/location rather than component/capability identities and
+JSON fragments.
 
 CLI, LSP, and MCP must call this same configured owner. The exact replacement
-boundary is recorded in
+boundary and owner split are recorded in
 [the queue](../../docs/REFACTOR_QUEUE.md#source-traced-replacement-boundary).
 These workflows are not all complete at this baseline.
 
