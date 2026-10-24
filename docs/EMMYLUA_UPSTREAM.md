@@ -207,23 +207,31 @@ navigation. They are not substitutes for EmmyLua's general-purpose editor
 server. Keep framework-specific operations limited to behavior that requires
 selected WoW project inputs or mappings.
 
-## Current state at `c36a058`
+## Current implementation state
 
-These are observed gaps, not claims of completion:
+The diagnostic-handoff slice on `feat/direct-addon-check-2026-10-24` changes the
+standalone exact-snapshot path, not the complete configured addon check:
 
-- [`syntax/analyzer.rs`](../crates/wow-emmy/src/syntax/analyzer.rs) sets Lua 5.1
-  but does not call `init_std_lib`; the shared Main/Library constructor in
-  [`references.rs`](../crates/wow-emmy/src/references.rs) also omits it.
-- The syntax adapter accepts only four diagnostic codes, drops upstream
-  messages, and fixes normalized severity to Error. The LSP projection sends
-  constant generic wording. See [`syntax.rs`](../crates/wow-emmy/src/syntax.rs)
-  and [`diagnostics.rs`](../crates/wow-service/src/frontend/lsp/diagnostics.rs).
-- The overlay diagnostic input contains one document, not the full project
-  Main and Library context. See [`overlay/state.rs`](../crates/wow-project/src/overlay/state.rs).
-- The shared Main/Library session exists for its current analysis route, while
-  other syntax and flow constructors still create their own analysis. See
-  [`session.rs`](../crates/wow-emmy/src/session.rs),
-  [`flow.rs`](../crates/wow-emmy/src/flow.rs), and
-  [`IMPLEMENTATION.md`](IMPLEMENTATION.md#addon-configuration-and-emmy-analysis).
+- [`syntax/analyzer.rs`](../crates/wow-emmy/src/syntax/analyzer.rs) now sets Lua
+  5.1, calls `init_std_lib(None)`, preserves configured string/numeric/uncoded
+  diagnostics, exact bounded messages and upstream severity. The four named
+  families retain typed kinds; other diagnostics are no longer discarded.
+- The transitional LSP projection now sends the retained upstream message and
+  severity. Its input still contains one document rather than the complete
+  project Main, Library and mapped XML context. See
+  [`overlay/state.rs`](../crates/wow-project/src/overlay/state.rs).
+- The shared Main/Library/virtual constructor in
+  [`references.rs`](../crates/wow-emmy/src/references.rs) still creates fixed
+  `Emmyrc::default`, omits embedded STD initialization and constructs semantic
+  collectors regardless of selected checks. `flow.rs` still creates another
+  analysis. T06 in the [trace register](IMPLEMENTATION_TRACE_REGISTER.md#t06--one-shared-emmy-engine-exists-but-is-fixed-and-private)
+  remains open.
+- The old generic CLI/Service result still lacks the direct message-bearing
+  diagnostic contract and ordinary configuration. The standalone/LSP fix must
+  not be presented as the completed addon workflow.
 - File updates conservatively clear and rebuild semantic indexes; upstream
   touched-ID updates alone do not establish cross-file invalidation parity.
+
+Formatting, compilation and Clippy are build evidence only. No addon or editor
+workflow is marked observed until the corresponding direct owner exists and the
+exact command/input/result is recorded in the trace register.
