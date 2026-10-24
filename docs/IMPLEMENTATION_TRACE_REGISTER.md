@@ -31,7 +31,7 @@ observation moves it to **observed**.
 | T04 | disk/Library bytes -> exact analyzer snapshots | traced | unexecuted |
 | T05 | XML load facts -> virtual Lua units/maps | traced | unexecuted |
 | T06 | Main/Library/virtual -> one configured Emmy owner | implemented in `main` by PR #247 | unexecuted |
-| T07 | compiled Emmy pin -> runtime identity | feature branch; gate pending | unexecuted |
+| T07 | compiled Emmy pin -> runtime identity | implemented in PR #249; exact-head run #437 passed | unexecuted |
 | T08 | unsaved editor text -> project diagnostics | partially implemented | unexecuted |
 | T09 | source/config changes -> current diagnostics/index | traced | unexecuted |
 | T10 | builder output -> ordinary Library metadata/maps | traced | unexecuted |
@@ -39,7 +39,7 @@ observation moves it to **observed**.
 | T12 | upstream diagnostic -> adapter DTO -> LSP payload | implemented in `main` by PR #246 | unexecuted |
 | T13 | caller diagnostic config -> optional semantic collectors | implemented in `main` by PR #247 | unexecuted |
 | T14 | exact snapshots -> direct Service result | implemented in `main` by PR #248 | unexecuted |
-| T15 | compiled pin/report evidence -> workspace identity -> legacy admission | feature branch; gate pending | unexecuted |
+| T15 | compiled pin/report evidence -> workspace identity -> legacy admission | implemented in PR #249; exact-head run #437 passed | unexecuted |
 
 ## Fixed decisions from T01–T11
 
@@ -247,8 +247,8 @@ from compatibility-report evidence without weakening legacy admission:
 `AnalyzerBindingDeclaration` and replay/publication remain report-backed through
 their existing construction path. The direct snapshot builder can bind the actual
 compiled pin without running or pretending to have run the compatibility probe.
-The exact-head gate is pending for this branch; no user workflow has been
-observed.
+Exact-head run #437 passed repository policy, formatting, workspace compilation,
+strict Clippy and the tracked-file rewrite check. No user workflow has been observed.
 
 ## Executed observations still required
 
