@@ -52,9 +52,9 @@ pub use syntax::{
 };
 pub use virtual_semantics::{VIRTUAL_SEMANTIC_PROFILE, VirtualSemanticReport};
 pub use workspace::{
-    EmmyBackendIdentity, EmmyWorkspaceError, EmmyWorkspaceErrorCode, EmmyWorkspaceResult,
-    LuaWorkspaceFile, LuaWorkspaceFileInput, LuaWorkspaceLimits, LuaWorkspaceSnapshot,
-    LuaWorkspaceUniverse,
+    EmmyBackendIdentity, EmmyBackendIdentitySource, EmmyWorkspaceError, EmmyWorkspaceErrorCode,
+    EmmyWorkspaceResult, LuaWorkspaceFile, LuaWorkspaceFileInput, LuaWorkspaceLimits,
+    LuaWorkspaceSnapshot, LuaWorkspaceUniverse,
 };
 
 /// Generic source-level global-slot facts for optional graph consumers.
