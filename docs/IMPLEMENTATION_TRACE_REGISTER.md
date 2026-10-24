@@ -39,6 +39,7 @@ the existing guides.
 | T09 | File/load/Library change -> current diagnostics/index | traced | fixed decision | unexecuted |
 | T10 | Builder output -> ordinary Library reader -> typed WoW metadata/maps | traced | fixed decision | unexecuted |
 | T11 | Addon chunk arguments -> transformed virtual context -> Emmy facts | traced | fixed decision | unexecuted |
+| T12 | Upstream diagnostic -> adapter DTO -> LSP payload | implemented on feature branch | fixed decision | unexecuted |
 
 ## T01 — the current generic check route is not the replacement owner
 
@@ -122,6 +123,12 @@ syntax diagnostics unconditionally and enable member/call/flow collectors only
 for selected checks that need them. Do not instantiate another analyzer in
 Service, CLI or LSP.
 
+**Implementation boundary after T12:** the standalone exact-snapshot adapter now
+initializes embedded STD and preserves complete diagnostic payloads. The shared
+registered Main/Library/virtual owner remains fixed and still needs the
+configuration/optional-collector refactor above. Do not mark T06 implemented from
+the standalone change.
+
 ## T07 — report hashes are not part of runtime analyzer validation
 
 **Evidence:** `wow-emmy/src/{workspace,references}.rs`.
@@ -139,14 +146,18 @@ legacy replay/probe consumers until they are removed.
 **Evidence:** `wow-project/src/overlay/state.rs` correctly owns exact unsaved
 text, client version, internal revision and UTF-8/UTF-16 projection, but
 `analyzer_input` builds an isolated one-file `LuaWorkspaceSnapshot`.
-`wow-service/src/frontend/lsp/diagnostics.rs` analyzes that input separately and
-replaces upstream wording with a constant sentence.
+`wow-service/src/frontend/lsp/diagnostics.rs` analyzes that input separately.
+Before T12 it also replaced upstream wording with a constant sentence.
 
 **Decision:** preserve overlay text/version/coordinate logic and pass an exact
 file-text override to the same `wow-service::addon_check` owner. Unchanged Main,
 Library, STD and mapped XML units remain in that owner. A stale/rejected/cancelled
 candidate cannot publish over a newer document version. Issue #198 records the
 frontend route.
+
+**Implemented subset:** the transitional LSP payload now uses the exact upstream
+message and upstream severity carried by the adapter. It remains an isolated
+one-file analyzer route and therefore does not complete T08.
 
 ## T09 — physical deltas and load/config changes have different update rules
 
@@ -205,6 +216,29 @@ files, infer context from local variable spelling or reuse package path prefixes
 as semantic namespace. XML handler wrappers and special Blizzard environments
 remain separate adapters. This conclusion is source-derived and still requires
 an executed addon observation.
+
+## T12 — preserve the upstream diagnostic contract before frontend projection
+
+**Evidence before implementation:** `syntax/analyzer.rs` accepted four string
+codes, discarded every other upstream diagnostic, omitted `message`, and forced
+normalized severity to Error. The transitional LSP then emitted one constant
+sentence. The pinned analyzer exposes the original code, message, severity and
+embedded STD loader.
+
+**Implemented on `feat/direct-addon-check-2026-10-24`:** diagnostic schema `/3`
+retains string, numeric and missing codes, the exact bounded upstream message,
+the upstream severity and exact mapped source span. The four known diagnostic
+families keep their typed kind; every other code uses `Other` without being
+dropped. Code/message/count bounds remain explicit. The standalone analyzer sets
+Lua 5.1 and calls `init_std_lib(None)` before user-file registration. The
+transitional LSP serializes the retained message instead of a fabricated one.
+
+**Still open:** this does not create the configured Main/Library/virtual session,
+thread user `EmmyrcDiagnostic` settings, repair the old generic CLI result, or
+prove behavior on an addon/editor. The shared session and direct Service/CLI
+route remain T06/T01 implementation work. Build/Clippy evidence is recorded only
+after the branch workflow completes; an end-to-end observation remains
+`unexecuted`.
 
 ## Executed observations still required
 
