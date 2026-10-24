@@ -9,9 +9,9 @@ use std::sync::atomic::AtomicBool;
 use serde::Serialize;
 use wow_core::{ProjectGenerationId, SourceSpan};
 use wow_emmy::{
-    ConfiguredAnalyzerSession, ConfiguredDiagnosticReports, ConfiguredSessionError,
-    ConfiguredSessionErrorCode, EmmyAnalysisConfiguration, EmmyDiagnosticSeverity,
-    EmmySyntaxDiagnostic, EmmySyntaxDiagnosticKind, LuaWorkspaceSnapshot,
+    ConfiguredAnalyzerSession, ConfiguredSessionError, ConfiguredSessionErrorCode,
+    EmmyAnalysisConfiguration, EmmyDiagnosticSeverity, EmmySyntaxDiagnostic,
+    EmmySyntaxDiagnosticKind, LuaWorkspaceSnapshot,
 };
 
 use crate::{ServiceError, ServiceErrorCode, ServiceResult};
@@ -27,10 +27,7 @@ pub struct AddonCheckVirtualInput {
 
 impl AddonCheckVirtualInput {
     #[must_use]
-    pub const fn new(
-        snapshot: LuaWorkspaceSnapshot,
-        project_generation: ProjectGenerationId,
-    ) -> Self {
+    pub fn new(snapshot: LuaWorkspaceSnapshot, project_generation: ProjectGenerationId) -> Self {
         Self {
             snapshot,
             project_generation,
@@ -59,7 +56,7 @@ pub struct AddonCheckRequest {
 
 impl AddonCheckRequest {
     #[must_use]
-    pub const fn new(
+    pub fn new(
         main: LuaWorkspaceSnapshot,
         libraries: Vec<LuaWorkspaceSnapshot>,
         configuration: EmmyAnalysisConfiguration,
@@ -369,11 +366,7 @@ pub fn check_addon(
     Ok(AddonCheckResult {
         schema: RESULT_SCHEMA,
         scope: AddonCheckScope::LuaTypes,
-        completeness: if limitations.is_empty() {
-            AddonCheckCompleteness::Complete
-        } else {
-            AddonCheckCompleteness::Partial
-        },
+        completeness: AddonCheckCompleteness::Partial,
         main_snapshot_id,
         library_snapshot_ids,
         virtual_snapshot_id,
