@@ -1,0 +1,69 @@
+name: Update T16 implementation register
+
+on:
+  push:
+    branches:
+      - fix/configured-owner-main-identity-2026-10-24
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-t16-implementation-register
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.repository == 'UnknownAlienHuman/WoW-Dev-Framework'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fix/configured-owner-main-identity-2026-10-24
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Record exact-head evidence
+        env:
+          TARGET_BRANCH: fix/configured-owner-main-identity-2026-10-24
+        run: |
+          set -euo pipefail
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/IMPLEMENTATION_TRACE_REGISTER.md')
+          text = path.read_text()
+          replacements = {
+              '| T16 | requested Main snapshot -> configured owner reuse admission | feature branch; gate pending | unexecuted |':
+                  '| T16 | requested Main snapshot -> configured owner reuse admission | implemented in PR #250; exact-head run #442 passed | unexecuted |',
+              'uses a CAS-validated update path, so this change does not alter that admission.\n\n## Executed observations still required':
+                  'uses a CAS-validated update path, so this change does not alter that admission.\nExact-head run #442 passed repository policy, formatting, workspace compilation,\nstrict Clippy and the tracked-file rewrite check. No user workflow has been observed.\n\n## Executed observations still required',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected one register occurrence: {old!r}')
+              text = text.replace(old, new)
+          path.write_text(text)
+          PY
+
+          rm -- .github/workflows/update-t16-register.yml
+
+          mapfile -t changed < <(git diff --name-only | sort)
+          expected=(
+            .github/workflows/update-t16-register.yml
+            docs/IMPLEMENTATION_TRACE_REGISTER.md
+          )
+          if [[ "${changed[*]}" != "${expected[*]}" ]]; then
+            printf 'unexpected register-update paths:\n' >&2
+            printf '  %s\n' "${changed[@]}" >&2
+            exit 1
+          fi
+
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs: record T16 exact-head evidence'
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
