@@ -1,4 +1,4 @@
-//! Exact-snapshot accepted diagnostics through the pinned upstream analyzer.
+//! Exact-snapshot diagnostics through the pinned upstream analyzer.
 //!
 //! Upstream database, URI, LSP range, and diagnostic types remain private.
 //! Public spans are exact, end-exclusive UTF-8 byte ranges over snapshot text.
@@ -16,7 +16,7 @@ use crate::{LuaWorkspaceSnapshot, LuaWorkspaceUniverse};
 pub const EMMYLUA_REVISION: &str = "aaaca68425d9362876228649b0b8d92f07654daa";
 pub const EMMYLUA_TREE: &str = "9175c01384e650b9a5bd64da69c36f47dbeaaf67";
 pub const EMMYLUA_CODE_ANALYSIS_VERSION: &str = "0.25.1";
-pub(crate) const REPORT_SCHEMA: &str = "wow-emmy/diagnostics/2";
+pub(crate) const REPORT_SCHEMA: &str = "wow-emmy/diagnostics/3";
 pub(crate) const FRAMEWORK_CATEGORY: &str = "emmy.generic.fixture_error";
 pub(crate) const CAPABILITY_ID: &str = "emmy.file.diagnostics";
 pub(crate) const MAX_DIAGNOSTICS: usize = 65_536;
@@ -90,6 +90,7 @@ pub enum EmmySyntaxDiagnosticKind {
     DocumentationSyntax,
     AssignmentTypeMismatch,
     ParameterTypeMismatch,
+    Other,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -119,6 +120,7 @@ pub enum EmmyDiagnosticRollout {
 pub struct EmmySyntaxDiagnostic {
     pub(crate) category: &'static str,
     pub(crate) upstream_code: Box<str>,
+    pub(crate) message: Box<str>,
     pub(crate) kind: EmmySyntaxDiagnosticKind,
     pub(crate) upstream_severity: EmmyDiagnosticSeverity,
     pub(crate) normalized_severity: EmmyDiagnosticSeverity,
@@ -137,6 +139,10 @@ impl EmmySyntaxDiagnostic {
     #[must_use]
     pub fn upstream_code(&self) -> &str {
         &self.upstream_code
+    }
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.message
     }
     #[must_use]
     pub const fn kind(&self) -> EmmySyntaxDiagnosticKind {
@@ -227,13 +233,13 @@ impl EmmySyntaxReport {
     }
 }
 
-/// Builds one analyzer instance from exact supplied bytes and returns only the
-/// accepted Lua syntax, documentation syntax, and frozen E0 generic families. No source file is read or executed.
+/// Builds one analyzer instance from exact supplied bytes and returns configured
+/// upstream diagnostics. No source file is read or executed.
 pub fn analyze_syntax(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmySyntaxReport> {
     analyzer::analyze(snapshot)
 }
 
-/// Collect accepted diagnostics under an operation stop state.
+/// Collect configured diagnostics under an operation stop state.
 ///
 /// The standalone entry point has no operation, so `analyze_syntax` keeps its
 /// no-stop signature and calls the same collector with a never-cancelled stop.
