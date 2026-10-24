@@ -49,7 +49,10 @@ fn configuration_builder() -> TestResult<ProjectConfigurationBuilder> {
     assert_eq!(backend.revision(), EMMYLUA_REVISION);
     assert_eq!(backend.tree(), EMMYLUA_TREE);
     assert_eq!(backend.crate_version(), Some(EMMYLUA_CODE_ANALYSIS_VERSION));
-    let compatibility_digest = backend.compatibility_report_sha256().to_owned();
+    let compatibility_digest = backend
+        .require_compatibility_report_evidence()?
+        .compatibility_report_sha256()
+        .to_owned();
     let analyzer = AnalyzerBindingDeclaration::new(
         "wow-emmy/e0-c/1",
         format!("emmy-pin:{EMMYLUA_REVISION}"),

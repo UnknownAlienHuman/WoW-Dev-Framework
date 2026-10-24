@@ -24,15 +24,18 @@ struct ReplayBackend {
     compatibility_report_sha256: String,
 }
 impl ReplayBackend {
-    fn capture(backend: &EmmyBackendIdentity) -> Self {
-        Self {
+    fn capture(backend: &EmmyBackendIdentity) -> ProjectResult<Self> {
+        let evidence = backend
+            .require_compatibility_report_evidence()
+            .map_err(|_| invalid())?;
+        Ok(Self {
             crate_name: backend.crate_name().into(),
             crate_version: backend.crate_version().map(str::to_owned),
             revision: backend.revision().into(),
             tree: backend.tree().into(),
-            surface_sha256: backend.surface_sha256().into(),
-            compatibility_report_sha256: backend.compatibility_report_sha256().into(),
-        }
+            surface_sha256: evidence.surface_sha256().into(),
+            compatibility_report_sha256: evidence.compatibility_report_sha256().into(),
+        })
     }
     fn rebuild(&self) -> ProjectResult<EmmyBackendIdentity> {
         EmmyBackendIdentity::new(
@@ -58,16 +61,16 @@ struct ReplayBinding {
     backend: ReplayBackend,
 }
 impl ReplayBinding {
-    fn capture(binding: &AnalyzerBindingDeclaration) -> Self {
-        Self {
+    fn capture(binding: &AnalyzerBindingDeclaration) -> ProjectResult<Self> {
+        Ok(Self {
             analyzer_contract_id: binding.analyzer_contract_id().into(),
             accepted_pin_id: binding.accepted_pin_id().into(),
             compatibility_probe_report_id: binding.compatibility_probe_report_id().into(),
             analyzer_configuration_digest: binding.analyzer_configuration_digest(),
             analyzer_fixture_contract_id: binding.analyzer_fixture_contract_id().into(),
             expected_library_contract_id: binding.expected_library_contract_id().into(),
-            backend: ReplayBackend::capture(binding.backend()),
-        }
+            backend: ReplayBackend::capture(binding.backend())?,
+        })
     }
     fn rebuild(&self) -> ProjectResult<AnalyzerBindingDeclaration> {
         AnalyzerBindingDeclaration::new(
@@ -321,7 +324,7 @@ impl ReplayConfiguration {
             logical_root: config.logical_root().as_str().into(),
             profile: config.selected_profile().clone(),
             reference_generation: config.reference_generation(),
-            analyzer: ReplayBinding::capture(config.analyzer_binding()),
+            analyzer: ReplayBinding::capture(config.analyzer_binding())?,
             capabilities: ReplayCapabilities {
                 mandatory: capabilities.mandatory_for_publication().to_vec(),
                 degradable: capabilities.degradable_for_publication().to_vec(),

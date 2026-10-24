@@ -541,12 +541,18 @@ impl AnalyzerBindingDeclaration {
     }
 
     pub fn validate(&self) -> ProjectResult<()> {
+        let report_matches = self
+            .backend
+            .compatibility_report_evidence()
+            .is_some_and(|evidence| {
+                self.compatibility_probe_report_id.as_ref()
+                    == evidence.compatibility_report_sha256()
+            });
         let exact = self.backend.crate_name() == "emmylua_code_analysis"
             && self.backend.crate_version() == Some(EMMYLUA_CODE_ANALYSIS_VERSION)
             && self.backend.revision() == EMMYLUA_REVISION
             && self.backend.tree() == EMMYLUA_TREE
-            && self.compatibility_probe_report_id.as_ref()
-                == self.backend.compatibility_report_sha256();
+            && report_matches;
         if exact && !is_floating(self.accepted_pin_id.as_ref()) {
             Ok(())
         } else {

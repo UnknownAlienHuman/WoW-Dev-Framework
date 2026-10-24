@@ -73,7 +73,10 @@ fn configuration_with_load(
     load_plan: Option<&wow_project::load::ProjectLoadPlan>,
 ) -> Result<ProjectConfiguration, Box<dyn Error>> {
     let backend = backend()?;
-    let compatibility_report_sha256 = backend.compatibility_report_sha256().to_owned();
+    let compatibility_report_sha256 = backend
+        .require_compatibility_report_evidence()?
+        .compatibility_report_sha256()
+        .to_owned();
     let analyzer_binding = AnalyzerBindingDeclaration::new(
         "wow-emmy/e0-c/1",
         format!("emmy-pin:{EMMYLUA_REVISION}"),
@@ -865,6 +868,7 @@ fn mismatched_library_backend_is_rejected_without_publication() -> TestResult {
         configuration
             .analyzer_binding()
             .backend()
+            .require_compatibility_report_evidence()?
             .compatibility_report_sha256(),
     )?;
     let library = library_for(different_backend)?;

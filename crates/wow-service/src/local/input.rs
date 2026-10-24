@@ -300,10 +300,13 @@ impl LocalProjectInput {
             input.analyzer.compatibility_report_json.as_bytes(),
         )
         .map_err(|_| invalid("analyzer compatibility report was rejected"))?;
+        let report_evidence = backend
+            .require_compatibility_report_evidence()
+            .map_err(|_| invalid("analyzer compatibility evidence was unavailable"))?;
         let declaration = AnalyzerBindingDeclaration::new(
             input.analyzer.contract_id,
             input.analyzer.accepted_pin_id,
-            backend.compatibility_report_sha256().to_owned(),
+            report_evidence.compatibility_report_sha256().to_owned(),
             input.analyzer.configuration_digest,
             input.analyzer.fixture_contract_id,
             input.analyzer.library_contract_id,

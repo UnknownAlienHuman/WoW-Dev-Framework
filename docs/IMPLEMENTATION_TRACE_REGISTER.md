@@ -31,7 +31,7 @@ observation moves it to **observed**.
 | T04 | disk/Library bytes -> exact analyzer snapshots | traced | unexecuted |
 | T05 | XML load facts -> virtual Lua units/maps | traced | unexecuted |
 | T06 | Main/Library/virtual -> one configured Emmy owner | implemented in `main` by PR #247 | unexecuted |
-| T07 | compiled Emmy pin -> runtime identity | implemented on feature branch | unexecuted |
+| T07 | compiled Emmy pin -> runtime identity | feature branch; gate pending | unexecuted |
 | T08 | unsaved editor text -> project diagnostics | partially implemented | unexecuted |
 | T09 | source/config changes -> current diagnostics/index | traced | unexecuted |
 | T10 | builder output -> ordinary Library metadata/maps | traced | unexecuted |
@@ -39,7 +39,7 @@ observation moves it to **observed**.
 | T12 | upstream diagnostic -> adapter DTO -> LSP payload | implemented in `main` by PR #246 | unexecuted |
 | T13 | caller diagnostic config -> optional semantic collectors | implemented in `main` by PR #247 | unexecuted |
 | T14 | exact snapshots -> direct Service result | implemented in `main` by PR #248 | unexecuted |
-| T15 | compiled pin/report evidence -> workspace identity -> legacy admission | implemented on feature branch | unexecuted |
+| T15 | compiled pin/report evidence -> workspace identity -> legacy admission | feature branch; gate pending | unexecuted |
 
 ## Fixed decisions from T01–T11
 
@@ -104,7 +104,7 @@ virtual units/maps.
 
 The original `EmmyBackendIdentity` required surface/report SHA values even though
 compiled-backend validation compared only crate, version, revision and tree.
-That forced new direct callers either to fabricate evidence or to depend on the
+That forced a direct caller either to fabricate evidence or to depend on the
 old probe/report pipeline.
 
 **Decision:** one identity records exact compiled provenance; compatibility
@@ -226,8 +226,8 @@ editor workflow was observed.
 
 ### T15 — distinguish compiled provenance from compatibility evidence
 
-`feat/compiled-emmy-identity-2026-10-24` changes `EmmyBackendIdentity` without
-weakening legacy report-backed identity:
+`feat/compiled-emmy-identity-2026-10-24` separates exact compiled provenance
+from compatibility-report evidence without weakening legacy admission:
 
 - `EmmyBackendIdentitySource` distinguishes `compiled_pin` from
   `compatibility_report`;
@@ -236,15 +236,19 @@ weakening legacy report-backed identity:
 - report-backed `new` still validates both SHA-256 values;
 - report-backed serialization preserves its historical field shape; compiled
   serialization emits an explicit source and omits report fields;
-- safe optional evidence accessors let admission code distinguish the two;
-- old report-only getters remain solely for existing legacy callers and fail
-  closed if misused, rather than returning a sentinel or fabricated digest.
+- a paired borrowed evidence view prevents one report digest from being consumed
+  without the other;
+- legacy callers now request that evidence through a typed fallible boundary.
+  A compiled identity therefore returns `InvalidBackendIdentity`; it never
+  panics, aborts, or substitutes a sentinel/fabricated digest;
+- replay capture and existing Project/Service admission propagate or translate
+  that failure before constructing legacy publication state.
 
-`AnalyzerBindingDeclaration` and replay/publication still require report-backed
-inputs through their existing construction path. The direct snapshot builder can
-now bind the actual compiled pin without running or pretending to have run the
-compatibility probe. Build status must be recorded after the exact-head gate;
-there is still no user observation.
+`AnalyzerBindingDeclaration` and replay/publication remain report-backed through
+their existing construction path. The direct snapshot builder can bind the actual
+compiled pin without running or pretending to have run the compatibility probe.
+The exact-head gate is pending for this branch; no user workflow has been
+observed.
 
 ## Executed observations still required
 

@@ -587,8 +587,16 @@ mod tests {
             identity.revision(),
             "1111111111111111111111111111111111111111"
         );
+        let evidence = identity
+            .require_compatibility_report_evidence()
+            .map_err(|source| {
+                report_error(
+                    EmmyCompatibilityErrorCode::InvalidSource,
+                    format!("report-backed identity lost its evidence: {source}"),
+                )
+            })?;
         assert_eq!(
-            identity.surface_sha256(),
+            evidence.surface_sha256(),
             "sha256:3333333333333333333333333333333333333333333333333333333333333333"
         );
         Ok(())

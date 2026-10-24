@@ -237,7 +237,10 @@ fn native_flow_service_with_library(
     let analyzer = AnalyzerBindingDeclaration::new(
         "wow-emmy/e0-c/1",
         format!("emmy-pin:{EMMYLUA_REVISION}"),
-        backend.compatibility_report_sha256().to_owned(),
+        backend
+            .require_compatibility_report_evidence()?
+            .compatibility_report_sha256()
+            .to_owned(),
         ContentDigest::<CanonicalResult>::from_bytes([3_u8; 32]),
         "wow-emmy/e0-c/1",
         "wow-emmy-e0-c-library-v1",
