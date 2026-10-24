@@ -314,17 +314,11 @@ pub fn check_addon(
     let virtual_snapshot_id = virtual_units
         .as_ref()
         .map(|input| Box::<str>::from(input.snapshot.snapshot_id()));
-    let configured_virtual = virtual_units
-        .map(|input| (input.snapshot, input.project_generation));
+    let configured_virtual = virtual_units.map(|input| (input.snapshot, input.project_generation));
 
-    let mut session = ConfiguredAnalyzerSession::open(
-        main,
-        &libraries,
-        configured_virtual,
-        configuration,
-        stop,
-    )
-    .map_err(map_session_error)?;
+    let mut session =
+        ConfiguredAnalyzerSession::open(main, &libraries, configured_virtual, configuration, stop)
+            .map_err(map_session_error)?;
     let reports = session.diagnostics(stop).map_err(map_session_error)?;
 
     let mut diagnostics = Vec::new();
@@ -344,15 +338,15 @@ pub fn check_addon(
 
     let mut limitations = vec![AddonCheckLimitation {
         code: AddonCheckLimitationCode::AddonChunkContextUnavailable,
-        message: "addon-name/private-table chunk arguments are not yet bound to Main files"
-            .into(),
+        message: "addon-name/private-table chunk arguments are not yet bound to Main files".into(),
     }];
     if reports.virtual_units.is_some() {
         limitations.extend([
             AddonCheckLimitation {
                 code: AddonCheckLimitationCode::VirtualSourceProjectionUnavailable,
-                message: "virtual Lua diagnostics are not yet projected through the exact XML source map"
-                    .into(),
+                message:
+                    "virtual Lua diagnostics are not yet projected through the exact XML source map"
+                        .into(),
             },
             AddonCheckLimitation {
                 code: AddonCheckLimitationCode::XmlHandlerContextUnavailable,
