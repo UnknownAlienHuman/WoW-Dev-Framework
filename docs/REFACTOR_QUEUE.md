@@ -29,6 +29,30 @@ the selected dependency closure. Preserve located malformed-XML failures and
 independent usable inputs instead of turning every failed unit into invalid
 configuration; recognize the reviewed `Dep` dependency spelling in both readers.
 
+### Source-traced replacement boundary
+
+The existing executable check path is a transitional platform path, not the
+owner to extend for the new public operation:
+
+- `apps/wow/src/args.rs` binds the CLI directly to `LocalCommand`;
+- `LocalProjectInput::assemble_with_platform` and `LocalProjectBackend` require
+  Reference, analyzer-compatibility and Project publication state;
+- `Service::check` treats `wow-reference` and `wow-rules` as mandatory healthy
+  components even for a type-only request;
+- `local/projection.rs::check_context` expands an empty rule selection to every
+  registry descriptor, while the target empty `checks` means no WoW rule;
+- `GenericFinding` has no explanatory message, and current text output primarily
+  renders internal component/capability identities and JSON fragments.
+
+Factor one direct configured addon-check owner in the existing crates. It reuses
+bounded Project acquisition/load selection and the shared Emmy mechanisms, but
+constructs Reference/Rules only for explicitly selected WoW checks. Its public
+result contains target information, source diagnostics and scoped limitations.
+Do not fabricate an empty `ReferenceView`, compatibility report, RuleRegistry or
+Project generation to satisfy old constructors, and do not translate old global
+component health into the new result. Keep the old local Service route only for
+transitional callers, then delete it with those callers.
+
 The first usable result is a typed addon check with an existing Library. It
 requires neither a persistent source index nor completion of all old cleanup.
 Its [scope and input selection](IMPLEMENTATION.md#first-implementation-slice)

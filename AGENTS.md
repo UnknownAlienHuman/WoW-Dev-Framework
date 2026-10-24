@@ -24,6 +24,14 @@ removed specifications cannot expand the product.
 - After two failed attempts at the same approach, inspect the failed assumption
   and change method. Do not repeat expensive commands without new evidence.
 
+For the first public `wow check`, follow the
+[source-traced boundary](docs/REFACTOR_QUEUE.md#source-traced-replacement-boundary).
+Reuse the bounded Project acquisition/load owners and factor one configured
+Main/Library/STD Emmy owner. Do not satisfy the old
+`LocalCommand`/`LocalProjectBackend`/generic `Service` constructors with
+fabricated Reference, Rules, compatibility or Project-publication state. Empty
+`checks` means no WoW rule; upstream diagnostics remain enabled.
+
 ## Verification during this rewrite
 
 Write the product first. For Rust changes run formatting and the smallest strict

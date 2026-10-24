@@ -21,13 +21,29 @@ LSP requires an explicit host and profile. These command forms are transitional;
 they are not instructions for the target user setup. Consult `--help` for
 available current syntax.
 
-The target check separates JSON findings from incompleteness, uses
+The executable currently parses directly into `LocalCommand`. Its check route
+constructs `LocalProjectInput`, `LocalProjectBackend` and the generic `Service`,
+which require Reference, Rules, analyzer-compatibility and Project publication
+state even for type-only analysis. Empty rule selection currently expands to all
+registered rule descriptors. This path is not the target owner and must not be
+kept alive with fabricated empty proof objects.
+
+The target check reuses the existing bounded Project acquisition/load code and
+factors one configured Main/Library/STD Emmy owner in the existing crates.
+Reference/Rules are created only for explicitly selected WoW checks. The direct
+result carries source diagnostics and scoped limitations, uses
 document-version-aware locations, and requires no compatibility/probe reports or
-internal IDs. CLI, LSP, and MCP must call the same configured analysis owner.
+internal IDs. Human output prints the actual message/code/severity/location
+rather than component/capability identities and JSON fragments.
+
+CLI, LSP, and MCP must call this same configured owner. The exact replacement
+boundary is recorded in
+[the queue](../../docs/REFACTOR_QUEUE.md#source-traced-replacement-boundary).
 These workflows are not all complete at this baseline.
 
 Source is read as data and never executed or rewritten. General Lua language
 features belong to upstream EmmyLua. The command dispatcher is in
 [`src/main.rs`](src/main.rs); argument parsing and help are in
-[`src/args.rs`](src/args.rs); LSP and MCP adapters are in
+[`src/args.rs`](src/args.rs); current rendering is in
+[`src/output.rs`](src/output.rs); LSP and MCP adapters are in
 [`src/lsp.rs`](src/lsp.rs) and [`src/mcp.rs`](src/mcp.rs).
