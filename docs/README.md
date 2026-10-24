@@ -13,6 +13,7 @@ tracking later merges.
 | What must a correct WoW linter understand? | [WoW behavior](WOW_LINTER.md) |
 | Which code should change, and in what order? | [Implementation](IMPLEMENTATION.md), [queue](REFACTOR_QUEUE.md) |
 | Which post-merge implementation boundaries were source-traced, implemented, or observed? | [Implementation trace register](IMPLEMENTATION_TRACE_REGISTER.md) |
+| Were the active GitHub Issues checked against their current production callers? | [Active Issue caller audit](ACTIVE_ISSUE_AUDIT.md) |
 | What can be reused? | [Donors](DONORS.md) |
 | How are Blizzard facts converted to annotations? | [Ketho/native projection](KETHO_RUST_PORT.md) |
 | How is EmmyLua configured and updated? | [EmmyLua](EMMYLUA_UPSTREAM.md) |
@@ -24,8 +25,10 @@ tracking later merges.
 `AUDIT.md` and `AUDIT_REGISTRY.md` are tied to the reviewed `c36a058` baseline.
 They remain evidence and design input, not a live progress page.
 `IMPLEMENTATION_TRACE_REGISTER.md` records new producer-to-consumer traces and
-executed observations after PR #244. `CURRENT_STATUS.md` reconciles those records
-with current `main`. None of these documents is a readiness percentage.
+executed observations after PR #244. `ACTIVE_ISSUE_AUDIT.md` records the current
+caller check for the open Issue instruction surface. `CURRENT_STATUS.md`
+reconciles those records with current `main`. None of these documents is a
+readiness percentage.
 
 Package READMEs are navigation to code, not separate product specifications.
 Historical audits, contracts and command recipes remain available at their Git
