@@ -24,6 +24,22 @@ removed specifications cannot expand the product.
 - After two failed attempts at the same approach, inspect the failed assumption
   and change method. Do not repeat expensive commands without new evidence.
 
+For the first public `wow check`, follow the
+[source-traced boundary](docs/REFACTOR_QUEUE.md#source-traced-replacement-boundary)
+and its [exact owner split](docs/REFACTOR_QUEUE.md#exact-owner-split).
+Reuse `ProjectInputDirectory`, `ProjectInputFile`, load plans and XML maps, but
+not `ProjectConfiguration`/`ProjectInputInventory` publication requirements.
+Factor one configurable native session from the existing registered Emmy owner;
+it derives the compiled analyzer identity internally and must not require or
+fabricate compatibility-report hashes. `wow-service` owns the direct use case;
+the CLI owns arguments/output/exit only. Empty `checks` means no WoW rule;
+upstream diagnostics remain enabled.
+
+Do not satisfy the old `LocalCommand`/`LocalProjectBackend`/generic `Service`
+constructors with fabricated Reference, Rules, compatibility or Project state.
+Legacy `ProfileIdentity`, generation and replay wrappers remain only for their
+current callers while those callers move.
+
 ## Verification during this rewrite
 
 Write the product first. For Rust changes run formatting and the smallest strict
@@ -37,10 +53,12 @@ with their retired behavior.
 For documentation, inspect links, source claims and instruction consistency.
 Do not build the Rust workspace for prose alone. A build or source review does
 not prove that a user workflow works; describe its status accurately.
-When reconciling old documentation or an audit, update the relevant entries in
-[the review register](docs/AUDIT_REGISTRY.md). Keep document reading, source
-tracing and executed verification distinct; do not turn it into a gate for
-unrelated implementation changes.
+Update [the post-merge implementation trace register](docs/IMPLEMENTATION_TRACE_REGISTER.md)
+when a newly traced source chain changes an implementation boundary or a real
+observation changes an executed status. Update the exhaustive
+[baseline review register](docs/AUDIT_REGISTRY.md) only when correcting its
+329-document reconciliation. Keep document reading, source tracing and executed
+verification distinct; neither register is a gate for unrelated work.
 
 ## Handoff
 
