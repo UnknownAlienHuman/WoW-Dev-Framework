@@ -34,7 +34,9 @@ pub(super) fn resolve_destination(
         Some((path, fragment)) => (path, Some(percent_decode(fragment)?)),
         None => (destination, None),
     };
-    let path_part = path_part.split_once('?').map_or(path_part, |(path, _)| path);
+    let path_part = path_part
+        .split_once('?')
+        .map_or(path_part, |(path, _)| path);
     let path_part = unescape_destination(path_part);
     let decoded = percent_decode(&path_part)?;
     let target = if decoded.is_empty() {

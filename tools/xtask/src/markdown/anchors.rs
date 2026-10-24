@@ -80,8 +80,7 @@ fn atx_heading(line: &str) -> Option<String> {
 fn is_setext_underline(line: &str) -> bool {
     let trimmed = line.trim();
     !trimmed.is_empty()
-        && (trimmed.bytes().all(|byte| byte == b'=')
-            || trimmed.bytes().all(|byte| byte == b'-'))
+        && (trimmed.bytes().all(|byte| byte == b'=') || trimmed.bytes().all(|byte| byte == b'-'))
 }
 
 fn insert_heading_anchor(

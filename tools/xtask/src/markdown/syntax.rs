@@ -80,9 +80,10 @@ pub(super) fn quoted_attributes(line: &str, names: &[&str]) -> Vec<String> {
             cursor += 1;
         }
         let start = cursor;
-        while bytes.get(cursor).is_some_and(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(*byte, b'-' | b'_' | b':')
-        }) {
+        while bytes
+            .get(cursor)
+            .is_some_and(|byte| byte.is_ascii_alphanumeric() || matches!(*byte, b'-' | b'_' | b':'))
+        {
             cursor += 1;
         }
         if start == cursor

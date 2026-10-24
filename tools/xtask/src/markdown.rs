@@ -25,7 +25,10 @@ pub(crate) fn check(root: &Path) -> Result<()> {
     )?;
     let mut tracked = BTreeSet::new();
     let mut markdown = Vec::new();
-    for raw in listing.split(|byte| *byte == 0).filter(|entry| !entry.is_empty()) {
+    for raw in listing
+        .split(|byte| *byte == 0)
+        .filter(|entry| !entry.is_empty())
+    {
         let relative = std::str::from_utf8(raw)?;
         crate::manifest::validate_path(relative)?;
         tracked.insert(relative.to_owned());
@@ -55,12 +58,13 @@ fn validate(tracked: &BTreeSet<String>, markdown: &[(String, String)]) -> Result
                 truncated = true;
                 break 'documents;
             }
-            let resolved = path::resolve_destination(source, &link.destination).map_err(|error| {
-                format!(
-                    "invalid local Markdown link in {source}:{} (`{}`): {error}",
-                    link.line, link.destination
-                )
-            })?;
+            let resolved =
+                path::resolve_destination(source, &link.destination).map_err(|error| {
+                    format!(
+                        "invalid local Markdown link in {source}:{} (`{}`): {error}",
+                        link.line, link.destination
+                    )
+                })?;
             let Some((target, fragment)) = resolved else {
                 continue;
             };
