@@ -23,6 +23,9 @@ use super::{
     MAX_DIAGNOSTICS_PER_FILE, REPORT_SCHEMA, coordinates,
 };
 
+const MAX_DIAGNOSTIC_CODE_BYTES: usize = 1_024;
+const MAX_DIAGNOSTIC_MESSAGE_BYTES: usize = 16 * 1_024;
+
 pub(super) fn analyze(snapshot: &LuaWorkspaceSnapshot) -> EmmySyntaxResult<EmmySyntaxReport> {
     validate_backend(snapshot)?;
     let root = virtual_root(snapshot.snapshot_id());
@@ -105,6 +108,7 @@ pub(crate) fn build_registered(
     configuration.runtime.version = EmmyrcLuaVersion::Lua51;
     configuration.diagnostics.enable = true;
     analysis.update_config(Arc::new(configuration));
+    analysis.init_std_lib(None);
     match snapshot.universe() {
         LuaWorkspaceUniverse::Project
         | LuaWorkspaceUniverse::Fixture
@@ -131,7 +135,7 @@ pub(crate) fn build_registered(
     Ok(analysis)
 }
 
-/// Collect accepted diagnostics from an already populated exact analyzer
+/// Collect configured diagnostics from an already populated exact analyzer
 /// session. The caller owns workspace registration; this function never opens a
 /// URI or creates a second parser/session.
 pub(crate) fn collect_registered(
@@ -191,15 +195,22 @@ pub(crate) fn collect_registered(
         })?;
         for diagnostic in upstream {
             cancel(stop, file.path())?;
-            let Some((kind, code)) = accepted_code(diagnostic.code.as_ref()) else {
-                continue;
-            };
+            let (kind, code) = diagnostic_code(diagnostic.code.as_ref());
+            if code.len() > MAX_DIAGNOSTIC_CODE_BYTES
+                || diagnostic.message.len() > MAX_DIAGNOSTIC_MESSAGE_BYTES
+            {
+                return Err(EmmySyntaxError::new(
+                    EmmySyntaxErrorCode::DiagnosticBudgetExceeded,
+                    "an upstream diagnostic code or message exceeds the adapter budget",
+                    Some(file.path()),
+                ));
+            }
             if diagnostics.len() - before >= MAX_DIAGNOSTICS_PER_FILE
                 || diagnostics.len() >= MAX_DIAGNOSTICS
             {
                 return Err(EmmySyntaxError::new(
                     EmmySyntaxErrorCode::DiagnosticBudgetExceeded,
-                    "accepted diagnostic count exceeds the adapter budget",
+                    "diagnostic count exceeds the adapter budget",
                     Some(file.path()),
                 ));
             }
@@ -210,12 +221,14 @@ pub(crate) fn collect_registered(
                     Some(file.path()),
                 )
             })?;
+            let upstream_severity = severity(diagnostic.severity);
             diagnostics.push(EmmySyntaxDiagnostic {
                 category: FRAMEWORK_CATEGORY,
-                upstream_code: code.into(),
+                upstream_code: code,
+                message: diagnostic.message.into_boxed_str(),
                 kind,
-                upstream_severity: severity(diagnostic.severity),
-                normalized_severity: EmmyDiagnosticSeverity::Error,
+                upstream_severity,
+                normalized_severity: upstream_severity,
                 classification: EmmyDiagnosticClassification::Accepted,
                 rollout: EmmyDiagnosticRollout::Advisory,
                 path: file.path().into(),
@@ -231,7 +244,7 @@ pub(crate) fn collect_registered(
             diagnostic_count: u64::try_from(diagnostics.len() - before).map_err(|_| {
                 EmmySyntaxError::new(
                     EmmySyntaxErrorCode::DiagnosticBudgetExceeded,
-                    "accepted diagnostic count exceeds u64",
+                    "diagnostic count exceeds u64",
                     Some(file.path()),
                 )
             })?,
@@ -348,26 +361,26 @@ pub(crate) fn virtual_root(snapshot_id: &str) -> PathBuf {
     std::env::temp_dir().join("wow-emmy-v1").join(stable)
 }
 
-fn accepted_code(
-    code: Option<&NumberOrString>,
-) -> Option<(EmmySyntaxDiagnosticKind, &'static str)> {
-    match code? {
-        NumberOrString::String(value) if value == "syntax-error" => {
-            Some((EmmySyntaxDiagnosticKind::LuaSyntax, "syntax-error"))
+fn diagnostic_code(code: Option<&NumberOrString>) -> (EmmySyntaxDiagnosticKind, Box<str>) {
+    match code {
+        Some(NumberOrString::String(value)) => {
+            (diagnostic_kind(value), value.as_str().into())
         }
-        NumberOrString::String(value) if value == "doc-syntax-error" => Some((
-            EmmySyntaxDiagnosticKind::DocumentationSyntax,
-            "doc-syntax-error",
-        )),
-        NumberOrString::String(value) if value == "assign-type-mismatch" => Some((
-            EmmySyntaxDiagnosticKind::AssignmentTypeMismatch,
-            "assign-type-mismatch",
-        )),
-        NumberOrString::String(value) if value == "param-type-mismatch" => Some((
-            EmmySyntaxDiagnosticKind::ParameterTypeMismatch,
-            "param-type-mismatch",
-        )),
-        NumberOrString::String(_) | NumberOrString::Number(_) => None,
+        Some(NumberOrString::Number(value)) => (
+            EmmySyntaxDiagnosticKind::Other,
+            value.to_string().into_boxed_str(),
+        ),
+        None => (EmmySyntaxDiagnosticKind::Other, "uncoded".into()),
+    }
+}
+
+fn diagnostic_kind(code: &str) -> EmmySyntaxDiagnosticKind {
+    match code {
+        "syntax-error" => EmmySyntaxDiagnosticKind::LuaSyntax,
+        "doc-syntax-error" => EmmySyntaxDiagnosticKind::DocumentationSyntax,
+        "assign-type-mismatch" => EmmySyntaxDiagnosticKind::AssignmentTypeMismatch,
+        "param-type-mismatch" => EmmySyntaxDiagnosticKind::ParameterTypeMismatch,
+        _ => EmmySyntaxDiagnosticKind::Other,
     }
 }
 
