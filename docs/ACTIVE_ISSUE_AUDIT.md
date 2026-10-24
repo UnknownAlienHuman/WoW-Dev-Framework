@@ -2,7 +2,7 @@
 
 **Checked:** 2026-10-24  
 **Source revision:** `281b3504b827a4d87b2d3ec9a0ce0a53179a557d`  
-**Scope:** all 19 open implementation Issues after PR #253
+**Scope:** all 21 open implementation Issues after PR #253
 
 This register checks the Issue bodies as an instruction surface against current
 production callers. It complements the baseline
