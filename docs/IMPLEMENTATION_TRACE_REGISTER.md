@@ -39,7 +39,8 @@ the existing guides.
 | T09 | File/load/Library change -> current diagnostics/index | traced | fixed decision | unexecuted |
 | T10 | Builder output -> ordinary Library reader -> typed WoW metadata/maps | traced | fixed decision | unexecuted |
 | T11 | Addon chunk arguments -> transformed virtual context -> Emmy facts | traced | fixed decision | unexecuted |
-| T12 | Upstream diagnostic -> adapter DTO -> LSP payload | implemented on feature branch | fixed decision | unexecuted |
+| T12 | Upstream diagnostic -> adapter DTO -> LSP payload | implemented in `main` by PR #246 | fixed decision | unexecuted |
+| T13 | Explicit Emmy diagnostic config -> retained Main/Library/virtual owner -> optional collectors | implemented on feature branch | fixed decision | unexecuted |
 
 ## T01 — the current generic check route is not the replacement owner
 
@@ -112,22 +113,23 @@ result.
 
 **Evidence:** `wow-emmy/src/{session,references}.rs` and
 `syntax/analyzer.rs`. `RegisteredMemberAnalysis` owns a real shared Main/Library/
-virtual `EmmyLuaAnalysis`, but is private, creates `Emmyrc::default`, forces its
-own diagnostic toggle, omits `init_std_lib(None)` and builds member/flow support
-regardless of type-only need. Other syntax/flow routes create independent
-analyses.
+virtual `EmmyLuaAnalysis`, but its original public route creates
+`Emmyrc::default`, forces its own diagnostic toggle, omits `init_std_lib(None)`
+and always couples the useful owner to semantic collectors. Other syntax/flow
+routes create independent analyses.
 
-**Decision:** `wow-emmy::session` owns one configurable native session. Set Lua
-5.1, initialize embedded STD once, register Library/Main/virtual units, collect
-syntax diagnostics unconditionally and enable member/call/flow collectors only
-for selected checks that need them. Do not instantiate another analyzer in
-Service, CLI or LSP.
+**Decision:** one configurable native session owns Main, Library, optional
+virtual units and embedded STD. Syntax diagnostics are always available;
+member/call/local-flow collectors run only when a selected check requests them.
+Do not instantiate another analyzer in Service, CLI or LSP.
 
-**Implementation boundary after T12:** the standalone exact-snapshot adapter now
-initializes embedded STD and preserves complete diagnostic payloads. The shared
-registered Main/Library/virtual owner remains fixed and still needs the
-configuration/optional-collector refactor above. Do not mark T06 implemented from
-the standalone change.
+**Implementation boundary after T13:** `ConfiguredAnalyzerSession` now retains
+one shared registered owner, applies caller-supplied upstream diagnostic settings,
+fixes Lua 5.1, initializes embedded STD once and exposes separate diagnostics-only
+and explicitly selected semantic methods. The existing legacy `AnalyzerSession`
+and standalone member/flow functions remain fixed adapters for old callers.
+No direct Service/CLI owner uses the configured session yet, so T06 remains
+unobserved and the old paths must not be advertised as replaced.
 
 ## T07 — report hashes are not part of runtime analyzer validation
 
@@ -225,20 +227,51 @@ normalized severity to Error. The transitional LSP then emitted one constant
 sentence. The pinned analyzer exposes the original code, message, severity and
 embedded STD loader.
 
-**Implemented on `feat/direct-addon-check-2026-10-24`:** diagnostic schema `/3`
-retains string, numeric and missing codes, the exact bounded upstream message,
-the upstream severity and exact mapped source span. The four known diagnostic
-families keep their typed kind; every other code uses `Other` without being
-dropped. Code/message/count bounds remain explicit. The standalone analyzer sets
-Lua 5.1 and calls `init_std_lib(None)` before user-file registration. The
-transitional LSP serializes the retained message instead of a fabricated one.
+**Implemented in `main` by PR #246:** diagnostic schema `/3` retains string,
+numeric and missing codes, the exact bounded upstream message, the upstream
+severity and exact mapped source span. The four known diagnostic families keep
+their typed kind; every other code uses `Other` without being dropped.
+Code/message/count bounds remain explicit. The standalone analyzer sets Lua 5.1
+and calls `init_std_lib(None)` before user-file registration. The transitional
+LSP serializes the retained message instead of a fabricated one. Exact-head
+formatting, workspace compilation and strict Clippy passed for the merged head.
 
-**Still open:** this does not create the configured Main/Library/virtual session,
-thread user `EmmyrcDiagnostic` settings, repair the old generic CLI result, or
-prove behavior on an addon/editor. The shared session and direct Service/CLI
-route remain T06/T01 implementation work. Build/Clippy evidence is recorded only
-after the branch workflow completes; an end-to-end observation remains
+**Still open:** this does not repair the old generic CLI result or prove behavior
+on an addon/editor. T13 supplies the reusable configured native owner; the direct
+Service/CLI route remains T01 implementation work. End-to-end status remains
 `unexecuted`.
+
+## T13 — one configured owner separates diagnostics from semantic collectors
+
+**Evidence:** the pinned `EmmyrcDiagnostic` is the supported typed diagnostic
+configuration. Upstream `update_config` updates diagnostic and semantic database
+configuration, while `init_std_lib(None)` adds embedded STD declarations to the
+same analysis. `RegisteredMemberAnalysis` already registers exact Main, Library
+and optional virtual workspaces under Lua 5.1.
+
+**Implemented on `feat/configured-emmy-session-2026-10-24`:** a small
+`EmmyAnalysisConfiguration` retains only caller diagnostic settings and fixes the
+runtime to Lua 5.1; it does not discover `.emmyrc`. `ConfiguredAnalyzerSession`
+uses the existing exact registration/Library-health boundary, applies that typed
+configuration before diagnostic collection, initializes embedded STD once and
+retains the same upstream owner. Its `diagnostics` method collects physical and
+optional virtual syntax reports without invoking member/call/local-flow. Its
+`semantic_reports` method explicitly invokes those collectors from the same
+owner. Compatibility includes Main identity, Library set, optional virtual
+snapshot/generation and structural diagnostic configuration equality.
+
+**Known boundary:** the underlying legacy registration constructor still creates
+its fixed Lua 5.1/default diagnostic configuration while registering exact files;
+the configured owner replaces only the diagnostic policy afterwards and then
+adds STD. This is behaviorally sufficient for the currently supported
+configuration surface because callers cannot change parser/runtime features, but
+the eventual cleanup should move configuration/STD initialization into the
+registration constructor and adapt/delete legacy entry points. The virtual root
+path contract is duplicated only to collect diagnostics without forcing semantic
+facts; consolidate it when the old private registration wrapper is removed.
+
+No Service, CLI, addon or editor workflow consumes this owner yet. Compilation
+and Clippy do not promote T13 to an observed user operation.
 
 ## Executed observations still required
 
