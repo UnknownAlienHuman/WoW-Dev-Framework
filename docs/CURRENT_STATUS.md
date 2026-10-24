@@ -1,14 +1,17 @@
 # Current implementation status
 
 **Checked:** 2026-10-24  
-**Current `main` reviewed:** `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`  
+**Implementation code reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`  
+**Documentation reconciliation:** PR #251, `3ecf03b15bb4597daa5bcaa90d84224b23d0fffb`  
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 
 This is the authoritative current-state checkpoint. It does not replace the
 product specification in [ARCHITECTURE.md](ARCHITECTURE.md), the implementation
 design in [IMPLEMENTATION.md](IMPLEMENTATION.md), or the baseline source audit in
 [AUDIT.md](AUDIT.md). It prevents those baseline documents from being mistaken
-for a live progress report after implementation changes.
+for a live progress report after implementation changes. PR #251 changed only
+documentation and active Issue instructions; runtime status remains the code
+reviewed through PR #250.
 
 ## Verification vocabulary
 
@@ -100,29 +103,35 @@ The following remain open and must not be described as delivered:
 reports missing exact XML projection and handler context. This is deliberate
 truthfulness, not completion.
 
-## Documentation reconciliation performed here
+## Documentation reconciliation completed in PR #251
 
-A post-merge reread found real drift in the active documentation:
+The post-merge reread found and corrected real drift in the active documentation:
 
 1. root and application READMEs still called the four-code/message loss a current
    defect after PR #246;
 2. the Emmy guide said T06 remained open after PR #247;
 3. contributor instructions still told agents to create the configured owner and
    direct Service result that already exist;
-4. the implementation queue mixed delivered prerequisites with remaining CLI and
-   acquisition work;
-5. the trace register cited exact-head runs #437 and #442 for PRs #249/#250;
+4. the implementation route and queue mixed delivered prerequisites with
+   remaining CLI/acquisition work;
+5. frontend guidance did not separate the delivered snapshot-to-Service result
+   from transitional CLI/LSP/MCP callers;
+6. the trace register cited exact-head runs #437 and #442 for PRs #249/#250;
    the actual successful runs are #440 and #445;
-6. the baseline audit's environment note about Cargo is not a product finding and
+7. the baseline audit's environment note about Cargo is not a product finding and
    conflicts with the supplied review's separate full test run. Current status
-   must not rely on that sentence.
+   does not rely on that sentence;
+8. active umbrella/completion/configuration/CLI/LSP/MCP/result Issues still
+   assigned already delivered #246–#250 work.
 
-The active guides are being corrected to distinguish baseline findings, delivered
-lower owners, transitional callers, and unobserved product behavior.
+PR #251 corrected the active guides and Issues while preserving baseline audit
+evidence and all runtime rows as unobserved.
 
 ## Readiness verdict
 
 - **Documentation baseline reconciliation:** complete.
+- **Post-merge documentation/current-Issue reconciliation:** complete through
+  PR #251.
 - **Known source-level architecture/error register:** complete for the retained
   baseline requirements; new implementation findings belong in
   [IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md).
