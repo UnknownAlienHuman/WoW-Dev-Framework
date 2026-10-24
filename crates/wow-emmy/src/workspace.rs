@@ -233,9 +233,7 @@ impl EmmyBackendIdentity {
 
     /// Compatibility-report evidence when this identity came from a report.
     #[must_use]
-    pub fn compatibility_report_evidence(
-        &self,
-    ) -> Option<EmmyCompatibilityReportEvidence<'_>> {
+    pub fn compatibility_report_evidence(&self) -> Option<EmmyCompatibilityReportEvidence<'_>> {
         match (
             self.source,
             self.surface_sha256.as_deref(),
