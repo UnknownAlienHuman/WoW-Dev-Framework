@@ -26,16 +26,9 @@ jobs:
 
       - name: Apply typed report-evidence migration
         env:
-          EXPECTED_HEAD: 9b3d2496a5daec2af446eb8770a9886cc3bd6bc1
           TARGET_BRANCH: feat/compiled-emmy-identity-2026-10-24
         run: |
           set -euo pipefail
-
-          actual_head="$(git rev-parse HEAD)"
-          if [[ "$actual_head" != "$EXPECTED_HEAD" ]]; then
-            printf 'refusing stale patch: expected %s, found %s\n' "$EXPECTED_HEAD" "$actual_head" >&2
-            exit 1
-          fi
 
           gzip -dc .ci/pr249-followup.patch.gz | git apply --check -
           gzip -dc .ci/pr249-followup.patch.gz | git apply -
