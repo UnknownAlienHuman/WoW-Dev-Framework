@@ -26,9 +26,7 @@ pub use compatibility::{
     EmmyCompatibilityError, EmmyCompatibilityErrorCode, EmmyCompatibilityResult,
     backend_identity_from_report,
 };
-pub use configuration::{
-    DiagnosticSeveritySetting, EmmyAnalysisConfiguration, EmmyrcDiagnostic,
-};
+pub use configuration::{DiagnosticSeveritySetting, EmmyAnalysisConfiguration, EmmyrcDiagnostic};
 pub use configured_session::{
     ConfiguredAnalyzerSession, ConfiguredDiagnosticReports, ConfiguredSemanticReports,
     ConfiguredSessionError, ConfiguredSessionErrorCode, ConfiguredSessionResult,
