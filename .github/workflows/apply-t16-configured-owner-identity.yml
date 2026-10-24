@@ -1,0 +1,113 @@
+name: Apply T16 configured-owner identity fix
+
+on:
+  push:
+    branches:
+      - fix/configured-owner-main-identity-2026-10-24
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-t16-configured-owner-identity
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.repository == 'UnknownAlienHuman/WoW-Dev-Framework'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fix/configured-owner-main-identity-2026-10-24
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Apply exact Main admission and register trace
+        env:
+          TARGET_BRANCH: fix/configured-owner-main-identity-2026-10-24
+        run: |
+          set -euo pipefail
+
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('crates/wow-emmy/src/configured_session.rs')
+          text = source.read_text()
+          replacements = {
+              '''    /// Admission check for retaining this owner. A changed diagnostic policy,
+    /// Library set, virtual snapshot or project generation requires a cold owner.''':
+                  '''    /// Admission check for retaining this owner. A changed Main snapshot,
+    /// diagnostic policy, Library set, virtual snapshot or project generation
+    /// requires a cold owner.''',
+              '''        self.healthy
+            && self.main.backend() == main.backend()
+            && self.main.universe() == main.universe()
+            && expected_libraries == observed_libraries''':
+                  '''        self.healthy
+            && self.main.snapshot_id() == main.snapshot_id()
+            && expected_libraries == observed_libraries''',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected one source occurrence: {old!r}')
+              text = text.replace(old, new)
+          source.write_text(text)
+
+          register = Path('docs/IMPLEMENTATION_TRACE_REGISTER.md')
+          text = register.read_text()
+          table_anchor = '| T15 | compiled pin/report evidence -> workspace identity -> legacy admission | implemented in `main` by PR #249 | unexecuted |'
+          if table_anchor not in text:
+              table_anchor = '| T15 | compiled pin/report evidence -> workspace identity -> legacy admission | implemented in PR #249; exact-head run #437 passed | unexecuted |'
+          if text.count(table_anchor) != 1:
+              raise SystemExit('expected one T15 table row')
+          text = text.replace(
+              table_anchor,
+              table_anchor + '\n| T16 | requested Main snapshot -> configured owner reuse admission | feature branch; gate pending | unexecuted |',
+          )
+          section_anchor = '## Executed observations still required'
+          if text.count(section_anchor) != 1:
+              raise SystemExit('expected one observations section')
+          section = '''### T16 — configured owner reuse requires exact Main identity
+
+`ConfiguredAnalyzerSession::compatible` is the admission boundary for retaining
+an immutable configured owner. It compared backend and universe, but not the
+Main snapshot ID. Different Main paths or bytes under the same backend/universe
+could therefore pass that method even though this owner has no update operation.
+The method has no external reuse caller yet; this is a preventive contract fix
+before Service/CLI retention is connected.
+
+**Decision:** compare the exact Main `snapshot_id`. That identity already binds
+backend, universe, ordered canonical paths and exact content digests. Keep the
+Library set order-insensitive, and continue requiring exact virtual
+snapshot/generation plus structurally equivalent diagnostic configuration. The
+legacy `AnalyzerSession` is different: its caller compares Main snapshot IDs and
+uses a CAS-validated update path, so this change does not alter that admission.
+
+'''
+          text = text.replace(section_anchor, section + section_anchor)
+          register.write_text(text)
+          PY
+
+          cargo fmt --all
+          rm -- .github/workflows/apply-t16-configured-owner-identity.yml
+
+          mapfile -t changed < <(git diff --name-only | sort)
+          expected=(
+            .github/workflows/apply-t16-configured-owner-identity.yml
+            crates/wow-emmy/src/configured_session.rs
+            docs/IMPLEMENTATION_TRACE_REGISTER.md
+          )
+          if [[ "${changed[*]}" != "${expected[*]}" ]]; then
+            printf 'unexpected T16 paths:\n' >&2
+            printf '  %s\n' "${changed[@]}" >&2
+            exit 1
+          fi
+
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: require exact Main snapshot for configured owner reuse'
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
