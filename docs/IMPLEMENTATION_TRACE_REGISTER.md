@@ -47,6 +47,7 @@ sequence can move it to **observed**.
 | T18 | dependency/TOC/XML order -> snapshots + context-sensitive checks | source-traced; order lost at snapshot boundary | unexecuted |
 | T19 | product channel + `LoadWith` -> package reachability/load trigger | source-traced; channel/trigger model open | unexecuted |
 | T20 | implicit `Bindings*.xml` -> mapped binding callback diagnostics | source-traced; discovery/body/context adapter open | unexecuted |
+| T21 | official zero Interface + unresolved `Secure` metadata -> compatibility/context admission | source-traced; current parser hard-rejects/blocks | unexecuted |
 
 ## Decisions and evidence
 
@@ -103,9 +104,8 @@ have gaps. A stale/rejected/cancelled candidate never publishes over newer text.
 
 Use physical delta only while selected membership, ordered load/context,
 Library identity and analyzer configuration remain exact. TOC/XML/dependency/
-Library/channel/context/config changes rebuild selection and owner cold.
-Deletion/rename removes declarations, virtual units, maps, diagnostics and index
-rows together.
+Library/config changes rebuild selection and owner cold. Removal deletes
+associated virtual units, maps, diagnostics and index rows. Publish atomically.
 
 ### T10 — one optional generated-Library manifest
 
@@ -163,7 +163,7 @@ relation. Both directives become blocking `UnknownDirective` issues.
 
 Add explicit product channel separate from flavor, Interface, game/glue and
 secure/global context. `OnlyBetaAndPTR: 1` includes PTR/Beta, excludes Stable and
-is unresolved when the channel is absent.
+is unresolved when channel is absent.
 
 `LoadWith` is a source-located reverse load trigger, not a required or optional
 dependency. It does not establish prior symbol availability in the trigger
@@ -188,10 +188,10 @@ A Blizzard addon can contain `Bindings.xml` without listing it in the TOC. Its
 `keystate` parameter. Current selected acquisition does not discover the sibling
 file, and the XML index only extracts `Ui/Script` and `Ui/.../Scripts/*` bodies.
 
-Use a bounded exact `Bindings<suffix>.xml` candidate list derived from the
-selected flavor/product rules. Select at most one by documented precedence;
-absence is normal; case/precedence ambiguity is explicit. Capture through the
-held root and existing file bounds.
+Use a bounded exact `Bindings<suffix>.xml` candidate list derived from selected
+flavor/product rules. Select at most one by documented precedence; absence is
+normal; case/precedence ambiguity is explicit. Capture through the held root and
+existing file bounds.
 
 Parse binding bodies with the existing quick-xml/source-map ownership into mapped
 callback units. A binding callback is neither a top-level TOC chunk nor an addon
@@ -201,6 +201,30 @@ a located limitation and preserves independent addon diagnostics.
 
 See [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
 
+### T21 — official sentinel and unresolved security metadata
+
+Pinned `Blizzard_ReforgingUI_Classic.toc` contains both `Interface: 0` and
+`Secure: 1`. Current TOC parsing rejects zero as malformed and records `Secure`
+as an unknown blocking directive. The reviewed Wowless parser retains the zero,
+but no reviewed Project or donor source establishes that `Secure` means
+`UseSecureEnvironment`, signing, taint mode or private-table policy.
+
+**Decision:**
+
+- retain zero as an explicit unknown/sentinel compatibility value rather than a
+  syntax error. It never proves compatibility with a positive target and must not
+  win automatic selection over a positive compatible candidate without a
+  documented product rule. Explicit source analysis survives with a scoped
+  compatibility limitation;
+- retain `Secure` as typed source-backed metadata with raw value/span and an
+  unsupported semantic state. Do not alias it by name to another directive;
+- context-dependent checks remain limited where unresolved `Secure` semantics
+  matter, while independent syntax/type diagnostics survive;
+- bind both facts into the validated Project context/rebuild identity.
+
+The focused evidence is in
+[TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
+
 ## Documentation reconciliation ledger
 
 | ID | Drift found after PR #244 | Resolution |
@@ -208,6 +232,7 @@ See [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
 | D01–D08 | delivered #246–#250 owners, stale links/run numbers and active instructions disagreed | corrected by PRs #251–#254 |
 | D09 | ordinary-load guidance named only missing `Dep` and generic secure/bootstrap context | PR #255 added full aliases, tri-state conditions, typed context and selected-order handoff |
 | D10 | product channel, `LoadWith`, implicit binding callback source and machine SavedVariables scope were absent | recorded as T19/T20 and in the focused trigger/bindings audit |
+| D11 | official `Interface: 0` was still described as invalid and `Secure: 1` had no explicit uncertainty boundary | recorded as T21; preserve sentinel/raw metadata and scoped limitations |
 
 Documentation/source inspection does not change runtime observation status.
 
@@ -227,10 +252,14 @@ anything observed:
   no-bindings absence and malformed bindings preserving independent findings;
 - `DefaultState`/`SavedVariablesMachine` without false global partial or user-data
   access;
+- explicit `Interface: 0` source preserving analysis with unknown compatibility;
+- `Secure: 1` yielding a scoped unsupported-context limitation, not guessed
+  execution semantics;
 - generated manifest and plain Lua Library;
 - physical, mapped XML, XML-only and malformed included XML;
 - shared addon private table and one verified UI handler signature;
-- coherent updates after source/TOC/XML/dependency/Library/channel/context change;
+- coherent updates after source/TOC/XML/dependency/trigger/Library/channel/context
+  change;
 - unsaved LSP edit, version gap and stale-result rejection;
 - MCP metadata/unknown notification plus useful result;
 - later-process body/symbol search and readable exact source context;
