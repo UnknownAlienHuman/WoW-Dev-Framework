@@ -1,7 +1,8 @@
 # Post-merge implementation trace register
 
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`  
-**Current `main` checked:** `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`  
+**Current `main` checked:** `338dcbec597ece5e4e296425b874ecc2203d2b8f`  
+**Implementation code reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`  
 **Implementation work started:** 2026-10-24
 
 This is the active addendum to [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md). The
@@ -44,6 +45,8 @@ protocol input/result moves it to **observed**.
 | T14 | exact snapshots -> direct Service diagnostic/limitation result | implemented in `main` by PR #248; run #425 passed | unexecuted |
 | T15 | compiled pin/report evidence -> workspace identity -> legacy admission | implemented in `main` by PR #249; run #440 passed | unexecuted |
 | T16 | requested Main snapshot -> configured-owner reuse admission | implemented in `main` by PR #250; run #445 passed | unexecuted |
+| T17 | selected TOC metadata/file clauses -> package and per-unit execution context | source-traced; dependency aliases and typed context handoff open | unexecuted |
+| T18 | dependency/TOC/XML source order -> exact snapshots -> context-sensitive Service checks | source-traced; computed order is lost at path-sorted snapshot boundary | unexecuted |
 
 The previous register incorrectly cited runs #437 and #442 for T15/T16. GitHub
 Actions associates the successful exact-head runs with #440 and #445.
@@ -91,7 +94,7 @@ held roots, no-follow regular-file reads, path/case/UTF-8 checks, bounds,
 deterministic ordering and exact content identity. `ProjectInputInventory::build`
 adds publication configuration and rejects physical-empty Main.
 
-**Decision:** direct acquisition converts selected exact files into the snapshots
+**Decision:** direct acquisition converts selected exact files to the snapshots
 required by `check_addon`; it does not construct publication inventory. Read only
 the selected TOC/dependency closure so unrelated variants cannot block the run.
 
@@ -149,6 +152,60 @@ replace only chunk-owned ellipsis expressions in memory; mark synthetic origins
 context-only; compose maps; keep XML handler, free inline, suppressed table,
 secure and bootstrap contexts separate. This remains unimplemented and
 unobserved.
+
+### T17 — retain the actual TOC execution facts
+
+The selected loader currently recognizes only plural dependency spellings and
+selection predicates. Pinned Blizzard TOCs use `Dep`, `RequiredDep` and
+`OptionalDep`; they also use package `UseSecureEnvironment`, conditional
+`LoadFirst`, per-file `LoadIntoEnvironment`, and reviewed source uses
+`SuppressLocalTableRef`. `AllowLoadEnvironment` answers whether a unit is
+selected; it is not the same as the environment in which that unit executes.
+
+`TocLoadContext`, `ProjectLoadPlan`, `ProjectPackageNode` and
+`ProjectPackageLoadUnit` do not currently preserve all of those package/per-unit
+facts. Unknown directives can degrade closure completeness while the missing
+semantic value itself is unavailable to chunk/XML context.
+
+**Decision:** use one finite reviewed metadata/directive table and typed
+source-backed context:
+
+- required aliases: `dep`, `dependencies`, `dependson`, `requireddep`,
+  `requireddeps`;
+- optional aliases: `optionaldep`, `optionaldeps`;
+- package default execution environment and private-table policy;
+- per-unit environment override and supported bootstrap/load phase;
+- source selection, source span and exact originating record for every fact.
+
+Unsupported context-changing directives remain located limitations. Cosmetic
+metadata must not make unrelated Lua/type work partial. The full evidence and
+tri-state predicate rules are in
+[TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md).
+
+`conditions::evaluate` must reduce each allow/exclude list by its boolean
+operator: one known allow match is sufficient; one known exclude match is
+sufficient to exclude; unknown matters only when no known value determines the
+result. Across conjunctive gates, known exclusion dominates unknown. Retain the
+unknown predicate as evidence without poisoning a definitely excluded unit.
+
+### T18 — preserve load order beside, not inside, the snapshot
+
+The package plan computes reachability, phases, order groups and source ordinals.
+`read_package_sources` then sorts loaded packages by name,
+`into_namespaced_main` sorts Main files by namespaced path, and
+`LuaWorkspaceSnapshot::build` sorts files by path again. The configured Emmy
+owner and `check_addon` receive snapshots but no exact load plan/context receipt.
+
+**Decision:** keep `LuaWorkspaceSnapshot` path-sorted and content-addressed for
+identity, lookup and analyzer ownership. Pass a separate immutable validated
+load/context value beside it. That value binds exact package/TOC/XML unit order
+to snapshot role, path, digest, originating load record/unit, addon identity,
+effective environment, private-table policy and supported phase. Reject foreign,
+missing, duplicate or digest-mismatched entries.
+
+Do not claim that upstream file-registration order emulates WoW execution. Emmy
+remains the single type engine; ordered context is consumed only by chunk
+transformation and selected WoW checks that need load semantics.
 
 ## Implemented slices
 
@@ -222,9 +279,10 @@ post-merge documentation defects:
 | D06 | trace register cited runs #437/#442 | corrected to #440/#445 |
 | D07 | baseline audit environment note could be read as current verification | current status now states the baseline/audit distinction and supplied run evidence |
 | D08 | baseline register retained 31 links to headings renamed in the active implementation/frontend guides | repaired each destination by subject; `xtask check` now validates local Markdown paths and anchors |
+| D09 | ordinary-load guidance named only missing `Dep` and generic secure/bootstrap context | added exact dependency aliases, tri-state conditions, typed package/per-unit context and ordered handoff evidence |
 
 This reconciliation is documentation/source inspection. It does not change any
-T01–T16 runtime observation.
+T01–T18 runtime observation.
 
 ## Executed observations still required
 
@@ -233,8 +291,15 @@ fixture/input identities and result:
 
 - public `wow check` with a valid and invalid typed call preserving upstream
   code/message/severity/addon location;
+- `Dep`, `RequiredDep`, absent `OptionalDep` and conditional dependency closure;
+- one known-determined allow/exclude list containing another unknown alias;
+- one secure addon with a global per-file override and one ordinary addon with a
+  secure per-file override;
+- exact dependency/TOC/XML order bound to the Service input without treating
+  snapshot path order as runtime order;
 - generated Library plus optional manifest, and plain Lua Library without it;
 - physical, mapped XML and XML-only programs;
+- malformed included XML retaining an independent valid unit and located failure;
 - shared addon private table and one verified handler signature;
 - add/edit/remove/rename plus TOC/XML/dependency/Library change without stale
   diagnostics;
