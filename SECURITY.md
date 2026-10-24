@@ -17,5 +17,5 @@ safety; see [WoW behavior](docs/WOW_LINTER.md).
 
 Report a suspected vulnerability privately through GitHub private vulnerability
 reporting/security advisories when available. Include the affected commit,
-minimal reproduction, required access and impact. No production release is
-claimed by this documentation rewrite.
+minimal reproduction, required access and impact. No production release or runtime-safety certification is claimed until the
+ordinary workflows are implemented and observed in the trace register.

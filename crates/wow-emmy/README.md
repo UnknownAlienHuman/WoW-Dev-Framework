@@ -1,9 +1,19 @@
 # EmmyLua adapter
 
-Reuse: `session.rs`, `references.rs`, `syntax/analyzer.rs` and coordinate mapping.
+Current status: [PRs #246–#250 and open handoffs](../../docs/CURRENT_STATUS.md).
 
-Target: one configured Main/Library/STD owner with full useful diagnostics.
-Read [EmmyLua](../../docs/EMMYLUA_UPSTREAM.md) for exact-pin APIs and update limits.
+Delivered: `ConfiguredAnalyzerSession` owns exact Main, explicit Library and
+optional virtual snapshots in one Lua 5.1 analysis; embedded STD and caller
+diagnostic configuration are applied once; diagnostics-only and explicit
+semantic collection are separate. Diagnostic code, exact message, severity and
+byte range reach the direct result. Exact Main identity is required for immutable
+owner reuse.
 
-See [Implementation](../../docs/IMPLEMENTATION.md#code-ownership),
-[WoW behavior](../../docs/WOW_LINTER.md) and [Audit](../../docs/AUDIT.md).
+Reuse `configured_session.rs`, `session.rs`, `references.rs`, existing semantic
+collectors and coordinate mapping. Do not add another analyzer owner or repeat
+the diagnostic adapter. Remaining work is ordinary Project acquisition, mapped
+addon/XML context, coherent updates and project-aware frontend reuse.
+
+Read [EmmyLua](../../docs/EMMYLUA_UPSTREAM.md) for the exact-pin contract and
+[Implementation](../../docs/IMPLEMENTATION.md#addon-configuration-and-emmy-analysis)
+for owner boundaries.

@@ -103,7 +103,7 @@ The following remain open and must not be described as delivered:
 reports missing exact XML projection and handler context. This is deliberate
 truthfulness, not completion.
 
-## Documentation reconciliation completed in PR #251
+## Documentation reconciliation
 
 The post-merge reread found and corrected real drift in the active documentation:
 
@@ -122,16 +122,21 @@ The post-merge reread found and corrected real drift in the active documentation
    conflicts with the supplied review's separate full test run. Current status
    does not rely on that sentence;
 8. active umbrella/completion/configuration/CLI/LSP/MCP/result Issues still
-   assigned already delivered #246–#250 work.
+   assigned already delivered #246–#250 work;
+9. the baseline register retained 31 local links to headings renamed during the
+   current-guide rewrite. Those anchors are repaired, and repository policy now
+   rejects missing local Markdown paths/anchors so Quick cannot silently pass the
+   same drift again.
 
-PR #251 corrected the active guides and Issues while preserving baseline audit
-evidence and all runtime rows as unobserved.
+PR #251 corrected items 1–8 while preserving baseline audit evidence and all
+runtime rows as unobserved. The follow-up Markdown guard corrects item 9 and
+makes the same class of drift executable repository-policy failure.
 
 ## Readiness verdict
 
 - **Documentation baseline reconciliation:** complete.
-- **Post-merge documentation/current-Issue reconciliation:** complete through
-  PR #251.
+- **Post-merge documentation/current-Issue reconciliation:** complete, including
+  the local Markdown path/anchor guard.
 - **Known source-level architecture/error register:** complete for the retained
   baseline requirements; new implementation findings belong in
   [IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md).

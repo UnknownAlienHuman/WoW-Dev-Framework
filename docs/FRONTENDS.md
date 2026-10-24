@@ -119,6 +119,8 @@ replace newer diagnostics.
 Cancellation is truthful and cooperative. Do not claim that an in-progress
 synchronous native analyzer call is preemptible.
 
+<a id="stdio-protocol-behavior"></a>
+
 ## CLI adapter
 
 The CLI owns only:

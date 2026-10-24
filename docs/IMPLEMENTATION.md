@@ -118,6 +118,8 @@ remains explicit `Partial`; do not drop those units and advertise complete addon
 semantics. This slice needs no SQLite, graph, Project publication, replay
 hydration, Reference or source regeneration.
 
+<a id="one-direct-check-operation"></a>
+
 ### One complete check operation
 
 The final check, including later context and selected WoW rules, is:
@@ -202,7 +204,11 @@ Pinned Emmy touched-file updates do not establish complete cross-file semantic
 invalidation. Retain conservative reindexing until narrower parity is observed.
 Cancellation remains cooperative around synchronous native calls.
 
+<a id="outputs-and-corrections"></a>
+
 ## Native annotation generation
+
+<a id="preserve-the-existing-pipeline"></a>
 
 ### Preserve one pipeline
 
