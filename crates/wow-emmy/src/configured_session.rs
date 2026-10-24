@@ -119,10 +119,12 @@ impl ConfiguredAnalyzerSession {
                 healthy: true,
             })
         }))
-        .unwrap_or_else(|_| Err(error(
-            ConfiguredSessionErrorCode::NativeFailure,
-            "configured native analysis failed while opening the owner",
-        )))
+        .unwrap_or_else(|_| {
+            Err(error(
+                ConfiguredSessionErrorCode::NativeFailure,
+                "configured native analysis failed while opening the owner",
+            ))
+        })
     }
 
     #[must_use]
@@ -228,10 +230,7 @@ impl ConfiguredAnalyzerSession {
             )
             .map_err(syntax_error)?;
             checkpoint(stop)?;
-            let virtual_snapshot = self
-                .virtual_units
-                .as_ref()
-                .map(|(snapshot, _)| snapshot);
+            let virtual_snapshot = self.virtual_units.as_ref().map(|(snapshot, _)| snapshot);
             let project_generation = self
                 .virtual_units
                 .as_ref()
@@ -354,10 +353,7 @@ fn flow_error(source: crate::EmmyLocalFlowError) -> ConfiguredSessionError {
     error(code, source.to_string())
 }
 
-fn error(
-    code: ConfiguredSessionErrorCode,
-    message: impl Into<Box<str>>,
-) -> ConfiguredSessionError {
+fn error(code: ConfiguredSessionErrorCode, message: impl Into<Box<str>>) -> ConfiguredSessionError {
     ConfiguredSessionError {
         code,
         message: message.into(),
