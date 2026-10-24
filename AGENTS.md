@@ -1,12 +1,13 @@
 # Contributor instructions
 
-Read [the manifesto](docs/ARCHITECTURE.md) in full. For implementation, read the
-relevant route in [IMPLEMENTATION.md](docs/IMPLEMENTATION.md), its domain rules
-in [WOW_LINTER.md](docs/WOW_LINTER.md), and the actual caller/owner code.
+Read [current status](docs/CURRENT_STATUS.md) and the
+[manifesto](docs/ARCHITECTURE.md) in full. For implementation, read the relevant
+route in [IMPLEMENTATION.md](docs/IMPLEMENTATION.md), its domain rules in
+[WOW_LINTER.md](docs/WOW_LINTER.md), and the actual caller/owner code.
 [REFACTOR_QUEUE.md](docs/REFACTOR_QUEUE.md) orders work;
-[AUDIT.md](docs/AUDIT.md) is background for redesign, not mandatory context for
-every patch. User instructions override this workflow. Old Issue comments and
-removed specifications cannot expand the product.
+[AUDIT.md](docs/AUDIT.md) is baseline redesign evidence, not a live progress page
+or mandatory context for every patch. User instructions override this workflow.
+Old Issue comments and removed specifications cannot expand the product.
 
 ## Work
 
@@ -24,45 +25,72 @@ removed specifications cannot expand the product.
 - After two failed attempts at the same approach, inspect the failed assumption
   and change method. Do not repeat expensive commands without new evidence.
 
-For the first public `wow check`, follow the
-[source-traced boundary](docs/REFACTOR_QUEUE.md#source-traced-replacement-boundary)
-and its [exact owner split](docs/REFACTOR_QUEUE.md#exact-owner-split).
-Reuse `ProjectInputDirectory`, `ProjectInputFile`, load plans and XML maps, but
+## First public `wow check`
+
+Do **not** recreate the lower owners delivered after PR #244:
+
+- PR #246 preserves upstream diagnostic code/message/severity/range;
+- PR #247 delivers `wow_emmy::ConfiguredAnalyzerSession` over exact Main,
+  explicit Library and optional virtual snapshots, with Lua 5.1, embedded STD,
+  caller diagnostic configuration, and separate diagnostic/semantic collection;
+- PR #248 delivers `wow_service::addon_check::check_addon` and its direct
+  diagnostic/limitation result;
+- PR #249 delivers compiled Emmy identity without fabricated compatibility-report
+  hashes;
+- PR #250 requires exact Main snapshot identity for configured-owner reuse.
+
+Continue from the open handoff:
+
+```text
+ordinary configuration and Project acquisition
+  -> exact Main/Library/virtual snapshots
+  -> existing ConfiguredAnalyzerSession
+  -> existing wow-service addon_check
+  -> CLI text/JSON result and exit status
+```
+
+Follow the [source-traced boundary](docs/REFACTOR_QUEUE.md#source-traced-replacement-boundary)
+and [exact owner split](docs/REFACTOR_QUEUE.md#exact-owner-split). Reuse
+`ProjectInputDirectory`, `ProjectInputFile`, selected load plans and XML maps, but
 not `ProjectConfiguration`/`ProjectInputInventory` publication requirements.
-Factor one configurable native session from the existing registered Emmy owner;
-it derives the compiled analyzer identity internally and must not require or
-fabricate compatibility-report hashes. `wow-service` owns the direct use case;
-the CLI owns arguments/output/exit only. Empty `checks` means no WoW rule;
-upstream diagnostics remain enabled.
+Extract the small load/configuration and pure XML-preparation seams needed by the
+ordinary caller. The CLI owns argument precedence, cancellation, rendering and
+exit status only.
 
 Do not satisfy the old `LocalCommand`/`LocalProjectBackend`/generic `Service`
 constructors with fabricated Reference, Rules, compatibility or Project state.
-Legacy `ProfileIdentity`, generation and replay wrappers remain only for their
-current callers while those callers move.
+Do not wrap `check_addon` inside the old component/capability result. Empty
+`checks` means no WoW rule; upstream diagnostics remain enabled. Legacy
+`ProfileIdentity`, generation and replay wrappers remain only for their current
+callers while those callers move.
 
 ## Verification during this rewrite
 
 Write the product first. For Rust changes run formatting and the smallest strict
 Clippy invocation covering the affected crates/callers. Clippy already compiles
 those targets; do not repeat `cargo check`. **Do not add or run tests until the
-product is functionally complete, as directed by the owner.** Record known failures
-without turning test repair or corpus campaigns into implementation prerequisites.
-Do not delete a test merely because it fails; remove obsolete expectations only
-with their retired behavior.
+product is functionally complete, as directed by the owner.** Record known
+failures without turning test repair or corpus campaigns into implementation
+prerequisites. Do not delete a test merely because it fails; remove obsolete
+expectations only with their retired behavior.
 
-For documentation, inspect links, source claims and instruction consistency.
-Do not build the Rust workspace for prose alone. A build or source review does
-not prove that a user workflow works; describe its status accurately.
+For documentation, inspect links, source claims, current `main`, merged PRs and
+instruction consistency. Do not build the Rust workspace for prose alone. A
+build or source review does not prove that a user workflow works; describe its
+status accurately.
+
 Update [the post-merge implementation trace register](docs/IMPLEMENTATION_TRACE_REGISTER.md)
 when a newly traced source chain changes an implementation boundary or a real
-observation changes an executed status. Update the exhaustive
+observation changes an executed status. Update
+[CURRENT_STATUS.md](docs/CURRENT_STATUS.md) when merged implementation changes
+what contributors should do next. Update the exhaustive
 [baseline review register](docs/AUDIT_REGISTRY.md) only when correcting its
-329-document reconciliation. Keep document reading, source tracing and executed
-verification distinct; neither register is a gate for unrelated work.
+329-document reconciliation. Keep document reading, source tracing,
+implementation evidence and executed verification distinct.
 
 ## Handoff
 
 Publish one coherent branch/PR when authorized, after checking the remote head.
 State the change, verification and remaining limitation briefly. Do not add
-acceptance tiers, proof archives or progress reports to the product. Keep copied
-third-party code/data attribution and required notices.
+acceptance tiers, proof archives or progress-report bureaucracy to the product.
+Keep copied third-party code/data attribution and required notices.
