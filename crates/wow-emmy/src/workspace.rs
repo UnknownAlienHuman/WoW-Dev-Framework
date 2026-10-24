@@ -134,9 +134,7 @@ impl EmmyBackendIdentity {
             tree,
             source: EmmyBackendIdentitySource::CompatibilityReport,
             surface_sha256: Some(surface_sha256.into_boxed_str()),
-            compatibility_report_sha256: Some(
-                compatibility_report_sha256.into_boxed_str(),
-            ),
+            compatibility_report_sha256: Some(compatibility_report_sha256.into_boxed_str()),
         })
     }
 
