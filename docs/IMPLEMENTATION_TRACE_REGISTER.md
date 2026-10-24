@@ -1,293 +1,241 @@
 # Post-merge implementation trace register
 
-**Baseline:** `main` after PR #244, commit
-[`0fdc34c`](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/commit/0fdc34c4a8afb1af51ec47d2038734d02500af42).  
-**Reviewed source baseline:** `c36a0581`, after #243.  
-**Started:** 2026-10-24.
+**Documentation baseline:** PR #244, merge `0fdc34c`.  
+**Implementation work started:** 2026-10-24.
 
-This is the active addendum for source traces discovered after the exhaustive
-329-document reconciliation in [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md). The
-baseline register remains the inventory of old documents and preserved ideas;
-it is not reopened or inflated for every new implementation finding.
+This is the active implementation addendum to
+[AUDIT_REGISTRY.md](AUDIT_REGISTRY.md). The old register accounts for every
+baseline document and preserved idea. This file records only new
+producer-to-consumer traces and implementation decisions discovered after that
+merge.
 
-A row here means its named producer-to-consumer chain was read. It does **not**
-mean the user workflow was executed. The implementation order remains
-[REFACTOR_QUEUE.md](REFACTOR_QUEUE.md), and detailed domain behavior remains in
-the existing guides.
+A source trace is not an executed user workflow. Documentation, compilation and
+Clippy may move a row to **implemented**, but only an exact command/input/result
+observation moves it to **observed**.
 
 ## Status language
 
-- **traced** — the listed source chain was followed far enough to support the
-  stated decision;
-- **fixed decision** — implementation ownership/boundary is decided and should
-  not be reopened without contradictory source evidence;
-- **unexecuted** — no end-to-end user observation established the behavior;
-- **implemented / observed** — use only after the code or real workflow exists.
+- **traced** — the named source chain was followed far enough to support the
+  decision;
+- **implemented** — the code exists and passed the stated build gate;
+- **observed** — the advertised user workflow was actually exercised;
+- **unexecuted** — no end-to-end observation exists yet.
 
 ## Active traces
 
-| ID | Chain | Source status | Decision | Executed status |
-| --- | --- | --- | --- | --- |
-| T01 | CLI check -> local input/backend -> generic Service -> output | traced | fixed decision | unexecuted |
-| T02 | Ordinary configuration -> Project configuration/publication DTO | traced | fixed decision | unexecuted |
-| T03 | Flavor/Interface -> TOC parser/load plan | traced | fixed decision | unexecuted |
-| T04 | Disk/Library bytes -> Project input/inventory | traced | fixed decision | unexecuted |
-| T05 | XML load facts -> virtual Lua units/maps | traced | fixed decision | unexecuted |
-| T06 | Main/Library/virtual files -> native Emmy session/diagnostics | traced | fixed decision | unexecuted |
-| T07 | Compiled Emmy pin -> workspace backend identity | traced | fixed decision | unexecuted |
-| T08 | Unsaved editor text -> LSP diagnostics | traced | fixed decision | unexecuted |
-| T09 | File/load/Library change -> current diagnostics/index | traced | fixed decision | unexecuted |
-| T10 | Builder output -> ordinary Library reader -> typed WoW metadata/maps | traced | fixed decision | unexecuted |
-| T11 | Addon chunk arguments -> transformed virtual context -> Emmy facts | traced | fixed decision | unexecuted |
-| T12 | Upstream diagnostic -> adapter DTO -> LSP payload | implemented in `main` by PR #246 | fixed decision | unexecuted |
-| T13 | Explicit Emmy diagnostic config -> retained Main/Library/virtual owner -> optional collectors | implemented on feature branch | fixed decision | unexecuted |
+| ID | Chain | Code status | User observation |
+| --- | --- | --- | --- |
+| T01 | CLI check -> old local backend -> generic Service -> output | traced | unexecuted |
+| T02 | ordinary config -> publication `ProjectConfiguration` | traced | unexecuted |
+| T03 | flavor/Interface -> TOC parser/load plan | traced | unexecuted |
+| T04 | disk/Library bytes -> exact analyzer snapshots | traced | unexecuted |
+| T05 | XML load facts -> virtual Lua units/maps | traced | unexecuted |
+| T06 | Main/Library/virtual -> one configured Emmy owner | implemented in `main` by PR #247 | unexecuted |
+| T07 | compiled Emmy pin -> runtime identity | traced | unexecuted |
+| T08 | unsaved editor text -> project diagnostics | partially implemented | unexecuted |
+| T09 | source/config changes -> current diagnostics/index | traced | unexecuted |
+| T10 | builder output -> ordinary Library metadata/maps | traced | unexecuted |
+| T11 | addon chunk arguments -> mapped analysis context | traced design | unexecuted |
+| T12 | upstream diagnostic -> adapter DTO -> LSP payload | implemented in `main` by PR #246 | unexecuted |
+| T13 | caller diagnostic config -> optional semantic collectors | implemented in `main` by PR #247 | unexecuted |
+| T14 | exact snapshots -> direct Service result | implemented on feature branch | unexecuted |
 
-## T01 — the current generic check route is not the replacement owner
+## Fixed decisions from T01–T11
 
-**Evidence:** `apps/wow/src/args.rs` binds directly to `LocalCommand`;
-`wow-service/src/local/{input,backend,projection,response}.rs`, `service.rs`,
-`model.rs` and `apps/wow/src/output.rs` carry the result.
+### T01 — do not extend the old generic check platform
 
-The route requires Reference, analyzer compatibility and Project publication
-state; `Service::check` requires Reference/Rules component health; an empty rule
-selection expands to every registry descriptor; `GenericFinding` loses the
-upstream explanation; text output emphasizes internal component/capability data.
+`apps/wow/src/args.rs` routes `wow check` through `LocalCommand`,
+`LocalProjectBackend`, generic `Service::check`, component capability reduction
+and presentation graphs. That path requires Reference, Rules, compatibility and
+Project-publication objects even for plain Lua/type diagnostics; empty rule
+selection expands to every rule; the old generic finding loses the upstream
+message.
 
-**Decision:** `wow-service` gets one direct `addon_check` use case over the lower
-Project/Emmy owners. Reference/Rules exist only for explicitly selected WoW
-checks. Do not fabricate empty Reference, compatibility, RuleRegistry or Project
-objects to satisfy legacy constructors. Keep the old route only for transitional
-callers, then remove it with them. See PR #245 and queue item 1.
+**Decision:** the replacement is `wow-service::addon_check`, composed directly
+over Project acquisition and the configured Emmy owner. Reference/Rules are
+created only for explicitly requested WoW checks. Never fabricate empty
+platform objects to satisfy legacy constructors. Remove the old route with its
+last callers.
 
-## T02 — `ProjectConfiguration` is a publication contract
+### T02 — publication configuration is not user configuration
 
-**Evidence:** `wow-project/src/configuration.rs` binds Project ID, profile/source/
-generation identities, accepted analyzer pins/probe report, capability policy,
-graph budgets and canonical digests.
+`wow-project::ProjectConfiguration` binds project IDs, generations, probe/report
+hashes, capability policy, graph budgets and canonical publication identities.
 
-**Decision:** it is not the ordinary `wow check` DTO. `wow-service::addon_check`
-owns a small public configuration for root, optional TOC, flavor, optional target
-Interface, Library directories, dependency roots, checks, Emmy diagnostic
-configuration and failure threshold. Legacy publication callers may continue to
-adapt their configuration while they exist.
+**Decision:** ordinary `wow check` gets a small config: root, optional TOC,
+flavor, optional Interface target, Library directories, dependency roots,
+selected checks, Emmy diagnostic settings and failure threshold. Legacy
+publication callers may adapt while they exist; the public CLI never asks users
+for those internal identities.
 
-## T03 — useful TOC parsing is hidden behind `ProfileIdentity`
+### T03 — separate load target from `ProfileIdentity`
 
-**Evidence:** `wow-project/src/load/{mod,toc}.rs` accepts a full
-`ProfileIdentity`, requires a positive target Interface, turns mismatch into a
-generic configuration failure and binds the profile digest into the load plan.
+Current TOC parsing takes a full `ProfileIdentity`, requires a positive target
+Interface and turns mismatch into a generic configuration failure.
 
-**Decision:** extract a small Project load target containing flavor, optional
-Interface and `TocLoadContext`. Keep exact TOC metadata and selected file order.
-An explicit incompatible Interface produces a located compatibility diagnostic,
-not silent target switching or loss of all usable files. Legacy profile callers
-adapt to the small target.
+**Decision:** extract a small load target: flavor, optional Interface and load
+context. Preserve selected files/order and report an explicit Interface mismatch
+without silently switching TOC/flavor or discarding independently usable input.
 
-## T04 — exact input files are reusable; publication inventory is not required
+### T04 — reuse safe acquisition, not publication inventory
 
-**Evidence:** `wow-project/src/disk.rs`, `disk/library.rs` and `inventory.rs`.
-`ProjectInputDirectory`/Library acquisition already enforce root capabilities,
-regular files, no-follow opens, UTF-8/path/case checks, deterministic ordering
-and bounded bytes. `ProjectInputFile` validates exact path/content/digest and
-converts directly to `LuaWorkspaceFileInput`. `ProjectInputInventory::build`
-requires the publication configuration and rejects a physical-empty Main.
+`ProjectInputDirectory`, Library acquisition and `ProjectInputFile` already
+enforce root capabilities, no-follow regular-file reads, path/case/UTF-8 checks,
+bounds, deterministic order and exact digests. `ProjectInputInventory::build`
+adds publication configuration and rejects physical-empty Main.
 
-**Decision:** reuse the safe readers and `ProjectInputFile` handoff. The direct
-check does not construct publication inventory. Selected virtual XML units can
-form part or all of the language program without a dummy physical Lua file.
+**Decision:** the direct check reuses safe readers and converts exact files to
+`LuaWorkspaceFileInput`; it does not build publication inventory. Virtual XML
+units may form part or all of the language program without a dummy `.lua` file.
 
-## T05 — XML unit preparation is coupled to publication receipts
+### T05 — split pure XML preparation from publication receipts
 
-**Evidence:** `wow-project/src/xml_lua.rs` contains useful collection of inline
-units, entity/newline/discontinuous mappings and virtual workspace input, but
-its current `prepare` wrapper also requires full `ProjectConfiguration`,
-generation, capability budgets and backend identity.
+`wow-project::xml_lua` already owns inline-unit collection, entity/newline and
+discontinuous source mappings, but its public preparation wrapper also requires
+configuration/generation/capability/report identities.
 
-**Decision:** extract pure preparation from selected load/package plans, exact
-captured source bytes, direct limits and compiled analyzer identity. The direct
-check and later source index consume those same units/maps. Keep a legacy wrapper
-that adds publication identities for old callers; do not place them in the new
-result.
+**Decision:** extract pure preparation from selected load facts, captured bytes,
+direct limits and the compiled analyzer identity. Keep one legacy wrapper for
+old publication callers. The direct check and later index consume the same
+virtual units/maps.
 
-## T06 — one shared Emmy engine exists but is fixed and private
+### T07 — compatibility-report hashes are not runtime analyzer validation
 
-**Evidence:** `wow-emmy/src/{session,references}.rs` and
-`syntax/analyzer.rs`. `RegisteredMemberAnalysis` owns a real shared Main/Library/
-virtual `EmmyLuaAnalysis`, but its original public route creates
-`Emmyrc::default`, forces its own diagnostic toggle, omits `init_std_lib(None)`
-and always couples the useful owner to semantic collectors. Other syntax/flow
-routes create independent analyses.
+`EmmyBackendIdentity` stores report/surface hashes, while compiled-backend
+validation actually compares crate, version, revision and tree.
 
-**Decision:** one configurable native session owns Main, Library, optional
-virtual units and embedded STD. Syntax diagnostics are always available;
-member/call/local-flow collectors run only when a selected check requests them.
-Do not instantiate another analyzer in Service, CLI or LSP.
+**Decision:** the direct path derives the compiled analyzer identity and never
+fabricates report hashes. Retain report identities only for legacy replay/probe
+consumers until removal.
 
-**Implementation boundary after T13:** `ConfiguredAnalyzerSession` now retains
-one shared registered owner, applies caller-supplied upstream diagnostic settings,
-fixes Lua 5.1, initializes embedded STD once and exposes separate diagnostics-only
-and explicitly selected semantic methods. The existing legacy `AnalyzerSession`
-and standalone member/flow functions remain fixed adapters for old callers.
-No direct Service/CLI owner uses the configured session yet, so T06 remains
-unobserved and the old paths must not be advertised as replaced.
+### T08 — retain overlay state, replace its one-file analyzer
 
-## T07 — report hashes are not part of runtime analyzer validation
+Project overlay code correctly owns exact unsaved text, client version,
+internal revision and UTF-8/UTF-16 conversion. Its current analyzer input is an
+isolated one-file snapshot; the transitional LSP still bypasses project
+Main/Library/XML context.
 
-**Evidence:** `wow-emmy/src/{workspace,references}.rs`.
-`EmmyBackendIdentity` requires surface and compatibility-report SHA values, but
-`validate_compiled_backend` compares only crate name, version, revision and tree.
-The report hashes currently affect snapshot/probe/replay identity rather than
-whether the compiled engine matches the pin.
+**Decision:** keep overlay text/version/coordinate logic and pass exact text
+overrides to the same direct addon-check owner. A stale/rejected/cancelled
+candidate cannot publish over a newer document. PR #246 fixed message/severity
+projection only; full project LSP reuse remains open.
 
-**Decision:** the direct session derives an internal compiled backend identity
-and never fabricates report hashes. Retain the report-derived identity only for
-legacy replay/probe consumers until they are removed.
+### T09 — file deltas and load/config changes are different operations
 
-## T08 — LSP overlay state is useful; its analyzer path is not
+Exact physical add/update/remove exists with conservative semantic reindexing.
+TOC/package-selected live updates are currently refused.
 
-**Evidence:** `wow-project/src/overlay/state.rs` correctly owns exact unsaved
-text, client version, internal revision and UTF-8/UTF-16 projection, but
-`analyzer_input` builds an isolated one-file `LuaWorkspaceSnapshot`.
-`wow-service/src/frontend/lsp/diagnostics.rs` analyzes that input separately.
-Before T12 it also replaced upstream wording with a constant sentence.
+**Decision:** use a file delta only when selected membership, load context,
+Library identity and Emmy configuration remain unchanged. TOC/XML/dependency/
+Library/target/config changes rebuild selection/context and the owner cold, then
+publish atomically. Deletion removes declarations, virtual units, maps,
+diagnostics and index rows together.
 
-**Decision:** preserve overlay text/version/coordinate logic and pass an exact
-file-text override to the same `wow-service::addon_check` owner. Unchanged Main,
-Library, STD and mapped XML units remain in that owner. A stale/rejected/cancelled
-candidate cannot publish over a newer document version. Issue #198 records the
-frontend route.
+### T10 — one generated-Library manifest, not another envelope
 
-**Implemented subset:** the transitional LSP payload now uses the exact upstream
-message and upstream severity carried by the adapter. It remains an isolated
-one-file analyzer route and therefore does not complete T08.
+The builder writes `.lua` files plus `source-report.json` schema
+`wow-native-source-build/2`; the ordinary Library reader only reads Lua. The old
+native-artifact reader expects an unrelated envelope and ignores mappings,
+metadata and limitations. Existing sidecars contain names/source links, while
+typed values remain in raw source documents.
 
-## T09 — physical deltas and load/config changes have different update rules
+**Decision:** keep one `source-report.json`. `wow-annotations` owns the shared
+serializable manifest/mapping DTO; Project returns optional exact bounded bytes;
+Service validates and consumes the same DTO. Plain Lua Libraries remain valid
+for typing and only disable affected WoW checks. The manifest contains selected
+revision/flavor/context, projection limitations, generated file identities,
+source mappings and only typed facts used by implemented checks—not the complete
+source corpus or old Reference snapshot.
 
-**Evidence:** `wow-emmy/src/session.rs`, Project update/publication code and
-`wow-service/src/live_project/operations.rs`. Exact physical add/update/remove
-exists with conservative full semantic reindex; the live Service route rejects
-TOC/package-selected plans.
+### T11 — mapped helper context is compatible with pinned Emmy semantics
 
-**Decision:** use an exact delta only when selected membership, load context,
-Library identity and analyzer configuration remain unchanged. TOC/XML/dependency/
-Library/target/config changes rebuild selection/context and the configured owner
-cold, then publish atomically. Deletion removes declarations, virtual units,
-maps, diagnostics and later index rows together. Issue #109 owns observation of
-this behavior.
+Pinned Emmy keeps final-position multi-return values and table identity, while
+existing transformed-workspace/source-map machinery can map a replacement
+expression to original bytes.
 
-## T10 — the public builder report has no production handoff
+**Decision:** create one analysis-only helper/private table per addon, replace
+only chunk-owned ellipsis expressions in an in-memory mapped view, and mark
+helper declarations/calls context-only so they never become user API/flow facts.
+Do not rewrite files, infer semantics from variable spelling, or treat package
+path prefixes as namespaces. XML handler and secure/bootstrap contexts remain
+separate adapters. This is source-derived and still requires execution.
 
-**Evidence:** `apps/wow-reference-builder/src/lib.rs` writes ordinary `.lua`
-files plus `source-report.json` with schema `wow-native-source-build/2`.
-Production search found only builder tests/workflow consuming that schema.
-`wow-project/src/disk/library.rs` loads the `.lua` files and does not deliver the
-report. The old `wow-service/src/local/native_artifact/wire.rs` expects an
-unrelated `wow-service/native-input-report/*` envelope and deserializes mappings,
-metadata sidecars and limitations as `IgnoredAny`.
+## Implemented slices
 
-The current sidecars contain field names and source links; typed values remain in
-raw source documents. Therefore neither retaining the report nor reading a
-sidecar establishes usable WoW semantics.
+### T12 — preserve the upstream diagnostic contract
 
-**Decision:** keep one `source-report.json` boundary; do not add another artifact
-envelope. `wow-annotations` owns the shared serializable generated-Library
-manifest/mapping DTO, with typed API facts supplied by their existing Reference
-owners. The builder writes it; Project Library acquisition returns exact optional
-bounded manifest bytes without interpreting WoW semantics; `wow-service` validates
-and consumes the same DTO. A plain `.lua` Library without a manifest remains
-valid for type analysis and makes only affected WoW checks unavailable.
+Before PR #246 the adapter admitted four codes, dropped all other diagnostics,
+omitted the message and forced severity to Error; LSP emitted one constant
+sentence.
 
-The manifest contains selected revision/flavor/API context, projection status and
-limitations, generated file path/digest/length, exact source mappings, and only
-the typed environment/restriction/origin relations used by implemented checks.
-Do not embed the complete source corpus or require the original checkout for
-ordinary checking. Retire the old native-input artifact envelope with its
-callers rather than creating a schema ladder.
+PR #246 (`b56c346`) now retains string/numeric/missing codes, exact bounded
+messages, upstream severity and mapped source spans. Known families keep typed
+kinds; unknown codes become `Other` without being discarded. The standalone
+snapshot analyzer sets Lua 5.1 and initializes embedded STD. Transitional LSP
+publishes the retained message/severity. Exact-head repository policy,
+formatting, full compilation and strict Clippy passed. Addon/editor behavior is
+still unobserved.
 
-## T11 — the mapped addon-chunk adapter is compatible with pinned Emmy semantics
+### T06/T13 — one configured Main/Library/virtual owner
 
-**Evidence:** pinned Emmy call/multi-return inference and assignment/table-owner
-compilation, plus the existing transformed-workspace/source-map mechanisms.
-A helper call can provide addon name and one stable table result; the second local
-retains that table identity, and field assignments resolve against it.
+PR #247 (`b40f701`) added `EmmyAnalysisConfiguration` and
+`ConfiguredAnalyzerSession`:
 
-**Decision:** use one transformed in-memory context view with exact maps for
-supported top-level addon chunk arguments. Mark helper calls context-only so
-synthetic API/call/flow facts cannot become user findings. Do not rewrite user
-files, infer context from local variable spelling or reuse package path prefixes
-as semantic namespace. XML handler wrappers and special Blizzard environments
-remain separate adapters. This conclusion is source-derived and still requires
-an executed addon observation.
+- caller-supplied pinned `EmmyrcDiagnostic`, fixed Lua 5.1, no `.emmyrc`
+  discovery;
+- exact Main, explicit Library and optional virtual-unit registration in one
+  retained upstream owner;
+- embedded STD initialized once;
+- diagnostics-only collection does not invoke member/call/local-flow;
+- semantic collectors run only through an explicit method in the same owner;
+- compatibility includes Main identity, Library set, virtual
+  snapshot/generation and structural diagnostic configuration equality.
 
-## T12 — preserve the upstream diagnostic contract before frontend projection
+The legacy registration constructor still installs its default diagnostic config
+while registering files; the new owner replaces the supported diagnostics policy
+before collection and then adds STD. Since the new public config cannot alter
+parser/runtime features, this does not create mixed parsing semantics. Move
+configuration/STD initialization into the constructor when legacy entry points
+are adapted or removed. Exact-head policy, formatting, compilation and strict
+Clippy passed. No Service/CLI workflow was observed.
 
-**Evidence before implementation:** `syntax/analyzer.rs` accepted four string
-codes, discarded every other upstream diagnostic, omitted `message`, and forced
-normalized severity to Error. The transitional LSP then emitted one constant
-sentence. The pinned analyzer exposes the original code, message, severity and
-embedded STD loader.
+### T14 — direct Service result without the old platform
 
-**Implemented in `main` by PR #246:** diagnostic schema `/3` retains string,
-numeric and missing codes, the exact bounded upstream message, the upstream
-severity and exact mapped source span. The four known diagnostic families keep
-their typed kind; every other code uses `Other` without being dropped.
-Code/message/count bounds remain explicit. The standalone analyzer sets Lua 5.1
-and calls `init_std_lib(None)` before user-file registration. The transitional
-LSP serializes the retained message instead of a fabricated one. Exact-head
-formatting, workspace compilation and strict Clippy passed for the merged head.
+`feat/direct-addon-check-service-2026-10-24` adds a first
+`wow-service::addon_check` operation over exact already-acquired snapshots. It:
 
-**Still open:** this does not repair the old generic CLI result or prove behavior
-on an addon/editor. T13 supplies the reusable configured native owner; the direct
-Service/CLI route remains T01 implementation work. End-to-end status remains
-`unexecuted`.
+- creates only `ConfiguredAnalyzerSession`; no Reference, Rules, compatibility
+  report, Project publication, graph, store or presentation graph;
+- keeps code, exact message, kind, severity, path, content digest and byte span;
+- separates physical Main and virtual diagnostics;
+- separates findings from limitations and records exact analysis/snapshot IDs;
+- keeps deterministic Library identities and output ordering;
+- maps typed cancellation/input/native failures to existing Service error
+  families.
 
-## T13 — one configured owner separates diagnostics from semantic collectors
-
-**Evidence:** the pinned `EmmyrcDiagnostic` is the supported typed diagnostic
-configuration. Upstream `update_config` updates diagnostic and semantic database
-configuration, while `init_std_lib(None)` adds embedded STD declarations to the
-same analysis. `RegisteredMemberAnalysis` already registers exact Main, Library
-and optional virtual workspaces under Lua 5.1.
-
-**Implemented on `feat/configured-emmy-session-2026-10-24`:** a small
-`EmmyAnalysisConfiguration` retains only caller diagnostic settings and fixes the
-runtime to Lua 5.1; it does not discover `.emmyrc`. `ConfiguredAnalyzerSession`
-uses the existing exact registration/Library-health boundary, applies that typed
-configuration before diagnostic collection, initializes embedded STD once and
-retains the same upstream owner. Its `diagnostics` method collects physical and
-optional virtual syntax reports without invoking member/call/local-flow. Its
-`semantic_reports` method explicitly invokes those collectors from the same
-owner. Compatibility includes Main identity, Library set, optional virtual
-snapshot/generation and structural diagnostic configuration equality.
-
-**Known boundary:** the underlying legacy registration constructor still creates
-its fixed Lua 5.1/default diagnostic configuration while registering exact files;
-the configured owner replaces only the diagnostic policy afterwards and then
-adds STD. This is behaviorally sufficient for the currently supported
-configuration surface because callers cannot change parser/runtime features, but
-the eventual cleanup should move configuration/STD initialization into the
-registration constructor and adapt/delete legacy entry points. The virtual root
-path contract is duplicated only to collect diagnostics without forcing semantic
-facts; consolidate it when the old private registration wrapper is removed.
-
-No Service, CLI, addon or editor workflow consumes this owner yet. Compilation
-and Clippy do not promote T13 to an observed user operation.
+This first slice is intentionally `Partial`: addon-name/private-table chunk
+arguments are not yet bound. When virtual units are supplied, exact XML source
+projection and handler parameters are also explicit limitations rather than
+silent omissions or fabricated user locations. The function accepts exact
+snapshots, not disk/TOC configuration; Project acquisition and CLI wiring remain
+T02–T05/T01 work. Build status must be recorded after the branch exact-head gate;
+no user workflow has been observed.
 
 ## Executed observations still required
 
-No row above is promoted by documentation, compilation or Clippy. The following
-must be observed after the corresponding product slice exists:
+No build-only slice above is a release claim. Record the exact command, fixture,
+input identities and result before marking any of these observed:
 
 - builder output loaded through the ordinary reader, with valid/invalid typed
-  calls preserving upstream message/code/severity/location;
-- optional generated manifest enabling one implemented WoW check while a plain
-  Lua Library still supports type checking;
+  calls preserving message/code/severity/location;
+- optional manifest enabling one implemented WoW check while plain Lua still
+  supports type checking;
 - physical, mapped XML and XML-only programs;
-- addon private table identity and one supported handler signature;
+- addon private-table identity and one supported handler signature;
 - add/edit/remove/rename plus changed TOC/XML/Library without stale results;
-- unsaved LSP edit, valid version gap and stale-result rejection;
+- unsaved LSP edit, valid client-version gap and stale-result rejection;
 - later-process body/symbol search returning readable source-linked context.
 
-Update this register when source evidence changes a boundary or a real
-observation changes an executed status. Do not turn it into a second product
-specification, acceptance-tier system or percentage dashboard.
+Update this register when evidence changes a boundary or a real observation
+changes status. Do not turn it into a second product specification, acceptance
+tier system or percentage dashboard.
