@@ -40,7 +40,7 @@ observation moves it to **observed**.
 | T13 | caller diagnostic config -> optional semantic collectors | implemented in `main` by PR #247 | unexecuted |
 | T14 | exact snapshots -> direct Service result | implemented in `main` by PR #248 | unexecuted |
 | T15 | compiled pin/report evidence -> workspace identity -> legacy admission | implemented in PR #249; exact-head run #437 passed | unexecuted |
-| T16 | requested Main snapshot -> configured owner reuse admission | feature branch; gate pending | unexecuted |
+| T16 | requested Main snapshot -> configured owner reuse admission | implemented in PR #250; exact-head run #442 passed | unexecuted |
 
 ## Fixed decisions from T01–T11
 
@@ -266,6 +266,8 @@ Library set order-insensitive, and continue requiring exact virtual
 snapshot/generation plus structurally equivalent diagnostic configuration. The
 legacy `AnalyzerSession` is different: its caller compares Main snapshot IDs and
 uses a CAS-validated update path, so this change does not alter that admission.
+Exact-head run #442 passed repository policy, formatting, workspace compilation,
+strict Clippy and the tracked-file rewrite check. No user workflow has been observed.
 
 ## Executed observations still required
 
