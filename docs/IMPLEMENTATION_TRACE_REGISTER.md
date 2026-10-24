@@ -40,6 +40,7 @@ observation moves it to **observed**.
 | T13 | caller diagnostic config -> optional semantic collectors | implemented in `main` by PR #247 | unexecuted |
 | T14 | exact snapshots -> direct Service result | implemented in `main` by PR #248 | unexecuted |
 | T15 | compiled pin/report evidence -> workspace identity -> legacy admission | implemented in PR #249; exact-head run #437 passed | unexecuted |
+| T16 | requested Main snapshot -> configured owner reuse admission | implemented in PR #250; exact-head run #442 passed | unexecuted |
 
 ## Fixed decisions from T01–T11
 
@@ -248,6 +249,24 @@ from compatibility-report evidence without weakening legacy admission:
 their existing construction path. The direct snapshot builder can bind the actual
 compiled pin without running or pretending to have run the compatibility probe.
 Exact-head run #437 passed repository policy, formatting, workspace compilation,
+strict Clippy and the tracked-file rewrite check. No user workflow has been observed.
+
+### T16 — configured owner reuse requires exact Main identity
+
+`ConfiguredAnalyzerSession::compatible` is the admission boundary for retaining
+an immutable configured owner. It compared backend and universe, but not the
+Main snapshot ID. Different Main paths or bytes under the same backend/universe
+could therefore pass that method even though this owner has no update operation.
+The method has no external reuse caller yet; this is a preventive contract fix
+before Service/CLI retention is connected.
+
+**Decision:** compare the exact Main `snapshot_id`. That identity already binds
+backend, universe, ordered canonical paths and exact content digests. Keep the
+Library set order-insensitive, and continue requiring exact virtual
+snapshot/generation plus structurally equivalent diagnostic configuration. The
+legacy `AnalyzerSession` is different: its caller compares Main snapshot IDs and
+uses a CAS-validated update path, so this change does not alter that admission.
+Exact-head run #442 passed repository policy, formatting, workspace compilation,
 strict Clippy and the tracked-file rewrite check. No user workflow has been observed.
 
 ## Executed observations still required
