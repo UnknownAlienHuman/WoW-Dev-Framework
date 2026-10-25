@@ -25,6 +25,8 @@ Keep these choices distinct:
 Never union flavors/channels to hide diagnostics. Existing plain Lua annotation
 directories remain usable for types; absent metadata limits only checks needing it.
 
+<a id="2-reuse-lua-analysis-model-the-wow-environment"></a>
+
 ## 2. Reuse EmmyLua and model WoW around it
 
 Use explicit Lua 5.1 and embedded standard declarations. Stock Lua declarations
@@ -77,6 +79,8 @@ Concrete reviewed losses include repeated triples in
 `C_ArtifactUI.GetMetaPowerInfo` and separate zero-result/table/element nilability
 in `C_EquipmentSet.GetItemIDs`. Unsupported exact correlations remain visible;
 independent valid declarations survive.
+
+<a id="4-toc-and-xml-form-the-load-model"></a>
 
 ## 4. TOC, triggers, XML and bindings form the load model
 
@@ -215,6 +219,8 @@ Exact catalog absence cannot repair a misidentified local receiver. Secret
 checking distinguishes coherent unresolved producer semantics from malformed or
 stale identity. Unresolved TOC `Secure` context is separate from both.
 
+<a id="6-secret-values-and-protected-behavior"></a>
+
 ## 6. Secret/protected behavior
 
 Preserve `SecretReturns`, conditional flags, field `SecretValue`,
@@ -228,6 +234,8 @@ Absence of a finding is never a runtime-safety certificate.
 
 Keep Secret metadata separate from primitive types and TOC execution-security
 metadata. Do not build another whole-program dataflow engine or auto-insert guards.
+
+<a id="7-useful-output-and-updates"></a>
 
 ## 7. Diagnostics, completeness and updates
 
