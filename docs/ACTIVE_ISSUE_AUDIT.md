@@ -1,76 +1,68 @@
 # Active Issue caller audit
 
 **Checked:** 2026-10-24  
-**Source revision:** `338dcbec597ece5e4e296425b874ecc2203d2b8f`  
-**Scope:** all 21 open implementation Issues after PR #254, plus deeper T02–T05/T11 load tracing
+**Source revision:** `337b9b6e676af6735f416e8527176ed17e865172`  
+**Scope:** all 21 open implementation Issues after PR #255, including T19–T21
 
 This register checks Issue bodies as an instruction surface against current
-production callers. It complements the baseline
-[AUDIT_REGISTRY.md](AUDIT_REGISTRY.md), the post-merge
-[implementation trace register](IMPLEMENTATION_TRACE_REGISTER.md) and the focused
-[TOC/load trace](TOC_LOAD_CONTEXT_AUDIT.md). It does not replace the ordered
-[queue](REFACTOR_QUEUE.md) and does not claim runtime execution.
+production callers. It complements [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md), the
+active [implementation trace register](IMPLEMENTATION_TRACE_REGISTER.md),
+[TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md) and
+[TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md). It does not
+replace the ordered [queue](REFACTOR_QUEUE.md) or claim runtime execution.
 
 ## Method and status
 
-- Read every open Issue body after the PR #246–#254 merges.
-- Followed the named current producer, handoff and production reader; tests and
-  fixtures were treated as evidence, not automatic product consumers.
-- Rechecked ordinary TOC/dependency/context/order claims against pinned Blizzard
-  TOCs and the reviewed Wowless loader comparison.
-- **confirmed** means the named current boundary still exists.
-- **corrected** means the body contained a current-source contradiction or omitted
-  a mandatory source boundary and was rewritten.
-- **reconciled** means its body already matched delivered owners and no new
-  contradiction was found.
+- Read every open Issue body after PRs #246–#255.
+- Followed named producers, handoffs and production readers; tests/fixtures were
+  evidence, not automatic product consumers.
+- Rechecked TOC dependencies, execution context, product channel, load triggers,
+  implicit bindings, official sentinel/security metadata and selected order
+  against pinned Blizzard source and the pinned Wowless comparison.
+- **confirmed** — the named boundary still exists.
+- **corrected** — the body contradicted current source or omitted a mandatory
+  handoff and was rewritten.
+- **reconciled** — the body already matches current owners.
 
 ## Register
 
 | Issue | Status | Source result / current boundary |
 | --- | --- | --- |
-| #103 Recognizer rules | confirmed | `RecognizerRegistry::e2_default` remains internal to fixed recognizer adapters; built-in typed producers feed Service graph-build consumers. The six `e2/examples/*.json` files have no production reader and remain test inventory. |
-| #106 Blizzard UI workflow | confirmed | No ordinary current-source index/search/context command exists. Existing FTS lanes cover labels/recorded names, not Lua/XML body text; later-process direct context remains dependent on #131/#169/#122. |
-| #107 Graph duplication | confirmed | `graph/build/native_api.rs::publish` still calls native Library reconstruction/verification, which loads Reference, renders annotations and builds a second Library snapshot before source-call publication. |
-| #109 updates | reconciled | Exact immutable `ConfiguredAnalyzerSession` and direct `addon_check` exist; physical delta and selection/config/context rebuild boundaries remain correctly separated. Exact ordered load context is now part of the cold-rebuild identity. |
-| #111 Store lifecycle | corrected | Backup/replacement/quarantine/source-authority and several report/release types have no production caller outside `wow-store`; GC/recovery/retention still reach Service/application callers and cannot be deleted as one block. |
-| #112 wire formats | reconciled | Current body distinguishes delivered direct DTOs from legacy replay/Search/Graph formats and preserves semantic admission after decoding. |
-| #113 performance | confirmed | There is no ordinary Blizzard UI workflow to measure yet. Performance remains correctly gated on #106 rather than inferred from parser reuse or failed preconditions. |
-| #117 TOC/XML relationships | corrected | Existing XML virtual units/maps are reusable, but the body omitted the exact typed package/per-unit context and selected-order receipt required to relate persisted XML units to actual selected loading. Pure preparation, handler context and direct persisted relations remain open. |
-| #118 lineage/fingerprints | corrected | The named lineage/source-comparison application, Service and Graph modules are already absent. Remaining scope is function/XML fingerprint CLI options, Project models, Service candidate manifests and old Search hold/proof plumbing. |
-| #122 readable context | confirmed | The old Context path still depends on Project/Graph reports, packs/continuations and source rereads. Exact body-backed plain context is not implemented. |
-| #125 product completion | reconciled | Completion requires observed ordinary generation/check/editor/search workflows; build/Clippy and lower owner construction are explicitly insufficient. |
-| #131 direct reads | corrected | `ReadSnapshot::acquire` validates generation membership and reads payloads lazily through `record`; it does not decode every partition. The expensive current path is `AcquiredProjectPair::read -> ProjectReplay::hydrate_owner -> recapture` in Search/Context/Graph readers. |
-| #169 direct FTS | confirmed | `StoredSearchArtifact.database_hex` still embeds an inner SQLite image as hex in canonical JSON; current FTS rows index `document_id`/metadata labels or recorded names, not source bodies. |
-| #191 umbrella | reconciled | Delivery order starts from ordinary Project acquisition into the existing configured owner/direct Service result and treats old platform removal as consumer migration. |
-| #194 result DTOs | reconciled | `AddonCheckResult` is the retained direct check result; generic component/capability/presentation/result identities remain transitional caller cleanup. |
-| #195 recognizer handoff | confirmed | Public built-in producers have Service graph-build consumers. `run_recognizers`/`adapt_emmy_direct_calls` have no external production caller; generic pack/plan use outside `wow-recognizers` is concentrated in `graph/build/recognizer_handoff.rs`. |
-| #197 CLI | reconciled | The target CLI must call Project acquisition and existing `wow-service::addon_check` directly, not adapt the old `LocalCommand`/generic Service route. |
-| #198 LSP | reconciled | Diagnostic payload is delivered, but overlay input remains one-file; project reuse, version gaps, stale-result rejection and standard empty results remain open. |
-| #199 MCP | reconciled | Direct lower owners exist; one useful MCP profile, `_meta` extensibility and unknown-notification behavior remain open. |
-| #200 configuration/acquisition | corrected | The body named only `Dep` and generic load context. The real next boundary also requires `RequiredDep`/`OptionalDep`, typed `UseSecureEnvironment`/`LoadIntoEnvironment`/private-table/load-phase facts, correct tri-state predicates and a validated exact selected-order handoff beside path-sorted snapshots. |
-| #201 end-to-end workflow | corrected | The ordinary-check sequence must preserve the same exact context/order input before CLI observation; builder/Library/check/index/context observations remain open and PR #246–#250 owners must not be rebuilt. |
+| #103 Recognizer rules | confirmed | Built-in typed producers still feed Service graph-build consumers; example JSON files have no production reader. |
+| #106 Blizzard UI workflow | confirmed | No ordinary current-source index/search/context command; FTS does not index Lua/XML body text. |
+| #107 Graph duplication | confirmed | Native graph build still reconstructs/verifies Library/Reference before source-call publication. |
+| #109 updates | reconciled | Configured owner/direct result exist; physical delta versus cold selection/context rebuild remains explicit. Channel, triggers, bindings and source compatibility/security metadata join cold-rebuild identity. |
+| #111 Store lifecycle | corrected | Several backup/replacement/quarantine/report surfaces are orphaned inside Store; GC/recovery/retention still have production consumers. |
+| #112 wire formats | reconciled | Direct DTOs are distinguished from legacy replay/Search/Graph formats; semantic admission remains required after decode. |
+| #113 performance | confirmed | No ordinary Blizzard UI workflow exists to measure. |
+| #117 TOC/XML relationships | corrected | Existing UI XML units/maps are useful, but persisted/direct relations must consume exact selected order/context. Implicit bindings are separate selected callback source; zero-Interface/security uncertainty stays attached to Project identity. |
+| #118 lineage/fingerprints | corrected | Named lineage/source-comparison routes are absent; remaining scope is fingerprints, Service candidate manifests and old Search proof plumbing. |
+| #122 readable context | confirmed | Old Context still depends on Project/Graph reports, packs/continuations and source rereads. |
+| #125 product completion | reconciled | Requires observed ordinary generation/check/editor/search behavior; build/Clippy is insufficient. |
+| #131 direct reads | corrected | Store membership/payload reads are lazy; expensive reconstruction is Project replay hydration/recapture above them. |
+| #169 direct FTS | confirmed | Inner SQLite remains hex in canonical JSON and FTS lacks source body text. |
+| #191 umbrella | reconciled | Starts from ordinary Project acquisition into existing configured owner/direct Service result. |
+| #194 result DTOs | reconciled | `AddonCheckResult` is retained; generic capability/presentation/result identities are transitional. |
+| #195 recognizer handoff | confirmed | Built-in producers have real consumers; generic pack/plan use is concentrated in graph handoff. |
+| #197 CLI | reconciled | Must call ordinary Project acquisition and existing `addon_check`, not adapt the generic route. Channel/trigger/binding/compatibility/security facts remain Project-owned. |
+| #198 LSP | reconciled | Payload fixed; project reuse, version gaps, stale rejection and standard empty results remain open. |
+| #199 MCP | reconciled | Lower owners exist; one useful profile, metadata and unknown-notification behavior remain open. |
+| #200 configuration/acquisition | corrected | Ordinary target now explicitly includes Stable/PTR/Beta, `LoadWith`, nonblocking `DefaultState`, machine SavedVariables, implicit bindings, official `Interface: 0` preservation and unresolved `Secure` context without guessed semantics. |
+| #201 end-to-end workflow | corrected | First observation must prove T17–T21 facts reach Service and are not discarded or fabricated before the public result. |
 
-## Corrections published during this audit
+## Corrections completed
 
-- #111 separates confirmed orphan Store surfaces from GC/recovery/retention types
-  with current production consumers.
-- #118 no longer assigns deletion of modules/routes already absent from `main` and
-  names the remaining fingerprint/proof scope.
-- #131 preserves the useful lazy Store record boundary and targets the real
-  Project replay/hydration reconstruction above it.
-- #117 now requires persisted/direct TOC/XML relations to consume the same
-  validated selected order and package/per-unit context as diagnostics.
-- #200 now names the complete finite dependency aliases, execution-context facts,
-  tri-state condition semantics and separate ordered context receipt.
-- #201 now carries that owner boundary into the first public CLI observation.
-
-No Issue was closed from source inspection alone. No workflow was promoted from
-`unexecuted` to `observed`.
+- #111, #118 and #131 were corrected in PR #254.
+- #117, #200 and #201 were corrected after PR #255 for exact order/context.
+- During the T19–T21 review, #117/#200/#201 were updated again for product
+  channel, reverse triggers, implicit bindings, machine SavedVariables, official
+  zero Interface and unresolved `Secure` metadata.
+- No Issue was closed by source inspection; no workflow moved to `observed`.
 
 ## Maintenance rule
 
 Issue prose is secondary to current code, `CURRENT_STATUS.md`, the queue and the
 trace register. When a merge changes an owner boundary, update those documents
-and the affected Issue body in the same work. Before deleting a subsystem, search
-production callers separately from tests/fixtures and distinguish an absent route,
-an orphan export and a transitional consumed API.
+and affected Issue bodies together. Before deleting a subsystem, distinguish
+production callers from tests/fixtures and an absent route from an orphan export
+or transitional consumed API.

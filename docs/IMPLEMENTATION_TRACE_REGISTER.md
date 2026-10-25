@@ -1,313 +1,270 @@
 # Post-merge implementation trace register
 
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`  
-**Current `main` checked:** `338dcbec597ece5e4e296425b874ecc2203d2b8f`  
+**Current `main` checked:** `337b9b6e676af6735f416e8527176ed17e865172`  
 **Implementation code reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`  
 **Implementation work started:** 2026-10-24
 
-This is the active addendum to [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md). The
-baseline register accounts for the old 329-document corpus. This file records
-new producer-to-consumer traces, implementation decisions and exact observations
-after that merge. [CURRENT_STATUS.md](CURRENT_STATUS.md) is the concise live
-checkpoint.
+This is the active addendum to [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md). The old
+register accounts for every baseline document and retained idea. This file tracks
+only post-merge producer-to-consumer traces, implementation status and exact
+observations. [CURRENT_STATUS.md](CURRENT_STATUS.md) is the concise checkpoint.
 
-A source trace is not an executed user workflow. Documentation, compilation and
-Clippy can move a row to **implemented**, but only an exact ordinary command or
-protocol input/result moves it to **observed**.
+A source trace is not a user workflow. Documentation, compilation and Clippy can
+move a row to **implemented**; only a recorded ordinary command or protocol
+sequence can move it to **observed**.
 
 ## Status language
 
-- **traced** — the named source chain was followed far enough to support the
-  decision;
-- **partially implemented** — some real handoff exists but its advertised caller
-  or result is incomplete;
+- **traced** — the named source chain supports the recorded decision;
+- **partially implemented** — useful code exists, but its advertised handoff or
+  visible result is incomplete;
 - **implemented** — code exists in `main` and passed the named exact-head gate;
-- **observed** — the ordinary user workflow was exercised and recorded;
+- **observed** — the ordinary workflow was exercised with exact input/result;
 - **unexecuted** — no end-to-end observation exists.
 
-## Active implementation traces
+## Active traces
 
 | ID | Chain | Code status | User observation |
 | --- | --- | --- | --- |
-| T01 | CLI check -> transitional local backend -> generic Service -> output | traced; replacement CLI adapter open | unexecuted |
-| T02 | ordinary config -> root/flavor/TOC/Library/dependencies | traced design; open | unexecuted |
-| T03 | flavor/optional Interface/load context -> TOC selection | traced design; open | unexecuted |
-| T04 | bounded disk/Library bytes -> exact analyzer snapshots | lower readers exist; direct acquisition open | unexecuted |
-| T05 | selected XML facts -> virtual Lua units/maps | lower preparation exists; direct pure handoff open | unexecuted |
-| T06 | Main/Library/virtual -> one configured Emmy owner | implemented in `main` by PR #247; run #422 passed | unexecuted |
-| T07 | compiled Emmy pin -> runtime identity | implemented in `main` by PR #249; run #440 passed | unexecuted |
+| T01 | public CLI check -> ordinary Service result | transitional generic route remains; replacement adapter open | unexecuted |
+| T02 | ordinary config -> root/flavor/channel/TOC/Library/dependency selection | traced design; open | unexecuted |
+| T03 | optional Interface + load context -> TOC/package admission | traced design; open | unexecuted |
+| T04 | bounded disk/Library bytes -> exact snapshots | safe lower readers exist; direct selected acquisition open | unexecuted |
+| T05 | selected XML facts -> mapped virtual Lua units | lower extraction/maps exist; pure direct handoff open | unexecuted |
+| T06 | Main/Library/virtual -> one configured Emmy owner | implemented by PR #247; run #422 passed | unexecuted |
+| T07 | compiled Emmy pin -> runtime identity | implemented by PR #249; run #440 passed | unexecuted |
 | T08 | unsaved editor text -> configured project diagnostics | overlay exists; project reuse open | unexecuted |
-| T09 | source/config changes -> coherent diagnostics/index | traced design; selected-load update open | unexecuted |
+| T09 | source/config changes -> coherent diagnostics/index | traced design; selected-load rebuild open | unexecuted |
 | T10 | builder output -> ordinary Library metadata/maps | traced design; manifest reader open | unexecuted |
 | T11 | addon chunk arguments -> mapped analysis context | traced design; open | unexecuted |
-| T12 | upstream diagnostic -> framework DTO -> transitional LSP payload | implemented in `main` by PR #246; run #418 passed | unexecuted |
-| T13 | caller diagnostic config -> optional semantic collectors | implemented in `main` by PR #247; run #422 passed | unexecuted |
-| T14 | exact snapshots -> direct Service diagnostic/limitation result | implemented in `main` by PR #248; run #425 passed | unexecuted |
-| T15 | compiled pin/report evidence -> workspace identity -> legacy admission | implemented in `main` by PR #249; run #440 passed | unexecuted |
-| T16 | requested Main snapshot -> configured-owner reuse admission | implemented in `main` by PR #250; run #445 passed | unexecuted |
-| T17 | selected TOC metadata/file clauses -> package and per-unit execution context | source-traced; dependency aliases and typed context handoff open | unexecuted |
-| T18 | dependency/TOC/XML source order -> exact snapshots -> context-sensitive Service checks | source-traced; computed order is lost at path-sorted snapshot boundary | unexecuted |
+| T12 | upstream diagnostic -> framework DTO -> transitional LSP payload | implemented by PR #246; run #418 passed | unexecuted |
+| T13 | caller diagnostic config -> optional semantic collectors | implemented by PR #247; run #422 passed | unexecuted |
+| T14 | exact snapshots -> direct Service findings/limitations | implemented by PR #248; run #425 passed | unexecuted |
+| T15 | compiled pin/report evidence -> legacy admission | implemented by PR #249; run #440 passed | unexecuted |
+| T16 | requested Main snapshot -> configured-owner reuse | implemented by PR #250; run #445 passed | unexecuted |
+| T17 | TOC metadata/file clauses -> typed package/per-unit execution context | source-traced; aliases/context handoff open | unexecuted |
+| T18 | dependency/TOC/XML order -> snapshots + context-sensitive checks | source-traced; order lost at snapshot boundary | unexecuted |
+| T19 | product channel + `LoadWith` -> package reachability/load trigger | source-traced; channel/trigger model open | unexecuted |
+| T20 | implicit `Bindings*.xml` -> mapped binding callback diagnostics | source-traced; discovery/body/context adapter open | unexecuted |
+| T21 | official zero Interface + unresolved `Secure` metadata -> compatibility/context admission | source-traced; current parser hard-rejects/blocks | unexecuted |
 
-The previous register incorrectly cited runs #437 and #442 for T15/T16. GitHub
-Actions associates the successful exact-head runs with #440 and #445.
+## Decisions and evidence
 
-## Fixed decisions for open traces
+### T01–T05 — connect the ordinary path, not the old platform
 
-### T01 — do not extend the old generic check platform
+The public path is:
 
-`apps/wow/src/args.rs` still routes `wow check` through `LocalCommand`,
-`LocalProjectBackend`, generic `Service::check`, global component capability
-reduction and presentation output. That path requires Reference, Rules,
-compatibility and Project-publication state for type-only work; empty selection
-expands to every rule.
+```text
+ordinary config
+  -> selected TOC/dependencies/context and exact bounded source
+  -> exact path-sorted Main/Library/virtual snapshots
+  + validated selected-order/context handoff
+  -> existing ConfiguredAnalyzerSession
+  -> existing wow-service::addon_check
+  -> CLI/LSP/MCP result adapters
+```
 
-**Decision:** the public CLI must call the delivered `wow-service::addon_check`
-after ordinary acquisition. Never fabricate empty platform objects or wrap the
-direct result in the legacy component/capability result. Remove the old path with
-its last callers.
+Do not extend `LocalCommand -> LocalProjectBackend -> generic Service::check`,
+fabricate Reference/Rules/publication objects, or wrap the direct result inside
+the old component/capability/presentation result.
 
-### T02 — publication configuration is not user configuration
+Ordinary configuration contains root, optional TOC, supported flavor, explicit
+product channel where needed, optional target Interface, Library directories,
+dependency roots, selected checks, Emmy diagnostic settings and failure
+threshold. It never exposes Project IDs, generations, profile/report digests,
+receipts or graph budgets.
 
-`wow-project::ProjectConfiguration` contains Project/profile/source/generation
-identities, probe/report binding, capability policy, graph budgets and canonical
-publication digests.
+Reuse `ProjectInputDirectory`, `ProjectInputFile`, Library discovery, existing
+TOC/XML records and exact maps. Do not build `ProjectInputInventory` for the
+direct route. Split pure selected XML preparation from publication receipts.
+Preserve independent captured units when one included XML file fails.
 
-**Decision:** ordinary configuration contains root, optional TOC, flavor,
-optional target Interface, Library directories, dependency roots, selected
-checks, Emmy diagnostic settings and failure threshold. CLI values override file
-values under the path-base rules in [IMPLEMENTATION.md](IMPLEMENTATION.md).
+### T06/T12–T16 — delivered lower owners
 
-### T03 — use a small load target
+- PR #246 preserves configured diagnostic code, exact bounded message, upstream
+  severity and byte range; standalone analysis initializes Lua 5.1 STD.
+- PR #247 delivers `ConfiguredAnalyzerSession` over exact Main, Library and
+  optional virtual snapshots with caller diagnostics and explicit semantic
+  collection.
+- PR #248 delivers `wow-service::addon_check` without Reference, Rules,
+  publication, graph, store or presentation construction.
+- PR #249 separates compiled Emmy provenance from compatibility-report evidence.
+- PR #250 requires exact Main snapshot identity for immutable configured-owner
+  reuse.
 
-Current useful TOC logic is coupled to `ProfileIdentity` and a mandatory positive
-Interface. The public operation needs flavor, optional target Interface and
-`TocLoadContext` without invented profile/source digests.
+Their successful exact-head runs are #418, #422, #425, #440 and #445. These are
+build gates, not addon/editor observations. Do not recreate these owners.
 
-**Decision:** extract that target, preserve explicit TOC selection through an
-Interface mismatch, require explicit choice for ambiguity, support retail/
-Mainline first, and keep unsupported flavor/load contexts explicit.
+### T08/T09 — updates and editor state
 
-### T04 — reuse safe readers, not publication inventory
+Keep exact overlay text, client version and coordinate conversion. Pass exact
+text overrides to the same configured project owner. Increasing LSP versions may
+have gaps. A stale/rejected/cancelled candidate never publishes over newer text.
 
-`ProjectInputDirectory`, Library discovery and `ProjectInputFile` already enforce
-held roots, no-follow regular-file reads, path/case/UTF-8 checks, bounds,
-deterministic ordering and exact content identity. `ProjectInputInventory::build`
-adds publication configuration and rejects physical-empty Main.
-
-**Decision:** direct acquisition converts selected exact files to the snapshots
-required by `check_addon`; it does not construct publication inventory. Read only
-the selected TOC/dependency closure so unrelated variants cannot block the run.
-
-### T05 — split pure XML preparation from receipts
-
-`wow-project::xml_lua` already owns inline-unit extraction and entity/newline/
-discontinuous source maps. Its public wrapper also requires configuration,
-generation, capability and report identities.
-
-**Decision:** expose pure preparation from selected load facts, captured bytes,
-direct limits and compiled analyzer identity. Keep one legacy wrapper while old
-publication callers remain. Preserve located malformed-unit failure and
-independent usable inputs.
-
-### T08 — keep overlay ownership, replace one-file analysis
-
-Overlay code correctly owns exact unsaved text, client version, internal revision
-and UTF-8/UTF-16 conversion. Its analyzer input is isolated from Main/Library/XML.
-
-**Decision:** pass exact text overrides to the same configured project/check
-owner. Accept increasing nonconsecutive client versions, reject stale versions,
-and never publish a stale/cancelled candidate over newer text. PR #246 fixed only
-the diagnostic payload, not project reuse.
-
-### T09 — file deltas and selection/config changes are different
-
-The older `AnalyzerSession` has exact add/update/remove plus conservative semantic
-reindexing. `LiveProjectStore::update` rejects TOC/package-selected plans.
-
-**Decision:** use a physical delta only when selected membership, load context,
-Library identity and analyzer configuration are unchanged. TOC/XML/dependency/
+Use physical delta only while selected membership, ordered load/context,
+Library identity and analyzer configuration remain exact. TOC/XML/dependency/
 Library/config changes rebuild selection and owner cold. Removal deletes
 associated virtual units, maps, diagnostics and index rows. Publish atomically.
 
-### T10 — one generated-Library manifest
+### T10 — one optional generated-Library manifest
 
-The builder writes Lua and `source-report.json`; the ordinary Library reader reads
-Lua only. The old native-artifact reader expects another envelope and ignores
-sidecars/mappings/limitations. Current sidecars contain names/source links while
-typed values remain in source facts.
+Keep `source-report.json` as the single optional producer/consumer DTO. Project
+returns exact bounded bytes; Service validates the typed facts/maps needed by
+implemented checks. Plain Lua Libraries remain valid for typing and limit only
+checks that require the manifest. Do not add a converter, original-source
+requirement or old native-artifact envelope.
 
-**Decision:** keep one shared manifest DTO owned with annotation output. Project
-returns optional bounded exact bytes; Service validates/consumes typed facts and
-maps needed by implemented checks. Plain Lua Libraries remain valid for typing.
-No converter, original checkout or old Reference snapshot is required.
+### T11 — addon chunk context
 
-### T11 — mapped helper context follows pinned Emmy semantics
+Use one analysis-only helper/private table per supported ordinary addon and
+replace only chunk-owned ellipsis expressions in memory. Compose exact source
+maps and keep synthetic declarations/calls out of user diagnostics/API/flow
+facts. External chunks, free inline scripts, verified handlers, suppressed
+private tables, secure overrides and bootstrap contexts remain distinct.
 
-Pinned Emmy retains final-position multi-results and table identity; existing
-transformed-workspace/source-map machinery can map replacements to original
-ellipsis spans.
+### T17 — actual TOC execution facts
 
-**Decision:** one analysis-only helper/private table per supported ordinary addon;
-replace only chunk-owned ellipsis expressions in memory; mark synthetic origins
-context-only; compose maps; keep XML handler, free inline, suppressed table,
-secure and bootstrap contexts separate. This remains unimplemented and
-unobserved.
+The reviewed finite dependency aliases are:
 
-### T17 — retain the actual TOC execution facts
+- required: `Dep`, `Dependencies`, `DependsOn`, `RequiredDep`, `RequiredDeps`;
+- optional: `OptionalDep`, `OptionalDeps`.
 
-The selected loader currently recognizes only plural dependency spellings and
-selection predicates. Pinned Blizzard TOCs use `Dep`, `RequiredDep` and
-`OptionalDep`; they also use package `UseSecureEnvironment`, conditional
-`LoadFirst`, per-file `LoadIntoEnvironment`, and reviewed source uses
-`SuppressLocalTableRef`. `AllowLoadEnvironment` answers whether a unit is
-selected; it is not the same as the environment in which that unit executes.
+Carry source-backed package default environment (`UseSecureEnvironment`),
+per-unit override (`LoadIntoEnvironment`), private-table policy
+(`SuppressLocalTableRef`), supported bootstrap/load-first phase, selection
+conditions and exact source records. Cosmetic metadata does not make unrelated
+type checking partial; an unknown context-changing directive remains a located
+limitation.
 
-`TocLoadContext`, `ProjectLoadPlan`, `ProjectPackageNode` and
-`ProjectPackageLoadUnit` do not currently preserve all of those package/per-unit
-facts. Unknown directives can degrade closure completeness while the missing
-semantic value itself is unavailable to chunk/XML context.
+Reduce predicates by their operators: one known allow match includes; one known
+exclude match excludes; across conjunction, known exclusion dominates unknown.
+Retain unknown source evidence without poisoning a definitely excluded unit.
+See [TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md).
 
-**Decision:** use one finite reviewed metadata/directive table and typed
-source-backed context:
+### T18 — load order is not snapshot order
 
-- required aliases: `dep`, `dependencies`, `dependson`, `requireddep`,
-  `requireddeps`;
-- optional aliases: `optionaldep`, `optionaldeps`;
-- package default execution environment and private-table policy;
-- per-unit environment override and supported bootstrap/load phase;
-- source selection, source span and exact originating record for every fact.
+Package closure computes reachability/phases/source ordinals, but package/Main
+projection and `LuaWorkspaceSnapshot` sort files by path. `addon_check` currently
+receives no exact load-plan/context receipt.
 
-Unsupported context-changing directives remain located limitations. Cosmetic
-metadata must not make unrelated Lua/type work partial. The full evidence and
-tri-state predicate rules are in
-[TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md).
+Keep snapshots path-sorted and content-addressed for identity and analyzer
+ownership. Pass a separate immutable validated value binding selected
+package/TOC/XML order to snapshot role/path/digest, originating load record/unit,
+addon identity, effective environment, private-table policy and phase. Reject
+missing, foreign, duplicate or mismatched entries. Never call Emmy registration
+order a WoW runtime model.
 
-`conditions::evaluate` must reduce each allow/exclude list by its boolean
-operator: one known allow match is sufficient; one known exclude match is
-sufficient to exclude; unknown matters only when no known value determines the
-result. Across conjunctive gates, known exclusion dominates unknown. Retain the
-unknown predicate as evidence without poisoning a definitely excluded unit.
+### T19 — product channel and reverse load triggers
 
-### T18 — preserve load order beside, not inside, the snapshot
+The pinned Blizzard source uses `OnlyBetaAndPTR: 1` and `LoadWith`. Current
+`TocLoadContext` has no Stable/PTR/Beta channel; Project has no `LoadWith`
+relation. Both directives become blocking `UnknownDirective` issues.
 
-The package plan computes reachability, phases, order groups and source ordinals.
-`read_package_sources` then sorts loaded packages by name,
-`into_namespaced_main` sorts Main files by namespaced path, and
-`LuaWorkspaceSnapshot::build` sorts files by path again. The configured Emmy
-owner and `check_addon` receive snapshots but no exact load plan/context receipt.
+Add explicit product channel separate from flavor, Interface, game/glue and
+secure/global context. `OnlyBetaAndPTR: 1` includes PTR/Beta, excludes Stable and
+is unresolved when channel is absent.
 
-**Decision:** keep `LuaWorkspaceSnapshot` path-sorted and content-addressed for
-identity, lookup and analyzer ownership. Pass a separate immutable validated
-load/context value beside it. That value binds exact package/TOC/XML unit order
-to snapshot role, path, digest, originating load record/unit, addon identity,
-effective environment, private-table policy and supported phase. Reject foreign,
-missing, duplicate or digest-mismatched entries.
+`LoadWith` is a source-located reverse load trigger, not a required or optional
+dependency. It does not establish prior symbol availability in the trigger
+package. Preserve source package, target package, resolution state and order;
+use it only for reachability/load queries and checks that request it. Explicitly
+selected source remains analyzable when automatic reachability is unresolved.
 
-Do not claim that upstream file-registration order emulates WoW execution. Emmy
-remains the single type engine; ordered context is consumed only by chunk
-transformation and selected WoW checks that need load semantics.
+Recognize `DefaultState` as bounded lifecycle metadata rather than a blocking
+unknown directive. For an explicitly selected root it does not suppress static
+analysis.
 
-## Implemented slices
+Current SavedVariables declarations already support account/per-character scope
+and never open user data. Add the source-backed `Machine` declaration scope for
+`SavedVariablesMachine`; do not infer schemas or initialize contents.
 
-### T12 — diagnostic contract
+See [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
 
-PR #246 (`b56c346` on merged history) removed the four-code admission filter,
-retained string/numeric/missing codes, exact bounded messages and upstream
-severity, mapped exact byte spans, initialized standalone Lua 5.1 STD and passed
-the real payload through the transitional LSP. Unknown families become `Other`
-rather than disappearing. Run #418 passed repository policy, formatting,
-workspace compilation, strict Clippy and tracked-file checks.
+### T20 — implicit binding callback source
 
-### T06/T13 — configured Main/Library/virtual owner
+A Blizzard addon can contain `Bindings.xml` without listing it in the TOC. Its
+`<Binding>` bodies are Lua callbacks and can use the source-verified implicit
+`keystate` parameter. Current selected acquisition does not discover the sibling
+file, and the XML index only extracts `Ui/Script` and `Ui/.../Scripts/*` bodies.
 
-PR #247 (`b40f701` on merged history) added `EmmyAnalysisConfiguration` and
-`ConfiguredAnalyzerSession`:
+Use a bounded exact `Bindings<suffix>.xml` candidate list derived from selected
+flavor/product rules. Select at most one by documented precedence; absence is
+normal; case/precedence ambiguity is explicit. Capture through the held root and
+existing file bounds.
 
-- explicit exact Main, Library and optional virtual snapshots;
-- caller diagnostic policy, fixed Lua 5.1 and no `.emmyrc` discovery;
-- one embedded STD initialization;
-- diagnostics-only collection without member/call/local-flow;
-- explicit semantic collection through the same owner;
-- compatibility over Main, Library set, virtual identity/generation and
-  diagnostic configuration.
+Parse binding bodies with the existing quick-xml/source-map ownership into mapped
+callback units. A binding callback is neither a top-level TOC chunk nor an addon
+ellipsis chunk. Bind it to addon identity, effective environment, exact source
+and only the verified `keystate` context. Malformed/unsupported binding scope is
+a located limitation and preserves independent addon diagnostics.
 
-The lower registration constructor still starts from its legacy fixed config;
-the configured owner replaces the supported diagnostic policy before collection.
-This is cleanup to perform with legacy-caller removal, not a reason to create
-another analysis. Run #422 passed the exact-head build gate.
+See [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
 
-### T14 — direct Service result
+### T21 — official sentinel and unresolved security metadata
 
-PR #248 (`d96c2fb` on merged history) added
-`wow-service::addon_check::check_addon` over exact already-acquired snapshots.
-It preserves source role, category, code, message, kind, severity, path, content
-identity and byte span; separates findings from limitations; and avoids the old
-Reference/Rules/publication/graph/store/presentation stack.
+Pinned `Blizzard_ReforgingUI_Classic.toc` contains both `Interface: 0` and
+`Secure: 1`. Current TOC parsing rejects zero as malformed and records `Secure`
+as an unknown blocking directive. The reviewed Wowless parser retains the zero,
+but no reviewed Project or donor source establishes that `Secure` means
+`UseSecureEnvironment`, signing, taint mode or private-table policy.
 
-The result is deliberately `Partial`: addon chunk arguments are not bound, and
-virtual input also reports missing exact XML projection and handler context.
-Root/TOC/Library acquisition and CLI wiring remain T01–T05. Run #425 passed.
+**Decision:**
 
-### T07/T15 — compiled provenance versus report evidence
+- retain zero as an explicit unknown/sentinel compatibility value rather than a
+  syntax error. It never proves compatibility with a positive target and must not
+  win automatic selection over a positive compatible candidate without a
+  documented product rule. Explicit source analysis survives with a scoped
+  compatibility limitation;
+- retain `Secure` as typed source-backed metadata with raw value/span and an
+  unsupported semantic state. Do not alias it by name to another directive;
+- context-dependent checks remain limited where unresolved `Secure` semantics
+  matter, while independent syntax/type diagnostics survive;
+- bind both facts into the validated Project context/rebuild identity.
 
-PR #249 distinguishes `compiled_pin` from `compatibility_report` identity.
-Compiled identities bind exact crate/version/revision/tree without fake report
-hashes. Legacy callers request paired report evidence through a typed fallible
-boundary; compiled identity cannot silently satisfy that contract. Run #440
-passed. No direct user workflow was observed.
-
-### T16 — exact Main reuse admission
-
-PR #250 changed `ConfiguredAnalyzerSession::compatible` to require the exact Main
-`snapshot_id`. Library comparison remains order-insensitive; virtual identity/
-generation and structural diagnostic configuration remain exact. The older
-mutable session's CAS/delta path is a separate contract. Run #445 passed. No
-public retained-owner caller or workflow was observed.
+The focused evidence is in
+[TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
 
 ## Documentation reconciliation ledger
 
-A reread of current `main`, merged PRs and canonical instructions found these
-post-merge documentation defects:
-
-| ID | Drift | Resolution |
+| ID | Drift found after PR #244 | Resolution |
 | --- | --- | --- |
-| D01 | root README still said the current adapter drops most diagnostics/messages | updated to current PR #246–#250 state |
-| D02 | `apps/wow/README.md` described configured session/direct Service as future work | updated to delivered lower owners and remaining CLI handoff |
-| D03 | `AGENTS.md` told agents to factor owners that already exist | changed to mandatory reuse of `ConfiguredAnalyzerSession` and `check_addon` |
-| D04 | queue mixed delivered T12–T16 work with open acquisition/CLI work | split delivered prerequisites from remaining item 1 |
-| D05 | Emmy guide said T06 remained open and linked an obsolete anchor | replaced with current owner contract and open adapters |
-| D06 | trace register cited runs #437/#442 | corrected to #440/#445 |
-| D07 | baseline audit environment note could be read as current verification | current status now states the baseline/audit distinction and supplied run evidence |
-| D08 | baseline register retained 31 links to headings renamed in the active implementation/frontend guides | repaired each destination by subject; `xtask check` now validates local Markdown paths and anchors |
-| D09 | ordinary-load guidance named only missing `Dep` and generic secure/bootstrap context | added exact dependency aliases, tri-state conditions, typed package/per-unit context and ordered handoff evidence |
+| D01–D08 | delivered #246–#250 owners, stale links/run numbers and active instructions disagreed | corrected by PRs #251–#254 |
+| D09 | ordinary-load guidance named only missing `Dep` and generic secure/bootstrap context | PR #255 added full aliases, tri-state conditions, typed context and selected-order handoff |
+| D10 | product channel, `LoadWith`, implicit binding callback source and machine SavedVariables scope were absent | recorded as T19/T20 and in the focused trigger/bindings audit |
+| D11 | official `Interface: 0` was still described as invalid and `Secure: 1` had no explicit uncertainty boundary | recorded as T21; preserve sentinel/raw metadata and scoped limitations |
 
-This reconciliation is documentation/source inspection. It does not change any
-T01–T18 runtime observation.
+Documentation/source inspection does not change runtime observation status.
 
-## Executed observations still required
+## Observations still required
 
-Before marking a workflow observed, record the exact command/protocol sequence,
-fixture/input identities and result:
+Record exact command/protocol input, source identities and result before marking
+anything observed:
 
-- public `wow check` with a valid and invalid typed call preserving upstream
-  code/message/severity/addon location;
-- `Dep`, `RequiredDep`, absent `OptionalDep` and conditional dependency closure;
-- one known-determined allow/exclude list containing another unknown alias;
-- one secure addon with a global per-file override and one ordinary addon with a
-  secure per-file override;
-- exact dependency/TOC/XML order bound to the Service input without treating
-  snapshot path order as runtime order;
-- generated Library plus optional manifest, and plain Lua Library without it;
-- physical, mapped XML and XML-only programs;
-- malformed included XML retaining an independent valid unit and located failure;
-- shared addon private table and one verified handler signature;
-- add/edit/remove/rename plus TOC/XML/dependency/Library change without stale
-  diagnostics;
-- unsaved LSP edit, valid version gap and stale-result rejection;
-- MCP unknown notification/metadata plus useful check result;
-- later-process body/symbol search returning readable exact source context;
+- public `wow check` with valid/invalid typed calls preserving code, message,
+  severity and addon location;
+- complete dependency aliases, missing required and absent optional dependency;
+- known-determined predicates containing another unknown value;
+- secure package/file overrides and exact selected order beside snapshot order;
+- Stable exclusion plus PTR/Beta inclusion for `OnlyBetaAndPTR`;
+- `LoadWith` trigger behavior without dependency semantics;
+- automatic binding discovery, mapped `keystate` callback diagnostics, normal
+  no-bindings absence and malformed bindings preserving independent findings;
+- `DefaultState`/`SavedVariablesMachine` without false global partial or user-data
+  access;
+- explicit `Interface: 0` source preserving analysis with unknown compatibility;
+- `Secure: 1` yielding a scoped unsupported-context limitation, not guessed
+  execution semantics;
+- generated manifest and plain Lua Library;
+- physical, mapped XML, XML-only and malformed included XML;
+- shared addon private table and one verified UI handler signature;
+- coherent updates after source/TOC/XML/dependency/trigger/Library/channel/context
+  change;
+- unsaved LSP edit, version gap and stale-result rejection;
+- MCP metadata/unknown notification plus useful result;
+- later-process body/symbol search and readable exact source context;
 - truthful cancellation at the granularity actually supported.
 
-Update this register when evidence changes a boundary or observation. Do not turn
-it into another product specification, percentage dashboard or acceptance-tier
-platform.
+Update this register only when evidence changes a boundary or an exact workflow
+changes status. Do not turn it into another product specification, percentage
+dashboard or acceptance-tier platform.

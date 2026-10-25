@@ -1,292 +1,256 @@
 # What the WoW linter must understand
 
-This is intended behavior, not a claim that the current code implements every
-row. The [audit](AUDIT.md) identifies existing gaps and the
-[review register](AUDIT_REGISTRY.md) records what was actually checked; the
-[implementation guide](IMPLEMENTATION.md) maps them to code. Sources and reusable
-algorithms are linked in [DONORS.md](DONORS.md).
+This is required behavior, not a claim that current code implements every row.
+Use [CURRENT_STATUS.md](CURRENT_STATUS.md) for delivery state,
+[IMPLEMENTATION.md](IMPLEMENTATION.md) for owners and
+[IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md) for evidence.
 
-## 1. Select the right program and environment
+## 1. Select the exact program and environment
 
-Keep these selections distinct:
+Keep these choices distinct:
 
 | Selection | Meaning |
 | --- | --- |
-| Blizzard source revision | Exact content used to generate API facts; a moving branch is resolved once. |
-| Client flavor/game type | Which client variant and TOC/load conditions are selected. Never union Mainline and Classic declarations to make errors disappear. |
-| Game/Glue load context | Which packages/units can be selected according to TOC conditions. A system named `Glue` does not determine this. |
-| Package/file execution context | Package secure/global default, per-unit override, private-table policy and supported bootstrap/load phase. Selection and execution environment are different facts. |
-| API execution context | Ordinary addon code by default. `SecureOnly` metadata is distinct from client flavor and must be considered at system **and member** scope. |
-| Main, dependencies and Library | Main is the addon under diagnosis; declared dependencies and libraries provide context. They are not arbitrary files found nearby. |
+| Blizzard source revision | Exact source used to generate API/UI facts; resolve a moving ref once. |
+| Client flavor/game type | Retail/Mainline versus other families and TOC game-type conditions. |
+| Product channel | Stable, PTR or Beta. `OnlyBetaAndPTR` is not flavor or Interface. |
+| Target Interface | Positive compatibility target supplied explicitly or by compatible Library metadata. |
+| Source Interface metadata | A selected TOC can carry positive versions or official sentinel `0`; it is evidence, not automatically the target. |
+| Game/Glue location | Package/unit selection context. A system named `Glue` does not determine it. |
+| Package/file execution context | Package default, per-unit override, private-table policy and load phase. Selection is not execution. |
+| TOC security metadata | Reviewed directives such as `UseSecureEnvironment` have typed meaning; unresolved `Secure` metadata remains separate and unsupported. |
+| API execution context | Ordinary addon by default. Member `SecureOnly` is distinct from package security and Secret flow. |
+| Main/dependencies/Library | Main is diagnosed; selected dependencies provide program context; Library is declarations, not executable source. |
 
-The distinction is observable in the reviewed Blizzard source: a
-[Mainline TOC](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_UIPanels_Game/Blizzard_UIPanels_Game_Mainline.toc)
-contains separate game/game-type directives, while
-[FrameScript](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_APIDocumentationGenerated/FrameScriptDocumentation.lua)
-contains a `SecureOnly` function inside an `All` system. `All` is not evidence
-that an API exists in every WoW flavor. A library generated for one selection
-must not silently satisfy another.
+Never union flavors/channels to hide diagnostics. Existing plain Lua annotation
+directories remain usable for types; absent metadata limits only checks needing it.
 
-Existing annotation directories remain usable without a generator report.
-Their types can be analyzed; absent source/context metadata makes the affected
-WoW-specific checks unavailable, not the entire Lua analysis unusable.
+<a id="2-reuse-lua-analysis-model-the-wow-environment"></a>
 
-## 2. Reuse Lua analysis; model the WoW environment
+## 2. Reuse EmmyLua and model WoW around it
 
-Use EmmyLua's explicit Lua 5.1 setting. Do not enable LuaJIT or arbitrary newer
-syntax to make a file parse. A genuine Blizzard syntax extension requires a
-source example and a narrow upstream/adaptor solution, not a second parser.
+Use explicit Lua 5.1 and embedded standard declarations. Stock Lua declarations
+do not prove host availability. A real Blizzard syntax extension requires a
+source example and narrow upstream/adapter support, not another parser.
 
-Load upstream standard declarations for Lua typing, then the selected WoW
-Library and addon. Stock Lua declarations do **not** prove that a host API exists
-in WoW. Keep runtime availability separate and keyed to the resolved symbol;
-a local variable shadowing a standard/global name is not a WoW API call. Reuse
-Blizzard/Ketho declarations for WoW aliases and extensions. Do not globally
-suppress undefined names, accept every `C_*` name, or type unknown values as `any`
-to hide missing environment support.
+Resolve symbols semantically. A local named like a standard global or `C_*`
+namespace is not a WoW API by spelling. Unknown aliases/dynamic dispatch remain
+unknown; do not suppress undefined names globally or widen missing types to `any`.
 
-WoW loads addon chunks through TOC/XML, not by inventing a `require()` graph.
-Model addon-name/private-table chunk arguments and their shared namespace within
-one addon using upstream-supported context/virtual declarations. Preserve each
-file's lexical scope. Generated context must map back to user source and never
-be written into addon files. The [Wowless loader reference](DONORS.md#wowless)
-is a useful comparison for this integration, not runtime proof.
+External addon chunks are selected by TOC/XML rather than an invented `require`
+graph. For supported ordinary chunks, provide source-mapped addon-name/private-
+table arguments with one stable private table per addon and separate lexical
+chunks. Dependency addons keep distinct tables. Path prefixes are file identity,
+not namespace semantics.
 
-Keep the private table distinct for each addon, including selected dependencies;
-sharing within one addon must not merge their lexical locals or all addon
-namespaces. The current package path prefix provides file identity only. The
-traced Main/Library inputs do not yet bind chunk arguments to a per-addon table.
+The exact selected unit controls context:
 
-That default context applies only where the exact selected load unit justifies it.
-The pinned Blizzard source contains all of these materially different cases:
+- package `UseSecureEnvironment` sets a reviewed default;
+- per-file `LoadIntoEnvironment` can override it;
+- `SuppressLocalTableRef` removes the private-table argument;
+- bootstrap/load-first/deferred phases remain distinct;
+- free inline UI scripts, verified UI handlers and binding callbacks are not
+  external addon chunks;
+- `Secure` is not assigned any of those meanings without reviewed evidence.
 
-- [`Blizzard_RecruitAFriend.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_RecruitAFriend/Blizzard_RecruitAFriend.toc)
-  uses `SuppressLocalTableRef: 1`;
-- [`Blizzard_PingUI.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_PingUI/Blizzard_PingUI.toc)
-  uses package `UseSecureEnvironment: 1` and overrides one file with
-  `[LoadIntoEnvironment global]`;
-- [`Blizzard_ChatFrameBase.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_ChatFrameBase/Blizzard_ChatFrameBase.toc)
-  contains a per-file `[LoadIntoEnvironment secure]` and conditional `LoadFirst`.
+Unsupported context is a scoped limitation, never a fabricated global/private-
+table/security value.
 
-Selection context (`AllowLoadEnvironment`) is not execution context
-(`UseSecureEnvironment`/`LoadIntoEnvironment`). Preserve typed package defaults,
-per-unit overrides, private-table policy, bootstrap/load phase and their source
-spans. Unsupported context remains an explicit limitation instead of receiving
-the same non-nil private table/global environment everywhere.
+SavedVariables names are declarations. Support account, character and machine
+scope from the selected TOC, but never read user SavedVariables data, infer a
+schema, or assume non-nil contents before addon initialization.
 
-SavedVariables names come from the selected TOC. Declaration does not make their
-contents non-nil before initialization, provide a complete schema, or justify
-reading the user's saved-variable files. Bundled Ace/LibStub libraries are normal
-selected dependencies; dynamic embed lookup stays unresolved unless a small
-explicit adapter can establish it.
-
-## 3. Preserve the type contract
+## 3. Preserve the Blizzard type contract
 
 | Blizzard fact | Required treatment |
 | --- | --- |
-| Ordered `Arguments` / `Returns` | Preserve order, Lua multiple-result behavior and receiver style. Let EmmyLua check types and argument counts. |
-| `Type`, `InnerType`, `Nilable`, `NilableContents` | Preserve aliases, arrays/unions, container nilability and element/pack-slot nilability separately. Missing metadata and explicit `false` are different. |
-| `Default` | Preserve `false`, zero and empty string as present values. Do not use truthiness to decide optionality. |
-| `MayReturnNothing` | Keep the callable's zero-result alternative, even when individual return fields say `Nilable = false`. At assignment, absent results become nil. |
-| `StrideIndex` / varargs | Preserve the fixed prefix, ordered repeated group and each position within it. A positive index is not merely a boolean variadic flag. Unsupported packs are visible projection gaps. |
-| `CallbackType`, event payload | Preserve ordered parameters and returns. A callback name alone is not a complete signature. |
-| Structure fields and `Mixin` | Retain the data type and explicit mixin relation; do not flatten guessed inheritance or duplicate every method. |
-| `ScriptObject`, widget bases | Use explicit reviewed class/receiver/base relationships. Folder or type-name similarity does not prove inheritance. |
-| Enumerations / literals | Keep closed enums closed and extensible string domains open. Membership claims require a sufficiently complete selected domain. |
-| Member `Environment`, secret/restriction flags | Carry them beside type facts; ordinary annotation syntax cannot express every game constraint. |
+| Ordered arguments/returns | Preserve order, receiver style and Lua multiple-result behavior. |
+| `Type`, `InnerType`, `Nilable`, `NilableContents` | Keep aliases, arrays/unions, container nilability and element/slot nilability separate. |
+| `Default` | Preserve false, zero and empty string as present values. |
+| `MayReturnNothing` | Keep zero-result alternative; do not collapse into container nilability. |
+| `StrideIndex` | Preserve fixed prefix and each ordered repeated position. |
+| Callback/event payload | Preserve ordered parameters/returns; a callback name is not a signature. |
+| Structure `Mixin` | Preserve data fields and explicit mixin relation without guessed inheritance. |
+| Widgets/script objects | Use reviewed explicit class/receiver/base relations. |
+| Enums/literals | Keep closed domains closed and extensible strings open. |
+| Member environment/restrictions | Carry beside types; annotations cannot express every game constraint. |
 
-The reviewed Ketho emitter is a useful donor, but it does not lower all of this
-metadata. In particular, `MayReturnNothing`, member `Environment`, `Mixin` and
-several restriction fields require work in this project, as do multi-position
-stride packs and `NilableContents`. See
-[Ketho/native projection](KETHO_RUST_PORT.md).
+Concrete reviewed losses include repeated triples in
+`C_ArtifactUI.GetMetaPowerInfo` and separate zero-result/table/element nilability
+in `C_EquipmentSet.GetItemIDs`. Unsupported exact correlations remain visible;
+independent valid declarations survive.
 
-For example, the selected Blizzard source gives `GetMetaPowerInfo` three return
-fields with `StrideIndex` 1, 2 and 3; the current emitter rejects that shape.
-`C_EquipmentSet.GetItemIDs` has both `MayReturnNothing` and a non-nil table whose
-contents may be nil. These are three separate questions: whether results exist,
-whether the returned table is nil, and whether an indexed element is nil. The
-[source traces](AUDIT.md#stride-packs-and-nilable-contents) identify the input and
-the current losses. Do not flatten them into one optional marker.
+<a id="4-toc-and-xml-form-the-load-model"></a>
 
-Use EmmyLua's supported types/overloads. If the engine cannot express correlated
-optional returns, retain that fact and use a documented conservative projection
-(e.g. nullable result slots); do not claim independent nullable slots exactly
-represent the original tuple. Unsupported expressions or unresolved named types
-remain visible. Independent valid declarations should survive one failed
-neighbor; the resulting library is explicitly partial.
+## 4. TOC, triggers, XML and bindings form the load model
 
-## 4. TOC and XML form the load model
+### TOC selection, Interface and dependencies
 
-Use one explicitly or unambiguously selected TOC and assess compatibility
-separately. Otherwise list candidates. Keep declared package, dependency, TOC
-file and nested XML include/script order. Sorting files for deterministic storage
-or snapshot identity must not change or replace load semantics. Normalize
-separators for lookup while retaining original spans; report missing paths, case
-collisions, cycles and invalid references.
+Use one explicit or unambiguous TOC and assess compatibility separately. Preserve
+original spans and exact declared order. Sorting for identity must not replace
+load semantics.
 
-Required and optional dependencies are different. Resolve only configured addon
-roots and one finite reviewed alias table:
+Finite dependency aliases:
 
 - required: `Dep`, `Dependencies`, `DependsOn`, `RequiredDep`, `RequiredDeps`;
 - optional: `OptionalDep`, `OptionalDeps`.
 
-An optional dependency being absent is not an error; an unknown required
-dependency prevents dependent availability claims. LoadOnDemand, load-first,
-bootstrap and conditional loading remain conditional. A TOC Interface mismatch
-is a compatibility diagnostic, not permission to abandon all useful analysis or
-guess another client.
+Absent optional dependency is normal. Missing required dependency limits dependent
+availability. A positive Interface mismatch is a compatibility diagnostic, not
+permission to switch TOC/flavor or abandon independent analysis.
 
-Reduce conditions by their actual boolean form. For an allow-list, any known
-match is sufficient; for an exclude-list, any known match excludes; unknown
-matters only when no known value determines the result. Across conjunctive gates,
-a known exclusion dominates an unknown gate. Retain the unknown predicate as
-source evidence even when the unit is definitely excluded, but do not let it
-poison the selected program. A reachable unresolved unit remains a limitation.
+Official Blizzard source contains `Interface: 0`. Treat zero as an explicit
+unknown/sentinel compatibility claim, not malformed syntax and not a positive
+target. It never proves compatibility and does not outrank a positive compatible
+candidate during automatic selection without a documented product rule. Explicit
+source analysis survives with a scoped compatibility limitation.
 
-Cosmetic/custom TOC metadata must not mark all type checking incomplete. An
-unknown directive that can change loading, namespace, execution environment or
-order affects the load-dependent checks. Keep selected, excluded and unresolved
-files distinct. Report a Lua file omitted from the load plan only when that
-warning is useful and its exclusion is proven.
+### Product channel and conditions
 
-`LuaWorkspaceSnapshot` is a path-sorted content-addressed source set. It is not
-the load-order owner. Pass a separate immutable validated context beside the
-snapshots with exact package/TOC/XML unit order, snapshot role/path/digest,
-originating load record/unit, addon identity, effective environment,
-private-table policy and supported phase. Reject missing, foreign, duplicate or
-digest-mismatched entries. Do not claim Emmy registration order reproduces WoW
-execution.
+Model Stable/PTR/Beta separately from flavor, Interface and game/glue location.
+`OnlyBetaAndPTR: 1` includes PTR/Beta, excludes Stable and is unresolved when the
+channel is absent. Never infer channel from repository name/ref/path.
 
-Track file discovery, XML parsing, inline Lua analysis and handler-context
-support separately. An extracted handler body must not keep a blanket
-`InlineLuaNotAnalyzed` blocker on file closure after its syntax has been
-analyzed. Unsupported handler context can still limit the relevant semantic
-check. Inventory membership also differs from load reachability: finding a file
-under a configured root does not prove that the selected addon loads it.
+Reduce predicates by boolean form:
 
-An addon may contain XML with inline Lua and no physical `.lua` file. Analyze
-those virtual units and retain load/template diagnostics even when there is no
-language body. The current Main admission rejects an empty physical inventory;
-it must be corrected before the existing inline-analysis path can handle this
-case. A successfully selected empty language scope and failed source acquisition
-must remain different outcomes.
+- allow-list: any known true includes; all known false excludes; otherwise
+  unresolved;
+- exclude-list: any known true excludes; all known false includes; otherwise
+  unresolved;
+- conjunctive gates: known exclusion dominates unknown.
 
-Use the existing quick-xml parser and source maps. Resolve `Include`/external
-`Script`, template inheritance, widget types, script handlers and explicit mixins
-only from selected data. XML inheritance, lexical containment and runtime object
-parentage are different relationships. Unknown templates or dynamically selected
-mixins do not establish a missing method.
+Retain unknown source evidence even when another gate determines exclusion. A
+reachable unresolved unit remains a limitation.
 
-One malformed included XML document is a located failed unit, not permission to
-hide all independent Lua/XML input behind one generic configuration failure.
-Unsafe selected roots/paths and malformed selected TOC admission remain hard
-failures. Preserve already captured independent units and limit only the scope
-that depends on the failed include.
+### `LoadWith` is not a dependency
 
-Inline Lua needs the context justified by its exact XML script kind. Supply a
-handler receiver and callback parameters only when that element's signature is
-source-verified; otherwise leave that context unknown. A free inline `Script`
-body and an external Lua chunk are different units. Do not replace a
-handler's `...` with addon arguments or assume every inline body receives the
-external chunk's private table. The current unwrapped inline analysis does not
-provide these contexts. Synthetic wrappers must have source maps; wrapper-only
-errors must not be reported against invented user locations. XML entities/newline
-transformations can map a virtual range to multiple original spans. Use the
-actual mapping; never add one constant offset.
+`LoadWith` is a reverse load trigger. Preserve source package, named trigger,
+resolution state, order and span. It does not prove that the trigger package can
+use symbols declared later by the `LoadWith` package and must not enter required/
+optional closure. Explicitly selected source remains analyzable when automatic
+reachability is unresolved.
 
-The exact Project-source trace for dependency aliases, execution context,
-three-valued conditions and the order handoff is in
-[TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md).
+### Security directives are not interchangeable
+
+`UseSecureEnvironment`, per-unit `LoadIntoEnvironment`, API member `SecureOnly`,
+Secret-value metadata and TOC `Secure` are different inputs.
+
+The reviewed Blizzard source contains `Secure: 1`, but reviewed Project/Wowless
+paths do not establish its exact meaning. Preserve raw value/span and mark its
+semantic state unsupported. Do not alias it to package environment, signing,
+taint or private-table policy by name. Checks requiring that context remain
+limited while independent syntax/type diagnostics survive.
+
+### Known lifecycle and persistence metadata
+
+`DefaultState` is known bounded lifecycle metadata. It does not suppress static
+analysis of an explicitly selected root and must not create global partial.
+SavedVariables account/character/machine declarations are metadata, not data-file
+access.
+
+Unknown cosmetic/custom metadata may be retained without limiting language work.
+Unknown directives that can alter selection, environment, namespace, order,
+triggers or callbacks remain located limitations.
+
+### Exact selected order and context
+
+`LuaWorkspaceSnapshot` is path-sorted/content-addressed for identity; it is not
+load order. Pass a separate immutable validated context containing exact package/
+dependency/TOC/XML/callback order/phase, snapshot role/path/digest, originating
+record/unit, addon identity, environment/private-table policy, product channel,
+trigger evidence, source Interface/compatibility state and reviewed or unsupported
+security metadata. Reject missing, foreign, duplicate or mismatched entries.
+
+### UI XML
+
+Use existing quick-xml parsing and exact source maps. Resolve only selected
+Include/external Script, template inheritance, widget/script association and
+explicit mixins. XML containment, inheritance and runtime parentage are distinct.
+
+Analyze XML-only addons without dummy Lua. One malformed included XML unit is a
+located failure of dependent scope and preserves independent units; unsafe paths
+and invalid selected TOC are hard refusal.
+
+Free inline scripts and verified handlers need different context. Supply `self`
+and parameters only for source-verified handler kinds. Never replace a handler's
+`...` with addon chunk arguments. Synthetic wrappers require exact maps and never
+produce invented user locations.
+
+### Implicit `Bindings*.xml`
+
+A selected addon may have `Bindings<suffix>.xml` not listed in its TOC. Discover
+at most one exact candidate under the held root using finite selected flavor/
+product precedence. Absence is normal; case/precedence ambiguity is explicit.
+
+Parse `<Binding>` Lua bodies with existing XML/source maps as mapped callback
+units. Supply only source-verified `keystate`. A binding body is not a top-level
+TOC chunk, receives no addon ellipsis/private-table arguments, becomes available
+after selected addon files, and executes on an event static analysis cannot prove.
+
+Malformed selected bindings XML or unsupported constructs limit binding analysis
+while preserving independent diagnostics. Synthetic callback wrappers stay out
+of user locations/API/flow facts.
+
+Detailed traces:
+[TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md) and
+[TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
 
 ## 5. Checks to deliver
 
-| Check | Reliable input and result | Boundary |
+| Check | Reliable input | Boundary |
 | --- | --- | --- |
-| Lua syntax/types | EmmyLua diagnostics with the selected environment and Library | Preserve upstream text/code/severity; a warning is not forced to Error. |
-| TOC/XML integrity | Selected paths, references and known load conditions | Static load facts do not prove that callbacks execute. |
-| API context/availability | Resolved symbol plus selected source/context metadata | A missing generated declaration is not proof that Blizzard removed an API. Say unresolved in this environment unless stronger evidence exists. |
-| Widgets/templates/mixins | Known object type, explicit inheritance and script signatures | Dynamic object creation/dispatch stays unknown. |
-| Events/callbacks | Known registration API, literal event and documented payload/handler | Frame events, EventRegistry signals, Ace callbacks and CVars are separate systems. An event-like string alone does not connect them. |
-| Deprecation/replacement | Explicit selected-source metadata or reviewed correction | Do not invent a replacement from a similar name or an old flavor. |
-| Secret/restricted use | Exact API/value metadata and a supported local operation | Advisory where execution state is unknown; no whole-program taint/combat proof. |
+| Lua syntax/types | configured Emmy owner and selected Library | preserve upstream code/message/severity/location |
+| TOC/XML/bindings integrity | exact selected paths, conditions, triggers, compatibility/context and maps | static facts do not prove runtime execution |
+| API availability/context | resolved receiver/symbol plus selected API metadata | missing declaration is not proof of removal |
+| Widgets/templates/mixins | known object type and explicit relations | dynamic creation/dispatch remains unknown |
+| Events/callbacks/bindings | known registration or verified callback unit/signature | event-like strings do not connect systems |
+| Deprecation/replacement | explicit selected metadata/reviewed correction | never infer by name similarity |
+| Secret/restricted use | exact metadata and supported local operation | advisory where execution state is unknown |
 
-Start with types, load integrity and API context. Add each remaining check as a
-small direct function over existing typed facts. Select checks **before** their
-work runs. Share relevant facts, not a JSON recognizer-pack compiler or a plugin
-registry. An unrequested rule cannot make a completed type check partial.
+Start with types, load integrity and API context. Select checks before work runs.
+An unrequested rule or unavailable optional feature cannot make type checking
+partial. Report exactly which selected check/unit lacks evidence.
 
-Apply that boundary to result status as well as execution. Report which selected
-check/file lacks necessary evidence. General component health, unsupported
-optional features and missing metadata for a disabled check are not by themselves
-limitations of the requested analysis. Keep actual input losses and enabled-check
-limitations visible; do not achieve a clean status by discarding them.
+Current active rule providers cover only API existence and a narrow local Secret
+operation. Event, broad callback, widget and binding checks remain work.
 
-At the reviewed baseline, the active rule providers are only API existence and
-a narrow local secret-value operation check. Event payload/handler validation,
-broader callback summaries and widget checks in this table are work to deliver;
-generating a callback annotation does not connect a registration site to a handler.
+API existence requires original Emmy receiver binding and selected API origin.
+Exact catalog absence cannot repair a misidentified local receiver. Secret
+checking distinguishes coherent unresolved producer semantics from malformed or
+stale identity. Unresolved TOC `Secure` context is separate from both.
 
-Before attributing a use to a WoW API, establish its receiver binding and selected
-API origin through Emmy. A local with the same `C_*` spelling can have an unrelated
-concrete type. The current spelling-based consumer can misclassify its missing
-member; [the audit](AUDIT.md#a-typed-local-receiver-can-enter-wow-api-absence-checking)
-traces this conditional path. Exact catalog absence alone cannot fix a wrong
-binding. Keep unknown provenance unknown and preserve ordinary Lua diagnostics.
-The existing API rule covers direct static member calls, with a receiver-name
-filter; it does not establish global-function or namespace-alias coverage.
+<a id="6-secret-values-and-protected-behavior"></a>
 
-## 6. Secret values and protected behavior
+## 6. Secret/protected behavior
 
-Preserve `SecretReturns`, conditional secret flags, field `SecretValue`,
-`SecretArguments`, `HasRestrictions` and `SecureHooksAllowed` with their original
-values and source. A generic restriction flag alone does not identify the reason
-or prove that the current call is forbidden. Source facts are valuable even when
-a rule cannot yet interpret them.
+Preserve `SecretReturns`, conditional flags, field `SecretValue`,
+`SecretArguments`, `HasRestrictions` and `SecureHooksAllowed` with exact origin.
+A generic restriction flag does not prove one current call is forbidden.
 
-Reuse the existing narrow local-flow work only where it resolves the exact
-producer, value and operation. A guard must apply to that value and dominate the
-use; a similarly named variable, a guard after use, copying, `pcall`, conversion
-or formatting does not itself prove permission to inspect it. Conditional
-secrecy, unknown aliasing/calls and unsupported control flow remain unknown.
-Do not turn absence of a supported finding into a runtime-safety certificate.
+Reuse narrow local flow only when exact producer/value/operation and dominating
+guard are established. Copying, formatting, `pcall`, similar spelling or a later
+guard does not prove permission. Unknown alias/control flow remains unknown.
+Absence of a finding is never a runtime-safety certificate.
 
-Distinguish unresolved semantics from invalid facts. A correctly linked local
-initializer may still have an unresolved member call. The current Secret
-consumer can treat this as a fact-graph error when matching restriction metadata
-exists; [the source trace](AUDIT.md#an-unresolved-secret-producer-is-treated-as-a-broken-fact-graph)
-describes the condition. Report the affected check/use as not evaluated while
-retaining real rejection of stale or inconsistent identities. Missing restriction
-rows in a partial catalog do not establish unrestricted behavior.
+Keep Secret metadata separate from primitive types and TOC execution-security
+metadata. Do not build another whole-program dataflow engine or auto-insert guards.
 
-Keep this metadata separate from the ordinary number/string/boolean type model;
-secret values are not assumed to be wrapper objects. Do not build a parallel
-whole-program dataflow engine for the first usable linter. Show a useful
-source-linked advisory where more precise analysis is unavailable. Do not propose
-automatic guard insertion that changes addon control flow.
+<a id="7-useful-output-and-updates"></a>
 
-## 7. Useful output and updates
+## 7. Diagnostics, completeness and updates
 
-A diagnostic contains a stable code, severity, explanatory message, file/range
-and optional related declaration/location. Keep findings separate from analysis
-problems such as an incomplete library, unknown load condition or cancellation.
-Known findings survive partial input; an unexamined scope never reports clean.
-Deduplicate only the same code/cause at the same source location; do not hide
-independent symptoms behind a root-cause platform.
+A diagnostic has stable code, severity, message, exact file/range and optional
+related location. Keep findings separate from limitations such as partial Library,
+unknown channel/trigger/compatibility/security context, malformed binding XML or
+cancellation. Known findings survive partial input; unexamined scope never reports
+clean.
 
-Internally use UTF-8 half-open byte ranges tied to the exact text. Convert to
-editor positions once with the negotiated encoding and document version. Library
-or STD declarations are related locations, not fabricated Main-file spans.
+Deduplicate only same code/cause/location. Library/STD declarations are related
+locations, never fabricated Main spans.
 
-A changed/deleted file, TOC, XML include, dependency, ordered load context or
-Library must invalidate the facts that depend on it. Initially retain the correct
-conservative semantic rebuild. Publish a coherent new result after success;
-never serve an old result as current after a failed update. Source search uses
-matching indexed text, not old offsets applied to modified disk contents.
-
-Deletion must remove obsolete declarations, load membership, virtual Lua units,
-source maps, check results and search rows together. If the effect of a change
-is unknown, rebuild the smallest containing scope known to be safe. An older
-immutable result may remain available as explicitly old data; it cannot satisfy
-a request for the new text. Client LSP versions increase but need not be
-consecutive; internal revisions must not impose that extra protocol constraint.
+Internally use UTF-8 half-open bytes tied to exact text; convert once to negotiated
+editor encoding/version. A changed/deleted file, TOC, XML, bindings document,
+dependency, trigger, source Interface/security metadata, channel or Library
+invalidates dependent facts. Physical delta is safe only while selected context
+remains exact; otherwise rebuild cold. Never serve old results as current after
+failed/stale/cancelled update.
