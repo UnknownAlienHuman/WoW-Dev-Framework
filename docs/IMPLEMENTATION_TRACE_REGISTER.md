@@ -120,7 +120,7 @@ requirement or old native-artifact envelope.
 Use one analysis-only helper/private table per supported ordinary addon and
 replace only chunk-owned ellipsis expressions in memory. Compose exact source
 maps and keep synthetic declarations/calls out of user diagnostics/API/flow
-facts. External chunks, free inline scripts, verified handlers, suppressed
+facts. External chunks, free inline scripts, reviewed handler adapters, suppressed
 private tables, secure overrides and bootstrap contexts remain distinct.
 
 ### T17 — actual TOC execution facts
@@ -268,7 +268,7 @@ anything observed:
   execution semantics;
 - generated manifest and plain Lua Library;
 - physical, mapped XML, XML-only and malformed included XML;
-- shared addon private table and one verified UI handler signature;
+- shared addon private table and one reviewed UI handler adapter with its evidence class;
 - coherent updates after source/TOC/XML/dependency/trigger/Library/channel/context
   change;
 - unsaved LSP edit, version gap and stale-result rejection;

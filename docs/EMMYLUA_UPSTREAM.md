@@ -158,9 +158,10 @@ attaches fields to that referenced table identity. These mechanisms support the
 design; cross-file behavior and mappings remain unobserved until implemented.
 
 Do not apply a universal two-argument/private-table model to every XML body or
-special Blizzard context. External chunks, free inline Script bodies, verified
-handler signatures, `SuppressLocalTableRef`, secure environments and bootstrap
-loads are distinct. Unsupported contexts remain explicit limitations.
+special Blizzard context. External chunks, free inline Script bodies, reviewed
+handler adapters with an explicit evidence class, `SuppressLocalTableRef`, secure
+environments and bootstrap loads are distinct. Unsupported contexts remain
+explicit limitations.
 
 ## Updates and invalidation
 
@@ -218,7 +219,7 @@ Still open:
 
 - ordinary Project acquisition/configuration and public CLI wiring;
 - pure XML preparation for the direct route and exact XML projection;
-- addon chunk and verified handler context;
+- addon chunk and evidence-scoped reviewed handler context;
 - generated-Library manifest handoff;
 - project-aware LSP reuse and executed editor scenarios;
 - any exact addon/editor observation.

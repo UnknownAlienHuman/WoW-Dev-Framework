@@ -242,8 +242,8 @@ separate lexical chunks. Dependency addons retain distinct tables. Transform
 only chunk-owned top-level ellipsis expressions in memory using the mapped helper
 seam in [EMMYLUA_UPSTREAM.md](EMMYLUA_UPSTREAM.md#addon-chunk-context).
 
-Keep external chunks, free inline scripts, verified UI handlers, reviewed
-binding callbacks, suppressed private tables, reviewed secure overrides,
+Keep external chunks, free inline scripts, reviewed UI handler adapters,
+reviewed binding callbacks, suppressed private tables, reviewed secure overrides,
 unresolved `Secure` metadata and bootstrap/load-first contexts distinct. Only
 evidence-backed handler/callback adapters receive implicit parameters, and their
 client-authoritative or donor-derived evidence class remains explicit.

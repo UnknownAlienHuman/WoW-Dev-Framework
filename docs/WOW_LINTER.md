@@ -50,8 +50,8 @@ The exact selected unit controls context:
 - reviewed donor behavior models `SuppressLocalTableRef` as private-table
   suppression;
 - bootstrap/load-first/deferred phases remain distinct;
-- free inline UI scripts, verified UI handlers and reviewed binding callbacks
-  are not external addon chunks;
+- free inline UI scripts, reviewed UI handler adapters and reviewed binding
+  callbacks are not external addon chunks;
 - `Secure` is not assigned any of those meanings without reviewed evidence.
 
 Unsupported context is a scoped limitation, never a fabricated global/private-
@@ -174,10 +174,11 @@ Analyze XML-only addons without dummy Lua. One malformed included XML unit is a
 located failure of dependent scope and preserves independent units; unsafe paths
 and invalid selected TOC are hard refusal.
 
-Free inline scripts and verified handlers need different context. Supply `self`
-and parameters only for source-verified handler kinds. Never replace a handler's
-`...` with addon chunk arguments. Synthetic wrappers require exact maps and never
-produce invented user locations.
+Free inline scripts and reviewed handler adapters need different context. Supply
+`self` and parameters only where selected source or explicitly reviewed donor
+data supports that handler signature, and preserve the evidence class. Never
+replace a handler's `...` with addon chunk arguments. Synthetic wrappers require
+exact maps and never produce invented user locations.
 
 ### Implicit `Bindings*.xml`
 
