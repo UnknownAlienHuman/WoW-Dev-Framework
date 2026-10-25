@@ -35,7 +35,7 @@ replace the ordered [queue](REFACTOR_QUEUE.md) or claim runtime execution.
 | #111 Store lifecycle | corrected | Several backup/replacement/quarantine/report surfaces are orphaned inside Store; GC/recovery/retention still have production consumers. |
 | #112 wire formats | reconciled | Direct DTOs are distinguished from legacy replay/Search/Graph formats; semantic admission remains required after decode. |
 | #113 performance | confirmed | No ordinary Blizzard UI workflow exists to measure. |
-| #117 TOC/XML relationships | corrected | Existing UI XML units/maps are useful, but persisted/direct relations must consume exact selected order/context. Implicit binding documents are separate selected callback source. Official zero Interface/security uncertainty must remain attached to the same project identity. |
+| #117 TOC/XML relationships | corrected | Existing UI XML units/maps are useful, but persisted/direct relations must consume exact selected order/context. Implicit bindings are separate selected callback source; zero-Interface/security uncertainty stays attached to Project identity. |
 | #118 lineage/fingerprints | corrected | Named lineage/source-comparison routes are absent; remaining scope is fingerprints, Service candidate manifests and old Search proof plumbing. |
 | #122 readable context | confirmed | Old Context still depends on Project/Graph reports, packs/continuations and source rereads. |
 | #125 product completion | reconciled | Requires observed ordinary generation/check/editor/search behavior; build/Clippy is insufficient. |
@@ -44,20 +44,20 @@ replace the ordered [queue](REFACTOR_QUEUE.md) or claim runtime execution.
 | #191 umbrella | reconciled | Starts from ordinary Project acquisition into existing configured owner/direct Service result. |
 | #194 result DTOs | reconciled | `AddonCheckResult` is retained; generic capability/presentation/result identities are transitional. |
 | #195 recognizer handoff | confirmed | Built-in producers have real consumers; generic pack/plan use is concentrated in graph handoff. |
-| #197 CLI | reconciled | Must call ordinary Project acquisition and existing `addon_check`, not adapt the generic route. Channel/trigger/binding/compatibility/security facts remain Project-owned, not CLI proof objects. |
+| #197 CLI | reconciled | Must call ordinary Project acquisition and existing `addon_check`, not adapt the generic route. Channel/trigger/binding/compatibility/security facts remain Project-owned. |
 | #198 LSP | reconciled | Payload fixed; project reuse, version gaps, stale rejection and standard empty results remain open. |
 | #199 MCP | reconciled | Lower owners exist; one useful profile, metadata and unknown-notification behavior remain open. |
-| #200 configuration/acquisition | corrected | In addition to #255 aliases/context/order, the ordinary target needs Stable/PTR/Beta, `LoadWith`, nonblocking `DefaultState`, machine SavedVariables, implicit bindings, official `Interface: 0` preservation and unresolved `Secure` context without guessed semantics. |
-| #201 end-to-end workflow | corrected | First observation must prove these facts reach Service and are not discarded or fabricated before the public CLI result. |
+| #200 configuration/acquisition | corrected | Ordinary target now explicitly includes Stable/PTR/Beta, `LoadWith`, nonblocking `DefaultState`, machine SavedVariables, implicit bindings, official `Interface: 0` preservation and unresolved `Secure` context without guessed semantics. |
+| #201 end-to-end workflow | corrected | First observation must prove T17–T21 facts reach Service and are not discarded or fabricated before the public result. |
 
-## Corrections published or required
+## Corrections completed
 
 - #111, #118 and #131 were corrected in PR #254.
 - #117, #200 and #201 were corrected after PR #255 for exact order/context.
-- T19–T21 require their next correction so those Issue bodies also cover product
-  channel, reverse triggers, implicit bindings, machine SavedVariables and
-  official zero-Interface/security uncertainty.
-- No Issue is closed by source inspection alone; no workflow moves to `observed`.
+- During the T19–T21 review, #117/#200/#201 were updated again for product
+  channel, reverse triggers, implicit bindings, machine SavedVariables, official
+  zero Interface and unresolved `Secure` metadata.
+- No Issue was closed by source inspection; no workflow moved to `observed`.
 
 ## Maintenance rule
 
