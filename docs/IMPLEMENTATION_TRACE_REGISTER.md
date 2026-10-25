@@ -1,8 +1,8 @@
 # Post-merge implementation trace register
 
-**Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`  
-**Current `main` checked:** `337b9b6e676af6735f416e8527176ed17e865172`  
-**Implementation code reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`  
+**Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
+**Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
+**Runtime implementation reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`
 **Implementation work started:** 2026-10-24
 
 This is the active addendum to [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md). The old
@@ -130,12 +130,13 @@ The reviewed finite dependency aliases are:
 - required: `Dep`, `Dependencies`, `DependsOn`, `RequiredDep`, `RequiredDeps`;
 - optional: `OptionalDep`, `OptionalDeps`.
 
-Carry source-backed package default environment (`UseSecureEnvironment`),
-per-unit override (`LoadIntoEnvironment`), private-table policy
-(`SuppressLocalTableRef`), supported bootstrap/load-first phase, selection
-conditions and exact source records. Cosmetic metadata does not make unrelated
-type checking partial; an unknown context-changing directive remains a located
-limitation.
+Blizzard source establishes occurrence and location of
+`UseSecureEnvironment`, `LoadIntoEnvironment`, `SuppressLocalTableRef` and phase
+directives; the reviewed Wowless implementation supplies the comparative
+environment/private-table interpretation. Carry typed adapter facts with that
+evidence class, selection conditions and exact source records. Cosmetic metadata
+does not make unrelated type checking partial; an unknown context-changing
+directive remains a located limitation.
 
 Reduce predicates by their operators: one known allow match includes; one known
 exclude match excludes; across conjunction, known exclusion dominates unknown.
@@ -162,14 +163,17 @@ The pinned Blizzard source uses `OnlyBetaAndPTR: 1` and `LoadWith`. Current
 relation. Both directives become blocking `UnknownDirective` issues.
 
 Add explicit product channel separate from flavor, Interface, game/glue and
-secure/global context. `OnlyBetaAndPTR: 1` includes PTR/Beta, excludes Stable and
-is unresolved when channel is absent.
+secure/global context. The reviewed Wowless model treats
+`OnlyBetaAndPTR: 1` as PTR/Beta included, Stable excluded and missing channel
+unresolved. Keep that donor evidence class until client-authoritative semantics
+are established.
 
-`LoadWith` is a source-located reverse load trigger, not a required or optional
-dependency. It does not establish prior symbol availability in the trigger
-package. Preserve source package, target package, resolution state and order;
-use it only for reachability/load queries and checks that request it. Explicitly
-selected source remains analyzable when automatic reachability is unresolved.
+Model `LoadWith` as the reviewed donor-backed source-located reverse trigger, not
+a required or optional dependency. It does not establish prior symbol
+availability in the trigger package. Preserve source package, target package,
+resolution state, order and evidence class; use it only for reachability/load
+queries and checks that request it. Explicitly selected source remains analyzable
+when automatic reachability is unresolved.
 
 Recognize `DefaultState` as bounded lifecycle metadata rather than a blocking
 unknown directive. For an explicitly selected root it does not suppress static
@@ -183,21 +187,24 @@ See [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
 
 ### T20 — implicit binding callback source
 
-A Blizzard addon can contain `Bindings.xml` without listing it in the TOC. Its
-`<Binding>` bodies are Lua callbacks and can use the source-verified implicit
-`keystate` parameter. Current selected acquisition does not discover the sibling
-file, and the XML index only extracts `Ui/Script` and `Ui/.../Scripts/*` bodies.
+A Blizzard addon can contain `Bindings.xml` without listing it in the TOC.
+Blizzard source proves that `<Binding>` bodies contain Lua and use `keystate`;
+the reviewed Wowless donor supplies the callback wrapper and candidate-selection
+model. Current selected acquisition does not discover the sibling file, and the
+XML index only extracts `Ui/Script` and `Ui/.../Scripts/*` bodies.
 
-Use a bounded exact `Bindings<suffix>.xml` candidate list derived from selected
-flavor/product rules. Select at most one by documented precedence; absence is
-normal; case/precedence ambiguity is explicit. Capture through the held root and
-existing file bounds.
+Use a bounded exact `Bindings<suffix>.xml` candidate list derived from reviewed
+flavor/product donor rules. Select at most one; absence is normal and case or
+same-precedence ambiguity is explicit. Capture through the held root and existing
+file bounds. Until client-authoritative loader evidence exists, preserve the
+evidence class and do not claim exact discovery precedence or timing.
 
 Parse binding bodies with the existing quick-xml/source-map ownership into mapped
 callback units. A binding callback is neither a top-level TOC chunk nor an addon
-ellipsis chunk. Bind it to addon identity, effective environment, exact source
-and only the verified `keystate` context. Malformed/unsupported binding scope is
-a located limitation and preserves independent addon diagnostics.
+ellipsis chunk. Bind it to addon identity, supported effective environment,
+exact source and the reviewed source-and-donor-backed `keystate` adapter in a
+separate callback phase. Malformed/unsupported binding scope is a located
+limitation and preserves independent addon diagnostics.
 
 See [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
 
@@ -233,8 +240,11 @@ The focused evidence is in
 | D09 | ordinary-load guidance named only missing `Dep` and generic secure/bootstrap context | PR #255 added full aliases, tri-state conditions, typed context and selected-order handoff |
 | D10 | product channel, `LoadWith`, implicit binding callback source and machine SavedVariables scope were absent | recorded as T19/T20 and in the focused trigger/bindings audit |
 | D11 | official `Interface: 0` was still described as invalid and `Secure: 1` had no explicit uncertainty boundary | recorded as T21; preserve sentinel/raw metadata and scoped limitations |
+| D12 | PR #256 updated the canonical Project boundary, but live summaries/status headers still pointed at PR #255 or omitted channel, triggers, bindings and validated order/context | post-#256 consistency pass: queue item 1 is the sole complete implementation checklist; CURRENT_STATUS reports delivery, the trace register records evidence, and README/AGENTS/package summaries may not narrow either |
+| D13 | several special-load rules were written as client-authoritative source facts even though Blizzard source proves occurrence while Wowless supplies product-channel, environment/private-table, `LoadWith` and binding adapter behavior | preserve an explicit evidence class: client source occurrence, current-code behavior, reviewed donor model or product policy/unsupported; never promote donor timing/availability into a client guarantee |
 
 Documentation/source inspection does not change runtime observation status.
+The authority split in D12 is a maintenance decision, not another product layer.
 
 ## Observations still required
 
@@ -248,8 +258,9 @@ anything observed:
 - secure package/file overrides and exact selected order beside snapshot order;
 - Stable exclusion plus PTR/Beta inclusion for `OnlyBetaAndPTR`;
 - `LoadWith` trigger behavior without dependency semantics;
-- automatic binding discovery, mapped `keystate` callback diagnostics, normal
-  no-bindings absence and malformed bindings preserving independent findings;
+- reviewed-donor binding selection, mapped `keystate` callback diagnostics,
+  normal no-bindings absence and malformed bindings preserving independent
+  findings, without claiming unverified exact client timing;
 - `DefaultState`/`SavedVariablesMachine` without false global partial or user-data
   access;
 - explicit `Interface: 0` source preserving analysis with unknown compatibility;

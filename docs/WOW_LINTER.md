@@ -18,7 +18,7 @@ Keep these choices distinct:
 | Source Interface metadata | A selected TOC can carry positive versions or official sentinel `0`; it is evidence, not automatically the target. |
 | Game/Glue location | Package/unit selection context. A system named `Glue` does not determine it. |
 | Package/file execution context | Package default, per-unit override, private-table policy and load phase. Selection is not execution. |
-| TOC security metadata | Reviewed directives such as `UseSecureEnvironment` have typed meaning; unresolved `Secure` metadata remains separate and unsupported. |
+| TOC security metadata | Source occurrences plus reviewed donor-backed adapters for known directives; unresolved `Secure` remains separate and unsupported. |
 | API execution context | Ordinary addon by default. Member `SecureOnly` is distinct from package security and Secret flow. |
 | Main/dependencies/Library | Main is diagnosed; selected dependencies provide program context; Library is declarations, not executable source. |
 
@@ -45,12 +45,13 @@ not namespace semantics.
 
 The exact selected unit controls context:
 
-- package `UseSecureEnvironment` sets a reviewed default;
-- per-file `LoadIntoEnvironment` can override it;
-- `SuppressLocalTableRef` removes the private-table argument;
+- reviewed donor behavior models package `UseSecureEnvironment` as the default;
+- reviewed donor behavior models per-file `LoadIntoEnvironment` as an override;
+- reviewed donor behavior models `SuppressLocalTableRef` as private-table
+  suppression;
 - bootstrap/load-first/deferred phases remain distinct;
-- free inline UI scripts, verified UI handlers and binding callbacks are not
-  external addon chunks;
+- free inline UI scripts, verified UI handlers and reviewed binding callbacks
+  are not external addon chunks;
 - `Secure` is not assigned any of those meanings without reviewed evidence.
 
 Unsupported context is a scoped limitation, never a fabricated global/private-
@@ -108,8 +109,9 @@ source analysis survives with a scoped compatibility limitation.
 ### Product channel and conditions
 
 Model Stable/PTR/Beta separately from flavor, Interface and game/glue location.
-`OnlyBetaAndPTR: 1` includes PTR/Beta, excludes Stable and is unresolved when the
-channel is absent. Never infer channel from repository name/ref/path.
+The reviewed donor model treats `OnlyBetaAndPTR: 1` as PTR/Beta included, Stable
+excluded and missing channel unresolved. Preserve that evidence class rather than
+presenting it as client-authoritative loader code. Never infer channel from repository name/ref/path.
 
 Reduce predicates by boolean form:
 
@@ -124,11 +126,12 @@ reachable unresolved unit remains a limitation.
 
 ### `LoadWith` is not a dependency
 
-`LoadWith` is a reverse load trigger. Preserve source package, named trigger,
-resolution state, order and span. It does not prove that the trigger package can
-use symbols declared later by the `LoadWith` package and must not enter required/
-optional closure. Explicitly selected source remains analyzable when automatic
-reachability is unresolved.
+`LoadWith` is modeled as a reverse load trigger from reviewed donor behavior.
+Preserve source package, named trigger, resolution state, order and span. The
+Blizzard TOC proves the directive exists, not the client's complete lifecycle
+timing. It does not prove that the trigger package can use symbols declared later
+by the `LoadWith` package and must not enter required/optional closure. Explicitly
+selected source remains analyzable when automatic reachability is unresolved.
 
 ### Security directives are not interchangeable
 
@@ -183,9 +186,11 @@ at most one exact candidate under the held root using finite selected flavor/
 product precedence. Absence is normal; case/precedence ambiguity is explicit.
 
 Parse `<Binding>` Lua bodies with existing XML/source maps as mapped callback
-units. Supply only source-verified `keystate`. A binding body is not a top-level
-TOC chunk, receives no addon ellipsis/private-table arguments, becomes available
-after selected addon files, and executes on an event static analysis cannot prove.
+units. Supply the reviewed source-and-donor-backed `keystate` parameter. A binding
+body is not a top-level TOC chunk and receives no addon ellipsis/private-table
+arguments. Keep a separate callback phase; donor after-files ordering is not
+client-authoritative and cannot justify exact timing or negative availability.
+Static analysis cannot prove that the binding event fires.
 
 Malformed selected bindings XML or unsupported constructs limit binding analysis
 while preserving independent diagnostics. Synthetic callback wrappers stay out
@@ -203,7 +208,7 @@ Detailed traces:
 | TOC/XML/bindings integrity | exact selected paths, conditions, triggers, compatibility/context and maps | static facts do not prove runtime execution |
 | API availability/context | resolved receiver/symbol plus selected API metadata | missing declaration is not proof of removal |
 | Widgets/templates/mixins | known object type and explicit relations | dynamic creation/dispatch remains unknown |
-| Events/callbacks/bindings | known registration or verified callback unit/signature | event-like strings do not connect systems |
+| Events/callbacks/bindings | known registration or reviewed callback unit with explicit evidence class | event-like strings do not connect systems |
 | Deprecation/replacement | explicit selected metadata/reviewed correction | never infer by name similarity |
 | Secret/restricted use | exact metadata and supported local operation | advisory where execution state is unknown |
 

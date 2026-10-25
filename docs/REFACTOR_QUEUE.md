@@ -48,10 +48,12 @@ Implement in this order:
 3. use the finite dependency aliases: required `Dep`, `Dependencies`,
    `DependsOn`, `RequiredDep`, `RequiredDeps`; optional `OptionalDep`,
    `OptionalDeps`; select only relevant transitive closure;
-4. model `UseSecureEnvironment`, `LoadIntoEnvironment`,
-   `SuppressLocalTableRef`, bootstrap and supported load-first/load-phase facts;
-5. model `OnlyBetaAndPTR` against explicit `Stable | Ptr | Beta`; retain
-   `LoadWith` as a source-located reverse trigger, never a dependency;
+4. model source-located `UseSecureEnvironment`, `LoadIntoEnvironment`,
+   `SuppressLocalTableRef`, bootstrap and supported load phases through the
+   reviewed donor adapters, retaining the evidence class;
+5. model `OnlyBetaAndPTR` against explicit `Stable | Ptr | Beta` using the
+   reviewed donor gating rule; retain source-located `LoadWith` through the
+   reviewed reverse-trigger model, never as a dependency or client timing proof;
 6. parse official source `Interface: 0` as an unknown/sentinel compatibility
    value rather than malformed input; retain `Secure` as source-backed
    unsupported context until reviewed semantics exist—never alias it by name to
@@ -59,9 +61,11 @@ Implement in this order:
 7. recognize bounded `DefaultState` lifecycle metadata without making an explicit
    source check partial; add `SavedVariablesMachine` declaration scope while
    never reading user SavedVariables content;
-8. discover at most one exact `Bindings<suffix>.xml` under the held addon root,
-   and map `<Binding>` Lua as callback units with only source-verified `keystate`;
-   absence is normal;
+8. discover at most one exact `Bindings<suffix>.xml` under the held addon root
+   using the reviewed finite donor model, and map `<Binding>` Lua as callback
+   units with the source-and-donor-backed `keystate` parameter; absence is normal.
+   Preserve the evidence class and do not claim exact client discovery timing or
+   negative availability from donor ordering;
 9. fix tri-state predicate reduction so known allow/exclude results are not
    poisoned by irrelevant unknown aliases or gates;
 10. preserve exact package/TOC/XML/callback order and context in a validated value
@@ -152,8 +156,8 @@ Use the same configured owner plus validated Project context for:
 - physical Lua and mapped UI XML Lua;
 - XML-only addons;
 - one private table per supported ordinary addon and lexical chunks per file;
-- source-verified UI handler parameters;
-- mapped `<Binding>` callbacks with `keystate`, distinct from top-level chunks;
+- reviewed UI handler parameter adapters with their evidence class;
+- mapped `<Binding>` callbacks using the source-and-donor-backed `keystate` adapter, distinct from top-level chunks;
 - suppressed private tables, package/per-unit secure overrides,
   bootstrap/load-first, free-inline and binding phases;
 - exact virtual-to-XML mappings including entities/discontinuous pieces;

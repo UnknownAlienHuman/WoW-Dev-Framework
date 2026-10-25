@@ -28,6 +28,20 @@ order as a client emulator. Keep immutable path-sorted snapshots for exact sourc
 identity and add a separate exact validated load/context handoff for WoW-specific
 semantics.
 
+### Evidence boundary
+
+Keep four evidence classes distinct throughout this trace:
+
+- Blizzard source occurrence/location;
+- current framework producer/consumer behavior;
+- reviewed Wowless comparison semantics;
+- framework policy for unsupported or conservatively admitted input.
+
+Directive names and source examples do not by themselves prove complete client
+execution semantics. Wowless is the reviewed adapter donor, not Blizzard loader
+authority. The validated Project context must preserve this distinction wherever
+a check can depend on timing, environment, namespace or availability.
+
 ## Evidence traced
 
 ### 1. Dependency spelling is broader than `Dep`
@@ -64,28 +78,34 @@ in source order with its conditions, source span and original normalized key.
 selected for a caller-supplied context. They do not represent the environment in
 which a selected unit executes.
 
-The pinned Blizzard source demonstrates distinct execution directives:
+The pinned Blizzard source demonstrates occurrence and location of distinct
+execution directives:
 
 - `Blizzard_PingUI.toc` declares `## UseSecureEnvironment: 1` for the addon but
   overrides `Blizzard_PingUtil.lua [LoadIntoEnvironment global]`;
 - `Blizzard_ChatFrameBase.toc` contains
-  `Shared\\ChatFrameFiltersSecure.lua [LoadIntoEnvironment secure]` and a
+  `Shared\ChatFrameFiltersSecure.lua [LoadIntoEnvironment secure]` and a
   conditional `## LoadFirst: 1`;
-- reviewed source also uses `SuppressLocalTableRef`, while the comparative
-  Wowless loader allocates bootstrap environments separately.
+- reviewed source also uses `SuppressLocalTableRef`.
+
+The comparative Wowless loader interprets these directives as package defaults,
+per-file overrides, private-table suppression and separate bootstrap
+environments. That is the donor model to port narrowly; it is not proof of every
+client runtime effect.
 
 Current `TocConditionKind` has no `LoadIntoEnvironment`; current TOC/package
 models have no typed package default environment, per-unit override,
 private-table policy or load-first state. Unknown metadata can also degrade
 closure completeness without preserving the semantic fact that was lost.
 
-Add typed source-backed facts rather than string exceptions:
+Add typed adapter facts rather than string exceptions, retaining source span and
+evidence class:
 
-- package default execution environment: ordinary/global or secure;
-- per-load-unit environment override: inherit/global/secure;
-- private-table policy: supplied or suppressed;
-- load phase facts already justified by source: dependency prerequisite,
-  bootstrap, load-first/normal/deferred where supported;
+- reviewed donor-backed package default environment: ordinary/global or secure;
+- reviewed donor-backed per-load-unit override: inherit/global/secure;
+- reviewed donor-backed private-table policy: supplied or suppressed;
+- source-located phase declarations plus only the phase semantics supported by
+  current code or reviewed donor behavior;
 - exact source span and selection conditions for every fact.
 
 Unsupported directives remain located limitations. Cosmetic/custom metadata may

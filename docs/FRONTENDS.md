@@ -77,10 +77,11 @@ Optional `target_interface` enables explicit compatibility checking. Optional
 `--library` replaces the configured array. Empty/omitted `checks` means no WoW
 rules while Emmy diagnostics remain enabled.
 
-Dependency aliases, `LoadWith`, secure/private-table phases, selected order,
-implicit `Bindings*.xml`, binding callback context and SavedVariables declaration
-scope are Project-owned source facts. Frontends do not ask users for internal
-receipts or reconstruct those facts from filenames.
+Dependency aliases, selected source metadata, secure/private-table phases and
+selected order are Project-owned facts. `LoadWith` and implicit binding adapters
+also remain Project-owned, but their client-authoritative versus donor-derived
+evidence class must stay explicit. Frontends do not ask users for internal
+receipts or reconstruct any of these values from filenames.
 
 Unknown check names are configuration errors. A recognized unavailable check is
 a scoped limitation and preserves independent findings.

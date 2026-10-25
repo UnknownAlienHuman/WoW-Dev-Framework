@@ -19,8 +19,9 @@ complete:
 
 1. `OnlyBetaAndPTR` requires a product channel distinct from flavor/game type;
 2. `LoadWith` is a reverse load trigger, not a dependency;
-3. a selected addon can have an automatically discovered `Bindings*.xml` absent
-   from its TOC and containing executable callback bodies;
+3. a selected addon can have `Bindings*.xml` absent from its TOC and containing
+   executable callback bodies; the reviewed donor supplies an automatic-selection
+   model whose exact client parity remains unverified;
 4. known lifecycle/persistence metadata (`DefaultState`,
    `SavedVariablesMachine`) is classified as an unknown blocking directive;
 5. the pinned Blizzard source contains `Interface: 0` and `Secure: 1`, while the
@@ -29,6 +30,15 @@ complete:
 The existing parser already supports account/per-character SavedVariables
 **declarations** and never opens user SavedVariables data files. Preserve that
 boundary. Extend declaration scope; do not add data ingestion or schema inference.
+
+### Evidence boundary
+
+Blizzard files below prove that directives/documents occur and show their source
+locations. The reviewed Wowless loader supplies comparative product-gating,
+reverse-trigger, binding-selection and callback-wrapper behavior. Framework
+admission policy covers unsupported `Secure`, sentinel Interface and explicitly
+selected source. These evidence classes must not be collapsed into one claim of
+client-authoritative runtime semantics.
 
 ## Evidence traced
 
@@ -56,10 +66,11 @@ example `Stable | Ptr | Beta`. It is separate from:
 - game/glue location;
 - global/secure execution context.
 
-For `OnlyBetaAndPTR: 1`, PTR/Beta includes and Stable excludes. An omitted channel
-makes the package gate unresolved; never infer it from repository branch, folder,
-Interface number or addon title. Reject malformed values rather than treating
-them as false.
+Adopt the reviewed donor rule for `OnlyBetaAndPTR: 1`: PTR/Beta includes,
+Stable excludes and an omitted channel leaves the gate unresolved. Preserve that
+donor evidence class until client-authoritative semantics are established; never
+infer channel from repository branch, folder, Interface number or addon title.
+Reject malformed values rather than treating them as false.
 
 ### 2. `LoadWith` is a trigger relation, not a prerequisite
 
@@ -75,7 +86,8 @@ with:
 Current Project metadata projection has required/optional dependencies and
 `LoadOnDemand`, but no `LoadWith` relation. `toc.rs` classifies the directive as
 unknown. The pinned Wowless comparison records reverse trigger edges and loads
-the `LoadWith` package after the named trigger package completes loading.
+the `LoadWith` package after the named trigger package completes loading. That
+establishes the reviewed donor model, not every detail of client lifecycle timing.
 
 `LoadWith` must not be folded into required or optional dependency closure:
 
@@ -104,7 +116,9 @@ The convention occurs in multiple Blizzard addon directories.
 The pinned Wowless loader searches an exact finite `Bindings<suffix>.xml` list
 for the selected product/flavor, loads the selected document after addon files,
 and its XML evaluator compiles each body as `function(keystate) ... end`. This is
-donor behavior to port narrowly; it is not a reason to execute addon source.
+comparative donor behavior. Blizzard source independently proves that unlisted
+binding documents and bodies using `keystate` exist, but the open source does not
+establish the client's exact discovery precedence or load timing.
 
 Current Project acquisition follows TOC-listed Lua/XML and nested XML references.
 It has no automatic sibling bindings discovery. Its XML index recognizes inline
@@ -120,8 +134,8 @@ quick-xml parser and source maps:
    collisions and same-precedence ambiguity;
 3. treat absence as normal;
 4. capture through `ProjectInputDirectory`/`ProjectInputFile` bounds;
-5. parse `<Binding>` bodies as distinct mapped callback units with only the
-   source-verified implicit `keystate` parameter;
+5. parse `<Binding>` bodies as distinct mapped callback units with the reviewed
+   source-and-donor-backed `keystate` parameter;
 6. bind each unit to addon/package identity, effective environment, source span
    and selected bindings document identity;
 7. classify malformed selected bindings XML or unsupported constructs as located
@@ -129,10 +143,11 @@ quick-xml parser and source maps:
 8. never rewrite XML or expose synthetic wrapper locations.
 
 A binding body is not a top-level TOC chunk and not the external addon chunk. It
-becomes callable after selected addon files and executes on a binding event. It
-must not be inserted into top-level TOC order or receive `(addonName,
-privateTable)` ellipsis semantics. Static availability does not prove that the
-binding ever fires.
+must not be inserted into top-level TOC execution order or receive `(addonName,
+privateTable)` ellipsis semantics. Model a separate callback phase. The donor's
+after-files ordering is comparison evidence only; without client-authoritative
+loader evidence it cannot support a negative availability or exact timing claim.
+Static analysis also cannot prove that the binding ever fires.
 
 ### 4. Known metadata must not create false global partial status
 

@@ -1,8 +1,8 @@
 # Current implementation status
 
-**Checked:** 2026-10-24  
-**Implementation code reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`  
-**Documentation/source reconciliation reviewed through:** PR #255, `337b9b6e676af6735f416e8527176ed17e865172`  
+**Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
+**Runtime implementation reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`
+**Documentation/source reconciliation reviewed through:** PR #256
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 
 This is the authoritative current-state checkpoint. It does not replace
@@ -53,11 +53,12 @@ complete dependency aliases, secure/private-table facts, proper three-valued
 selection and a separate exact selected-order/context handoff beside path-sorted
 snapshots.
 
-The follow-up source trace found the next special-load layer:
+PR #256 recorded the next special-load layer:
 
 - explicit Stable/PTR/Beta channel for `OnlyBetaAndPTR`;
 - typed `LoadWith` reverse triggers, distinct from dependencies;
-- automatically selected `Bindings*.xml` and mapped `<Binding>` callback bodies;
+- unlisted `Bindings*.xml` source plus the reviewed donor selection/callback
+  model;
 - known nonblocking `DefaultState` metadata;
 - `SavedVariablesMachine` declaration scope without user-data reads;
 - official `Interface: 0` source that current parsing incorrectly hard-rejects;
@@ -69,6 +70,14 @@ These findings are T19–T21 in
 [IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md) and
 [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
 
+The post-#256 consistency review found two documentation defect classes of its
+own: active summaries still exposed the pre-T17/T19 handoff, and several
+special-load semantics were labelled more strongly than their evidence allowed.
+D12–D13 record the correction: queue item 1 is the sole complete checklist, and
+client-source occurrences, current-code behavior, Wowless donor models and
+framework policy/unsupported states remain distinct. No runtime status changes
+from this documentation correction.
+
 ## Implemented after the baseline
 
 | Slice | Delivered behavior | Evidence | Runtime observation |
@@ -79,7 +88,8 @@ These findings are T19–T21 in
 | T07/T15 / PR #249 | compiled provenance separated from compatibility-report evidence | run #440 passed | unexecuted |
 | T16 / PR #250 | configured-owner reuse requires exact Main plus Library/virtual/config compatibility | run #445 passed | unexecuted |
 
-The lower language-check core exists. The public product path does not.
+These five internal building blocks exist. No ordinary addon input reaches them
+through the public command yet.
 
 ## Open path to the first usable command
 
@@ -110,7 +120,7 @@ Open work includes:
 - independent-unit preservation after malformed included/bindings XML;
 - public `wow check` wiring, rendering, exit and cancellation;
 - XML-only Main and exact virtual projection;
-- addon chunk/private table and verified handler/binding signatures;
+- addon chunk/private table plus evidence-scoped handler/binding adapters;
 - generated-Library manifest consumption;
 - corrected `StrideIndex`, `NilableContents`, `MayReturnNothing`, mixins and
   member environment;
@@ -134,8 +144,9 @@ source projection/handler context.
 ## Readiness verdict
 
 - **Baseline document reconciliation:** complete.
-- **Current-guide/Issue reconciliation:** complete through PR #255; local links
-  and anchors are mechanically checked.
+- **Current-guide/Issue reconciliation:** complete through PR #256; the
+  post-#256 consistency pass also reconciles active summaries with the canonical
+  queue. Local links and anchors are mechanically checked.
 - **Baseline source architecture/error register:** complete for retained baseline
   requirements.
 - **Current implementation tracing:** active; T17–T21 are source-traced and open.

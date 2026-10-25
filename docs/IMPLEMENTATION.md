@@ -74,9 +74,10 @@ Resolution rules:
    collisions/equal candidates require choice. A zero-Interface candidate does
    not outrank a positive compatible candidate without a documented product rule.
 5. Ordinary installed-client default may be `stable` only when that target is
-   explicit. `OnlyBetaAndPTR: 1` includes PTR/Beta, excludes Stable, and is
-   unresolved when channel is unknown. Channel is separate from flavor,
-   game/glue and global/secure context.
+   explicit. Use the reviewed donor model for `OnlyBetaAndPTR: 1`: PTR/Beta
+   included, Stable excluded and unknown channel unresolved. Preserve the donor
+   evidence class. Channel is separate from flavor, game/glue and global/secure
+   context.
 6. Use explicit target Interface, otherwise compatible selected-Library metadata.
    Conflicting targets are configuration errors. Without either, only dependent
    checks are limited. Never infer target Interface from the addon TOC or use
@@ -87,8 +88,9 @@ Resolution rules:
    - optional: `OptionalDep`, `OptionalDeps`.
    Reject ambiguity. Missing required dependency limits dependent work; absent
    optional dependency is normal.
-8. `LoadWith` is a reverse runtime trigger, not a dependency. Preserve source
-   package/target/resolution/order without granting prior availability.
+8. Model `LoadWith` as the reviewed donor-backed reverse trigger, not a
+   dependency. Preserve source package/target/resolution/order and evidence class
+   without granting prior availability or claiming complete client timing.
 9. Decode `emmy_diagnostics` as pinned `EmmyrcDiagnostic`; invalid fields are
    errors. No `.emmyrc` discovery. `diagnosticInterval` is scheduling only.
 10. `fail_on` changes exit status only. Empty/omitted `checks` runs no WoW rule
@@ -144,15 +146,16 @@ selection with recursive collection of every Lua/XML file or another parser.
 Acquire only explicit/unambiguous TOCs and relevant dependency closure.
 
 Use one finite metadata/directive table shared by TOC and package projection.
-Preserve source span, predicates and originating record for all facts. Recognize:
+Preserve source span, predicates, originating record and evidence class for all
+facts. Recognize:
 
 - dependency aliases above;
-- package `UseSecureEnvironment`;
-- per-unit `LoadIntoEnvironment`;
-- `SuppressLocalTableRef`;
-- `LoadOnDemand`, bootstrap and supported `LoadFirst`/phase;
-- `OnlyBetaAndPTR` and explicit product channel;
-- `LoadWith` trigger relations;
+- source-located `UseSecureEnvironment`, `LoadIntoEnvironment` and
+  `SuppressLocalTableRef` plus their reviewed donor-backed adapter semantics;
+- `LoadOnDemand`, bootstrap and supported `LoadFirst`/phase, with source versus
+  donor evidence retained;
+- `OnlyBetaAndPTR`, explicit product channel and the reviewed donor gating model;
+- source-located `LoadWith` plus the reviewed donor reverse-trigger model;
 - bounded `DefaultState` lifecycle metadata;
 - `SavedVariables`, `SavedVariablesPerCharacter` and
   `SavedVariablesMachine` declarations;
@@ -220,15 +223,16 @@ invalid selected TOC remain hard refusal.
 #### Implicit binding documents
 
 A selected addon may contain sibling `Bindings<suffix>.xml` absent from its TOC.
-Project must derive a finite candidate list from selected flavor/product rules,
-select at most one by documented precedence under the held root, treat absence as
-normal, reject ambiguity/case collision, capture exact bounded bytes, and parse
-`<Binding>` bodies through existing quick-xml/source maps.
+Project must derive a finite candidate list from reviewed flavor/product donor
+rules, select at most one under the held root, treat absence as normal, reject
+ambiguity/case collision, capture exact bounded bytes, and parse `<Binding>`
+bodies through existing quick-xml/source maps. Preserve the evidence class; the
+reviewed donor does not establish exact client discovery precedence or timing.
 
-Mapped binding callback units receive only source-verified `keystate`, addon
-identity, effective supported environment, exact document identity and callback
-phase. They are not top-level TOC chunks and do not receive addon ellipsis/private
--table arguments. Malformed binding scope is a located limitation and preserves
+Mapped binding callback units receive the reviewed source-and-donor-backed
+`keystate` adapter, addon identity, effective supported environment, exact
+document identity and callback phase. They are not top-level TOC chunks and do not receive addon
+ellipsis/private-table arguments. Malformed binding scope is a located limitation and preserves
 independent diagnostics. Synthetic wrappers never become user locations/facts.
 
 #### Addon chunk context
@@ -238,10 +242,11 @@ separate lexical chunks. Dependency addons retain distinct tables. Transform
 only chunk-owned top-level ellipsis expressions in memory using the mapped helper
 seam in [EMMYLUA_UPSTREAM.md](EMMYLUA_UPSTREAM.md#addon-chunk-context).
 
-Keep external chunks, free inline scripts, verified UI handlers, binding
-callbacks, suppressed private tables, reviewed secure overrides, unresolved
-`Secure` metadata and bootstrap/load-first contexts distinct. Only source-
-verified handler/callback kinds receive implicit parameters.
+Keep external chunks, free inline scripts, verified UI handlers, reviewed
+binding callbacks, suppressed private tables, reviewed secure overrides,
+unresolved `Secure` metadata and bootstrap/load-first contexts distinct. Only
+evidence-backed handler/callback adapters receive implicit parameters, and their
+client-authoritative or donor-derived evidence class remains explicit.
 
 ### Updates
 
