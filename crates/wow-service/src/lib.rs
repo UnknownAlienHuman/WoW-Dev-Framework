@@ -27,7 +27,7 @@ pub mod source_census;
 pub mod source_reference;
 
 pub use addon_check::{
-    AddonCheckAnalysis, AddonCheckCompleteness, AddonCheckDiagnostic, AddonCheckLimitation,
+    AddonCheckCompleteness, AddonCheckDiagnostic, AddonCheckLimitation,
     AddonCheckLimitationCode, AddonCheckRequest, AddonCheckResult, AddonCheckScope,
     AddonCheckSourceRole, AddonCheckVirtualInput, check_addon,
 };
