@@ -78,7 +78,7 @@ pub struct ConfiguredSemanticReports {
 pub struct ConfiguredAnalyzerSession {
     main: LuaWorkspaceSnapshot,
     libraries: Vec<LuaWorkspaceSnapshot>,
-    virtual_units: Option<(LuaWorkspaceSnapshot, ProjectGenerationId)>,
+    virtual_units: Option<LuaWorkspaceSnapshot>,
     configuration: EmmyAnalysisConfiguration,
     semantic: RegisteredMemberAnalysis,
     healthy: bool,
@@ -90,14 +90,14 @@ impl ConfiguredAnalyzerSession {
     pub fn open(
         main: LuaWorkspaceSnapshot,
         libraries: &[LuaWorkspaceSnapshot],
-        virtual_units: Option<(LuaWorkspaceSnapshot, ProjectGenerationId)>,
+        virtual_units: Option<LuaWorkspaceSnapshot>,
         configuration: EmmyAnalysisConfiguration,
         stop: &AtomicBool,
     ) -> ConfiguredSessionResult<Self> {
         checkpoint(stop)?;
         catch_unwind(AssertUnwindSafe(|| {
             let library_refs = libraries.iter().collect::<Vec<_>>();
-            let virtual_ref = virtual_units.as_ref().map(|(snapshot, _)| snapshot);
+            let virtual_ref = virtual_units.as_ref();
             let mut semantic =
                 RegisteredMemberAnalysis::new(&main, &library_refs, virtual_ref, stop)
                     .map_err(member_error)?;
@@ -138,21 +138,18 @@ impl ConfiguredAnalyzerSession {
     }
 
     #[must_use]
-    pub fn virtual_units(&self) -> Option<(&LuaWorkspaceSnapshot, ProjectGenerationId)> {
-        self.virtual_units
-            .as_ref()
-            .map(|(snapshot, generation)| (snapshot, *generation))
+    pub const fn virtual_units(&self) -> Option<&LuaWorkspaceSnapshot> {
+        self.virtual_units.as_ref()
     }
 
     /// Admission check for retaining this owner. A changed Main snapshot,
-    /// diagnostic policy, Library set, virtual snapshot or project generation
-    /// requires a cold owner.
+    /// diagnostic policy, Library set or virtual snapshot requires a cold owner.
     #[must_use]
     pub fn compatible(
         &self,
         main: &LuaWorkspaceSnapshot,
         libraries: &[LuaWorkspaceSnapshot],
-        virtual_units: Option<(&LuaWorkspaceSnapshot, ProjectGenerationId)>,
+        virtual_units: Option<&LuaWorkspaceSnapshot>,
         configuration: &EmmyAnalysisConfiguration,
     ) -> bool {
         let mut expected_libraries = self
@@ -166,11 +163,8 @@ impl ConfiguredAnalyzerSession {
             .collect::<Vec<_>>();
         expected_libraries.sort_unstable();
         observed_libraries.sort_unstable();
-        let expected_virtual = self
-            .virtual_units()
-            .map(|(snapshot, generation)| (snapshot.snapshot_id(), generation));
-        let observed_virtual =
-            virtual_units.map(|(snapshot, generation)| (snapshot.snapshot_id(), generation));
+        let expected_virtual = self.virtual_units().map(LuaWorkspaceSnapshot::snapshot_id);
+        let observed_virtual = virtual_units.map(LuaWorkspaceSnapshot::snapshot_id);
 
         self.healthy
             && self.main.snapshot_id() == main.snapshot_id()
@@ -207,9 +201,12 @@ impl ConfiguredAnalyzerSession {
     }
 
     /// Collect selected semantic facts from the same configured owner. Callers
-    /// that only need Lua/type diagnostics must use [`Self::diagnostics`].
+    /// that only need Lua/type diagnostics must use [`Self::diagnostics`]. A
+    /// project generation is required only when virtual semantic facts are
+    /// requested; it is not part of diagnostics-owner construction or reuse.
     pub fn semantic_reports(
         &mut self,
+        project_generation: Option<ProjectGenerationId>,
         profile: MemberCallSessionQueryProfile<'_>,
         include_function_calls: bool,
         stop: &AtomicBool,
@@ -218,6 +215,12 @@ impl ConfiguredAnalyzerSession {
             return Err(error(
                 ConfiguredSessionErrorCode::Poisoned,
                 "configured native analysis owner is unavailable after failure",
+            ));
+        }
+        if self.virtual_units.is_some() != project_generation.is_some() {
+            return Err(error(
+                ConfiguredSessionErrorCode::InvalidInputs,
+                "virtual semantic reports require one exact project generation",
             ));
         }
         checkpoint(stop)?;
@@ -230,16 +233,11 @@ impl ConfiguredAnalyzerSession {
             )
             .map_err(syntax_error)?;
             checkpoint(stop)?;
-            let virtual_snapshot = self.virtual_units.as_ref().map(|(snapshot, _)| snapshot);
-            let project_generation = self
-                .virtual_units
-                .as_ref()
-                .map(|(_, generation)| *generation);
             let member_session = self
                 .semantic
                 .collect(
                     &self.main,
-                    virtual_snapshot,
+                    self.virtual_units.as_ref(),
                     project_generation,
                     profile,
                     include_function_calls,
@@ -290,7 +288,7 @@ impl ConfiguredAnalyzerSession {
         let virtual_units = self
             .virtual_units
             .as_ref()
-            .map(|(snapshot, _)| {
+            .map(|snapshot| {
                 let root = member_virtual_root("xml-virtual", snapshot.snapshot_id());
                 crate::syntax::analyzer::collect_registered(
                     &self.semantic.analysis,
