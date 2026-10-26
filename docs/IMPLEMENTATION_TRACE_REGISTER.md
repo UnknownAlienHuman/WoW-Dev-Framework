@@ -1,7 +1,7 @@
 # Post-merge implementation trace register
 
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
-**Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
+**Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256); PR #257 owns this review
 **Runtime implementation reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`
 **Implementation work started:** 2026-10-24
 
@@ -48,6 +48,8 @@ sequence can move it to **observed**.
 | T19 | product channel + `LoadWith` -> package reachability/load trigger | source-traced; channel/trigger model open | unexecuted |
 | T20 | implicit `Bindings*.xml` -> mapped binding callback diagnostics | source-traced; discovery/body/context adapter open | unexecuted |
 | T21 | official zero Interface + unresolved `Secure` metadata -> compatibility/context admission | source-traced; current parser hard-rejects/blocks | unexecuted |
+| T22 | ordinary chunk namespace + `AllowAddOnTableAccess` / `SuppressLocalTableRef` | official normal contract traced; retrieval permission missing; restricted suppression semantics unsupported | unexecuted |
+| T23 | current TOC metadata -> issue classification/completeness | current known directives become blocking `UnknownDirective`; correction designed | unexecuted |
 
 ## Decisions and evidence
 
@@ -130,13 +132,16 @@ The reviewed finite dependency aliases are:
 - required: `Dep`, `Dependencies`, `DependsOn`, `RequiredDep`, `RequiredDeps`;
 - optional: `OptionalDep`, `OptionalDeps`.
 
-Blizzard source establishes occurrence and location of
+Blizzard source establishes the ordinary `(addonName, addonTable)` chunk
+contract, `AllowAddOnTableAccess` retrieval permission, and the occurrence of
 `UseSecureEnvironment`, `LoadIntoEnvironment`, `SuppressLocalTableRef` and phase
-directives; the reviewed Wowless implementation supplies the comparative
-environment/private-table interpretation. Carry typed adapter facts with that
-evidence class, selection conditions and exact source records. Cosmetic metadata
-does not make unrelated type checking partial; an unknown context-changing
-directive remains a located limitation.
+directives. The reviewed Wowless implementation supplies only comparative
+secure/bootstrap/load behavior. Carry exact source records and the narrow typed
+facts consumed by the checker. `SuppressLocalTableRef` remains unsupported
+restricted/internal context; donor `nil` behavior is not a client guarantee. If
+a result depends on unverified parity, attach a scoped limitation. Do not add a
+generic evidence/proof field. Cosmetic metadata does not make unrelated type
+checking partial; an unknown context-changing directive remains located.
 
 Reduce predicates by their operators: one known allow match includes; one known
 exclude match excludes; across conjunction, known exclusion dominates unknown.
@@ -152,9 +157,9 @@ receives no exact load-plan/context receipt.
 Keep snapshots path-sorted and content-addressed for identity and analyzer
 ownership. Pass a separate immutable validated value binding selected
 package/TOC/XML order to snapshot role/path/digest, originating load record/unit,
-addon identity, effective environment, private-table policy and phase. Reject
-missing, foreign, duplicate or mismatched entries. Never call Emmy registration
-order a WoW runtime model.
+addon identity, effective environment, ordinary or unsupported chunk-table
+context, retrieval permission and phase. Reject missing, foreign, duplicate or
+mismatched entries. Never call Emmy registration order a WoW runtime model.
 
 ### T19 — product channel and reverse load triggers
 
@@ -165,15 +170,15 @@ relation. Both directives become blocking `UnknownDirective` issues.
 Add explicit product channel separate from flavor, Interface, game/glue and
 secure/global context. The reviewed Wowless model treats
 `OnlyBetaAndPTR: 1` as PTR/Beta included, Stable excluded and missing channel
-unresolved. Keep that donor evidence class until client-authoritative semantics
-are established.
+unresolved. Use this as a provisional adapter and scope a limitation to dependent
+results until client-authoritative semantics are established.
 
 Model `LoadWith` as the reviewed donor-backed source-located reverse trigger, not
 a required or optional dependency. It does not establish prior symbol
 availability in the trigger package. Preserve source package, target package,
-resolution state, order and evidence class; use it only for reachability/load
-queries and checks that request it. Explicitly selected source remains analyzable
-when automatic reachability is unresolved.
+resolution state and order; scope a limitation to checks that depend on
+unverified lifecycle timing. Explicitly selected source remains analyzable when
+automatic reachability is unresolved.
 
 Recognize `DefaultState` as bounded lifecycle metadata rather than a blocking
 unknown directive. For an explicitly selected root it does not suppress static
@@ -196,8 +201,8 @@ XML index only extracts `Ui/Script` and `Ui/.../Scripts/*` bodies.
 Use a bounded exact `Bindings<suffix>.xml` candidate list derived from reviewed
 flavor/product donor rules. Select at most one; absence is normal and case or
 same-precedence ambiguity is explicit. Capture through the held root and existing
-file bounds. Until client-authoritative loader evidence exists, preserve the
-evidence class and do not claim exact discovery precedence or timing.
+file bounds. Until client-authoritative loader evidence exists, do not claim exact
+discovery precedence or timing; scope a limitation to results that depend on it.
 
 Parse binding bodies with the existing quick-xml/source-map ownership into mapped
 callback units. A binding callback is neither a top-level TOC chunk nor an addon
@@ -232,6 +237,42 @@ but no reviewed Project or donor source establishes that `Secure` means
 The focused evidence is in
 [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
 
+### T22 — ordinary addon-table contract and unsupported legacy suppression
+
+Pinned Blizzard `AddOnsDocumentation.lua` states that addon files receive the
+addon table as the second result of `...`; the normal first result is the addon
+name. It also states that `AllowAddOnTableAccess: 1` only opts this table into
+retrieval through `C_AddOns.GetAddOnLocalTable`. Pinned
+`Blizzard_CombatAudioAlerts.toc` uses that directive, but current Project code does
+not recognize it.
+
+Pinned `Blizzard_RecruitAFriend.toc` still contains restricted/internal
+`SuppressLocalTableRef`. The reviewed Wowless loader responds by passing a `nil`
+second value, but this comparative behavior does not establish current client
+semantics and must not override the official ordinary-chunk contract.
+
+**Decision:** ordinary external chunks use `(addonName, addonTable)`.
+`AllowAddOnTableAccess` is a separate retrieval-permission fact. A selected chunk
+under `SuppressLocalTableRef` remains unsupported special context: preserve the
+raw directive, do not apply the ordinary helper or fabricate a table, and scope
+only ellipsis/private-table-dependent conclusions as limited. No generic proof
+DTO is introduced.
+
+### T23 — known current metadata must not become a global blocking issue
+
+Pinned source uses `LoadSavedVariablesFirst`, `AllowAddOnTableAccess` and
+`EscalateErrorDuringLoad`. Current `toc.rs` recognizes none of them and classifies
+all other included metadata as `UnknownDirective`; current issue projection marks
+that blocking except for unresolved optional dependencies.
+
+**Decision:** use one semantic metadata table and explicit nonblocking metadata
+category. `LoadSavedVariablesFirst` is load-order metadata without user-data
+access; `AllowAddOnTableAccess` is namespace retrieval permission;
+`EscalateErrorDuringLoad` is known error-policy metadata. Localized display,
+icon/category/group and `X-*` custom metadata stay nonblocking. Unknown package
+metadata produces a located scoped limitation instead of invalidating enumerated
+files; unknown inline/file directives remain unit-selection limitations.
+
 ## Documentation reconciliation ledger
 
 | ID | Drift found after PR #244 | Resolution |
@@ -241,7 +282,12 @@ The focused evidence is in
 | D10 | product channel, `LoadWith`, implicit binding callback source and machine SavedVariables scope were absent | recorded as T19/T20 and in the focused trigger/bindings audit |
 | D11 | official `Interface: 0` was still described as invalid and `Secure: 1` had no explicit uncertainty boundary | recorded as T21; preserve sentinel/raw metadata and scoped limitations |
 | D12 | PR #256 updated the canonical Project boundary, but live summaries/status headers still pointed at PR #255 or omitted channel, triggers, bindings and validated order/context | post-#256 consistency pass: queue item 1 is the sole complete implementation checklist; CURRENT_STATUS reports delivery, the trace register records evidence, and README/AGENTS/package summaries may not narrow either |
-| D13 | several special-load rules were written as client-authoritative source facts even though Blizzard source proves occurrence while Wowless supplies product-channel, environment/private-table, `LoadWith` and binding adapter behavior | preserve an explicit evidence class: client source occurrence, current-code behavior, reviewed donor model or product policy/unsupported; never promote donor timing/availability into a client guarantee |
+| D13 | several special-load rules were written as client-authoritative source facts even though Blizzard source proves occurrence while Wowless supplies product-channel, secure/bootstrap, `LoadWith` and binding adapter behavior | preserve exact raw source and state donor assumptions directly; use scoped limitations instead of stronger client guarantees |
+| D14 | status files embedded the exact “current main” SHA, so their own merge immediately made the value stale | record a named review base/PR, not the branch head containing the status document |
+| D15 | the correction proposed propagating a generic “evidence class” through Project, Service, frontends and Issues | reject the new proof layer; keep raw source, narrow adapter behavior and ordinary scoped limitations only |
+| D16 | `.ci/wow-emmy-syntax-bootstrap-passed` contained only `verified-bootstrap` and had no reader | remove the orphan ceremony marker; real repository checks remain in the workflow/xtask owners |
+| D17 | chunk context was derived mainly from Wowless and omitted Blizzard's current `AllowAddOnTableAccess`/second-result contract | use pinned `AddOnsDocumentation.lua` for ordinary chunks; keep retrieval permission separate and `SuppressLocalTableRef` unsupported |
+| D18 | `LoadSavedVariablesFirst`, `AllowAddOnTableAccess` and `EscalateErrorDuringLoad` were absent from the canonical plan although selected source uses them and current parsing makes them blocking unknowns | add T23 and effect-scoped metadata classification; do not make known/nonsemantic metadata globally partial |
 
 Documentation/source inspection does not change runtime observation status.
 The authority split in D12 is a maintenance decision, not another product layer.
@@ -256,6 +302,10 @@ anything observed:
 - complete dependency aliases, missing required and absent optional dependency;
 - known-determined predicates containing another unknown value;
 - secure package/file overrides and exact selected order beside snapshot order;
+- ordinary `(addonName, addonTable)` plus `AllowAddOnTableAccess` retrieval
+  permission, and `SuppressLocalTableRef` remaining a scoped unsupported context;
+- `LoadSavedVariablesFirst`/`EscalateErrorDuringLoad` without user-data reads or
+  false global partial status;
 - Stable exclusion plus PTR/Beta inclusion for `OnlyBetaAndPTR`;
 - `LoadWith` trigger behavior without dependency semantics;
 - reviewed-donor binding selection, mapped `keystate` callback diagnostics,
@@ -268,7 +318,7 @@ anything observed:
   execution semantics;
 - generated manifest and plain Lua Library;
 - physical, mapped XML, XML-only and malformed included XML;
-- shared addon private table and one reviewed UI handler adapter with its evidence class;
+- shared addon private table and one reviewed UI handler adapter with any scoped donor-parity limitation;
 - coherent updates after source/TOC/XML/dependency/trigger/Library/channel/context
   change;
 - unsaved LSP edit, version gap and stale-result rejection;

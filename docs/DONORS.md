@@ -46,13 +46,25 @@ facts. Keep these roles distinct when a donor and current client data disagree.
 Use Gethe's selected Blizzard API docs and authored Lua/XML/TOC as the source
 of truth. Do not treat Ketho's annotations or Wowless's models as newer or
 more authoritative facts. The exact source revision, client flavor and selected
-TOC control what is in scope. In the pinned API docs, observed `Environment`
-values include `All` and `SecureOnly`. These name UI environments, not client
-flavors such as `Mainline` or `Classic`; `All` is not a statement that an API is
-present in every client flavor. The native callable model currently does not
-preserve this field, so environment-aware availability needs an explicit model
-and policy. At this source revision, for example,
-`FrameScript.GetForbiddenObjectTable` is documented `SecureOnly`.
+TOC control what is in scope.
+
+The pinned
+[`AddOnsDocumentation.lua`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_APIDocumentationGenerated/AddOnsDocumentation.lua)
+explicitly describes the addon table as the second result of chunk `...` and
+states that `AllowAddOnTableAccess: 1` only opts that table into retrieval through
+`C_AddOns.GetAddOnLocalTable`. The pinned
+[`Blizzard_CombatAudioAlerts.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_CombatAudioAlerts/Blizzard_CombatAudioAlerts.toc)
+uses that directive. This is stronger evidence for ordinary chunk context than a
+runtime-emulator convention, and it keeps table injection separate from external
+retrieval permission.
+
+In the pinned API docs, observed `Environment` values include `All` and
+`SecureOnly`. These name UI environments, not client flavors such as `Mainline`
+or `Classic`; `All` is not a statement that an API is present in every client
+flavor. The native callable model currently does not preserve this field, so
+environment-aware availability needs an explicit model and policy. At this source
+revision, for example, `FrameScript.GetForbiddenObjectTable` is documented
+`SecureOnly`.
 
 Ketho-specific compatibility gaps to check against the current Rust owner:
 
@@ -95,15 +107,21 @@ privateTable)`; the linter must read source and model only the statically
 supported namespace relationship. Do not run Ketho or Wowless Lua loaders.
 
 The inspected loader gives `SuppressLocalTableRef` its own branch and allocates
-bootstrap environments separately. It also compares product gates, records
-`LoadWith` reverse triggers and searches a finite bindings-suffix list; its XML
-evaluator wraps binding bodies with `keystate`, passes addon arguments to external
-Lua, compiles known handlers with their script parameters, and loads free inline
-Script bodies through a different call. These are reviewed donor behaviors, not
-an open Blizzard loader specification. They justify narrow adapters and explicit
-uncertainty, not universal runtime claims. Gethe's selected
+bootstrap environments separately. It sets the addon environment to `nil` for
+that directive but still calls external Lua with both `addonName` and the
+`addonEnv` value. Gethe's selected
 [`Blizzard_RecruitAFriend.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_RecruitAFriend/Blizzard_RecruitAFriend.toc)
-confirms actual use of `SuppressLocalTableRef`; the comparative implementation
-does not independently prove every client runtime detail. The framework's
-[context adapter](EMMYLUA_UPSTREAM.md#addon-chunk-context) supports explicit load
-kinds and leaves unsupported special environments limited.
+confirms that the restricted/internal metadata still occurs in selected Blizzard
+source, but neither source establishes its current client effect. Do not turn the
+donor's `nil` convention into a supported client suppression rule. Preserve the
+raw directive as unsupported context and limit only conclusions that depend on
+chunk ellipsis/private-table semantics.
+
+The loader also compares product gates, records `LoadWith` reverse triggers and
+searches a finite bindings-suffix list; its XML evaluator wraps binding bodies
+with `keystate`, compiles known handlers with their script parameters, and loads
+free inline Script bodies through a different call. These are reviewed donor
+behaviors, not an open Blizzard loader specification. They justify narrow
+adapters and scoped limitations, not universal runtime claims. The required
+[context adapter](EMMYLUA_UPSTREAM.md#addon-chunk-context) remains open work and
+must keep unsupported special environments explicitly limited.

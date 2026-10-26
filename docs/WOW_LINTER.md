@@ -38,17 +38,21 @@ namespace is not a WoW API by spelling. Unknown aliases/dynamic dispatch remain
 unknown; do not suppress undefined names globally or widen missing types to `any`.
 
 External addon chunks are selected by TOC/XML rather than an invented `require`
-graph. For supported ordinary chunks, provide source-mapped addon-name/private-
-table arguments with one stable private table per addon and separate lexical
+graph. Pinned Blizzard API documentation defines the ordinary chunk results as
+`(addonName, addonTable)`. For supported ordinary chunks, provide those
+source-mapped results with one stable private table per addon and separate lexical
 chunks. Dependency addons keep distinct tables. Path prefixes are file identity,
-not namespace semantics.
+not namespace semantics. `AllowAddOnTableAccess` only controls retrieval through
+`C_AddOns.GetAddOnLocalTable`; it does not control table injection.
 
 The exact selected unit controls context:
 
-- reviewed donor behavior models package `UseSecureEnvironment` as the default;
-- reviewed donor behavior models per-file `LoadIntoEnvironment` as an override;
-- reviewed donor behavior models `SuppressLocalTableRef` as private-table
-  suppression;
+- the reviewed donor models package `UseSecureEnvironment` as the default;
+- the reviewed donor models per-file `LoadIntoEnvironment` as an override;
+- `SuppressLocalTableRef` is selected restricted/internal metadata with
+  unsupported current semantics. The donor passes a `nil` second value, but that
+  is not client authority; do not apply the ordinary helper or fabricate a table,
+  and keep ellipsis-dependent analysis limited;
 - bootstrap/load-first/deferred phases remain distinct;
 - free inline UI scripts, reviewed UI handler adapters and reviewed binding
   callbacks are not external addon chunks;
@@ -110,8 +114,9 @@ source analysis survives with a scoped compatibility limitation.
 
 Model Stable/PTR/Beta separately from flavor, Interface and game/glue location.
 The reviewed donor model treats `OnlyBetaAndPTR: 1` as PTR/Beta included, Stable
-excluded and missing channel unresolved. Preserve that evidence class rather than
-presenting it as client-authoritative loader code. Never infer channel from repository name/ref/path.
+excluded and missing channel unresolved. Use that as an explicit provisional
+adapter rule and emit a scoped limitation wherever a result depends on unverified
+client parity. Never infer channel from repository name, ref or path.
 
 Reduce predicates by boolean form:
 
@@ -148,12 +153,17 @@ limited while independent syntax/type diagnostics survive.
 
 `DefaultState` is known bounded lifecycle metadata. It does not suppress static
 analysis of an explicitly selected root and must not create global partial.
-SavedVariables account/character/machine declarations are metadata, not data-file
-access.
+`LoadSavedVariablesFirst` is known load-order metadata: preserve it, but never
+invent SavedVariables contents or types. SavedVariables account/character/machine
+declarations are metadata, not data-file access. `EscalateErrorDuringLoad` is a
+known restricted error-policy flag and does not make independent language
+analysis partial.
 
-Unknown cosmetic/custom metadata may be retained without limiting language work.
-Unknown directives that can alter selection, environment, namespace, order,
-triggers or callbacks remain located limitations.
+Retain localized display metadata, icon/category/group fields and `X-*` custom
+metadata without limiting language work. An unrecognized package metadata key is
+reported and limits only checks whose selection/context could depend on it; it
+does not invalidate already enumerated files. Unknown inline/file directives can
+change selection and therefore remain located unit limitations.
 
 ### Exact selected order and context
 
@@ -175,10 +185,11 @@ located failure of dependent scope and preserves independent units; unsafe paths
 and invalid selected TOC are hard refusal.
 
 Free inline scripts and reviewed handler adapters need different context. Supply
-`self` and parameters only where selected source or explicitly reviewed donor
-data supports that handler signature, and preserve the evidence class. Never
-replace a handler's `...` with addon chunk arguments. Synthetic wrappers require
-exact maps and never produce invented user locations.
+`self` and parameters only where selected source or an explicitly reviewed donor
+supports that handler signature. If the adapter is donor-derived rather than
+client-established, report the corresponding scoped limitation. Never replace a
+handler's `...` with addon chunk arguments. Synthetic wrappers require exact maps
+and never produce invented user locations.
 
 ### Implicit `Bindings*.xml`
 
@@ -209,7 +220,7 @@ Detailed traces:
 | TOC/XML/bindings integrity | exact selected paths, conditions, triggers, compatibility/context and maps | static facts do not prove runtime execution |
 | API availability/context | resolved receiver/symbol plus selected API metadata | missing declaration is not proof of removal |
 | Widgets/templates/mixins | known object type and explicit relations | dynamic creation/dispatch remains unknown |
-| Events/callbacks/bindings | known registration or reviewed callback unit with explicit evidence class | event-like strings do not connect systems |
+| Events/callbacks/bindings | known registration or reviewed callback unit plus any scoped semantic limitation | event-like strings do not connect systems |
 | Deprecation/replacement | explicit selected metadata/reviewed correction | never infer by name similarity |
 | Secret/restricted use | exact metadata and supported local operation | advisory where execution state is unknown |
 

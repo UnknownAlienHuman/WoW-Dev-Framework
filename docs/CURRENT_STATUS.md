@@ -2,7 +2,7 @@
 
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
 **Runtime implementation reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`
-**Documentation/source reconciliation reviewed through:** PR #256
+**Documentation/source reconciliation:** PR #257, based on `main` after PR #256
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 
 This is the authoritative current-state checkpoint. It does not replace
@@ -49,7 +49,7 @@ behavior.
 PRs #251–#254 reconciled active guides and all 21 open Issues with post-#250 code,
 repaired local anchors and added repository validation for local Markdown
 paths/anchors. PR #255 then closed deeper T02–T05/T11 specification gaps:
-complete dependency aliases, secure/private-table facts, proper three-valued
+complete dependency aliases, selected load-context facts, proper three-valued
 selection and a separate exact selected-order/context handoff beside path-sorted
 snapshots.
 
@@ -70,13 +70,16 @@ These findings are T19–T21 in
 [IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md) and
 [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
 
-The post-#256 consistency review found two documentation defect classes of its
-own: active summaries still exposed the pre-T17/T19 handoff, and several
-special-load semantics were labelled more strongly than their evidence allowed.
-D12–D13 record the correction: queue item 1 is the sole complete checklist, and
-client-source occurrences, current-code behavior, Wowless donor models and
-framework policy/unsupported states remain distinct. No runtime status changes
-from this documentation correction.
+PR #257 records seven documentation/maintenance defects after #256: active
+summaries still exposed the pre-T17/T19 handoff; donor models had been promoted
+into client claims; exact-current-head status fields became stale through their
+own merge; a proposed generic “evidence class” handoff would have recreated a
+proof layer; an orphan CI marker had no reader; the ordinary addon-table contract
+and `AllowAddOnTableAccess` were omitted while `SuppressLocalTableRef` was
+overclaimed; and current `LoadSavedVariablesFirst`/`EscalateErrorDuringLoad`
+metadata was absent even though the parser turns it into blocking unknown issues.
+T22–T23 and D12–D18 record the corrections. Exact raw source, narrow adapters and
+scoped limitations remain; no runtime status changes from this documentation work.
 
 ## Implemented after the baseline
 
@@ -109,8 +112,12 @@ Open work includes:
 - normal root/TOC/flavor/channel/Library configuration and ambiguity;
 - a small load target independent of `ProfileIdentity`/publication receipts;
 - complete dependency aliases and typed `LoadWith` triggers;
-- `UseSecureEnvironment`, `LoadIntoEnvironment`, `SuppressLocalTableRef`,
-  bootstrap/load-first and supported phases;
+- `UseSecureEnvironment`, per-unit `LoadIntoEnvironment`, ordinary
+  `(addonName, addonTable)` chunk context and `AllowAddOnTableAccess`;
+  `SuppressLocalTableRef` remains unsupported legacy/internal metadata rather
+  than a guessed suppression adapter;
+- `LoadSavedVariablesFirst`, `EscalateErrorDuringLoad` and nonblocking display/
+  localized/custom metadata without false global partial status;
 - correct three-valued allow/exclude reduction;
 - exact selected order/context beside path-sorted snapshots;
 - Stable/PTR/Beta admission, official zero-Interface compatibility uncertainty,
@@ -120,7 +127,8 @@ Open work includes:
 - independent-unit preservation after malformed included/bindings XML;
 - public `wow check` wiring, rendering, exit and cancellation;
 - XML-only Main and exact virtual projection;
-- addon chunk/private table plus evidence-scoped handler/binding adapters;
+- addon chunk/private table plus reviewed handler/binding adapters and scoped
+  limitations where client parity is unverified;
 - generated-Library manifest consumption;
 - corrected `StrideIndex`, `NilableContents`, `MayReturnNothing`, mixins and
   member environment;
@@ -144,12 +152,12 @@ source projection/handler context.
 ## Readiness verdict
 
 - **Baseline document reconciliation:** complete.
-- **Current-guide/Issue reconciliation:** complete through PR #256; the
-  post-#256 consistency pass also reconciles active summaries with the canonical
-  queue. Local links and anchors are mechanically checked.
+- **Current-guide/Issue reconciliation:** complete through PR #257; active
+  summaries and Issue instructions use the canonical queue without a generic
+  proof/evidence handoff. Local links and anchors are mechanically checked.
 - **Baseline source architecture/error register:** complete for retained baseline
   requirements.
-- **Current implementation tracing:** active; T17–T21 are source-traced and open.
+- **Current implementation tracing:** active; T17–T23 are source-traced and open.
 - **Lower first-slice owners:** defined and partially implemented.
 - **First ordinary user workflow:** not implemented or observed.
 - **Ready for blind execution without producer-to-reader tracing:** no.

@@ -132,8 +132,13 @@ availability, combat/taint safety or complete Secret-value flow.
 ## Addon chunk context
 
 Pinned Emmy infers an unbound chunk `...` as homogeneous `any...`; workspace
-registration or unrelated globals do not assign the two WoW chunk arguments.
-The public API has no WoW chunk-argument setting.
+registration or unrelated globals do not assign the WoW chunk arguments. The
+public API has no WoW chunk-argument setting.
+
+Pinned Blizzard `AddOnsDocumentation.lua` states that ordinary addon files receive
+an addon table as the second result of `...`; the standard first result is the
+addon name. `AllowAddOnTableAccess: 1` controls later retrieval through
+`C_AddOns.GetAddOnLocalTable`; it does not create or suppress the chunk table.
 
 For supported ordinary external Lua chunks, the source-traced design is:
 
@@ -157,11 +162,17 @@ value, and
 attaches fields to that referenced table identity. These mechanisms support the
 design; cross-file behavior and mappings remain unobserved until implemented.
 
-Do not apply a universal two-argument/private-table model to every XML body or
-special Blizzard context. External chunks, free inline Script bodies, reviewed
-handler adapters with an explicit evidence class, `SuppressLocalTableRef`, secure
-environments and bootstrap loads are distinct. Unsupported contexts remain
-explicit limitations.
+Do not apply the ordinary two-result chunk model to every XML body or special
+Blizzard context. External chunks, free inline Script bodies, reviewed handler
+adapters, secure environments and bootstrap loads are distinct.
+
+`SuppressLocalTableRef` is different again. Selected Blizzard source still
+contains the restricted/internal metadata, while the reviewed Wowless donor uses
+a `nil` second value. That donor behavior is not enough to override the pinned
+Blizzard ordinary-chunk contract or establish current client arity. Treat the
+directive as unsupported context: do not fabricate a table, do not rewrite its
+chunk as an ordinary helper, and keep ellipsis-dependent conclusions explicitly
+limited. `AllowAddOnTableAccess` remains a separate retrieval permission.
 
 ## Updates and invalidation
 

@@ -1,8 +1,8 @@
 # TOC trigger, product-channel and binding-callback trace
 
-**Checked:** 2026-10-24  
-**Source revision:** `337b9b6e676af6735f416e8527176ed17e865172`  
-**Scope:** post-#255 completion of the ordinary TOC/load-context audit
+**Original trace base:** `337b9b6e676af6735f416e8527176ed17e865172` (`main` after PR #255)
+**Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
+**Scope:** product-channel, reverse-trigger, binding-callback and sentinel/security traces T19–T21
 
 This source trace supplements
 [TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md) and the active
@@ -12,7 +12,7 @@ not a runtime-client emulator and does not claim an executed addon workflow.
 
 ## Verdict
 
-The #255 trace closed dependency aliases, secure/private-table execution context,
+The #255 trace addressed dependency aliases, selected execution context,
 three-valued predicates and the separate ordered-unit handoff. Five additional
 source-backed gaps remain before ordinary Project acquisition can be considered
 complete:
@@ -37,8 +37,8 @@ Blizzard files below prove that directives/documents occur and show their source
 locations. The reviewed Wowless loader supplies comparative product-gating,
 reverse-trigger, binding-selection and callback-wrapper behavior. Framework
 admission policy covers unsupported `Secure`, sentinel Interface and explicitly
-selected source. These evidence classes must not be collapsed into one claim of
-client-authoritative runtime semantics.
+selected source. State those boundaries directly; do not collapse them into a
+client-authoritative runtime claim or add a generic proof/evidence DTO.
 
 ## Evidence traced
 
@@ -67,9 +67,9 @@ example `Stable | Ptr | Beta`. It is separate from:
 - global/secure execution context.
 
 Adopt the reviewed donor rule for `OnlyBetaAndPTR: 1`: PTR/Beta includes,
-Stable excludes and an omitted channel leaves the gate unresolved. Preserve that
-donor evidence class until client-authoritative semantics are established; never
-infer channel from repository branch, folder, Interface number or addon title.
+Stable excludes and an omitted channel leaves the gate unresolved. Scope a
+limitation to results that depend on unverified client parity; never infer channel
+from repository branch, folder, Interface number or addon title.
 Reject malformed values rather than treating them as false.
 
 ### 2. `LoadWith` is a trigger relation, not a prerequisite
