@@ -4,10 +4,12 @@ Read [current status](docs/CURRENT_STATUS.md) and the
 [manifesto](docs/ARCHITECTURE.md) in full. For implementation, read the relevant
 route in [IMPLEMENTATION.md](docs/IMPLEMENTATION.md), its domain rules in
 [WOW_LINTER.md](docs/WOW_LINTER.md), and the actual caller/owner code.
-[REFACTOR_QUEUE.md](docs/REFACTOR_QUEUE.md) orders work;
-[AUDIT.md](docs/AUDIT.md) is baseline redesign evidence, not a live progress page
-or mandatory context for every patch. User instructions override this workflow.
-Old Issue comments and removed specifications cannot expand the product.
+[REFACTOR_QUEUE.md](docs/REFACTOR_QUEUE.md) orders work and is the complete
+checklist for its current item; README, skill and package summaries are navigation
+only and cannot narrow it. [AUDIT.md](docs/AUDIT.md) is baseline redesign evidence,
+not a live progress page or mandatory context for every patch. User instructions
+override this workflow. Old Issue comments and removed specifications cannot
+expand the product.
 
 ## Work
 
@@ -39,10 +41,14 @@ Do **not** recreate the lower owners delivered after PR #244:
   hashes;
 - PR #250 requires exact Main snapshot identity for configured-owner reuse.
 
-Continue from the open handoff:
+The authoritative handoff is
+[queue item 1](docs/REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check). Do not
+implement from this abbreviated route alone:
 
 ```text
-ordinary configuration and Project acquisition
+ordinary configuration
+  -> Project-selected TOC/dependencies/triggers/channel and bounded source
+  -> validated exact selected order/execution context plus mapped XML/bindings
   -> exact Main/Library/virtual snapshots
   -> existing ConfiguredAnalyzerSession
   -> existing wow-service addon_check
@@ -53,9 +59,10 @@ Follow the [source-traced boundary](docs/REFACTOR_QUEUE.md#source-traced-replace
 and [exact owner split](docs/REFACTOR_QUEUE.md#exact-owner-split). Reuse
 `ProjectInputDirectory`, `ProjectInputFile`, selected load plans and XML maps, but
 not `ProjectConfiguration`/`ProjectInputInventory` publication requirements.
-Extract the small load/configuration and pure XML-preparation seams needed by the
-ordinary caller. The CLI owns argument precedence, cancellation, rendering and
-exit status only.
+Project owns flavor versus product channel, target/source Interface, dependency
+versus `LoadWith`, selected order, execution/private-table context, implicit
+bindings and unresolved security metadata. The CLI owns argument precedence,
+cancellation, rendering and exit status only.
 
 Do not satisfy the old `LocalCommand`/`LocalProjectBackend`/generic `Service`
 constructors with fabricated Reference, Rules, compatibility or Project state.

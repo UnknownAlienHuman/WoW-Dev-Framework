@@ -44,15 +44,18 @@ addon or editor workflow.
 
 ## Remaining application handoff
 
-The next application work is not another analyzer or Service wrapper. It is:
+The next application work is not another analyzer or Service wrapper. The complete
+Project/Service checklist is
+[queue item 1](../../docs/REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check);
+this application summary must not narrow it. Application-owned work is:
 
 1. parse ordinary CLI/config inputs and precedence;
-2. call Project's selected root/TOC/dependency/Library acquisition and pure XML
-   preparation seams;
-3. build the exact snapshots required by the existing Service request;
-4. call `wow_service::addon_check::check_addon` directly;
-5. render its message/code/severity/location and limitations in text/JSON;
-6. apply the documented `0/1/2/64/130/4` exit policy.
+2. request the validated Project input defined by queue item 1, including selected
+   order/context and mapped XML/binding units rather than snapshot paths alone;
+3. pass that input to `wow_service::addon_check::check_addon` without reconstructing
+   load facts in the CLI;
+4. render message/code/severity/location and scoped limitations in text/JSON;
+5. apply the documented `0/1/2/64/130/4` exit policy.
 
 The old executable path constructs `LocalProjectInput`, `LocalProjectBackend` and
 the generic `Service`, which require Reference, Rules, analyzer-compatibility and

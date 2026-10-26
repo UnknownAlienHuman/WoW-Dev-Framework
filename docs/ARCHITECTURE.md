@@ -8,17 +8,20 @@ cannot express.
 
 ## Required result
 
-An author selects an addon, a client flavor and a compatible annotation Library.
-The tool reads its TOC, Lua and XML, then reports useful diagnostics at the actual
-source locations. Messages explain the problem and retain the upstream code and
-severity. The same project analysis serves CLI, editor and agent requests.
+An author selects an addon, an exact client target (flavor, product channel and
+optional Interface compatibility target) and a compatible annotation Library.
+The tool reads its TOC, Lua, XML and selected binding callbacks, then reports
+useful diagnostics at the actual source locations. Messages explain the problem
+and retain the upstream code and severity. The same project analysis serves CLI,
+editor and agent requests.
 
 The product must cover:
 
 - Lua syntax and type checking against the selected Blizzard API, including
   parameters, multiple returns, nilability, callbacks, widgets and mixins;
-- TOC/XML file selection, dependency declarations, ordered loading and embedded
-  Lua, with precise locations and explicit unknowns;
+- TOC/XML/binding selection, dependency declarations, reverse load triggers,
+  ordered loading and embedded/callback Lua, with precise locations and explicit
+  unknowns;
 - API availability in the selected client and execution context, plus supported
   event, callback and restriction checks;
 - changes to source, Library or load selection without stale diagnostics;

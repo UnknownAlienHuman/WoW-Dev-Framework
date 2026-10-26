@@ -1,9 +1,8 @@
 # Active Issue caller audit
 
-**Checked:** 2026-10-25  
-**Repository revision used for caller/source checks:** `337b9b6e676af6735f416e8527176ed17e865172` (runtime code unchanged from PR #250)  
-**Issue bodies reconciled through:** PR #256, `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77`  
-**Scope:** all 21 open implementation Issues, including T19–T21
+**Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
+**Runtime callers reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`
+**Scope:** all 21 open implementation Issues through PR #257, including T17–T23
 
 This register checks Issue bodies as an instruction surface against current
 production callers. It complements [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md), the
@@ -14,12 +13,14 @@ replace the ordered [queue](REFACTOR_QUEUE.md) or claim runtime execution.
 
 ## Method and status
 
-- Read every open Issue body after PRs #246–#256.
+- Read every open Issue body after PRs #246–#256 and rechecked the three bodies
+  changed during T17–T23 and PR #257.
 - Followed named producers, handoffs and production readers; tests/fixtures were
   evidence, not automatic product consumers.
-- Rechecked TOC dependencies, execution context, product channel, load triggers,
-  implicit bindings, official sentinel/security metadata and selected order
-  against pinned Blizzard source and the pinned Wowless comparison.
+- Rechecked TOC dependencies, ordinary addon-table/retrieval semantics, current
+  lifecycle/error metadata, execution context, product channel, load triggers,
+  implicit bindings, sentinel/security metadata and selected order against pinned
+  Blizzard source, current code and the pinned Wowless comparison.
 - **confirmed** — the named boundary still exists.
 - **corrected** — the body contradicted current source or omitted a mandatory
   handoff and was rewritten.
@@ -36,7 +37,7 @@ replace the ordered [queue](REFACTOR_QUEUE.md) or claim runtime execution.
 | #111 Store lifecycle | corrected | Several backup/replacement/quarantine/report surfaces are orphaned inside Store; GC/recovery/retention still have production consumers. |
 | #112 wire formats | reconciled | Direct DTOs are distinguished from legacy replay/Search/Graph formats; semantic admission remains required after decode. |
 | #113 performance | confirmed | No ordinary Blizzard UI workflow exists to measure. |
-| #117 TOC/XML relationships | corrected | Existing UI XML units/maps are useful, but persisted/direct relations must consume exact selected order/context. Implicit bindings are separate selected callback source; zero-Interface/security uncertainty stays attached to Project identity. |
+| #117 TOC/XML relationships | corrected | Existing UI XML units/maps are useful, but persisted/direct relations consume exact selected order/context. Donor-modeled binding behavior produces scoped limitations where parity is unverified; zero-Interface/security uncertainty stays attached to Project identity. |
 | #118 lineage/fingerprints | corrected | Named lineage/source-comparison routes are absent; remaining scope is fingerprints, Service candidate manifests and old Search proof plumbing. |
 | #122 readable context | confirmed | Old Context still depends on Project/Graph reports, packs/continuations and source rereads. |
 | #125 product completion | reconciled | Requires observed ordinary generation/check/editor/search behavior; build/Clippy is insufficient. |
@@ -48,16 +49,22 @@ replace the ordered [queue](REFACTOR_QUEUE.md) or claim runtime execution.
 | #197 CLI | reconciled | Must call ordinary Project acquisition and existing `addon_check`, not adapt the generic route. Channel/trigger/binding/compatibility/security facts remain Project-owned. |
 | #198 LSP | reconciled | Payload fixed; project reuse, version gaps, stale rejection and standard empty results remain open. |
 | #199 MCP | reconciled | Lower owners exist; one useful profile, metadata and unknown-notification behavior remain open. |
-| #200 configuration/acquisition | corrected | Ordinary target now explicitly includes Stable/PTR/Beta, `LoadWith`, nonblocking `DefaultState`, machine SavedVariables, implicit bindings, official `Interface: 0` preservation and unresolved `Secure` context without guessed semantics. |
-| #201 end-to-end workflow | corrected | First observation must prove T17–T21 facts reach Service and are not discarded or fabricated before the public result. |
+| #200 configuration/acquisition | corrected | Ordinary target includes Stable/PTR/Beta, official ordinary addon-table context, `AllowAddOnTableAccess`, current load/error metadata and narrow special-load adapters. `SuppressLocalTableRef`, zero Interface and unresolved `Secure` remain scoped unsupported context. |
+| #201 end-to-end workflow | corrected | First observation must prove T17–T23 facts reach Service without being discarded, fabricated or promoted into stronger client guarantees, and without introducing a generic evidence/proof result layer. |
 
 ## Corrections completed
 
 - #111, #118 and #131 were corrected in PR #254.
 - #117, #200 and #201 were corrected after PR #255 for exact order/context.
-- During the T19–T21 review, #117/#200/#201 were updated again in PR #256 for
-  product channel, reverse triggers, implicit bindings, machine SavedVariables,
-  official zero Interface and unresolved `Secure` metadata.
+- During the T19–T21 review, #117/#200/#201 were updated again for product
+  channel, reverse triggers, implicit bindings, machine SavedVariables, official
+  zero Interface and unresolved `Secure` metadata.
+- PR #257 corrected those same bodies again where donor product-gating,
+  environment/private-table, trigger or callback/discovery behavior had been
+  labelled as client-authoritative. It also added the pinned ordinary chunk/
+  `AllowAddOnTableAccess` contract and current metadata classification. The result
+  preserves exact raw source and uses narrow scoped limitations without a generic
+  evidence/proof handoff.
 - No Issue was closed by source inspection; no workflow moved to `observed`.
 
 ## Maintenance rule

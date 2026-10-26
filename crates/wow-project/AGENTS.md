@@ -4,6 +4,8 @@ Follow root [AGENTS.md](../../AGENTS.md), the full
 [manifesto](../../docs/ARCHITECTURE.md) and the relevant
 [implementation route](../../docs/IMPLEMENTATION.md).
 
-Own root/TOC/dependency selection, current source, XML virtual context and
-updates. Preserve load order and exact mapped ranges; reuse Emmy for semantics.
-An ordinary check must not require Project publication or replay hydration.
+Own root/TOC/dependency/trigger/channel selection, exact selected order and
+execution/private-table context, implicit binding documents, current source, XML
+virtual context and updates. Preserve exact mapped ranges and source-backed
+unknowns; reuse Emmy for Lua semantics. The complete current boundary is queue
+item 1. An ordinary check must not require Project publication or replay hydration.

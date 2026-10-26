@@ -12,15 +12,18 @@ Read only the owners and callers the task needs; do not repeat a slice already
 recorded as implemented in the trace register.
 
 Reuse EmmyLua for Lua analysis and the existing Rust Reference/Annotations path
-for Blizzard/Ketho data. Keep client flavor, TOC load context and API execution
-environment distinct. Preserve useful diagnostic text, exact source spans and
-visible unknowns. Never execute analyzed Lua or infer runtime safety from types.
+for Blizzard/Ketho data. Keep client flavor, product channel, target/source
+Interface, TOC execution/private-table context, API execution context and Secret
+flow distinct. Preserve useful diagnostic text, exact source spans and visible
+unknowns. Never execute analyzed Lua or infer runtime safety from types.
 
 Finish a useful input-to-output path and remove its displaced platform code and
-instructions. One manager/worktree; delegate nonoverlapping work. Preserve user
-source, configuration and unpublished changes. Follow root AGENTS for current
-validation: product first, formatting/affected strict Clippy; tests deferred until
-functional completion. Do not restore historical gates or create status diaries.
+instructions. For the first public check, follow queue item 1 as the complete
+checklist; README/AGENTS/package summaries cannot narrow it. One manager/worktree;
+delegate nonoverlapping work. Preserve user source, configuration and unpublished
+changes. Follow root AGENTS for current validation: product first,
+formatting/affected strict Clippy; tests deferred until functional completion. Do
+not restore historical gates or create status diaries.
 
 For annotation changes read `docs/KETHO_RUST_PORT.md`; for engine changes read
 `docs/EMMYLUA_UPSTREAM.md`. Preserve notices. Inspect the public generator help

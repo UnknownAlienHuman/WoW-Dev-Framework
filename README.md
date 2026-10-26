@@ -17,7 +17,11 @@ The documentation/source audit was consolidated in PR #244. The authoritative
 live checkpoint is [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md); the baseline
 [audit](docs/AUDIT.md) remains tied to the commit it names.
 
-On current `main` after PR #250:
+Runtime implementation currently stops at PR #250. PRs #251–#256 reconcile
+current guides, Issues and additional source/load requirements; they do not add
+runtime behavior.
+
+Implemented internal components:
 
 - PR #246 preserves configured Emmy diagnostic codes, exact messages, severities
   and source ranges instead of filtering to four families;
@@ -30,11 +34,17 @@ On current `main` after PR #250:
   evidence, so the direct path need not fabricate report hashes;
 - PR #250 requires exact Main snapshot identity for configured-owner reuse.
 
-These are lower-level implemented components, not a usable public addon checker.
-The ordinary root/TOC/flavor/Library acquisition path, CLI wiring, XML source
-projection, addon chunk/private-table context, verified XML handler context,
-WoW metadata/rule repairs, project-aware LSP reuse and direct source index/search
-remain open. No end-to-end addon or editor workflow is marked observed.
+These are internal components, not a usable public addon checker. The ordinary
+Project path still has to preserve product channel, dependencies versus
+`LoadWith`, exact selected order/execution context, implicit bindings,
+Interface/security uncertainty, XML mappings and addon/callback context before
+calling them. CLI wiring, WoW metadata/rule repairs, project-aware LSP reuse and
+direct source index/search also remain open. No end-to-end addon or editor
+workflow is marked observed.
+
+The complete current checklist is
+[queue item 1](docs/REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check); this
+README is only a status/navigation summary.
 
 ## Current executable entry points
 

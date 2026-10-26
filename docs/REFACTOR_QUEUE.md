@@ -48,20 +48,27 @@ Implement in this order:
 3. use the finite dependency aliases: required `Dep`, `Dependencies`,
    `DependsOn`, `RequiredDep`, `RequiredDeps`; optional `OptionalDep`,
    `OptionalDeps`; select only relevant transitive closure;
-4. model `UseSecureEnvironment`, `LoadIntoEnvironment`,
-   `SuppressLocalTableRef`, bootstrap and supported load-first/load-phase facts;
-5. model `OnlyBetaAndPTR` against explicit `Stable | Ptr | Beta`; retain
-   `LoadWith` as a source-located reverse trigger, never a dependency;
+4. model source-located `UseSecureEnvironment` and `LoadIntoEnvironment`
+   through narrow reviewed adapters; implement the official ordinary
+   `(addonName, addonTable)` contract and `AllowAddOnTableAccess` retrieval flag;
+   retain `SuppressLocalTableRef` as unsupported restricted/internal context,
+   never as a guessed suppression adapter;
+5. model `OnlyBetaAndPTR` against explicit `Stable | Ptr | Beta` using the
+   reviewed donor gating rule; retain source-located `LoadWith` through the
+   reviewed reverse-trigger model, never as a dependency or client timing proof;
 6. parse official source `Interface: 0` as an unknown/sentinel compatibility
    value rather than malformed input; retain `Secure` as source-backed
    unsupported context until reviewed semantics exist—never alias it by name to
    `UseSecureEnvironment` or another security model;
-7. recognize bounded `DefaultState` lifecycle metadata without making an explicit
-   source check partial; add `SavedVariablesMachine` declaration scope while
-   never reading user SavedVariables content;
-8. discover at most one exact `Bindings<suffix>.xml` under the held addon root,
-   and map `<Binding>` Lua as callback units with only source-verified `keystate`;
-   absence is normal;
+7. recognize bounded `DefaultState`, `LoadSavedVariablesFirst` and
+   `EscalateErrorDuringLoad` without making independent source checking partial;
+   add `SavedVariablesMachine` declaration scope while never reading user
+   SavedVariables content;
+8. discover at most one exact `Bindings<suffix>.xml` under the held addon root
+   using the reviewed finite donor model, and map `<Binding>` Lua as callback
+   units with the source-and-donor-backed `keystate` parameter; absence is normal.
+   Do not claim exact client discovery timing or negative availability from donor
+   ordering; attach a scoped limitation only where a result depends on it;
 9. fix tri-state predicate reduction so known allow/exclude results are not
    poisoned by irrelevant unknown aliases or gates;
 10. preserve exact package/TOC/XML/callback order and context in a validated value
@@ -79,6 +86,10 @@ Implement in this order:
     documented `0/1/2/64/130/4` exit policy;
 17. record the first exact command/input/result only after it is actually run.
 
+Preserve exact raw source facts and named scoped limitations; do not create a
+universal evidence-class/proof DTO or expose donor provenance as normal frontend
+configuration.
+
 Empty/omitted `checks` selects no WoW rule while Emmy diagnostics remain enabled.
 Missing chunk, handler, binding or unresolved security context is an explicit
 limitation, not a clean result.
@@ -86,7 +97,8 @@ limitation, not a clean result.
 Source evidence:
 
 - [TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md) — dependency aliases,
-  secure/private-table context, tri-state predicates and selected order;
+  ordinary/special chunk-table context, namespace retrieval permission, current
+  metadata classification, tri-state predicates and selected order;
 - [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md) — product
   channel, reverse triggers, implicit bindings, known metadata and official
   compatibility/security uncertainty.
@@ -152,9 +164,13 @@ Use the same configured owner plus validated Project context for:
 - physical Lua and mapped UI XML Lua;
 - XML-only addons;
 - one private table per supported ordinary addon and lexical chunks per file;
-- source-verified UI handler parameters;
-- mapped `<Binding>` callbacks with `keystate`, distinct from top-level chunks;
-- suppressed private tables, package/per-unit secure overrides,
+- `AllowAddOnTableAccess` as retrieval permission, not injection control;
+- unsupported `SuppressLocalTableRef` chunks with no fabricated context;
+- reviewed UI handler parameter adapters plus scoped limitations where client
+  parity is unverified;
+- mapped `<Binding>` callbacks using the source-and-donor-backed `keystate`
+  adapter, distinct from top-level chunks;
+- package/per-unit secure overrides,
   bootstrap/load-first, free-inline and binding phases;
 - exact virtual-to-XML mappings including entities/discontinuous pieces;
 - explicit limitations for unresolved `Secure` metadata rather than guessed
