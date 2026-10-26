@@ -45,8 +45,7 @@ pub(super) fn parse(
                 });
             }
             if record.selection != LoadSelection::Included {
-                record.file_enumeration_complete =
-                    record.selection == LoadSelection::Excluded;
+                record.file_enumeration_complete = record.selection == LoadSelection::Excluded;
                 records.push(record);
                 offset = end;
                 continue;
