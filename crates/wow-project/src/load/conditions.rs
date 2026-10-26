@@ -258,15 +258,16 @@ pub(super) fn project(
     let mut unresolved_condition = false;
     while let Some(start) = rest.find('[') {
         if rest[..start].contains(']') {
-            record.selection = LoadSelection::Unresolved;
+            record.selection = record.selection.and(LoadSelection::Unresolved);
             record.issues.push(Issue::UnknownTocSyntax);
         }
         path.push_str(&rest[..start]);
         rest = &rest[start..];
         let Some(end) = rest.find(']') else {
-            record.selection = LoadSelection::Unresolved;
+            record.selection = record.selection.and(LoadSelection::Unresolved);
             record.issues.push(Issue::UnknownTocSyntax);
-            return Ok(String::new());
+            rest = "";
+            break;
         };
         clauses += 1;
         if clauses > 16 {
@@ -288,14 +289,14 @@ pub(super) fn project(
             record.conditions.push(condition);
             unresolved_condition |= selection == LoadSelection::Unresolved;
         } else {
-            record.selection = LoadSelection::Unresolved;
+            record.selection = record.selection.and(LoadSelection::Unresolved);
             record.issues.push(Issue::UnknownTocSyntax);
         }
         rest = &rest[end + 1..];
     }
     path.push_str(rest);
     if rest.contains(']') {
-        record.selection = LoadSelection::Unresolved;
+        record.selection = record.selection.and(LoadSelection::Unresolved);
         record.issues.push(Issue::UnknownTocSyntax);
     }
     if record.selection == LoadSelection::Excluded {
@@ -332,7 +333,7 @@ pub(super) fn project(
         if let Some(value) = value {
             expanded = expanded.replace(&format!("[{variable}]"), value);
         } else {
-            record.selection = LoadSelection::Unresolved;
+            record.selection = record.selection.and(LoadSelection::Unresolved);
             record.issues.push(Issue::LoadContextRequired);
         }
     }
