@@ -1,8 +1,9 @@
 # Active Issue caller audit
 
-**Checked:** 2026-10-24  
-**Source revision:** `337b9b6e676af6735f416e8527176ed17e865172`  
-**Scope:** all 21 open implementation Issues after PR #255, including T19–T21
+**Checked:** 2026-10-25  
+**Repository revision used for caller/source checks:** `337b9b6e676af6735f416e8527176ed17e865172` (runtime code unchanged from PR #250)  
+**Issue bodies reconciled through:** PR #256, `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77`  
+**Scope:** all 21 open implementation Issues, including T19–T21
 
 This register checks Issue bodies as an instruction surface against current
 production callers. It complements [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md), the
@@ -13,7 +14,7 @@ replace the ordered [queue](REFACTOR_QUEUE.md) or claim runtime execution.
 
 ## Method and status
 
-- Read every open Issue body after PRs #246–#255.
+- Read every open Issue body after PRs #246–#256.
 - Followed named producers, handoffs and production readers; tests/fixtures were
   evidence, not automatic product consumers.
 - Rechecked TOC dependencies, execution context, product channel, load triggers,
@@ -54,9 +55,9 @@ replace the ordered [queue](REFACTOR_QUEUE.md) or claim runtime execution.
 
 - #111, #118 and #131 were corrected in PR #254.
 - #117, #200 and #201 were corrected after PR #255 for exact order/context.
-- During the T19–T21 review, #117/#200/#201 were updated again for product
-  channel, reverse triggers, implicit bindings, machine SavedVariables, official
-  zero Interface and unresolved `Secure` metadata.
+- During the T19–T21 review, #117/#200/#201 were updated again in PR #256 for
+  product channel, reverse triggers, implicit bindings, machine SavedVariables,
+  official zero Interface and unresolved `Secure` metadata.
 - No Issue was closed by source inspection; no workflow moved to `observed`.
 
 ## Maintenance rule
