@@ -190,13 +190,39 @@ impl AddonCheckDiagnostic {
     }
 }
 
-/// Stable reasons why this first slice cannot claim full addon semantics.
+/// Stable, finite reasons why the requested direct check cannot claim complete
+/// results. Project maps its detailed load/XML issues into these user-facing
+/// categories while retaining the exact message and optional source location.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AddonCheckLimitationCode {
+    /// A selected physical, TOC, XML or binding source unit is unavailable or
+    /// cannot be safely included in the requested analysis scope.
+    SourceSelectionIncomplete,
+    /// Required dependency/package closure or its deterministic order is not
+    /// completely resolved. Normal absence of an optional dependency is not a
+    /// limitation.
+    DependencyResolutionIncomplete,
+    /// Product channel, predicate or trigger facts leave selected reachability
+    /// unresolved.
+    LoadSelectionUnresolved,
+    /// Target Interface or source compatibility is unknown for dependent work.
+    CompatibilityUnresolved,
+    /// A retained source directive or execution context has unsupported or
+    /// unverified semantics for the affected result.
+    LoadContextUnsupported,
+    /// Ordinary addon-name/private-table chunk context is unavailable.
     AddonChunkContextUnavailable,
+    /// Virtual Lua findings cannot yet be mapped to exact XML source.
     VirtualSourceProjectionUnavailable,
+    /// A selected XML handler lacks its reviewed receiver/parameter context.
     XmlHandlerContextUnavailable,
+    /// Binding discovery, mapping or callback context is unavailable for the
+    /// affected result.
+    BindingContextUnavailable,
+    /// A check needs generated-Library typed metadata that the supplied plain
+    /// Lua Library does not provide.
+    GeneratedLibraryMetadataUnavailable,
 }
 
 /// One explicit analysis limitation kept separate from findings.

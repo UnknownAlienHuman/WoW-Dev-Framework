@@ -1,7 +1,7 @@
 # Current implementation status
 
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
-**Runtime implementation review:** PRs #259–#262 own T24–T27; previous delivered slices are PRs #246–#250
+**Runtime implementation review:** PRs #259–#263 own T24–T28; previous delivered slices are PRs #246–#250
 **Documentation/source reconciliation:** PR #257, based on `main` after PR #256
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 
@@ -109,11 +109,18 @@ owner and can affect shared analysis, but only exact physical Main diagnostics
 are public until Project supplies the virtual-to-XML map. The result keeps an
 explicit projection limitation instead of fabricating a user location.
 
+PR #263 supplies the missing finite limitation categories needed by the direct
+Project handoff: selected-source, dependency closure, unresolved load selection,
+compatibility, unsupported load context, chunk, virtual projection, XML handler,
+binding and generated-Library metadata. Detailed Project issue enums remain in
+Project; messages and exact locations remain on individual limitations. The
+actual Project-to-Service mapping is still open.
+
 ## Implemented after the baseline
 
 | Slice | Delivered behavior | Evidence | Runtime observation |
 | --- | --- | --- | --- |
-| T12 / PR #246 | configured Emmy diagnostics retain code, exact message, severity and byte range; standalone path initializes Lua 5.1 STD | run #418 passed | unexecuted |
+| T12 / PR #246 | configured Emmy diagnostics retain code, exact message, severity and byte range; standalone Lua 5.1 STD is initialized | run #418 passed | unexecuted |
 | T06/T13 / PR #247 | one exact Main + Library + optional virtual configured owner with caller diagnostics, STD and explicit semantic collection | run #422 passed | unexecuted |
 | T14 / PR #248 | direct `wow-service::addon_check` result without Reference, Rules, publication, graph, store or presentation platform | run #425 passed | unexecuted |
 | T07/T15 / PR #249 | compiled provenance separated from compatibility-report evidence | run #440 passed | unexecuted |
@@ -121,9 +128,10 @@ explicit projection limitation instead of fabricating a user location.
 | T24 / PR #259 | direct virtual diagnostics require only the exact snapshot; Project generation remains only for explicit virtual semantic facts | run #480 passed | unexecuted |
 | T25 / PR #260 | direct result exposes diagnostics/limitations without snapshot or analysis receipts | run #486 passed | unexecuted |
 | T26 / PR #261 | direct request/result preserves exact located input limitations without another result model | run #491 passed | unexecuted |
-| T27 / PR #262 | unprojected virtual diagnostics remain internal; public findings require exact physical or projected source locations | exact-head compile/Clippy gate required before merge | unexecuted |
+| T27 / PR #262 | unprojected virtual diagnostics remain internal; public findings require exact physical or projected source locations | run #495 passed | unexecuted |
+| T28 / PR #263 | finite direct limitation categories cover the ordinary Project result surface without string-only classification | exact-head compile/Clippy gate required before merge | unexecuted |
 
-These nine internal building blocks exist after PR #262. No ordinary addon input
+These ten internal building blocks exist after PR #263. No ordinary addon input
 reaches them through the public command yet.
 
 ## Open path to the first usable command
@@ -157,6 +165,7 @@ Open work includes:
 - bounded exact `Bindings*.xml` discovery and callback context;
 - known nonblocking `DefaultState` and machine SavedVariables declarations;
 - independent-unit preservation after malformed included/bindings XML;
+- Project issue-to-limitation mapping through the finite T28 categories;
 - public `wow check` wiring, rendering, exit and cancellation;
 - XML-only Main and exact virtual-to-XML diagnostic projection;
 - addon chunk/private table plus reviewed handler/binding adapters and scoped
@@ -184,21 +193,23 @@ collect virtual diagnostics, its public result exposes no lower-owner receipts,
 and exact Project preparation limitations can reach that same result with their
 source locations intact. Until exact XML projection is supplied, virtual findings
 remain internal rather than leaking synthetic workspace paths as user locations.
+The finite T28 categories are available; Project still must map its detailed
+issues into them during ordinary orchestration.
 
 ## Readiness verdict
 
 - **Baseline document reconciliation:** complete.
-- **Current-guide/Issue reconciliation:** complete through PR #257; active
-  summaries and Issue instructions use the canonical queue without a generic
-  proof/evidence handoff. Local links and anchors are mechanically checked.
+- **Current-guide/Issue reconciliation:** complete through PR #257 plus the
+  delivered T24–T28 runtime corrections; local links and anchors are mechanically
+  checked.
 - **Baseline source architecture/error register:** complete for retained baseline
   requirements.
-- **Current implementation tracing:** active; T17–T27 are traced, with T24–T27
-  implemented by PRs #259–#262 and the ordinary route still open.
+- **Current implementation tracing:** active; T17–T28 are traced, with T24–T28
+  implemented by PRs #259–#263 and the ordinary route still open.
 - **Lower first-slice owners:** defined and partially implemented.
 - **First ordinary user workflow:** not implemented or observed.
 - **Ready for blind execution without producer-to-reader tracing:** no.
 
-Do not reopen the old platform or repeat T06/T12–T16/T24–T27. Continue from
+Do not reopen the old platform or repeat T06/T12–T16/T24–T28. Continue from
 ordinary acquisition/context/CLI and update the trace register whenever a
 boundary or observed result changes.

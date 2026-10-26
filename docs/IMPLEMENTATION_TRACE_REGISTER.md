@@ -2,7 +2,7 @@
 
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256); PR #257 owns this review
-**Runtime implementation review:** PRs #259–#262 own T24–T27; earlier delivered slices remain PRs #246–#250
+**Runtime implementation review:** PRs #259–#263 own T24–T28; earlier delivered slices remain PRs #246–#250
 **Implementation work started:** 2026-10-24
 
 This is the active addendum to [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md). The old
@@ -53,7 +53,8 @@ sequence can move it to **observed**.
 | T24 | exact virtual snapshot -> direct configured diagnostics without Project publication identity | implemented by PR #259; run #480 passed | unexecuted |
 | T25 | configured diagnostics -> public direct result without snapshot/report receipts | implemented by PR #260; run #486 passed | unexecuted |
 | T26 | exact selected-input limitation -> same direct result with optional exact location | implemented by PR #261; run #491 passed | unexecuted |
-| T27 | virtual Emmy diagnostic -> public exact XML location | PR #262 hides unprojected findings; exact projection handoff remains open | unexecuted |
+| T27 | virtual Emmy diagnostic -> public exact XML location | PR #262 hides unprojected findings; exact projection handoff remains open; run #495 passed | unexecuted |
+| T28 | detailed Project issue -> finite direct limitation category | PR #263 supplies result categories; actual Project mapping remains open | unexecuted |
 
 ## Decisions and evidence
 
@@ -345,6 +346,26 @@ only physical Main diagnostics. Do not fabricate an XML location, discard the
 virtual units from analysis, or create another result wrapper. The existing
 `Virtual` source role remains reserved for the later exact projected handoff.
 
+### T28 — one finite direct limitation surface for Project outcomes
+
+After PR #261, Project could pass a message and exact location into the direct
+result, but the code enum contained only addon-chunk, virtual-projection and XML-
+handler fallbacks. Current Project owners already distinguish source selection,
+dependency/package closure, unresolved predicates/channel/triggers,
+compatibility, unsupported execution context, XML/binding and generated-Library
+metadata outcomes. Mapping all of those into three unrelated codes or message
+text would destroy stable classification.
+
+**Decision and implementation:** PR #263 adds finite user-facing categories for
+selected-source incompleteness, dependency resolution, unresolved load
+selection, unresolved compatibility, unsupported load context, addon chunk,
+virtual projection, XML handler, binding context and generated-Library metadata.
+Detailed Project issue enums remain Project-owned. Each direct limitation retains
+its exact bounded message and optional exact source location. The actual mapping
+from Project issues into these categories is still part of ordinary orchestration;
+do not add an open-ended string code, generic evidence class or duplicate issue
+hierarchy.
+
 ## Documentation reconciliation ledger
 
 | ID | Drift found after PR #244 | Resolution |
@@ -364,6 +385,7 @@ virtual units from analysis, or create another result wrapper. The existing
 | D20 | the direct serializable result still exposed snapshot and upstream analysis IDs despite the current ordinary workflow rejecting report/digest receipts | PR #260 removes those public fields while preserving exact per-diagnostic source binding and internal lower-owner identities |
 | D21 | the direct limitation DTO and request could not preserve source-located Project preparation failures required by the canonical path | PR #261 reuses `ExactSourceLocation` and adds one direct input-limitation handoff with same-code fallback suppression |
 | D22 | the direct result published synthetic virtual workspace paths while explicitly admitting that exact XML projection was unavailable | PR #262 keeps virtual analysis internal and withholds virtual findings until Project supplies exact source projection |
+| D23 | the located limitation handoff still had only three fallback codes and could not classify most existing Project outcomes | PR #263 adds one finite semantic code surface; detailed Project-to-code mapping remains ordinary orchestration work |
 
 Documentation/source inspection does not change runtime observation status.
 The authority split in D12 is a maintenance decision, not another product layer.
@@ -402,6 +424,8 @@ anything observed:
   same-code located limitation replaces only the generic Service fallback;
 - no synthetic virtual path/span in the public result before exact XML
   projection; projected virtual diagnostics retain the exact XML location;
+- Project issue classes map to the finite T28 categories without string-only
+  classification or false global partial status;
 - shared addon private table and one reviewed UI handler adapter with any scoped donor-parity limitation;
 - coherent updates after source/TOC/XML/dependency/trigger/Library/channel/context
   change;
