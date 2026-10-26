@@ -7,7 +7,7 @@
 use std::sync::atomic::AtomicBool;
 
 use serde::Serialize;
-use wow_core::{ProjectGenerationId, SourceSpan};
+use wow_core::SourceSpan;
 use wow_emmy::{
     ConfiguredAnalyzerSession, ConfiguredSessionError, ConfiguredSessionErrorCode,
     EmmyAnalysisConfiguration, EmmyDiagnosticSeverity, EmmySyntaxDiagnostic,
@@ -22,26 +22,17 @@ const RESULT_SCHEMA: &str = "wow-service/addon-check/1";
 #[derive(Debug, Clone)]
 pub struct AddonCheckVirtualInput {
     snapshot: LuaWorkspaceSnapshot,
-    project_generation: ProjectGenerationId,
 }
 
 impl AddonCheckVirtualInput {
     #[must_use]
-    pub fn new(snapshot: LuaWorkspaceSnapshot, project_generation: ProjectGenerationId) -> Self {
-        Self {
-            snapshot,
-            project_generation,
-        }
+    pub fn new(snapshot: LuaWorkspaceSnapshot) -> Self {
+        Self { snapshot }
     }
 
     #[must_use]
     pub const fn snapshot(&self) -> &LuaWorkspaceSnapshot {
         &self.snapshot
-    }
-
-    #[must_use]
-    pub const fn project_generation(&self) -> ProjectGenerationId {
-        self.project_generation
     }
 }
 
@@ -314,7 +305,7 @@ pub fn check_addon(
     let virtual_snapshot_id = virtual_units
         .as_ref()
         .map(|input| Box::<str>::from(input.snapshot.snapshot_id()));
-    let configured_virtual = virtual_units.map(|input| (input.snapshot, input.project_generation));
+    let configured_virtual = virtual_units.map(|input| input.snapshot);
 
     let mut session =
         ConfiguredAnalyzerSession::open(main, &libraries, configured_virtual, configuration, stop)
