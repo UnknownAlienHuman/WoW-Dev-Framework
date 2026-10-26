@@ -1,15 +1,15 @@
 # Current implementation status
 
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
-**Runtime implementation reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`
+**Runtime implementation review:** PR #259 owns T24; previous delivered slices are PRs #246–#250
 **Documentation/source reconciliation:** PR #257, based on `main` after PR #256
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 
 This is the authoritative current-state checkpoint. It does not replace
 [ARCHITECTURE.md](ARCHITECTURE.md), [IMPLEMENTATION.md](IMPLEMENTATION.md), or
-the baseline [AUDIT.md](AUDIT.md). Runtime status remains the code delivered
-through PR #250; later source-trace/documentation work changes implementation
-instructions, not delivered product behavior.
+the baseline [AUDIT.md](AUDIT.md). Runtime product wiring remains incomplete;
+source-trace/documentation work changes implementation instructions but not
+workflow observation status.
 
 ## Verification vocabulary
 
@@ -81,6 +81,13 @@ metadata was absent even though the parser turns it into blocking unknown issues
 T22–T23 and D12–D18 record the corrections. Exact raw source, narrow adapters and
 scoped limitations remain; no runtime status changes from this documentation work.
 
+PR #259 fixes the first post-#250 runtime boundary defect found during continued
+review: direct mapped virtual diagnostics required `ProjectGenerationId` even
+though the diagnostic collector used only the exact virtual snapshot. T24 keeps
+configured-owner construction/reuse snapshot-owned and moves generation to the
+optional virtual semantic-report call that actually consumes it. This does not
+wire or observe the ordinary addon workflow.
+
 ## Implemented after the baseline
 
 | Slice | Delivered behavior | Evidence | Runtime observation |
@@ -90,9 +97,10 @@ scoped limitations remain; no runtime status changes from this documentation wor
 | T14 / PR #248 | direct `wow-service::addon_check` result without Reference, Rules, publication, graph, store or presentation platform | run #425 passed | unexecuted |
 | T07/T15 / PR #249 | compiled provenance separated from compatibility-report evidence | run #440 passed | unexecuted |
 | T16 / PR #250 | configured-owner reuse requires exact Main plus Library/virtual/config compatibility | run #445 passed | unexecuted |
+| T24 / PR #259 | direct virtual diagnostics require only the exact snapshot; Project generation remains only for explicit virtual semantic facts | exact-head compile/Clippy gate required before merge | unexecuted |
 
-These five internal building blocks exist. No ordinary addon input reaches them
-through the public command yet.
+These six internal building blocks exist after PR #259. No ordinary addon input
+reaches them through the public command yet.
 
 ## Open path to the first usable command
 
@@ -145,9 +153,10 @@ channel, reverse triggers, implicit bindings, known lifecycle/persistence
 metadata and official unsupported compatibility/security facts.
 
 `LuaWorkspaceSnapshot` remains path-sorted for exact identity; it is not runtime
-order. `check_addon` currently consumes exact snapshots and truthfully returns
-`Partial` because addon chunk context is missing; virtual input also lacks final
-source projection/handler context.
+order. `check_addon` consumes exact snapshots and truthfully returns `Partial`
+because addon chunk context is missing; virtual input also lacks final source
+projection/handler context. It no longer requires a Project generation merely to
+collect virtual diagnostics.
 
 ## Readiness verdict
 
@@ -157,11 +166,12 @@ source projection/handler context.
   proof/evidence handoff. Local links and anchors are mechanically checked.
 - **Baseline source architecture/error register:** complete for retained baseline
   requirements.
-- **Current implementation tracing:** active; T17–T23 are source-traced and open.
+- **Current implementation tracing:** active; T17–T24 are traced, with T24
+  implemented by PR #259 and the ordinary route still open.
 - **Lower first-slice owners:** defined and partially implemented.
 - **First ordinary user workflow:** not implemented or observed.
 - **Ready for blind execution without producer-to-reader tracing:** no.
 
-Do not reopen the old platform or repeat T06/T12–T16. Continue from ordinary
+Do not reopen the old platform or repeat T06/T12–T16/T24. Continue from ordinary
 acquisition/context/CLI and update the trace register whenever a boundary or
 observed result changes.
