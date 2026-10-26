@@ -1,7 +1,7 @@
 # Current implementation status
 
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
-**Runtime implementation review:** PRs #259–#263 own T24–T28; previous delivered slices are PRs #246–#250
+**Runtime implementation review:** PRs #259–#264 own T24–T29; previous delivered slices are PRs #246–#250
 **Documentation/source reconciliation:** PR #257, based on `main` after PR #256
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 
@@ -113,8 +113,17 @@ PR #263 supplies the missing finite limitation categories needed by the direct
 Project handoff: selected-source, dependency closure, unresolved load selection,
 compatibility, unsupported load context, chunk, virtual projection, XML handler,
 binding and generated-Library metadata. Detailed Project issue enums remain in
-Project; messages and exact locations remain on individual limitations. The
-actual Project-to-Service mapping is still open.
+Project; messages and exact locations remain on individual limitations.
+
+PR #264 connects the existing native load/package issue owners to that finite
+surface. `project_package_limitations` validates package count/name, selected
+root role and selected TOC against the retained package plan; maps only blocking
+issues; omits normal missing optional dependencies, nonblocking duplicates and
+the aggregate file-closure issue when detailed per-package reasons exist; and
+constructs exact logical source locations from the configured package root plus
+retained source digest/span. Root `.` is canonicalized without a `./` prefix.
+Ordinary configuration/acquisition still has to call this mapper, and T23
+metadata/XML/binding producers remain open.
 
 ## Implemented after the baseline
 
@@ -129,9 +138,10 @@ actual Project-to-Service mapping is still open.
 | T25 / PR #260 | direct result exposes diagnostics/limitations without snapshot or analysis receipts | run #486 passed | unexecuted |
 | T26 / PR #261 | direct request/result preserves exact located input limitations without another result model | run #491 passed | unexecuted |
 | T27 / PR #262 | unprojected virtual diagnostics remain internal; public findings require exact physical or projected source locations | run #495 passed | unexecuted |
-| T28 / PR #263 | finite direct limitation categories cover the ordinary Project result surface without string-only classification | exact-head compile/Clippy gate required before merge | unexecuted |
+| T28 / PR #263 | finite direct limitation categories cover the ordinary Project result surface without string-only classification | run #499 passed | unexecuted |
+| T29 / PR #264 | native blocking load/package issues map to finite direct categories with validated retained-source digest/span and logical location | code run #503 passed; final PR gate enforced before merge | unexecuted |
 
-These ten internal building blocks exist after PR #263. No ordinary addon input
+These eleven internal building blocks exist after PR #264. No ordinary addon input
 reaches them through the public command yet.
 
 ## Open path to the first usable command
@@ -165,9 +175,12 @@ Open work includes:
 - bounded exact `Bindings*.xml` discovery and callback context;
 - known nonblocking `DefaultState` and machine SavedVariables declarations;
 - independent-unit preservation after malformed included/bindings XML;
-- Project issue-to-limitation mapping through the finite T28 categories;
+- ordinary orchestration invoking the delivered native issue mapper plus the
+  remaining XML/binding/current-metadata limitation producers;
 - public `wow check` wiring, rendering, exit and cancellation;
 - XML-only Main and exact virtual-to-XML diagnostic projection;
+- exact physical package diagnostic projection from namespaced analyzer paths to
+  configured logical source paths;
 - addon chunk/private table plus reviewed handler/binding adapters and scoped
   limitations where client parity is unverified;
 - generated-Library manifest consumption;
@@ -193,23 +206,23 @@ collect virtual diagnostics, its public result exposes no lower-owner receipts,
 and exact Project preparation limitations can reach that same result with their
 source locations intact. Until exact XML projection is supplied, virtual findings
 remain internal rather than leaking synthetic workspace paths as user locations.
-The finite T28 categories are available; Project still must map its detailed
-issues into them during ordinary orchestration.
+The finite T28 categories and T29 native mapper exist; ordinary orchestration and
+remaining producer-specific mappings are still open.
 
 ## Readiness verdict
 
 - **Baseline document reconciliation:** complete.
 - **Current-guide/Issue reconciliation:** complete through PR #257 plus the
-  delivered T24–T28 runtime corrections; local links and anchors are mechanically
+  delivered T24–T29 runtime corrections; local links and anchors are mechanically
   checked.
 - **Baseline source architecture/error register:** complete for retained baseline
   requirements.
-- **Current implementation tracing:** active; T17–T28 are traced, with T24–T28
-  implemented by PRs #259–#263 and the ordinary route still open.
+- **Current implementation tracing:** active; T17–T29 are traced, with T24–T29
+  implemented by PRs #259–#264 and the ordinary route still open.
 - **Lower first-slice owners:** defined and partially implemented.
 - **First ordinary user workflow:** not implemented or observed.
 - **Ready for blind execution without producer-to-reader tracing:** no.
 
-Do not reopen the old platform or repeat T06/T12–T16/T24–T28. Continue from
+Do not reopen the old platform or repeat T06/T12–T16/T24–T29. Continue from
 ordinary acquisition/context/CLI and update the trace register whenever a
 boundary or observed result changes.
