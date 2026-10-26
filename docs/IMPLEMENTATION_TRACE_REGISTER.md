@@ -2,7 +2,7 @@
 
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256); PR #257 owns this review
-**Runtime implementation review:** PR #259 owns T24; earlier delivered slices remain PRs #246–#250
+**Runtime implementation review:** PRs #259–#260 own T24–T25; earlier delivered slices remain PRs #246–#250
 **Implementation work started:** 2026-10-24
 
 This is the active addendum to [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md). The old
@@ -50,7 +50,8 @@ sequence can move it to **observed**.
 | T21 | official zero Interface + unresolved `Secure` metadata -> compatibility/context admission | source-traced; current parser hard-rejects/blocks | unexecuted |
 | T22 | ordinary chunk namespace + `AllowAddOnTableAccess` / `SuppressLocalTableRef` | official normal contract traced; retrieval permission missing; restricted suppression semantics unsupported | unexecuted |
 | T23 | current TOC metadata -> issue classification/completeness | current known directives become blocking `UnknownDirective`; correction designed | unexecuted |
-| T24 | exact virtual snapshot -> direct configured diagnostics without Project publication identity | implemented by PR #259; merge gated on exact-head compile/Clippy | unexecuted |
+| T24 | exact virtual snapshot -> direct configured diagnostics without Project publication identity | implemented by PR #259; run #480 passed | unexecuted |
+| T25 | configured diagnostics -> public direct result without snapshot/report receipts | implemented by PR #260; merge gated on exact-head compile/Clippy | unexecuted |
 
 ## Decisions and evidence
 
@@ -291,6 +292,22 @@ incomplete snapshot/generation pair. Do not fabricate a generation for ordinary
 mapped diagnostics, and do not remove generation from the older semantic report
 that still identifies facts with it.
 
+### T25 — public direct results contain findings, not lower-owner receipts
+
+PR #248 deliberately included Main/Library/virtual snapshot IDs plus upstream
+analysis IDs in the serializable `AddonCheckResult`. Continued caller review found
+no production reader outside the DTO itself, while the current ordinary workflow
+explicitly rejects exposing Project/report/digest identities. These fields were
+internal correlation receipts, not diagnostics, limitations or user-selected
+context.
+
+**Decision and implementation:** PR #260 removes `AddonCheckAnalysis`, the three
+snapshot-ID fields and their getters/export from the direct result. Exact finding
+binding remains in each diagnostic as source role, path, content SHA-256 and byte
+span. Lower Emmy/Project owners keep identities where their internal admission and
+semantic reports actually consume them. Frontends serialize one direct result and
+do not reconstruct or expose the removed receipts.
+
 ## Documentation reconciliation ledger
 
 | ID | Drift found after PR #244 | Resolution |
@@ -307,6 +324,7 @@ that still identifies facts with it.
 | D17 | chunk context was derived mainly from Wowless and omitted Blizzard's current `AllowAddOnTableAccess`/second-result contract | use pinned `AddOnsDocumentation.lua` for ordinary chunks; keep retrieval permission separate and `SuppressLocalTableRef` unsupported |
 | D18 | `LoadSavedVariablesFirst`, `AllowAddOnTableAccess` and `EscalateErrorDuringLoad` were absent from the canonical plan although selected source uses them and current parsing makes them blocking unknowns | add T23 and effect-scoped metadata classification; do not make known/nonsemantic metadata globally partial |
 | D19 | direct `addon_check` rejected Project publication identities in prose but required `ProjectGenerationId` for virtual diagnostics that never read it | PR #259 makes diagnostics snapshot-owned and keeps generation only at the virtual semantic-report call |
+| D20 | the direct serializable result still exposed snapshot and upstream analysis IDs despite the current ordinary workflow rejecting report/digest receipts | PR #260 removes those public fields while preserving exact per-diagnostic source binding and internal lower-owner identities |
 
 Documentation/source inspection does not change runtime observation status.
 The authority split in D12 is a maintenance decision, not another product layer.
@@ -339,6 +357,8 @@ anything observed:
 - physical, mapped XML, XML-only and malformed included XML;
 - direct virtual diagnostics from exact mapped source without Project generation
   or publication construction; virtual semantic facts with an exact generation;
+- direct JSON/text results with exact diagnostics/limitations and no snapshot,
+  analysis, Project or report receipt fields;
 - shared addon private table and one reviewed UI handler adapter with any scoped donor-parity limitation;
 - coherent updates after source/TOC/XML/dependency/trigger/Library/channel/context
   change;

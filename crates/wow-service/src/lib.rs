@@ -27,9 +27,9 @@ pub mod source_census;
 pub mod source_reference;
 
 pub use addon_check::{
-    AddonCheckAnalysis, AddonCheckCompleteness, AddonCheckDiagnostic, AddonCheckLimitation,
-    AddonCheckLimitationCode, AddonCheckRequest, AddonCheckResult, AddonCheckScope,
-    AddonCheckSourceRole, AddonCheckVirtualInput, check_addon,
+    AddonCheckCompleteness, AddonCheckDiagnostic, AddonCheckLimitation, AddonCheckLimitationCode,
+    AddonCheckRequest, AddonCheckResult, AddonCheckScope, AddonCheckSourceRole,
+    AddonCheckVirtualInput, check_addon,
 };
 pub use backend::{OwnedServiceBackend, ServiceBackend, ServiceBackendStatus};
 pub use configuration::{

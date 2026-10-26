@@ -1,7 +1,7 @@
 # Current implementation status
 
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
-**Runtime implementation review:** PR #259 owns T24; previous delivered slices are PRs #246–#250
+**Runtime implementation review:** PRs #259–#260 own T24–T25; previous delivered slices are PRs #246–#250
 **Documentation/source reconciliation:** PR #257, based on `main` after PR #256
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 
@@ -88,6 +88,13 @@ configured-owner construction/reuse snapshot-owned and moves generation to the
 optional virtual semantic-report call that actually consumes it. This does not
 wire or observe the ordinary addon workflow.
 
+PR #260 removes the remaining internal receipts from the serializable direct
+result: Main/Library/virtual snapshot IDs and upstream analysis IDs had no
+production reader and contradicted the ordinary workflow's no-report/no-digest
+surface. Each diagnostic still carries exact source role, path, content SHA-256
+and byte span. Lower-owner identities remain where internal semantic admission
+actually consumes them.
+
 ## Implemented after the baseline
 
 | Slice | Delivered behavior | Evidence | Runtime observation |
@@ -97,9 +104,10 @@ wire or observe the ordinary addon workflow.
 | T14 / PR #248 | direct `wow-service::addon_check` result without Reference, Rules, publication, graph, store or presentation platform | run #425 passed | unexecuted |
 | T07/T15 / PR #249 | compiled provenance separated from compatibility-report evidence | run #440 passed | unexecuted |
 | T16 / PR #250 | configured-owner reuse requires exact Main plus Library/virtual/config compatibility | run #445 passed | unexecuted |
-| T24 / PR #259 | direct virtual diagnostics require only the exact snapshot; Project generation remains only for explicit virtual semantic facts | exact-head compile/Clippy gate required before merge | unexecuted |
+| T24 / PR #259 | direct virtual diagnostics require only the exact snapshot; Project generation remains only for explicit virtual semantic facts | run #480 passed | unexecuted |
+| T25 / PR #260 | direct result exposes diagnostics/limitations without snapshot or analysis receipts | exact-head compile/Clippy gate required before merge | unexecuted |
 
-These six internal building blocks exist after PR #259. No ordinary addon input
+These seven internal building blocks exist after PR #260. No ordinary addon input
 reaches them through the public command yet.
 
 ## Open path to the first usable command
@@ -156,7 +164,8 @@ metadata and official unsupported compatibility/security facts.
 order. `check_addon` consumes exact snapshots and truthfully returns `Partial`
 because addon chunk context is missing; virtual input also lacks final source
 projection/handler context. It no longer requires a Project generation merely to
-collect virtual diagnostics.
+collect virtual diagnostics, and its public result no longer exposes lower-owner
+snapshot or analysis receipts.
 
 ## Readiness verdict
 
@@ -166,12 +175,12 @@ collect virtual diagnostics.
   proof/evidence handoff. Local links and anchors are mechanically checked.
 - **Baseline source architecture/error register:** complete for retained baseline
   requirements.
-- **Current implementation tracing:** active; T17–T24 are traced, with T24
-  implemented by PR #259 and the ordinary route still open.
+- **Current implementation tracing:** active; T17–T25 are traced, with T24–T25
+  implemented by PRs #259–#260 and the ordinary route still open.
 - **Lower first-slice owners:** defined and partially implemented.
 - **First ordinary user workflow:** not implemented or observed.
 - **Ready for blind execution without producer-to-reader tracing:** no.
 
-Do not reopen the old platform or repeat T06/T12–T16/T24. Continue from ordinary
-acquisition/context/CLI and update the trace register whenever a boundary or
-observed result changes.
+Do not reopen the old platform or repeat T06/T12–T16/T24–T25. Continue from
+ordinary acquisition/context/CLI and update the trace register whenever a
+boundary or observed result changes.

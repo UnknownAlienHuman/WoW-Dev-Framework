@@ -201,27 +201,6 @@ impl AddonCheckLimitation {
     }
 }
 
-/// Upstream analysis identities used by this service result.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct AddonCheckAnalysis {
-    main_analysis_id: Box<str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    virtual_analysis_id: Option<Box<str>>,
-}
-
-impl AddonCheckAnalysis {
-    #[must_use]
-    pub fn main_analysis_id(&self) -> &str {
-        &self.main_analysis_id
-    }
-
-    #[must_use]
-    pub fn virtual_analysis_id(&self) -> Option<&str> {
-        self.virtual_analysis_id.as_deref()
-    }
-}
-
 /// Direct language-check result. Findings survive partial context.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -229,11 +208,6 @@ pub struct AddonCheckResult {
     schema: &'static str,
     scope: AddonCheckScope,
     completeness: AddonCheckCompleteness,
-    main_snapshot_id: Box<str>,
-    library_snapshot_ids: Vec<Box<str>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    virtual_snapshot_id: Option<Box<str>>,
-    analysis: AddonCheckAnalysis,
     diagnostics: Vec<AddonCheckDiagnostic>,
     limitations: Vec<AddonCheckLimitation>,
 }
@@ -247,26 +221,6 @@ impl AddonCheckResult {
     #[must_use]
     pub const fn completeness(&self) -> AddonCheckCompleteness {
         self.completeness
-    }
-
-    #[must_use]
-    pub fn main_snapshot_id(&self) -> &str {
-        &self.main_snapshot_id
-    }
-
-    #[must_use]
-    pub fn library_snapshot_ids(&self) -> &[Box<str>] {
-        &self.library_snapshot_ids
-    }
-
-    #[must_use]
-    pub fn virtual_snapshot_id(&self) -> Option<&str> {
-        self.virtual_snapshot_id.as_deref()
-    }
-
-    #[must_use]
-    pub const fn analysis(&self) -> &AddonCheckAnalysis {
-        &self.analysis
     }
 
     #[must_use]
@@ -296,15 +250,6 @@ pub fn check_addon(
         configuration,
     } = request;
 
-    let main_snapshot_id: Box<str> = main.snapshot_id().into();
-    let mut library_snapshot_ids = libraries
-        .iter()
-        .map(|library| Box::<str>::from(library.snapshot_id()))
-        .collect::<Vec<_>>();
-    library_snapshot_ids.sort_unstable();
-    let virtual_snapshot_id = virtual_units
-        .as_ref()
-        .map(|input| Box::<str>::from(input.snapshot.snapshot_id()));
     let configured_virtual = virtual_units.map(|input| input.snapshot);
 
     let mut session =
@@ -352,16 +297,6 @@ pub fn check_addon(
         schema: RESULT_SCHEMA,
         scope: AddonCheckScope::LuaTypes,
         completeness: AddonCheckCompleteness::Partial,
-        main_snapshot_id,
-        library_snapshot_ids,
-        virtual_snapshot_id,
-        analysis: AddonCheckAnalysis {
-            main_analysis_id: reports.main.analysis_id().into(),
-            virtual_analysis_id: reports
-                .virtual_units
-                .as_ref()
-                .map(|report| Box::<str>::from(report.analysis_id())),
-        },
         diagnostics,
         limitations,
     })
