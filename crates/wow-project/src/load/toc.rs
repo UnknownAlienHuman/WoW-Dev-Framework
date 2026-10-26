@@ -1,6 +1,6 @@
 use super::{
     LoadIssueKind as Issue, LoadRecordKind as Kind, LoadSelection, MAX_RECORDS, Record,
-    TocLoadContext, TocMetadata, budget, conditions, invalid, package,
+    TocLoadContext, TocMetadata, TocMetadataKind, budget, conditions, invalid, package,
 };
 use crate::ProjectResult;
 use crate::disk::checkpoint;
@@ -36,14 +36,12 @@ pub(super) fn parse(
         } else if let Some(metadata) = content.strip_prefix("##") {
             record.kind = Kind::Metadata;
             let metadata = conditions::project(metadata.trim(), &mut record, context, true)?;
-            // Retain the normalized key/value that this single source parse
-            // already derived, so downstream owners never re-split raw spans.
-            if let Some((key, value)) = metadata.split_once(':') {
-                record.metadata = Some(TocMetadata {
-                    key: key.trim().to_ascii_lowercase(),
-                    value: value.trim().to_owned(),
-                });
-            }
+            let retained = metadata.split_once(':').map(|(key, value)| TocMetadata {
+                key: key.trim().to_ascii_lowercase(),
+                value: value.trim().to_owned(),
+            });
+            let kind = retained.as_ref().map(TocMetadata::kind);
+            record.metadata = retained;
             if record.selection != LoadSelection::Included {
                 record.file_enumeration_complete = record.selection == LoadSelection::Excluded;
                 records.push(record);
@@ -58,62 +56,71 @@ pub(super) fn parse(
                 offset = end;
                 continue;
             }
-            if let Some((key, value)) = metadata.split_once(':') {
-                let key = key.trim().to_ascii_lowercase();
-                let value = value.trim();
-                match key.as_str() {
-                    "interface" => {
-                        interfaces += 1;
-                        let versions = value.split(',').map(str::trim).collect::<Vec<_>>();
-                        if versions.len() > 64 {
-                            return Err(budget());
-                        }
-                        let mut compatible = false;
-                        for version in versions {
-                            if version.is_empty() || !version.bytes().all(|b| b.is_ascii_digit()) {
-                                return Err(invalid("TOC Interface directive is malformed"));
-                            }
-                            let number = version
-                                .parse::<u64>()
-                                .map_err(|_| invalid("TOC Interface value overflow"))?;
-                            if number == 0 {
-                                return Err(invalid("TOC Interface must be positive"));
-                            }
-                            compatible |= number == interface;
-                        }
-                        if !compatible {
-                            return Err(invalid(
-                                "selected TOC Interface does not match the selected profile",
-                            ));
-                        }
-                        if interfaces > 1 {
-                            record.issues.push(Issue::ConflictingInterface);
-                        }
+            match (kind, record.metadata.as_ref()) {
+                (Some(TocMetadataKind::Interface), Some(metadata)) => {
+                    interfaces += 1;
+                    let versions = metadata
+                        .value
+                        .split(',')
+                        .map(str::trim)
+                        .collect::<Vec<_>>();
+                    if versions.len() > 64 {
+                        return Err(budget());
                     }
-                    "dependencies" | "requireddeps" | "dependson" => {
-                        if !value.is_empty() {
-                            record.issues.push(Issue::RequiredDependencyUnresolved);
+                    let mut compatible = false;
+                    for version in versions {
+                        if version.is_empty() || !version.bytes().all(|b| b.is_ascii_digit()) {
+                            return Err(invalid("TOC Interface directive is malformed"));
                         }
-                    }
-                    "optionaldeps" => {
-                        if !value.is_empty() {
-                            record.issues.push(Issue::OptionalDependencyUnresolved);
+                        let number = version
+                            .parse::<u64>()
+                            .map_err(|_| invalid("TOC Interface value overflow"))?;
+                        if number == 0 {
+                            return Err(invalid("TOC Interface must be positive"));
                         }
+                        compatible |= number == interface;
                     }
-                    "loadondemand" => {
-                        if !matches!(value, "0" | "1") {
-                            record.issues.push(Issue::UnknownDirective);
-                        }
+                    if !compatible {
+                        return Err(invalid(
+                            "selected TOC Interface does not match the selected profile",
+                        ));
                     }
-                    "savedvariables" | "savedvariablespercharacter" => {
-                        record.saved_variables = super::saved_variables::parse(&key, value)?;
+                    if interfaces > 1 {
+                        record.issues.push(Issue::ConflictingInterface);
                     }
-                    // Other metadata remains source-backed. No SavedVariables contents are read.
-                    "title" | "notes" | "author" | "version" => {}
-                    _ => record.issues.push(Issue::UnknownDirective),
                 }
-            } else {
-                record.issues.push(Issue::UnknownDirective);
+                (Some(TocMetadataKind::RequiredDependencies), Some(metadata)) => {
+                    if !metadata.value.is_empty() {
+                        record.issues.push(Issue::RequiredDependencyUnresolved);
+                    }
+                }
+                (Some(TocMetadataKind::OptionalDependencies), Some(metadata)) => {
+                    if !metadata.value.is_empty() {
+                        record.issues.push(Issue::OptionalDependencyUnresolved);
+                    }
+                }
+                (Some(TocMetadataKind::LoadOnDemand), Some(metadata)) => {
+                    if !matches!(metadata.value.as_str(), "0" | "1") {
+                        record.issues.push(Issue::UnknownDirective);
+                    }
+                }
+                (Some(kind), Some(metadata)) if kind.saved_variables() => {
+                    record.saved_variables =
+                        super::saved_variables::parse(&metadata.key, &metadata.value)?;
+                }
+                (Some(kind), _) if kind.unsupported_load_context() => {
+                    record.issues.push(Issue::UnknownDirective);
+                }
+                (Some(TocMetadataKind::Unknown), _) => {
+                    record.issues.push(Issue::UnknownMetadata);
+                }
+                // Package filters have already been projected by package::admit.
+                // Known lifecycle, persistence, error-policy, retrieval,
+                // display and custom metadata remain source-backed and do not
+                // make independent file enumeration incomplete.
+                (Some(_), _) => {}
+                (None, None) => record.issues.push(Issue::UnknownDirective),
+                (None, Some(_)) => unreachable!("retained metadata always has a kind"),
             }
         } else if content.starts_with('#') {
             record.kind = Kind::Comment;
@@ -133,7 +140,10 @@ pub(super) fn parse(
             }
         }
         record.file_enumeration_complete = match record.selection {
-            LoadSelection::Included => record.issues.is_empty(),
+            LoadSelection::Included => record
+                .issues
+                .iter()
+                .all(|issue| !issue.blocks_complete()),
             LoadSelection::Excluded => true,
             LoadSelection::Unresolved => false,
         };
