@@ -2,7 +2,7 @@
 
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256); PR #257 owns this review
-**Runtime implementation review:** PRs #259–#260 own T24–T25; earlier delivered slices remain PRs #246–#250
+**Runtime implementation review:** PRs #259–#261 own T24–T26; earlier delivered slices remain PRs #246–#250
 **Implementation work started:** 2026-10-24
 
 This is the active addendum to [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md). The old
@@ -51,7 +51,8 @@ sequence can move it to **observed**.
 | T22 | ordinary chunk namespace + `AllowAddOnTableAccess` / `SuppressLocalTableRef` | official normal contract traced; retrieval permission missing; restricted suppression semantics unsupported | unexecuted |
 | T23 | current TOC metadata -> issue classification/completeness | current known directives become blocking `UnknownDirective`; correction designed | unexecuted |
 | T24 | exact virtual snapshot -> direct configured diagnostics without Project publication identity | implemented by PR #259; run #480 passed | unexecuted |
-| T25 | configured diagnostics -> public direct result without snapshot/report receipts | implemented by PR #260; merge gated on exact-head compile/Clippy | unexecuted |
+| T25 | configured diagnostics -> public direct result without snapshot/report receipts | implemented by PR #260; run #486 passed | unexecuted |
+| T26 | exact selected-input limitation -> same direct result with optional exact location | implemented by PR #261; merge gated on exact-head compile/Clippy | unexecuted |
 
 ## Decisions and evidence
 
@@ -308,6 +309,24 @@ span. Lower Emmy/Project owners keep identities where their internal admission a
 semantic reports actually consume them. Frontends serialize one direct result and
 do not reconstruct or expose the removed receipts.
 
+### T26 — selected-input limitations keep their exact source location
+
+The canonical Project path requires malformed or unsupported selected source to
+remain a located scoped limitation while independent diagnostics survive. Before
+PR #261, `AddonCheckLimitation` contained only code/message and
+`AddonCheckRequest` had no input for limitations discovered during safe
+selection/XML/binding/context preparation. Project would therefore have had to
+discard the source location or wrap the direct result in another result model.
+
+**Decision and implementation:** reuse the existing validated
+`ExactSourceLocation`; do not create a second location DTO. A limitation may carry
+one optional exact path/content-digest/byte range, and `AddonCheckRequest` accepts
+the ordinary input limitations produced during exact preparation. The result
+sorts and deduplicates exact limitation values. Service adds a same-code generic
+fallback only when no caller-supplied limitation of that code exists, so one or
+more precise located failures survive without an extra generic duplicate. No
+Project/report/provenance identity enters the result.
+
 ## Documentation reconciliation ledger
 
 | ID | Drift found after PR #244 | Resolution |
@@ -325,6 +344,7 @@ do not reconstruct or expose the removed receipts.
 | D18 | `LoadSavedVariablesFirst`, `AllowAddOnTableAccess` and `EscalateErrorDuringLoad` were absent from the canonical plan although selected source uses them and current parsing makes them blocking unknowns | add T23 and effect-scoped metadata classification; do not make known/nonsemantic metadata globally partial |
 | D19 | direct `addon_check` rejected Project publication identities in prose but required `ProjectGenerationId` for virtual diagnostics that never read it | PR #259 makes diagnostics snapshot-owned and keeps generation only at the virtual semantic-report call |
 | D20 | the direct serializable result still exposed snapshot and upstream analysis IDs despite the current ordinary workflow rejecting report/digest receipts | PR #260 removes those public fields while preserving exact per-diagnostic source binding and internal lower-owner identities |
+| D21 | the direct limitation DTO and request could not preserve source-located Project preparation failures required by the canonical path | PR #261 reuses `ExactSourceLocation` and adds one direct input-limitation handoff with same-code fallback suppression |
 
 Documentation/source inspection does not change runtime observation status.
 The authority split in D12 is a maintenance decision, not another product layer.
@@ -359,6 +379,8 @@ anything observed:
   or publication construction; virtual semantic facts with an exact generation;
 - direct JSON/text results with exact diagnostics/limitations and no snapshot,
   analysis, Project or report receipt fields;
+- multiple located input limitations surviving in the direct result while a
+  same-code located limitation replaces only the generic Service fallback;
 - shared addon private table and one reviewed UI handler adapter with any scoped donor-parity limitation;
 - coherent updates after source/TOC/XML/dependency/trigger/Library/channel/context
   change;

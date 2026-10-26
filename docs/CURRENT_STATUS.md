@@ -1,7 +1,7 @@
 # Current implementation status
 
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
-**Runtime implementation review:** PRs #259–#260 own T24–T25; previous delivered slices are PRs #246–#250
+**Runtime implementation review:** PRs #259–#261 own T24–T26; previous delivered slices are PRs #246–#250
 **Documentation/source reconciliation:** PR #257, based on `main` after PR #256
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 
@@ -95,6 +95,13 @@ surface. Each diagnostic still carries exact source role, path, content SHA-256
 and byte span. Lower-owner identities remain where internal semantic admission
 actually consumes them.
 
+PR #261 adds the missing limitation handoff required by ordinary Project
+preparation. `AddonCheckRequest` can carry one or more input limitations, each
+with an optional validated exact source location. A caller-supplied same-code
+limitation suppresses only the less informative Service fallback; distinct
+located failures remain in the direct result. This is a structural seam, not an
+observed Project workflow.
+
 ## Implemented after the baseline
 
 | Slice | Delivered behavior | Evidence | Runtime observation |
@@ -105,9 +112,10 @@ actually consumes them.
 | T07/T15 / PR #249 | compiled provenance separated from compatibility-report evidence | run #440 passed | unexecuted |
 | T16 / PR #250 | configured-owner reuse requires exact Main plus Library/virtual/config compatibility | run #445 passed | unexecuted |
 | T24 / PR #259 | direct virtual diagnostics require only the exact snapshot; Project generation remains only for explicit virtual semantic facts | run #480 passed | unexecuted |
-| T25 / PR #260 | direct result exposes diagnostics/limitations without snapshot or analysis receipts | exact-head compile/Clippy gate required before merge | unexecuted |
+| T25 / PR #260 | direct result exposes diagnostics/limitations without snapshot or analysis receipts | run #486 passed | unexecuted |
+| T26 / PR #261 | direct request/result preserves exact located input limitations without another result model | exact-head compile/Clippy gate required before merge | unexecuted |
 
-These seven internal building blocks exist after PR #260. No ordinary addon input
+These eight internal building blocks exist after PR #261. No ordinary addon input
 reaches them through the public command yet.
 
 ## Open path to the first usable command
@@ -164,8 +172,9 @@ metadata and official unsupported compatibility/security facts.
 order. `check_addon` consumes exact snapshots and truthfully returns `Partial`
 because addon chunk context is missing; virtual input also lacks final source
 projection/handler context. It no longer requires a Project generation merely to
-collect virtual diagnostics, and its public result no longer exposes lower-owner
-snapshot or analysis receipts.
+collect virtual diagnostics, its public result exposes no lower-owner receipts,
+and exact Project preparation limitations can reach that same result with their
+source locations intact.
 
 ## Readiness verdict
 
@@ -175,12 +184,12 @@ snapshot or analysis receipts.
   proof/evidence handoff. Local links and anchors are mechanically checked.
 - **Baseline source architecture/error register:** complete for retained baseline
   requirements.
-- **Current implementation tracing:** active; T17–T25 are traced, with T24–T25
-  implemented by PRs #259–#260 and the ordinary route still open.
+- **Current implementation tracing:** active; T17–T26 are traced, with T24–T26
+  implemented by PRs #259–#261 and the ordinary route still open.
 - **Lower first-slice owners:** defined and partially implemented.
 - **First ordinary user workflow:** not implemented or observed.
 - **Ready for blind execution without producer-to-reader tracing:** no.
 
-Do not reopen the old platform or repeat T06/T12–T16/T24–T25. Continue from
+Do not reopen the old platform or repeat T06/T12–T16/T24–T26. Continue from
 ordinary acquisition/context/CLI and update the trace register whenever a
 boundary or observed result changes.
