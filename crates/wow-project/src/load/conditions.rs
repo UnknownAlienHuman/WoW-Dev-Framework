@@ -255,6 +255,7 @@ pub(super) fn project(
     let mut rest = content;
     let mut variables = Vec::new();
     let mut clauses = 0;
+    let mut unresolved_condition = false;
     while let Some(start) = rest.find('[') {
         if rest[..start].contains(']') {
             record.selection = LoadSelection::Unresolved;
@@ -285,9 +286,7 @@ pub(super) fn project(
             let selection = condition.selection;
             record.selection = record.selection.and(selection);
             record.conditions.push(condition);
-            if selection == LoadSelection::Unresolved {
-                record.issues.push(Issue::LoadConditionUnresolved);
-            }
+            unresolved_condition |= selection == LoadSelection::Unresolved;
         } else {
             record.selection = LoadSelection::Unresolved;
             record.issues.push(Issue::UnknownTocSyntax);
@@ -298,6 +297,19 @@ pub(super) fn project(
     if rest.contains(']') {
         record.selection = LoadSelection::Unresolved;
         record.issues.push(Issue::UnknownTocSyntax);
+    }
+    if record.selection == LoadSelection::Excluded {
+        // The source and every recognized/unknown condition remain retained on
+        // the record. They do not make the selected program partial once a
+        // different conjunct proves that this record is excluded.
+        record.issues.retain(|issue| {
+            !matches!(
+                issue,
+                Issue::UnknownTocSyntax | Issue::LoadConditionUnresolved
+            )
+        });
+    } else if record.selection == LoadSelection::Unresolved && unresolved_condition {
+        record.issues.push(Issue::LoadConditionUnresolved);
     }
     let path = path.trim().to_owned();
     if !metadata {
