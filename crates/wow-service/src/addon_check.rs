@@ -5,6 +5,10 @@
 //! remain Project responsibilities; this owner composes one configured Emmy
 //! session and publishes only diagnostics with exact user-source locations.
 
+mod project_limitations;
+
+pub use project_limitations::project_package_limitations;
+
 use std::sync::atomic::AtomicBool;
 
 use serde::Serialize;
