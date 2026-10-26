@@ -1,7 +1,7 @@
 # Current implementation status
 
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
-**Runtime implementation review:** PRs #259–#264 own T24–T29; previous delivered slices are PRs #246–#250
+**Runtime implementation review:** PRs #259–#265 own T24–T30; previous delivered slices are PRs #246–#250
 **Documentation/source reconciliation:** PR #257, based on `main` after PR #256
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 
@@ -129,6 +129,14 @@ aggregate load-state issues remain honestly unlocated. Ordinary configuration
 still has to project package-qualified paths to configured user roots and invoke
 the mapper; T23 metadata/XML/binding producers remain open.
 
+PR #265 fixes the source-selection truth table across line predicates,
+package-wide filters and TOC completeness. Known allow/exclude results are no
+longer poisoned by unrelated unknown values; a definite exclusion dominates an
+unknown conjunct; malformed/unsupported clauses use the same conjunction; and a
+record already proven excluded retains source evidence without creating a false
+blocking issue or incomplete selected-file enumeration. Code run #521 passed;
+no addon workflow was executed.
+
 ## Implemented after the baseline
 
 | Slice | Delivered behavior | Evidence | Runtime observation |
@@ -144,8 +152,9 @@ the mapper; T23 metadata/XML/binding producers remain open.
 | T27 / PR #262 | unprojected virtual diagnostics remain internal; public findings require exact physical or projected source locations | run #495 passed | unexecuted |
 | T28 / PR #263 | finite direct limitation categories cover the ordinary Project result surface without string-only classification | run #499 passed | unexecuted |
 | T29 / PR #264 | reachable native blocking load/package issues map to finite direct categories; retained spans use Project-owned package-qualified locations and source-less issues remain unlocated | run #510 passed | unexecuted |
+| T30 / PR #265 | line/package TOC predicates use one three-valued reduction; excluded records retain evidence without false blocking completeness | code run #521 passed; final PR gate required before merge | unexecuted |
 
-These eleven internal building blocks exist after PR #264. No ordinary addon input
+These twelve internal building blocks exist after PR #265. No ordinary addon input
 reaches them through the public command yet.
 
 ## Open path to the first usable command
@@ -172,7 +181,6 @@ Open work includes:
   than a guessed suppression adapter;
 - `LoadSavedVariablesFirst`, `EscalateErrorDuringLoad` and nonblocking display/
   localized/custom metadata without false global partial status;
-- correct three-valued allow/exclude reduction;
 - exact selected order/context beside path-sorted snapshots;
 - Stable/PTR/Beta admission, official zero-Interface compatibility uncertainty,
   and unresolved `Secure` metadata;
@@ -218,16 +226,16 @@ specific mappings are still open.
 
 - **Baseline document reconciliation:** complete.
 - **Current-guide/Issue reconciliation:** complete through PR #257 plus the
-  delivered T24–T29 runtime corrections; local links and anchors are mechanically
+  delivered T24–T30 runtime corrections; local links and anchors are mechanically
   checked.
 - **Baseline source architecture/error register:** complete for retained baseline
   requirements.
-- **Current implementation tracing:** active; T17–T29 are traced, with T24–T29
-  implemented by PRs #259–#264 and the ordinary route still open.
+- **Current implementation tracing:** active; T17–T30 are traced, with T24–T30
+  implemented by PRs #259–#265 and the ordinary route still open.
 - **Lower first-slice owners:** defined and partially implemented.
 - **First ordinary user workflow:** not implemented or observed.
 - **Ready for blind execution without producer-to-reader tracing:** no.
 
-Do not reopen the old platform or repeat T06/T12–T16/T24–T29. Continue from
+Do not reopen the old platform or repeat T06/T12–T16/T24–T30. Continue from
 ordinary acquisition/context/CLI and update the trace register whenever a
 boundary or observed result changes.

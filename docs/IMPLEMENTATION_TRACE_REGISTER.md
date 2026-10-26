@@ -2,7 +2,7 @@
 
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256); PR #257 owns this review
-**Runtime implementation review:** PRs #259–#264 own T24–T29; earlier delivered slices remain PRs #246–#250
+**Runtime implementation review:** PRs #259–#265 own T24–T30; earlier delivered slices remain PRs #246–#250
 **Implementation work started:** 2026-10-24
 
 This is the active addendum to [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md). The old
@@ -56,6 +56,7 @@ sequence can move it to **observed**.
 | T27 | virtual Emmy diagnostic -> public exact XML location | PR #262 hides unprojected findings; exact projection handoff remains open; run #495 passed | unexecuted |
 | T28 | detailed Project issue -> finite direct limitation category | PR #263 supplies result categories; producer mappings remain scoped | unexecuted |
 | T29 | reachable native load/package issues -> finite direct limitations | implemented by PR #264; run #510 passed; configured-root projection remains open | unexecuted |
+| T30 | TOC/package predicates -> selected closure and completeness | implemented by PR #265; code run #521 passed; final PR gate required before merge | unexecuted |
 
 ## Decisions and evidence
 
@@ -392,6 +393,35 @@ suppressed when exact retained local reasons are available. Exact-head run #510
 passed repository policy, Markdown validation, formatting, workspace compilation
 and strict Clippy; no addon workflow was executed.
 
+### T30 — three-valued predicates do not poison excluded source
+
+Before PR #265, line-level and package-wide TOC selection used two inconsistent
+shortcuts: the first unknown value made an allow/exclude list unresolved even
+when another known value already determined the result, and `Unresolved`
+dominated a definite `Excluded` across conjunction. Parser issues and
+`file_enumeration_complete = false` then kept an already excluded record in the
+blocking closure.
+
+**Decision and implementation:** PR #265 applies one three-valued reduction from
+producer to selected closure:
+
+- allow lists are OR: any known match includes; otherwise an unknown keeps the
+  result unresolved; otherwise the list excludes;
+- exclude lists are NOT-OR: any known match excludes; otherwise an unknown keeps
+  the result unresolved; otherwise the list includes;
+- conjunctive line/package gates use AND: any definite exclusion excludes;
+  otherwise any unknown remains unresolved; otherwise the record is included;
+- malformed or unsupported clauses participate in that same conjunction instead
+  of overwriting an earlier exclusion;
+- exact source bytes and recognized condition values remain retained, but a
+  record already proven excluded does not emit blocking condition/syntax issues
+  or make selected-file enumeration incomplete.
+
+The same rule is implemented in `conditions.rs`, package-wide preflight and TOC
+record completeness. Exact-head code run #521 passed repository policy, Markdown
+validation, formatting, workspace compilation and strict Clippy. No addon/client
+workflow was executed, so T30 remains unobserved.
+
 ## Documentation reconciliation ledger
 
 | ID | Drift found after PR #244 | Resolution |
@@ -414,6 +444,7 @@ and strict Clippy; no addon workflow was executed.
 | D23 | the located limitation handoff still had only three fallback codes and could not classify most existing Project outcomes | PR #263 adds one finite semantic code surface; producer mappings stay narrow |
 | D24 | the first native mapper re-trusted repeated package roots and included issues from `Unreachable` packages that analyzer Main omits | PR #264 consumes the retained plan only, maps the same reachable closure, uses Project-owned package-qualified paths, and leaves source-less issues unlocated |
 | D25 | the native mapper initially published parser-stage dependency and stale inline-Lua placeholders after package/XML owners had newer outcomes | PR #264 defers dependency resolution to package closure and actual virtual preparation/projection state to the XML owner |
+| D26 | line/package predicate reducers let unknown values or syntax override known matches/exclusions, and excluded records still poisoned file-enumeration completeness | PR #265 applies one three-valued reduction through parser, package admission and TOC completeness while retaining source evidence |
 
 Documentation/source inspection does not change runtime observation status.
 The authority split in D12 is a maintenance decision, not another product layer.
@@ -426,7 +457,7 @@ anything observed:
 - public `wow check` with valid/invalid typed calls preserving code, message,
   severity and addon location;
 - complete dependency aliases, missing required and absent optional dependency;
-- known-determined predicates containing another unknown value;
+- known-determined line and package predicates containing another unknown value, with no false partial status for definitely excluded source;
 - secure package/file overrides and exact selected order beside snapshot order;
 - ordinary `(addonName, addonTable)` plus `AllowAddOnTableAccess` retrieval
   permission, and `SuppressLocalTableRef` remaining a scoped unsupported context;

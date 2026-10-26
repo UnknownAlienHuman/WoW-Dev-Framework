@@ -30,9 +30,10 @@ Related: [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/20
 | #262 | unprojected virtual findings remain internal instead of leaking synthetic workspace paths | exact XML/binding projection remains open |
 | #263 | finite direct limitation categories cover source selection, dependency, load selection, compatibility, unsupported context, chunk/XML/binding and generated-Library outcomes | detailed Project issues still need mapping |
 | #264 | `project_package_limitations` maps blocking issues from the retained reachable package closure, defers parser-stage dependency placeholders to package closure and stale inline-Lua state to the XML owner; exact retained spans use Project-owned package-qualified paths and source-less issues remain unlocated | ordinary orchestration must project configured roots/invoke it; T23 XML/binding/current-metadata producers remain open |
+| #265 | line and package TOC predicates use one three-valued reduction; definite exclusion dominates unknown, and excluded records do not poison selected-file completeness | ordinary workflow observation plus channel/trigger/metadata/XML/binding/chunk context remain open |
 
 Exact-head runs #418, #422, #425, #440, #445, #480, #486, #491, #495,
-#499, #503 and #510 passed. None is an observed addon workflow.
+#499, #503, #510 and code run #521 passed. None is an observed addon workflow.
 
 ### Remaining item-1 path
 
@@ -75,25 +76,23 @@ Implement in this order:
    units with the source-and-donor-backed `keystate` parameter; absence is normal.
    Do not claim exact client discovery timing or negative availability from donor
    ordering; attach a scoped limitation only where a result depends on it;
-9. fix tri-state predicate reduction so known allow/exclude results are not
-   poisoned by irrelevant unknown aliases or gates;
-10. preserve exact package/TOC/XML/callback order and context in a validated value
-    beside path-sorted snapshots; never treat Emmy registration order as runtime;
-11. reuse `ProjectInputDirectory`/`ProjectInputFile` safety and bounds without
+9. preserve exact package/TOC/XML/callback order and context in a validated value
+   beside path-sorted snapshots; never treat Emmy registration order as runtime;
+10. reuse `ProjectInputDirectory`/`ProjectInputFile` safety and bounds without
     `ProjectInputInventory` or publication configuration;
-12. split pure XML/binding unit-map preparation from publication wrappers;
-13. preserve independent captured units and located failure when one included or
+11. split pure XML/binding unit-map preparation from publication wrappers;
+12. preserve independent captured units and located failure when one included or
     bindings XML document is malformed;
-14. admit physical-only, physical+virtual, XML-only and valid empty language
+13. admit physical-only, physical+virtual, XML-only and valid empty language
     scopes without a dummy Lua file;
-15. project Project-owned package-qualified source paths to configured user roots,
+14. project Project-owned package-qualified source paths to configured user roots,
     invoke the delivered `project_package_limitations` mapper for the same reachable
     closure registered in Main, add remaining XML/binding/current-metadata
     producers, then pass exact Main/Library/virtual snapshots plus validated
     context and located-or-honestly-unlocated limitations to the direct result;
-16. render actual code/message/severity/location plus scoped limitations and the
+15. render actual code/message/severity/location plus scoped limitations and the
     documented `0/1/2/64/130/4` exit policy;
-17. record the first exact command/input/result only after it is actually run.
+16. record the first exact command/input/result only after it is actually run.
 
 Preserve exact raw source facts and named scoped limitations; do not create a
 universal evidence-class/proof DTO or expose donor provenance as normal frontend
