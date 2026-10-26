@@ -32,7 +32,7 @@ Related: [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/20
 | #264 | `project_package_limitations` maps blocking issues from the retained reachable package closure, defers parser-stage dependency placeholders to package closure and stale inline-Lua state to the XML owner; exact retained spans use Project-owned package-qualified paths and source-less issues remain unlocated | ordinary orchestration must project configured roots/invoke it; T23 XML/binding/current-metadata producers remain open |
 
 Exact-head runs #418, #422, #425, #440, #445, #480, #486, #491, #495,
-#499 and #503 passed. None is an observed addon workflow.
+#499, #503 and #510 passed. None is an observed addon workflow.
 
 ### Remaining item-1 path
 

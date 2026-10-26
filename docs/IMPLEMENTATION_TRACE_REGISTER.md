@@ -55,7 +55,7 @@ sequence can move it to **observed**.
 | T26 | exact selected-input limitation -> same direct result with optional exact location | implemented by PR #261; run #491 passed | unexecuted |
 | T27 | virtual Emmy diagnostic -> public exact XML location | PR #262 hides unprojected findings; exact projection handoff remains open; run #495 passed | unexecuted |
 | T28 | detailed Project issue -> finite direct limitation category | PR #263 supplies result categories; producer mappings remain scoped | unexecuted |
-| T29 | reachable native load/package issues -> finite direct limitations | PR #264 maps retained reachable closure with Project-owned package-qualified locations; configured-root projection remains open | unexecuted |
+| T29 | reachable native load/package issues -> finite direct limitations | implemented by PR #264; run #510 passed; configured-root projection remains open | unexecuted |
 
 ## Decisions and evidence
 
@@ -388,7 +388,9 @@ omitted because actual virtual preparation/projection state belongs to the XML
 owner. Issues whose Project producer retained no exact document/span remain
 unlocated; the later ordinary configuration adapter owns projection from package-
 qualified paths to configured user roots. Aggregate file-closure issues remain
-suppressed when exact retained local reasons are available.
+suppressed when exact retained local reasons are available. Exact-head run #510
+passed repository policy, Markdown validation, formatting, workspace compilation
+and strict Clippy; no addon workflow was executed.
 
 ## Documentation reconciliation ledger
 

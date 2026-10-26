@@ -143,7 +143,7 @@ the mapper; T23 metadata/XML/binding producers remain open.
 | T26 / PR #261 | direct request/result preserves exact located input limitations without another result model | run #491 passed | unexecuted |
 | T27 / PR #262 | unprojected virtual diagnostics remain internal; public findings require exact physical or projected source locations | run #495 passed | unexecuted |
 | T28 / PR #263 | finite direct limitation categories cover the ordinary Project result surface without string-only classification | run #499 passed | unexecuted |
-| T29 / PR #264 | reachable native blocking load/package issues map to finite direct categories; retained spans use Project-owned package-qualified locations and source-less issues remain unlocated | final exact-head gate required before merge | unexecuted |
+| T29 / PR #264 | reachable native blocking load/package issues map to finite direct categories; retained spans use Project-owned package-qualified locations and source-less issues remain unlocated | run #510 passed | unexecuted |
 
 These eleven internal building blocks exist after PR #264. No ordinary addon input
 reaches them through the public command yet.
