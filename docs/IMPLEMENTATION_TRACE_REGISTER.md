@@ -1,7 +1,7 @@
 # Post-merge implementation trace register
 
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`  
-**Current `main` checked:** `337b9b6e676af6735f416e8527176ed17e865172`  
+**Current `main` checked:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77`  
 **Implementation code reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`  
 **Implementation work started:** 2026-10-24
 
@@ -233,6 +233,7 @@ The focused evidence is in
 | D09 | ordinary-load guidance named only missing `Dep` and generic secure/bootstrap context | PR #255 added full aliases, tri-state conditions, typed context and selected-order handoff |
 | D10 | product channel, `LoadWith`, implicit binding callback source and machine SavedVariables scope were absent | recorded as T19/T20 and in the focused trigger/bindings audit |
 | D11 | official `Interface: 0` was still described as invalid and `Secure: 1` had no explicit uncertainty boundary | recorded as T21; preserve sentinel/raw metadata and scoped limitations |
+| D12 | status headers still stopped at PR #255 after PR #256 added T19–T21 and updated active Issues | current status and this register now bind the exact PR #256 `main` revision |
 
 Documentation/source inspection does not change runtime observation status.
 

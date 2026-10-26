@@ -1,8 +1,8 @@
 # Current implementation status
 
-**Checked:** 2026-10-24  
+**Checked:** 2026-10-25  
 **Implementation code reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`  
-**Documentation/source reconciliation reviewed through:** PR #255, `337b9b6e676af6735f416e8527176ed17e865172`  
+**Documentation/source reconciliation reviewed through:** PR #256, `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77`  
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 
 This is the authoritative current-state checkpoint. It does not replace
@@ -53,7 +53,7 @@ complete dependency aliases, secure/private-table facts, proper three-valued
 selection and a separate exact selected-order/context handoff beside path-sorted
 snapshots.
 
-The follow-up source trace found the next special-load layer:
+PR #256 traced and recorded the next special-load layer:
 
 - explicit Stable/PTR/Beta channel for `OnlyBetaAndPTR`;
 - typed `LoadWith` reverse triggers, distinct from dependencies;
@@ -134,7 +134,7 @@ source projection/handler context.
 ## Readiness verdict
 
 - **Baseline document reconciliation:** complete.
-- **Current-guide/Issue reconciliation:** complete through PR #255; local links
+- **Current-guide/Issue reconciliation:** complete through PR #256; local links
   and anchors are mechanically checked.
 - **Baseline source architecture/error register:** complete for retained baseline
   requirements.
