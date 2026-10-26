@@ -42,9 +42,10 @@ pub(super) fn admit(
             let raw_filter_like =
                 raw_key.starts_with("allowload") || raw_key.starts_with("excludeload");
             let metadata = conditions::project(metadata.trim(), &mut record, context, true)?;
-            // A malformed trailing bracket must not erase a known filter key.
+            // A malformed trailing bracket must not erase a known filter key or
+            // override a package already excluded by another conjunct.
             if raw_filter_like && record.selection == LoadSelection::Unresolved {
-                decision = LoadSelection::Unresolved;
+                decision = decision.and(LoadSelection::Unresolved);
             }
             let (key, value) = metadata.split_once(':').unwrap_or((&metadata, ""));
             let key = key.trim().to_ascii_lowercase();
@@ -62,12 +63,12 @@ pub(super) fn admit(
                     Some(kind) if record.selection == LoadSelection::Included => {
                         let condition = conditions::condition(kind, value.trim(), context)?;
                         if !seen.insert(key) {
-                            decision = LoadSelection::Unresolved;
+                            decision = decision.and(LoadSelection::Unresolved);
                         }
                         decision = decision.and(condition.selection);
                         filters.insert(offset, condition);
                     }
-                    _ => decision = LoadSelection::Unresolved,
+                    _ => decision = decision.and(LoadSelection::Unresolved),
                 }
             }
         }
