@@ -118,9 +118,11 @@ Project; messages and exact locations remain on individual limitations.
 PR #264 connects the existing native load/package issue owners to that finite
 surface without re-trusting caller declarations. `project_package_limitations`
 consumes the retained `ProjectPackageLoadPlan`, maps only blocking issues from the
-same reachable package closure registered in analyzer Main, skips normal missing
-optional dependencies/nonblocking duplicates and suppresses the aggregate file-
-closure issue when exact retained reasons exist. When Project retained a complete
+same reachable package closure registered in analyzer Main. It skips parser-stage
+dependency placeholders in favor of package-closure outcomes, skips normal missing
+optional dependencies/nonblocking duplicates, leaves the stale inline-Lua marker
+to the actual XML preparation owner, and suppresses the aggregate file-closure
+issue when exact retained reasons exist. When Project retained a complete
 source span, the limitation uses the Project-owned collision-free
 `packages/<package>/<source>` path plus retained digest/span; source-less cycle or
 aggregate load-state issues remain honestly unlocated. Ordinary configuration

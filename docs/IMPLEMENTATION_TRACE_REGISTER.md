@@ -381,10 +381,14 @@ package-level blocking issues only when the package reachability is not
 `Unreachable`, and resolves retained source spans through
 `ProjectPackageLoadPlan::source_path` into the collision-free
 `packages/<package>/<source>` namespace. It does not re-trust raw declarations.
-Issues whose Project producer retained no exact document/span remain unlocated;
-the later ordinary configuration adapter owns projection from package-qualified
-paths to configured user roots. Aggregate file-closure issues remain suppressed
-when exact retained local reasons are available.
+Parser-stage dependency placeholders are omitted because package closure owns the
+resolved/missing/conditional outcome; otherwise a successfully resolved dependency
+would remain falsely partial. The stale `InlineLuaNotAnalyzed` marker is also
+omitted because actual virtual preparation/projection state belongs to the XML
+owner. Issues whose Project producer retained no exact document/span remain
+unlocated; the later ordinary configuration adapter owns projection from package-
+qualified paths to configured user roots. Aggregate file-closure issues remain
+suppressed when exact retained local reasons are available.
 
 ## Documentation reconciliation ledger
 
@@ -407,6 +411,7 @@ when exact retained local reasons are available.
 | D22 | the direct result published synthetic virtual workspace paths while explicitly admitting that exact XML projection was unavailable | PR #262 keeps virtual analysis internal and withholds virtual findings until Project supplies exact source projection |
 | D23 | the located limitation handoff still had only three fallback codes and could not classify most existing Project outcomes | PR #263 adds one finite semantic code surface; producer mappings stay narrow |
 | D24 | the first native mapper re-trusted repeated package roots and included issues from `Unreachable` packages that analyzer Main omits | PR #264 consumes the retained plan only, maps the same reachable closure, uses Project-owned package-qualified paths, and leaves source-less issues unlocated |
+| D25 | the native mapper initially published parser-stage dependency and stale inline-Lua placeholders after package/XML owners had newer outcomes | PR #264 defers dependency resolution to package closure and actual virtual preparation/projection state to the XML owner |
 
 Documentation/source inspection does not change runtime observation status.
 The authority split in D12 is a maintenance decision, not another product layer.
@@ -448,7 +453,8 @@ anything observed:
 - reachable native load/package issues map to the finite T28 categories without
   string-only classification, unreachable-package false partial status or raw-
   root rebinding; exact retained spans use package-qualified Project paths and
-  source-less issues remain unlocated;
+  source-less issues remain unlocated, while parser-stage dependency and stale
+  inline-Lua placeholders remain with their semantic owners;
 - shared addon private table and one reviewed UI handler adapter with any scoped donor-parity limitation;
 - coherent updates after source/TOC/XML/dependency/trigger/Library/channel/context
   change;

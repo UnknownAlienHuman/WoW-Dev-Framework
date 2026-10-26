@@ -115,16 +115,20 @@ fn load_issue_code(issue: &LoadIssue) -> Option<AddonCheckLimitationCode> {
         LoadIssueKind::MissingInterface | LoadIssueKind::ConflictingInterface => {
             AddonCheckLimitationCode::CompatibilityUnresolved
         }
-        LoadIssueKind::RequiredDependencyUnresolved => {
-            AddonCheckLimitationCode::DependencyResolutionIncomplete
-        }
-        LoadIssueKind::OptionalDependencyUnresolved => return None,
+        // Package closure is the semantic owner for dependency resolution. The
+        // selected-TOC parser emits these placeholders before that closure is
+        // known, so publishing them here would report a resolved dependency as
+        // incomplete and duplicate the exact package-level outcome.
+        LoadIssueKind::RequiredDependencyUnresolved
+        | LoadIssueKind::OptionalDependencyUnresolved => return None,
         LoadIssueKind::LoadContextRequired | LoadIssueKind::LoadConditionUnresolved => {
             AddonCheckLimitationCode::LoadSelectionUnresolved
         }
-        LoadIssueKind::InlineLuaNotAnalyzed => {
-            AddonCheckLimitationCode::VirtualSourceProjectionUnavailable
-        }
+        // This legacy parser marker survives even when a later XML owner has
+        // prepared virtual Lua. The XML preparation/projection handoff must
+        // classify its actual state instead of this mapper guessing from stale
+        // load-plan wording.
+        LoadIssueKind::InlineLuaNotAnalyzed => return None,
         LoadIssueKind::UnknownDirective
         | LoadIssueKind::XmlSemanticsUnresolved
         | LoadIssueKind::UnsupportedXmlNamespace

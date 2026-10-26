@@ -29,7 +29,7 @@ Related: [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/20
 | #261 | direct input limitations preserve optional exact source locations and suppress only less-informative same-code fallbacks | Project producers are not connected |
 | #262 | unprojected virtual findings remain internal instead of leaking synthetic workspace paths | exact XML/binding projection remains open |
 | #263 | finite direct limitation categories cover source selection, dependency, load selection, compatibility, unsupported context, chunk/XML/binding and generated-Library outcomes | detailed Project issues still need mapping |
-| #264 | `project_package_limitations` maps blocking issues from the retained reachable package closure; exact retained spans use Project-owned package-qualified paths and source-less issues remain unlocated | ordinary orchestration must project configured roots/invoke it; T23 XML/binding/current-metadata producers remain open |
+| #264 | `project_package_limitations` maps blocking issues from the retained reachable package closure, defers parser-stage dependency placeholders to package closure and stale inline-Lua state to the XML owner; exact retained spans use Project-owned package-qualified paths and source-less issues remain unlocated | ordinary orchestration must project configured roots/invoke it; T23 XML/binding/current-metadata producers remain open |
 
 Exact-head runs #418, #422, #425, #440, #445, #480, #486, #491, #495,
 #499 and #503 passed. None is an observed addon workflow.
