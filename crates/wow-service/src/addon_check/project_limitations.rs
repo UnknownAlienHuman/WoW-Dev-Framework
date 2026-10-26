@@ -319,7 +319,7 @@ fn source_location(
             "Project issue span exceeds its retained source bytes",
         ));
     }
-    let path = if root.is_empty() {
+    let path = if root.is_empty() || root == "." {
         document.to_owned()
     } else {
         format!("{root}/{document}")
