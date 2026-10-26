@@ -29,7 +29,7 @@ Related: [#200](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/20
 | #261 | direct input limitations preserve optional exact source locations and suppress only less-informative same-code fallbacks | Project producers are not connected |
 | #262 | unprojected virtual findings remain internal instead of leaking synthetic workspace paths | exact XML/binding projection remains open |
 | #263 | finite direct limitation categories cover source selection, dependency, load selection, compatibility, unsupported context, chunk/XML/binding and generated-Library outcomes | detailed Project issues still need mapping |
-| #264 | `project_package_limitations` validates selected package declarations and maps native blocking load/package issues to finite located direct limitations | ordinary orchestration must invoke it; T23 XML/binding/current-metadata producers remain open |
+| #264 | `project_package_limitations` maps blocking issues from the retained reachable package closure; exact retained spans use Project-owned package-qualified paths and source-less issues remain unlocated | ordinary orchestration must project configured roots/invoke it; T23 XML/binding/current-metadata producers remain open |
 
 Exact-head runs #418, #422, #425, #440, #445, #480, #486, #491, #495,
 #499 and #503 passed. None is an observed addon workflow.
@@ -86,10 +86,11 @@ Implement in this order:
     bindings XML document is malformed;
 14. admit physical-only, physical+virtual, XML-only and valid empty language
     scopes without a dummy Lua file;
-15. invoke the delivered `project_package_limitations` mapper for retained native
-    load/package issues; add the remaining XML/binding/current-metadata producers,
-    then pass exact Main/Library/virtual snapshots plus validated context and
-    located limitations to the direct Service result;
+15. project Project-owned package-qualified source paths to configured user roots,
+    invoke the delivered `project_package_limitations` mapper for the same reachable
+    closure registered in Main, add remaining XML/binding/current-metadata
+    producers, then pass exact Main/Library/virtual snapshots plus validated
+    context and located-or-honestly-unlocated limitations to the direct result;
 16. render actual code/message/severity/location plus scoped limitations and the
     documented `0/1/2/64/130/4` exit policy;
 17. record the first exact command/input/result only after it is actually run.
@@ -138,9 +139,9 @@ remove the route.
   add only demonstrated mapped context seams; never invent unresolved `Secure`
   behavior.
 - **`wow-service`** — existing `addon_check` plus delivered finite located
-  limitation DTO/categories and native load/package mapper; add ordinary config
-  orchestration, validated load/context input, remaining XML/binding projections
-  and selected check dependencies.
+  limitation DTO/categories and reachable-closure native load/package mapper;
+  add ordinary config/root projection, validated load/context input, remaining
+  XML/binding projections and selected check dependencies.
 - **`wow-cli`** — arguments, config precedence, cancellation, rendering, exit.
 - **LSP/MCP** — later adapters to the same Service/Project owner.
 

@@ -1,18 +1,21 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use wow_project::load::{
-    LoadIssue, LoadIssueKind, ProjectLoadPlan, ProjectPackageInput, ProjectPackageLoadIssue,
-    ProjectPackageLoadIssueKind, ProjectPackageLoadPlan,
+    LoadIssue, LoadIssueKind, ProjectLoadPlan, ProjectPackageLoadIssue,
+    ProjectPackageLoadIssueKind, ProjectPackageLoadPlan, ProjectPackageReachability,
 };
 
 use crate::{ExactSourceLocation, ServiceError, ServiceErrorCode, ServiceResult};
 
 use super::{AddonCheckLimitation, AddonCheckLimitationCode};
 
-/// Convert the detailed native Project load/package issues into the finite direct
-/// result categories. Package declarations are required because their logical
-/// roots are acquisition/source-location facts intentionally excluded from the
-/// package semantic/replay identity.
+/// Convert detailed native Project load/package issues into the finite direct
+/// result categories for the same reachable package closure registered in Main.
+///
+/// Source locations use Project's retained collision-free
+/// `packages/<package>/<source>` namespace. The later ordinary configuration
+/// adapter may project that logical path to a configured user-facing root, but
+/// Service never re-trusts a repeated raw package declaration.
 ///
 /// Normal absence of an optional dependency and duplicate declarations that do
 /// not block the native plan are not limitations. Aggregate file-closure issues
@@ -20,38 +23,36 @@ use super::{AddonCheckLimitation, AddonCheckLimitationCode};
 /// source-backed reasons.
 pub fn project_package_limitations(
     plan: &ProjectPackageLoadPlan,
-    packages: &[ProjectPackageInput],
 ) -> ServiceResult<Vec<AddonCheckLimitation>> {
-    let declarations = validate_package_declarations(plan, packages)?;
+    let reachability = package_reachability(plan)?;
     let mut limitations = Vec::new();
 
-    for node in plan.packages() {
-        let declaration = declarations.get(node.package.as_str()).ok_or_else(|| {
-            invalid_context("package limitation mapping is missing its source declaration")
-        })?;
+    for node in plan
+        .packages()
+        .iter()
+        .filter(|node| node.reachability != ProjectPackageReachability::Unreachable)
+    {
         let package_plan = plan.package_plan(&node.package).ok_or_else(|| {
             invalid_context("package limitation mapping is missing its retained load plan")
         })?;
-        append_load_limitations(
-            &mut limitations,
-            &node.package,
-            declaration.root(),
-            package_plan,
-        )?;
+        append_load_limitations(&mut limitations, plan, &node.package, package_plan)?;
     }
 
     for issue in plan.issues() {
+        let package_reachability = reachability
+            .get(issue.package.as_str())
+            .ok_or_else(|| invalid_context("package issue references an unknown package"))?;
+        if *package_reachability == ProjectPackageReachability::Unreachable {
+            continue;
+        }
         let Some(code) = package_issue_code(issue) else {
             continue;
         };
-        let declaration = declarations.get(issue.package.as_str()).ok_or_else(|| {
-            invalid_context("package issue references an undeclared source package")
-        })?;
         let package_plan = plan.package_plan(&issue.package).ok_or_else(|| {
             invalid_context("package issue references a missing retained load plan")
         })?;
         let mut limitation = AddonCheckLimitation::new(code, package_issue_message(issue));
-        if let Some(location) = package_issue_location(declaration.root(), package_plan, issue)? {
+        if let Some(location) = package_issue_location(plan, package_plan, issue)? {
             limitation = limitation.with_location(location);
         }
         limitations.push(limitation);
@@ -62,68 +63,34 @@ pub fn project_package_limitations(
     Ok(limitations)
 }
 
-fn validate_package_declarations<'a>(
+fn package_reachability(
     plan: &ProjectPackageLoadPlan,
-    packages: &'a [ProjectPackageInput],
-) -> ServiceResult<BTreeMap<&'a str, &'a ProjectPackageInput>> {
-    if packages.len() != plan.packages().len() {
-        return Err(invalid_context(
-            "package declarations differ from the selected package plan",
-        ));
-    }
-
-    let mut declarations = BTreeMap::new();
-    for package in packages {
-        if declarations.insert(package.name(), package).is_some() {
-            return Err(invalid_context(
-                "package limitation mapping contains duplicate declarations",
-            ));
-        }
-    }
-
-    let mut seen_plan_packages = BTreeSet::new();
+) -> ServiceResult<BTreeMap<&str, ProjectPackageReachability>> {
+    let mut reachability = BTreeMap::new();
     for node in plan.packages() {
-        if !seen_plan_packages.insert(node.package.as_str()) {
+        if reachability
+            .insert(node.package.as_str(), node.reachability)
+            .is_some()
+        {
             return Err(invalid_context(
                 "package limitation mapping contains duplicate plan nodes",
             ));
         }
-        let declaration = declarations
-            .get(node.package.as_str())
-            .ok_or_else(|| invalid_context("selected package plan has no matching declaration"))?;
-        if declaration.selected_root() != node.selected_root {
-            return Err(invalid_context(
-                "package declaration root role differs from the selected plan",
-            ));
-        }
-        let mut selected = declaration
-            .variants()
-            .iter()
-            .filter(|variant| variant.selected());
-        let selected_variant = selected
-            .next()
-            .ok_or_else(|| invalid_context("package declaration has no selected TOC variant"))?;
-        if selected.next().is_some() || selected_variant.toc().path() != node.selected_toc {
-            return Err(invalid_context(
-                "package declaration selected TOC differs from the selected plan",
-            ));
-        }
     }
-
-    Ok(declarations)
+    Ok(reachability)
 }
 
 fn append_load_limitations(
     output: &mut Vec<AddonCheckLimitation>,
+    package_plan: &ProjectPackageLoadPlan,
     package: &str,
-    root: &str,
     plan: &ProjectLoadPlan,
 ) -> ServiceResult<()> {
     for issue in plan.issues() {
         let Some(code) = load_issue_code(issue) else {
             continue;
         };
-        let location = load_issue_location(root, plan, issue)?;
+        let location = load_issue_location(package_plan, package, plan, issue)?;
         output.push(
             AddonCheckLimitation::new(
                 code,
@@ -273,12 +240,14 @@ fn package_issue_message(issue: &ProjectPackageLoadIssue) -> String {
 }
 
 fn load_issue_location(
-    root: &str,
+    package_plan: &ProjectPackageLoadPlan,
+    package: &str,
     plan: &ProjectLoadPlan,
     issue: &LoadIssue,
 ) -> ServiceResult<ExactSourceLocation> {
     source_location(
-        root,
+        package_plan,
+        package,
         plan,
         &issue.document,
         issue.byte_start,
@@ -287,15 +256,21 @@ fn load_issue_location(
 }
 
 fn package_issue_location(
-    root: &str,
+    package_plan: &ProjectPackageLoadPlan,
     plan: &ProjectLoadPlan,
     issue: &ProjectPackageLoadIssue,
 ) -> ServiceResult<Option<ExactSourceLocation>> {
     match (&issue.document, issue.byte_start, issue.byte_end) {
         (None, None, None) => Ok(None),
-        (Some(document), Some(byte_start), Some(byte_end)) => {
-            source_location(root, plan, document, byte_start, byte_end).map(Some)
-        }
+        (Some(document), Some(byte_start), Some(byte_end)) => source_location(
+            package_plan,
+            &issue.package,
+            plan,
+            document,
+            byte_start,
+            byte_end,
+        )
+        .map(Some),
         _ => Err(invalid_context(
             "package issue contains an incomplete exact source location",
         )),
@@ -303,7 +278,8 @@ fn package_issue_location(
 }
 
 fn source_location(
-    root: &str,
+    package_plan: &ProjectPackageLoadPlan,
+    package: &str,
     plan: &ProjectLoadPlan,
     document: &str,
     byte_start: u64,
@@ -319,11 +295,9 @@ fn source_location(
             "Project issue span exceeds its retained source bytes",
         ));
     }
-    let path = if root.is_empty() || root == "." {
-        document.to_owned()
-    } else {
-        format!("{root}/{document}")
-    };
+    let path = package_plan
+        .source_path(package, document)
+        .ok_or_else(|| invalid_context("Project issue source is absent from its package plan"))?;
     ExactSourceLocation::new(
         path,
         source.content_digest.to_string(),

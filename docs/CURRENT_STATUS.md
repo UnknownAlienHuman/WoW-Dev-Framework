@@ -116,14 +116,16 @@ binding and generated-Library metadata. Detailed Project issue enums remain in
 Project; messages and exact locations remain on individual limitations.
 
 PR #264 connects the existing native load/package issue owners to that finite
-surface. `project_package_limitations` validates package count/name, selected
-root role and selected TOC against the retained package plan; maps only blocking
-issues; omits normal missing optional dependencies, nonblocking duplicates and
-the aggregate file-closure issue when detailed per-package reasons exist; and
-constructs exact logical source locations from the configured package root plus
-retained source digest/span. Root `.` is canonicalized without a `./` prefix.
-Ordinary configuration/acquisition still has to call this mapper, and T23
-metadata/XML/binding producers remain open.
+surface without re-trusting caller declarations. `project_package_limitations`
+consumes the retained `ProjectPackageLoadPlan`, maps only blocking issues from the
+same reachable package closure registered in analyzer Main, skips normal missing
+optional dependencies/nonblocking duplicates and suppresses the aggregate file-
+closure issue when exact retained reasons exist. When Project retained a complete
+source span, the limitation uses the Project-owned collision-free
+`packages/<package>/<source>` path plus retained digest/span; source-less cycle or
+aggregate load-state issues remain honestly unlocated. Ordinary configuration
+still has to project package-qualified paths to configured user roots and invoke
+the mapper; T23 metadata/XML/binding producers remain open.
 
 ## Implemented after the baseline
 
@@ -139,7 +141,7 @@ metadata/XML/binding producers remain open.
 | T26 / PR #261 | direct request/result preserves exact located input limitations without another result model | run #491 passed | unexecuted |
 | T27 / PR #262 | unprojected virtual diagnostics remain internal; public findings require exact physical or projected source locations | run #495 passed | unexecuted |
 | T28 / PR #263 | finite direct limitation categories cover the ordinary Project result surface without string-only classification | run #499 passed | unexecuted |
-| T29 / PR #264 | native blocking load/package issues map to finite direct categories with validated retained-source digest/span and logical location | code run #503 passed; final PR gate enforced before merge | unexecuted |
+| T29 / PR #264 | reachable native blocking load/package issues map to finite direct categories; retained spans use Project-owned package-qualified locations and source-less issues remain unlocated | final exact-head gate required before merge | unexecuted |
 
 These eleven internal building blocks exist after PR #264. No ordinary addon input
 reaches them through the public command yet.
@@ -206,8 +208,9 @@ collect virtual diagnostics, its public result exposes no lower-owner receipts,
 and exact Project preparation limitations can reach that same result with their
 source locations intact. Until exact XML projection is supplied, virtual findings
 remain internal rather than leaking synthetic workspace paths as user locations.
-The finite T28 categories and T29 native mapper exist; ordinary orchestration and
-remaining producer-specific mappings are still open.
+The finite T28 categories and reachable-closure T29 native mapper exist;
+configured-root projection, ordinary orchestration and remaining producer-
+specific mappings are still open.
 
 ## Readiness verdict
 
