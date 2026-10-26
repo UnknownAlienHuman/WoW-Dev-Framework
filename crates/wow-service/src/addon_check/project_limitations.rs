@@ -88,9 +88,9 @@ fn validate_package_declarations<'a>(
                 "package limitation mapping contains duplicate plan nodes",
             ));
         }
-        let declaration = declarations.get(node.package.as_str()).ok_or_else(|| {
-            invalid_context("selected package plan has no matching declaration")
-        })?;
+        let declaration = declarations
+            .get(node.package.as_str())
+            .ok_or_else(|| invalid_context("selected package plan has no matching declaration"))?;
         if declaration.selected_root() != node.selected_root {
             return Err(invalid_context(
                 "package declaration root role differs from the selected plan",
@@ -100,9 +100,9 @@ fn validate_package_declarations<'a>(
             .variants()
             .iter()
             .filter(|variant| variant.selected());
-        let selected_variant = selected.next().ok_or_else(|| {
-            invalid_context("package declaration has no selected TOC variant")
-        })?;
+        let selected_variant = selected
+            .next()
+            .ok_or_else(|| invalid_context("package declaration has no selected TOC variant"))?;
         if selected.next().is_some() || selected_variant.toc().path() != node.selected_toc {
             return Err(invalid_context(
                 "package declaration selected TOC differs from the selected plan",
@@ -144,9 +144,7 @@ fn load_issue_code(issue: &LoadIssue) -> Option<AddonCheckLimitationCode> {
         | LoadIssueKind::IncludeCycle
         | LoadIssueKind::RepeatedLoad
         | LoadIssueKind::UnknownTocSyntax
-        | LoadIssueKind::UnsupportedFileKind => {
-            AddonCheckLimitationCode::SourceSelectionIncomplete
-        }
+        | LoadIssueKind::UnsupportedFileKind => AddonCheckLimitationCode::SourceSelectionIncomplete,
         LoadIssueKind::MissingInterface | LoadIssueKind::ConflictingInterface => {
             AddonCheckLimitationCode::CompatibilityUnresolved
         }
@@ -175,9 +173,7 @@ const fn load_issue_message(kind: LoadIssueKind) -> &'static str {
         LoadIssueKind::IncludeCycle => "selected XML includes form a cycle",
         LoadIssueKind::RepeatedLoad => "selected source repeats a load occurrence",
         LoadIssueKind::MissingInterface => "selected TOC has no usable Interface value",
-        LoadIssueKind::ConflictingInterface => {
-            "selected TOC contains conflicting Interface values"
-        }
+        LoadIssueKind::ConflictingInterface => "selected TOC contains conflicting Interface values",
         LoadIssueKind::RequiredDependencyUnresolved => {
             "required dependency declarations are unresolved"
         }
@@ -188,24 +184,16 @@ const fn load_issue_message(kind: LoadIssueKind) -> &'static str {
             "selected source contains an unsupported load-context directive"
         }
         LoadIssueKind::UnknownTocSyntax => "selected TOC contains unsupported syntax",
-        LoadIssueKind::LoadContextRequired => {
-            "selected source requires an explicit load context"
-        }
+        LoadIssueKind::LoadContextRequired => "selected source requires an explicit load context",
         LoadIssueKind::LoadConditionUnresolved => {
             "selected source contains an unresolved load condition"
         }
-        LoadIssueKind::UnsupportedFileKind => {
-            "selected source references an unsupported file kind"
-        }
+        LoadIssueKind::UnsupportedFileKind => "selected source references an unsupported file kind",
         LoadIssueKind::XmlSemanticsUnresolved => {
             "selected XML requires unsupported semantic context"
         }
-        LoadIssueKind::UnsupportedXmlNamespace => {
-            "selected XML uses an unsupported namespace"
-        }
-        LoadIssueKind::UnsupportedXmlAttributes => {
-            "selected XML uses unsupported attributes"
-        }
+        LoadIssueKind::UnsupportedXmlNamespace => "selected XML uses an unsupported namespace",
+        LoadIssueKind::UnsupportedXmlAttributes => "selected XML uses unsupported attributes",
         LoadIssueKind::InlineLuaNotAnalyzed => {
             "selected inline XML Lua is not yet source-projected for analysis"
         }
