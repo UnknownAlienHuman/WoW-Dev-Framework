@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use wow_project::load::{
     LoadIssue, LoadIssueKind, ProjectLoadPlan, ProjectPackageLoadIssue,
@@ -9,13 +9,9 @@ use crate::{ExactSourceLocation, ServiceError, ServiceErrorCode, ServiceResult};
 
 use super::{AddonCheckLimitation, AddonCheckLimitationCode};
 
-/// Convert detailed native Project load/package issues into the finite direct
-/// result categories for the same reachable package closure registered in Main.
-///
-/// Source locations use Project's retained collision-free
-/// `packages/<package>/<source>` namespace. The later ordinary configuration
-/// adapter may project that logical path to a configured user-facing root, but
-/// Service never re-trusts a repeated raw package declaration.
+/// Convert the detailed native Project load/package issues into the finite direct
+/// result categories. Exact source paths come from the retained Project plan;
+/// caller-supplied acquisition roots are deliberately not re-trusted here.
 ///
 /// Normal absence of an optional dependency and duplicate declarations that do
 /// not block the native plan are not limitations. Aggregate file-closure issues
@@ -24,7 +20,7 @@ use super::{AddonCheckLimitation, AddonCheckLimitationCode};
 pub fn project_package_limitations(
     plan: &ProjectPackageLoadPlan,
 ) -> ServiceResult<Vec<AddonCheckLimitation>> {
-    let reachability = package_reachability(plan)?;
+    validate_package_plan(plan)?;
     let mut limitations = Vec::new();
 
     for node in plan
@@ -35,24 +31,18 @@ pub fn project_package_limitations(
         let package_plan = plan.package_plan(&node.package).ok_or_else(|| {
             invalid_context("package limitation mapping is missing its retained load plan")
         })?;
-        append_load_limitations(&mut limitations, plan, &node.package, package_plan)?;
+        append_load_limitations(&mut limitations, &node.package, plan, package_plan)?;
     }
 
     for issue in plan.issues() {
-        let package_reachability = reachability
-            .get(issue.package.as_str())
-            .ok_or_else(|| invalid_context("package issue references an unknown package"))?;
-        if *package_reachability == ProjectPackageReachability::Unreachable {
+        if !package_is_reachable(plan, &issue.package)? {
             continue;
         }
         let Some(code) = package_issue_code(issue) else {
             continue;
         };
-        let package_plan = plan.package_plan(&issue.package).ok_or_else(|| {
-            invalid_context("package issue references a missing retained load plan")
-        })?;
         let mut limitation = AddonCheckLimitation::new(code, package_issue_message(issue));
-        if let Some(location) = package_issue_location(plan, package_plan, issue)? {
+        if let Some(location) = package_issue_location(plan, issue)? {
             limitation = limitation.with_location(location);
         }
         limitations.push(limitation);
@@ -63,30 +53,42 @@ pub fn project_package_limitations(
     Ok(limitations)
 }
 
-fn package_reachability(
-    plan: &ProjectPackageLoadPlan,
-) -> ServiceResult<BTreeMap<&str, ProjectPackageReachability>> {
-    let mut reachability = BTreeMap::new();
+fn validate_package_plan(plan: &ProjectPackageLoadPlan) -> ServiceResult<()> {
+    let mut seen = BTreeSet::new();
     for node in plan.packages() {
-        if reachability
-            .insert(node.package.as_str(), node.reachability)
-            .is_some()
-        {
+        if !seen.insert(node.package.as_str()) {
             return Err(invalid_context(
                 "package limitation mapping contains duplicate plan nodes",
             ));
         }
+        let package_plan = plan.package_plan(&node.package).ok_or_else(|| {
+            invalid_context("package limitation mapping is missing its retained load plan")
+        })?;
+        if package_plan.selected_toc() != node.selected_toc {
+            return Err(invalid_context(
+                "package limitation mapping selected TOC differs from its retained plan",
+            ));
+        }
     }
-    Ok(reachability)
+    Ok(())
+}
+
+fn package_is_reachable(plan: &ProjectPackageLoadPlan, package: &str) -> ServiceResult<bool> {
+    let node = plan
+        .packages()
+        .iter()
+        .find(|node| node.package == package)
+        .ok_or_else(|| invalid_context("package issue references an unknown plan node"))?;
+    Ok(node.reachability != ProjectPackageReachability::Unreachable)
 }
 
 fn append_load_limitations(
     output: &mut Vec<AddonCheckLimitation>,
-    package_plan: &ProjectPackageLoadPlan,
     package: &str,
-    plan: &ProjectLoadPlan,
+    plan: &ProjectPackageLoadPlan,
+    package_plan: &ProjectLoadPlan,
 ) -> ServiceResult<()> {
-    for issue in plan.issues() {
+    for issue in package_plan.issues() {
         let Some(code) = load_issue_code(issue) else {
             continue;
         };
@@ -120,7 +122,8 @@ fn load_issue_code(issue: &LoadIssue) -> Option<AddonCheckLimitationCode> {
         // known, so publishing them here would report a resolved dependency as
         // incomplete and duplicate the exact package-level outcome.
         LoadIssueKind::RequiredDependencyUnresolved
-        | LoadIssueKind::OptionalDependencyUnresolved => return None,
+        | LoadIssueKind::OptionalDependencyUnresolved
+        | LoadIssueKind::UnknownMetadata => return None,
         LoadIssueKind::LoadContextRequired | LoadIssueKind::LoadConditionUnresolved => {
             AddonCheckLimitationCode::LoadSelectionUnresolved
         }
@@ -153,6 +156,9 @@ const fn load_issue_message(kind: LoadIssueKind) -> &'static str {
         }
         LoadIssueKind::UnknownDirective => {
             "selected source contains an unsupported load-context directive"
+        }
+        LoadIssueKind::UnknownMetadata => {
+            "selected TOC contains retained metadata with unknown semantics"
         }
         LoadIssueKind::UnknownTocSyntax => "selected TOC contains unsupported syntax",
         LoadIssueKind::LoadContextRequired => "selected source requires an explicit load context",
@@ -244,9 +250,9 @@ fn package_issue_message(issue: &ProjectPackageLoadIssue) -> String {
 }
 
 fn load_issue_location(
-    package_plan: &ProjectPackageLoadPlan,
+    package_plan: &ProjectLoadPlan,
     package: &str,
-    plan: &ProjectLoadPlan,
+    plan: &ProjectPackageLoadPlan,
     issue: &LoadIssue,
 ) -> ServiceResult<ExactSourceLocation> {
     source_location(
@@ -260,21 +266,25 @@ fn load_issue_location(
 }
 
 fn package_issue_location(
-    package_plan: &ProjectPackageLoadPlan,
-    plan: &ProjectLoadPlan,
+    plan: &ProjectPackageLoadPlan,
     issue: &ProjectPackageLoadIssue,
 ) -> ServiceResult<Option<ExactSourceLocation>> {
     match (&issue.document, issue.byte_start, issue.byte_end) {
         (None, None, None) => Ok(None),
-        (Some(document), Some(byte_start), Some(byte_end)) => source_location(
-            package_plan,
-            &issue.package,
-            plan,
-            document,
-            byte_start,
-            byte_end,
-        )
-        .map(Some),
+        (Some(document), Some(byte_start), Some(byte_end)) => {
+            let package_plan = plan.package_plan(&issue.package).ok_or_else(|| {
+                invalid_context("package issue references a missing retained load plan")
+            })?;
+            source_location(
+                package_plan,
+                &issue.package,
+                plan,
+                document,
+                byte_start,
+                byte_end,
+            )
+            .map(Some)
+        }
         _ => Err(invalid_context(
             "package issue contains an incomplete exact source location",
         )),
@@ -282,14 +292,14 @@ fn package_issue_location(
 }
 
 fn source_location(
-    package_plan: &ProjectPackageLoadPlan,
+    package_plan: &ProjectLoadPlan,
     package: &str,
-    plan: &ProjectLoadPlan,
+    plan: &ProjectPackageLoadPlan,
     document: &str,
     byte_start: u64,
     byte_end: u64,
 ) -> ServiceResult<ExactSourceLocation> {
-    let source = plan
+    let source = package_plan
         .sources()
         .iter()
         .find(|source| source.path == document)
@@ -299,9 +309,9 @@ fn source_location(
             "Project issue span exceeds its retained source bytes",
         ));
     }
-    let path = package_plan
+    let path = plan
         .source_path(package, document)
-        .ok_or_else(|| invalid_context("Project issue source is absent from its package plan"))?;
+        .ok_or_else(|| invalid_context("Project issue source has no retained project path"))?;
     ExactSourceLocation::new(
         path,
         source.content_digest.to_string(),
