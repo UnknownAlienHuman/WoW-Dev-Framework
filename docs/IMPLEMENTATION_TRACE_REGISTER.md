@@ -2,7 +2,7 @@
 
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256); PR #257 owns this review
-**Runtime implementation reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`
+**Runtime implementation review:** PR #259 owns T24; earlier delivered slices remain PRs #246–#250
 **Implementation work started:** 2026-10-24
 
 This is the active addendum to [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md). The old
@@ -50,6 +50,7 @@ sequence can move it to **observed**.
 | T21 | official zero Interface + unresolved `Secure` metadata -> compatibility/context admission | source-traced; current parser hard-rejects/blocks | unexecuted |
 | T22 | ordinary chunk namespace + `AllowAddOnTableAccess` / `SuppressLocalTableRef` | official normal contract traced; retrieval permission missing; restricted suppression semantics unsupported | unexecuted |
 | T23 | current TOC metadata -> issue classification/completeness | current known directives become blocking `UnknownDirective`; correction designed | unexecuted |
+| T24 | exact virtual snapshot -> direct configured diagnostics without Project publication identity | implemented by PR #259; merge gated on exact-head compile/Clippy | unexecuted |
 
 ## Decisions and evidence
 
@@ -273,6 +274,23 @@ icon/category/group and `X-*` custom metadata stay nonblocking. Unknown package
 metadata produces a located scoped limitation instead of invalidating enumerated
 files; unknown inline/file directives remain unit-selection limitations.
 
+### T24 — direct virtual diagnostics are snapshot-owned, not publication-owned
+
+Before PR #259, `AddonCheckVirtualInput` required both an exact virtual
+`LuaWorkspaceSnapshot` and `ProjectGenerationId`. `check_addon` immediately passed
+that pair into `ConfiguredAnalyzerSession`, although `diagnostics()` reads only
+the registered snapshot. The generation was consumed only by the optional
+`VirtualSemanticReport` path and therefore forced the direct diagnostics route to
+carry a legacy Project publication identity it explicitly rejects elsewhere.
+
+**Decision and implementation:** configured-owner construction and reuse compare
+the exact virtual snapshot only. `AddonCheckVirtualInput` contains only that
+snapshot. `ProjectGenerationId` is supplied to `semantic_reports` only when
+virtual semantic facts are explicitly requested, and the method rejects an
+incomplete snapshot/generation pair. Do not fabricate a generation for ordinary
+mapped diagnostics, and do not remove generation from the older semantic report
+that still identifies facts with it.
+
 ## Documentation reconciliation ledger
 
 | ID | Drift found after PR #244 | Resolution |
@@ -288,6 +306,7 @@ files; unknown inline/file directives remain unit-selection limitations.
 | D16 | `.ci/wow-emmy-syntax-bootstrap-passed` contained only `verified-bootstrap` and had no reader | remove the orphan ceremony marker; real repository checks remain in the workflow/xtask owners |
 | D17 | chunk context was derived mainly from Wowless and omitted Blizzard's current `AllowAddOnTableAccess`/second-result contract | use pinned `AddOnsDocumentation.lua` for ordinary chunks; keep retrieval permission separate and `SuppressLocalTableRef` unsupported |
 | D18 | `LoadSavedVariablesFirst`, `AllowAddOnTableAccess` and `EscalateErrorDuringLoad` were absent from the canonical plan although selected source uses them and current parsing makes them blocking unknowns | add T23 and effect-scoped metadata classification; do not make known/nonsemantic metadata globally partial |
+| D19 | direct `addon_check` rejected Project publication identities in prose but required `ProjectGenerationId` for virtual diagnostics that never read it | PR #259 makes diagnostics snapshot-owned and keeps generation only at the virtual semantic-report call |
 
 Documentation/source inspection does not change runtime observation status.
 The authority split in D12 is a maintenance decision, not another product layer.
@@ -318,6 +337,8 @@ anything observed:
   execution semantics;
 - generated manifest and plain Lua Library;
 - physical, mapped XML, XML-only and malformed included XML;
+- direct virtual diagnostics from exact mapped source without Project generation
+  or publication construction; virtual semantic facts with an exact generation;
 - shared addon private table and one reviewed UI handler adapter with any scoped donor-parity limitation;
 - coherent updates after source/TOC/XML/dependency/trigger/Library/channel/context
   change;
