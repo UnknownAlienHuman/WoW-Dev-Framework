@@ -36,9 +36,11 @@ pub(super) fn parse(
         } else if let Some(metadata) = content.strip_prefix("##") {
             record.kind = Kind::Metadata;
             let metadata = conditions::project(metadata.trim(), &mut record, context, true)?;
-            let retained = metadata.split_once(':').map(|(key, value)| TocMetadata {
-                key: key.trim().to_ascii_lowercase(),
-                value: value.trim().to_owned(),
+            let retained = metadata.split_once(':').map(|(key, value)| {
+                TocMetadata::new(
+                    key.trim().to_ascii_lowercase(),
+                    value.trim().to_owned(),
+                )
             });
             let kind = retained.as_ref().map(TocMetadata::kind);
             record.metadata = retained;
