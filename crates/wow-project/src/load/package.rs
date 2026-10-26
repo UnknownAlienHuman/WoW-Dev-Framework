@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::AtomicBool;
 
 use super::{
-    LoadRecordKind, LoadSelection, MAX_RECORDS, Record, TocCondition, TocConditionKind,
-    TocLoadContext, budget, conditions,
+    LoadRecordKind, LoadSelection, MAX_RECORDS, Record, TocCondition, TocLoadContext,
+    TocMetadataKind, budget, conditions,
 };
 use crate::{ProjectError, ProjectErrorCode, ProjectPhase, ProjectResult, disk::checkpoint};
 
@@ -39,8 +39,11 @@ pub(super) fn admit(
                 .map(|(key, _)| key)
                 .unwrap_or(metadata);
             let raw_key = raw_key.trim().to_ascii_lowercase();
-            let raw_filter_like =
-                raw_key.starts_with("allowload") || raw_key.starts_with("excludeload");
+            let raw_filter_like = TocMetadataKind::classify(&raw_key)
+                .condition_kind()
+                .is_some()
+                || raw_key.starts_with("allowload")
+                || raw_key.starts_with("excludeload");
             let metadata = conditions::project(metadata.trim(), &mut record, context, true)?;
             // A malformed trailing bracket must not erase a known filter key or
             // override a package already excluded by another conjunct.
@@ -49,7 +52,7 @@ pub(super) fn admit(
             }
             let (key, value) = metadata.split_once(':').unwrap_or((&metadata, ""));
             let key = key.trim().to_ascii_lowercase();
-            let kind = TocConditionKind::parse(&key);
+            let kind = TocMetadataKind::classify(&key).condition_kind();
             // A misspelled/future package filter is not an ordinary descriptive
             // tag: opening its descendants would guess that it had no effect.
             let filter_like =
