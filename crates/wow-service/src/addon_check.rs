@@ -1,8 +1,9 @@
 //! Direct addon language checking without the legacy generic platform.
 //!
 //! The first slice consumes exact already-acquired Main, Library and optional
-//! virtual snapshots. Disk/TOC/XML acquisition remains a Project responsibility;
-//! this owner composes one configured Emmy session and projects its diagnostics.
+//! virtual snapshots. Disk/TOC/XML acquisition and virtual-to-source projection
+//! remain Project responsibilities; this owner composes one configured Emmy
+//! session and publishes only diagnostics with exact user-source locations.
 
 use std::sync::atomic::AtomicBool;
 
@@ -118,7 +119,8 @@ pub enum AddonCheckCompleteness {
     Partial,
 }
 
-/// Which exact analysis source set produced a diagnostic.
+/// Which exact analysis source set produced a diagnostic. Virtual findings are
+/// emitted only after Project supplies an exact source projection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AddonCheckSourceRole {
@@ -302,13 +304,10 @@ pub fn check_addon(
         AddonCheckSourceRole::Main,
         reports.main.diagnostics(),
     );
-    if let Some(virtual_report) = &reports.virtual_units {
-        append_diagnostics(
-            &mut diagnostics,
-            AddonCheckSourceRole::Virtual,
-            virtual_report.diagnostics(),
-        );
-    }
+    // Virtual diagnostics remain part of the shared configured analysis but
+    // cannot become user-visible until Project maps every virtual byte range to
+    // exact XML source. Publishing the synthetic virtual path/span here would
+    // violate the direct result's source-location contract.
     diagnostics.sort_unstable();
 
     let mut limitations = input_limitations;

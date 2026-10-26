@@ -2,7 +2,7 @@
 
 **Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
 **Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256); PR #257 owns this review
-**Runtime implementation review:** PRs #259–#261 own T24–T26; earlier delivered slices remain PRs #246–#250
+**Runtime implementation review:** PRs #259–#262 own T24–T27; earlier delivered slices remain PRs #246–#250
 **Implementation work started:** 2026-10-24
 
 This is the active addendum to [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md). The old
@@ -41,7 +41,7 @@ sequence can move it to **observed**.
 | T12 | upstream diagnostic -> framework DTO -> transitional LSP payload | implemented by PR #246; run #418 passed | unexecuted |
 | T13 | caller diagnostic config -> optional semantic collectors | implemented by PR #247; run #422 passed | unexecuted |
 | T14 | exact snapshots -> direct Service findings/limitations | implemented by PR #248; run #425 passed | unexecuted |
-| T15 | compiled pin/report evidence -> legacy admission | implemented by PR #249; run #440 passed | unexecuted |
+| T15 | compiled Emmy pin/report evidence -> legacy admission | implemented by PR #249; run #440 passed | unexecuted |
 | T16 | requested Main snapshot -> configured-owner reuse | implemented by PR #250; run #445 passed | unexecuted |
 | T17 | TOC metadata/file clauses -> typed package/per-unit execution context | source-traced; aliases/context handoff open | unexecuted |
 | T18 | dependency/TOC/XML order -> snapshots + context-sensitive checks | source-traced; order lost at snapshot boundary | unexecuted |
@@ -52,7 +52,8 @@ sequence can move it to **observed**.
 | T23 | current TOC metadata -> issue classification/completeness | current known directives become blocking `UnknownDirective`; correction designed | unexecuted |
 | T24 | exact virtual snapshot -> direct configured diagnostics without Project publication identity | implemented by PR #259; run #480 passed | unexecuted |
 | T25 | configured diagnostics -> public direct result without snapshot/report receipts | implemented by PR #260; run #486 passed | unexecuted |
-| T26 | exact selected-input limitation -> same direct result with optional exact location | implemented by PR #261; merge gated on exact-head compile/Clippy | unexecuted |
+| T26 | exact selected-input limitation -> same direct result with optional exact location | implemented by PR #261; run #491 passed | unexecuted |
+| T27 | virtual Emmy diagnostic -> public exact XML location | PR #262 hides unprojected findings; exact projection handoff remains open | unexecuted |
 
 ## Decisions and evidence
 
@@ -327,6 +328,23 @@ fallback only when no caller-supplied limitation of that code exists, so one or
 more precise located failures survive without an extra generic duplicate. No
 Project/report/provenance identity enters the result.
 
+### T27 — virtual findings are visible only after exact XML projection
+
+`ConfiguredAnalyzerSession` intentionally registers mapped virtual Lua in the
+same owner as physical Main, but its syntax report still uses synthetic virtual
+workspace paths and byte ranges. Before PR #262, `check_addon` copied those
+unprojected diagnostics into the public result while also returning
+`VirtualSourceProjectionUnavailable`. That exposed a location already known not
+to be the user's XML source and contradicted the canonical rule that a virtual
+diagnostic becomes visible only after exact projection.
+
+**Decision and implementation:** keep virtual units in the shared configured
+owner, collect their report, and use its presence to retain projection/handler
+limitations. Until Project supplies the exact virtual-to-XML source map, publish
+only physical Main diagnostics. Do not fabricate an XML location, discard the
+virtual units from analysis, or create another result wrapper. The existing
+`Virtual` source role remains reserved for the later exact projected handoff.
+
 ## Documentation reconciliation ledger
 
 | ID | Drift found after PR #244 | Resolution |
@@ -345,6 +363,7 @@ Project/report/provenance identity enters the result.
 | D19 | direct `addon_check` rejected Project publication identities in prose but required `ProjectGenerationId` for virtual diagnostics that never read it | PR #259 makes diagnostics snapshot-owned and keeps generation only at the virtual semantic-report call |
 | D20 | the direct serializable result still exposed snapshot and upstream analysis IDs despite the current ordinary workflow rejecting report/digest receipts | PR #260 removes those public fields while preserving exact per-diagnostic source binding and internal lower-owner identities |
 | D21 | the direct limitation DTO and request could not preserve source-located Project preparation failures required by the canonical path | PR #261 reuses `ExactSourceLocation` and adds one direct input-limitation handoff with same-code fallback suppression |
+| D22 | the direct result published synthetic virtual workspace paths while explicitly admitting that exact XML projection was unavailable | PR #262 keeps virtual analysis internal and withholds virtual findings until Project supplies exact source projection |
 
 Documentation/source inspection does not change runtime observation status.
 The authority split in D12 is a maintenance decision, not another product layer.
@@ -381,6 +400,8 @@ anything observed:
   analysis, Project or report receipt fields;
 - multiple located input limitations surviving in the direct result while a
   same-code located limitation replaces only the generic Service fallback;
+- no synthetic virtual path/span in the public result before exact XML
+  projection; projected virtual diagnostics retain the exact XML location;
 - shared addon private table and one reviewed UI handler adapter with any scoped donor-parity limitation;
 - coherent updates after source/TOC/XML/dependency/trigger/Library/channel/context
   change;
