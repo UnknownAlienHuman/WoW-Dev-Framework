@@ -14,7 +14,7 @@ use wow_emmy::{
     EmmySyntaxDiagnosticKind, LuaWorkspaceSnapshot,
 };
 
-use crate::{ServiceError, ServiceErrorCode, ServiceResult};
+use crate::{ExactSourceLocation, ServiceError, ServiceErrorCode, ServiceResult};
 
 const RESULT_SCHEMA: &str = "wow-service/addon-check/1";
 
@@ -42,6 +42,7 @@ pub struct AddonCheckRequest {
     main: LuaWorkspaceSnapshot,
     libraries: Vec<LuaWorkspaceSnapshot>,
     virtual_units: Option<AddonCheckVirtualInput>,
+    input_limitations: Vec<AddonCheckLimitation>,
     configuration: EmmyAnalysisConfiguration,
 }
 
@@ -56,6 +57,7 @@ impl AddonCheckRequest {
             main,
             libraries,
             virtual_units: None,
+            input_limitations: Vec::new(),
             configuration,
         }
     }
@@ -63,6 +65,18 @@ impl AddonCheckRequest {
     #[must_use]
     pub fn with_virtual_units(mut self, virtual_units: AddonCheckVirtualInput) -> Self {
         self.virtual_units = Some(virtual_units);
+        self
+    }
+
+    /// Preserve limitations discovered while selecting and preparing exact
+    /// Project input. A later, more specific located limitation replaces the
+    /// same-code fallback that this first Service slice would otherwise add.
+    #[must_use]
+    pub fn with_input_limitations(
+        mut self,
+        input_limitations: Vec<AddonCheckLimitation>,
+    ) -> Self {
+        self.input_limitations = input_limitations;
         self
     }
 
@@ -79,6 +93,11 @@ impl AddonCheckRequest {
     #[must_use]
     pub const fn virtual_units(&self) -> Option<&AddonCheckVirtualInput> {
         self.virtual_units.as_ref()
+    }
+
+    #[must_use]
+    pub fn input_limitations(&self) -> &[AddonCheckLimitation] {
+        &self.input_limitations
     }
 
     #[must_use]
@@ -187,9 +206,26 @@ pub enum AddonCheckLimitationCode {
 pub struct AddonCheckLimitation {
     code: AddonCheckLimitationCode,
     message: Box<str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    location: Option<ExactSourceLocation>,
 }
 
 impl AddonCheckLimitation {
+    #[must_use]
+    pub fn new(code: AddonCheckLimitationCode, message: impl Into<Box<str>>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            location: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_location(mut self, location: ExactSourceLocation) -> Self {
+        self.location = Some(location);
+        self
+    }
+
     #[must_use]
     pub const fn code(&self) -> AddonCheckLimitationCode {
         self.code
@@ -198,6 +234,11 @@ impl AddonCheckLimitation {
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> Option<&ExactSourceLocation> {
+        self.location.as_ref()
     }
 }
 
@@ -247,6 +288,7 @@ pub fn check_addon(
         main,
         libraries,
         virtual_units,
+        input_limitations,
         configuration,
     } = request;
 
@@ -272,26 +314,26 @@ pub fn check_addon(
     }
     diagnostics.sort_unstable();
 
-    let mut limitations = vec![AddonCheckLimitation {
-        code: AddonCheckLimitationCode::AddonChunkContextUnavailable,
-        message: "addon-name/private-table chunk arguments are not yet bound to Main files".into(),
-    }];
+    let mut limitations = input_limitations;
+    add_fallback_limitation(
+        &mut limitations,
+        AddonCheckLimitationCode::AddonChunkContextUnavailable,
+        "addon-name/private-table chunk arguments are not yet bound to Main files",
+    );
     if reports.virtual_units.is_some() {
-        limitations.extend([
-            AddonCheckLimitation {
-                code: AddonCheckLimitationCode::VirtualSourceProjectionUnavailable,
-                message:
-                    "virtual Lua diagnostics are not yet projected through the exact XML source map"
-                        .into(),
-            },
-            AddonCheckLimitation {
-                code: AddonCheckLimitationCode::XmlHandlerContextUnavailable,
-                message: "implicit XML handler receiver and parameter context is not yet supplied"
-                    .into(),
-            },
-        ]);
+        add_fallback_limitation(
+            &mut limitations,
+            AddonCheckLimitationCode::VirtualSourceProjectionUnavailable,
+            "virtual Lua diagnostics are not yet projected through the exact XML source map",
+        );
+        add_fallback_limitation(
+            &mut limitations,
+            AddonCheckLimitationCode::XmlHandlerContextUnavailable,
+            "implicit XML handler receiver and parameter context is not yet supplied",
+        );
     }
     limitations.sort_unstable();
+    limitations.dedup();
 
     Ok(AddonCheckResult {
         schema: RESULT_SCHEMA,
@@ -300,6 +342,19 @@ pub fn check_addon(
         diagnostics,
         limitations,
     })
+}
+
+fn add_fallback_limitation(
+    limitations: &mut Vec<AddonCheckLimitation>,
+    code: AddonCheckLimitationCode,
+    message: &'static str,
+) {
+    if limitations
+        .iter()
+        .all(|limitation| limitation.code() != code)
+    {
+        limitations.push(AddonCheckLimitation::new(code, message));
+    }
 }
 
 fn append_diagnostics(
