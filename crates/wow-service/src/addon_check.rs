@@ -72,10 +72,7 @@ impl AddonCheckRequest {
     /// Project input. A later, more specific located limitation replaces the
     /// same-code fallback that this first Service slice would otherwise add.
     #[must_use]
-    pub fn with_input_limitations(
-        mut self,
-        input_limitations: Vec<AddonCheckLimitation>,
-    ) -> Self {
+    pub fn with_input_limitations(mut self, input_limitations: Vec<AddonCheckLimitation>) -> Self {
         self.input_limitations = input_limitations;
         self
     }
