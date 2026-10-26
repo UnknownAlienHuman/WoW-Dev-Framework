@@ -1,0 +1,68 @@
+name: Finalize PR 264 evidence
+
+on:
+  push:
+    branches: [fix/map-project-limitations-2026-10-26]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr264-evidence-v2-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      BRANCH_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+      - name: Record exact evidence and remove temporary helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path('docs/CURRENT_STATUS.md'): [(
+                  '| T29 / PR #264 | reachable native blocking load/package issues map to finite direct categories; retained spans use Project-owned package-qualified locations and source-less issues remain unlocated | final exact-head gate required before merge | unexecuted |',
+                  '| T29 / PR #264 | reachable native blocking load/package issues map to finite direct categories; retained spans use Project-owned package-qualified locations and source-less issues remain unlocated | run #510 passed | unexecuted |',
+              )],
+              Path('docs/REFACTOR_QUEUE.md'): [(
+                  '#499 and #503 passed. None is an observed addon workflow.',
+                  '#499, #503 and #510 passed. None is an observed addon workflow.',
+              )],
+              Path('docs/IMPLEMENTATION_TRACE_REGISTER.md'): [
+                  (
+                      '| T29 | reachable native load/package issues -> finite direct limitations | PR #264 maps retained reachable closure with Project-owned package-qualified locations; configured-root projection remains open | unexecuted |',
+                      '| T29 | reachable native load/package issues -> finite direct limitations | implemented by PR #264; run #510 passed; configured-root projection remains open | unexecuted |',
+                  ),
+                  (
+                      'suppressed when exact retained local reasons are available.\n',
+                      'suppressed when exact retained local reasons are available. Exact-head run #510\npassed repository policy, Markdown validation, formatting, workspace compilation\nand strict Clippy; no addon workflow was executed.\n',
+                  ),
+              ],
+          }
+          for path, pairs in replacements.items():
+              text = path.read_text(encoding='utf-8')
+              for old, new in pairs:
+                  count = text.count(old)
+                  if count != 1:
+                      raise SystemExit(f'{path}: expected one occurrence, found {count}: {old!r}')
+                  text = text.replace(old, new, 1)
+              path.write_text(text, encoding='utf-8')
+          PY
+          rm .github/pr264-run510.patch .github/workflows/pr264-run510.yml .github/workflows/pr264-run510-v2.yml
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/CURRENT_STATUS.md docs/IMPLEMENTATION_TRACE_REGISTER.md docs/REFACTOR_QUEUE.md .github/pr264-run510.patch .github/workflows/pr264-run510.yml .github/workflows/pr264-run510-v2.yml
+          git commit -m "docs: record PR 264 exact-head evidence"
+          git push origin "HEAD:${BRANCH_NAME}"
