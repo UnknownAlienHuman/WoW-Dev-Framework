@@ -45,6 +45,8 @@ pub(super) fn parse(
                 });
             }
             if record.selection != LoadSelection::Included {
+                record.file_enumeration_complete =
+                    record.selection == LoadSelection::Excluded;
                 records.push(record);
                 offset = end;
                 continue;
@@ -52,6 +54,7 @@ pub(super) fn parse(
             if let Some(filter) = package_filters.get(&offset) {
                 record.kind = Kind::PackageGate;
                 record.conditions.push(filter.clone());
+                record.file_enumeration_complete = true;
                 records.push(record);
                 offset = end;
                 continue;
@@ -130,8 +133,11 @@ pub(super) fn parse(
                 record.issues.push(Issue::UnsupportedFileKind);
             }
         }
-        record.file_enumeration_complete =
-            record.selection == LoadSelection::Included && record.issues.is_empty();
+        record.file_enumeration_complete = match record.selection {
+            LoadSelection::Included => record.issues.is_empty(),
+            LoadSelection::Excluded => true,
+            LoadSelection::Unresolved => false,
+        };
         records.push(record);
         offset = end;
     }
