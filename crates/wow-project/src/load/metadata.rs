@@ -1,14 +1,9 @@
 //! One normalized TOC metadata directive retained by the single source parser.
 //!
-//! [TocMetadata] is a lexical projection of a directive normalized by the load
-//! owner's parser. The containing record retains conditional predicates and
-//! selection, including unknown or excluded conditions. Downstream owners read
-//! the retained key/value pair without re-splitting raw source spans.
-//!
-//! Semantic classification is derived from the normalized key through one table
-//! shared by TOC admission and package projection. The kind is deliberately not
-//! stored as another identity field: raw key/value remain the source-backed
-//! representation, while [TocMetadataKind] is the narrow current interpretation.
+//! The containing record retains conditional predicates and selection, including
+//! unknown or excluded conditions. Downstream owners read the retained semantic
+//! key/value pair without re-splitting raw source spans. Dependency aliases keep
+//! their exact normalized source key separately from the canonical semantic key.
 use serde::Serialize;
 
 use super::TocConditionKind;
@@ -45,7 +40,7 @@ pub enum TocMetadataKind {
 }
 
 impl TocMetadataKind {
-    /// Classify one already lowercased, trimmed metadata key.
+    /// Classify one already lowercased, trimmed source metadata key.
     #[must_use]
     pub fn classify(key: &str) -> Self {
         match key {
@@ -78,6 +73,16 @@ impl TocMetadataKind {
             _ if localized_display_key(key) => Self::Display,
             _ if key.starts_with("x-") => Self::Custom,
             _ => Self::Unknown,
+        }
+    }
+
+    /// Canonical key used by semantic readers. Non-alias keys remain unchanged.
+    #[must_use]
+    pub fn canonical_key<'a>(self, source_key: &'a str) -> &'a str {
+        match self {
+            Self::RequiredDependencies => "dependencies",
+            Self::OptionalDependencies => "optionaldeps",
+            _ => source_key,
         }
     }
 
@@ -131,16 +136,29 @@ fn localized_display_key(key: &str) -> bool {
 /// One normalized TOC metadata directive.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TocMetadata {
-    /// Lowercased key, trimmed, with conditional clauses already stripped.
+    /// Canonical semantic key. Dependency aliases collapse to one stable key.
     pub key: String,
+    /// Exact lowercased, trimmed source key before semantic aliasing.
+    pub source_key: String,
     /// Trimmed value, with conditional clauses already stripped.
     pub value: String,
 }
 
 impl TocMetadata {
-    /// Semantic class derived from the retained normalized key.
+    #[must_use]
+    pub fn new(source_key: String, value: String) -> Self {
+        let kind = TocMetadataKind::classify(&source_key);
+        let key = kind.canonical_key(&source_key).to_owned();
+        Self {
+            key,
+            source_key,
+            value,
+        }
+    }
+
+    /// Semantic class derived from the retained exact source key.
     #[must_use]
     pub fn kind(&self) -> TocMetadataKind {
-        TocMetadataKind::classify(&self.key)
+        TocMetadataKind::classify(&self.source_key)
     }
 }
