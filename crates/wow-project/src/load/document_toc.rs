@@ -6,8 +6,8 @@ use std::sync::atomic::AtomicBool;
 use serde::Serialize;
 
 use super::{
-    LoadIssue, LoadIssueKind, LoadRecord, LoadRecordKind, LoadSelection, LoadSource,
-    TocLoadContext, invalid, resolve, toc,
+    LoadIssue, LoadRecord, LoadRecordKind, LoadSelection, LoadSource, TocLoadContext, invalid,
+    resolve, toc,
 };
 use crate::ProjectResult;
 use crate::disk::{DISK_INVENTORY_MAX_FILES, DISK_SOURCE_MAX_BYTES, checkpoint, validate_path};
@@ -21,7 +21,7 @@ pub struct DocumentTocSelection {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) load_context: Option<TocLoadContext>,
     pub(crate) source_order: Vec<String>,
-    pub(crate) records: Vec<LoadRecord>,
+    pub(crate) records: Vec<super::LoadRecord>,
     pub(crate) issues: Vec<LoadIssue>,
 }
 
@@ -86,10 +86,10 @@ pub(crate) fn select(
                 document: path.to_owned(),
                 byte_start: record.start as u64,
                 byte_end: record.end as u64,
-                blocks_complete: kind != LoadIssueKind::OptionalDependencyUnresolved,
+                blocks_complete: kind.blocks_complete(),
             });
         }
-        records.push(LoadRecord {
+        records.push(super::LoadRecord {
             ordinal: records.len() as u64,
             document: path.to_owned(),
             byte_start: record.start as u64,
@@ -110,7 +110,7 @@ pub(crate) fn select(
     }
     checkpoint(stop)?;
     Ok(DocumentTocSelection {
-        profile: "wow-project/document-toc/1",
+        profile: "wow-project/document-toc/2",
         source: LoadSource {
             path: path.to_owned(),
             content_digest: crate::identity::source_digest(text.as_bytes()),
