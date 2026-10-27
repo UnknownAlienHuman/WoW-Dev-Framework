@@ -8,6 +8,10 @@ Read [current status](CURRENT_STATUS.md) for delivery state and
 [the queue](REFACTOR_QUEUE.md) for implementation order. This guide defines the
 stable interface contract only.
 
+<a id="current-checkpoint"></a>
+<a id="target-user-operations"></a>
+<a id="configuration-and-check-input"></a>
+
 ## CLI
 
 CLI is the complete offline path. The first usable command is a narrow `LuaTypes`
@@ -31,6 +35,8 @@ physical-Lua command.
 CLI precedence and path bases are defined in
 [ordinary configuration](IMPLEMENTATION.md#ordinary-configuration).
 
+<a id="check-results-and-command-status"></a>
+
 Text and JSON render the same typed result:
 
 - selected scope and completeness;
@@ -53,6 +59,8 @@ Recommended exit policy:
 
 A limitation unrelated to the requested scope does not force exit `2`.
 
+<a id="locations-and-document-updates"></a>
+<a id="stdio-protocol-behavior"></a>
 <a id="lsp-adapter"></a>
 
 ## LSP adapter
@@ -104,6 +112,8 @@ Project/report identities, Context packs or durable result receipts.
 - Primary diagnostics survive scoped limitations.
 - Cancellation is advertised only at actual cooperative checkpoints; a
   synchronous native Emmy call is not described as preemptible.
+
+<a id="completion-and-verification"></a>
 
 ## Observation
 
