@@ -21,7 +21,7 @@ vertical slice, not the complete Blizzard loader:
 wow check
   --root <addon-dir>
   --toc <explicit.toc>
-  --flavor <supported-flavor>
+  --flavor retail
   --library <dir> [--library <dir> ...]
   [--config <wowdev.json>]
   [--format text|json]
@@ -44,7 +44,15 @@ Text and JSON render the same typed result:
 - scoped limitations with optional exact source location.
 
 The direct public result contains no snapshot, analyzer, Project generation,
-report, proof or component/capability identities.
+report, proof or component/capability identities. Paths are canonical relative to
+the configured addon root; text rendering may show `root/path`, while JSON keeps
+the relative identity the caller supplied with the root. Ambient absolute paths
+never enter snapshot/result identity.
+
+Malformed configuration, unsafe/missing selected input and malformed Library
+content are invalid input (`64`), not partial success or internal component
+failure. A retained source branch that was safely selected but is deferred or
+unresolved is a scoped partial result (`2`) with independent diagnostics.
 
 Recommended exit policy:
 
@@ -57,7 +65,10 @@ Recommended exit policy:
 | `64` | invalid configuration or usage |
 | `130` | cancelled |
 
-A limitation unrelated to the requested scope does not force exit `2`.
+A limitation unrelated to the requested scope does not force exit `2`. Exit
+precedence is deterministic: invalid input `64`; observed cancellation `130`;
+internal/output failure `4`; otherwise a partial result `2`; otherwise a finding
+at/above threshold `1`; otherwise `0`. Findings remain in partial output.
 
 <a id="locations-and-document-updates"></a>
 <a id="stdio-protocol-behavior"></a>
