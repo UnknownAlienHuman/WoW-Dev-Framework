@@ -1,240 +1,148 @@
 # EmmyLua integration guide
 
-Read [current status](CURRENT_STATUS.md) first. This guide records the verified
-upstream contract, the delivered framework seams, and the remaining WoW-specific
-adapters. It is subordinate to [Architecture](ARCHITECTURE.md) and the
-[implementation route](IMPLEMENTATION.md#addon-configuration-and-emmy-analysis).
+This guide records the durable contract with the pinned EmmyLua donor. Delivery
+state lives in [CURRENT_STATUS.md](CURRENT_STATUS.md); implementation order lives
+in [REFACTOR_QUEUE.md](REFACTOR_QUEUE.md).
 
 ## Pinned donor
 
 The workspace pins `emmylua_code_analysis` and `emmylua_parser` to revision
 `aaaca68425d9362876228649b0b8d92f07654daa` of
 [EmmyLua Analyzer Rust](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/tree/aaaca68425d9362876228649b0b8d92f07654daa).
-Read behavior at that revision rather than a moving default branch. Primary
-sources include:
+Read behavior at that revision rather than a moving default branch.
 
-- [`EmmyLuaAnalysis`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/lib.rs)
-- [embedded resources](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/resources/mod.rs)
-- [runtime configuration](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/config/configs/runtime.rs)
-- [diagnostic configuration](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/config/configs/diagnostics.rs)
-- [diagnostic collection](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/diagnostic/lua_diagnostic.rs)
-- [workspace configuration](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/config/configs/workspace.rs)
-- [compilation/indexing](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/compilation/mod.rs)
-- [index removal](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/db_index/mod.rs)
+EmmyLua owns Lua parsing, type inference, semantic identities and language
+diagnostics. Do not build a parallel parser/type checker or import private
+`emmylua_ls` handlers as an SDK.
 
-EmmyLua owns Lua parsing, type inference and language diagnostics. Do not build a
-parallel Lua parser/type checker or depend on private `emmylua_ls` handlers as an
-SDK.
+## Source roles and engine setup
 
-## Engine setup
+Use one analysis owner with explicit roles:
 
-Use one analysis for three explicit source roles:
+- **Main** — selected addon source diagnosed for the user;
+- **Library** — Blizzard/addon declarations used to resolve Main;
+- **Virtual Main** — mapped selected XML/binding Lua, still user source after
+  exact projection;
+- **STD** — upstream Lua declarations, neither user source nor WoW API authority.
 
-- **Main** — selected addon source to diagnose;
-- **Library** — selected addon/Blizzard declarations used to resolve Main;
-- **STD** — upstream Lua declarations, not user source or WoW API authority.
+Set Lua 5.1 explicitly and call `init_std_lib(None)` once in the retained owner.
+`EmmyLuaAnalysis::new()` does not load STD and workspace roots do not discover
+files automatically.
 
-For the supported baseline, set Lua 5.1 explicitly and call `init_std_lib(None)`
-once in the retained owner. At the pinned revision this loads embedded resources;
-it does not extract files to disk. `EmmyLuaAnalysis::new()` does not load them,
-and adding a workspace root does not discover files automatically.
+STD typing is not proof that the WoW client exposes a host API. Availability
+checks require the resolved symbol plus selected WoW facts.
 
-STD typing is not WoW runtime availability. A declaration resolving through STD
-cannot by itself prove that the game exposes that host API, and absence from STD
-does not prove WoW absence. Availability checks require the original resolved
-symbol and selected WoW facts. Do not invent a whole-runtime allowlist from the
-embedded files.
+## Configured owner
 
-## Delivered configured owner
+`wow-emmy::ConfiguredAnalyzerSession` owns exact caller-supplied Main, explicit
+Library and optional virtual snapshots with caller diagnostic configuration.
+Diagnostics-only collection does not run optional semantic collectors.
 
-PR #247 added `EmmyAnalysisConfiguration` and
-`ConfiguredAnalyzerSession` in `wow-emmy`:
+Owner compatibility requires:
 
-- exact caller-supplied Main, explicit Library and optional virtual snapshots;
-- fixed Lua 5.1 runtime;
-- caller-supplied pinned `EmmyrcDiagnostic` without `.emmyrc` discovery;
-- one embedded STD initialization in the retained owner;
-- diagnostics-only collection that does not invoke member/call/local-flow;
-- explicit semantic collection through the same owner when a selected WoW check
-  needs those facts;
-- compatibility over exact Main identity, order-insensitive Library identities,
-  exact virtual snapshot/generation and equivalent diagnostic configuration.
+- exact Main snapshot ID;
+- the same Library snapshot-ID set;
+- exact optional virtual snapshot ID;
+- equivalent diagnostic configuration;
+- a healthy retained owner.
 
-PR #250 corrected that compatibility boundary to require the exact Main
-`snapshot_id`; backend/universe equality alone is insufficient for an immutable
-owner with no update method.
+`RegisteredMemberAnalysis::new` sorts Library snapshots by exact snapshot ID
+before assigning roots and registering files. `compatible` sorts the same IDs
+before comparison. Caller Library argument order is therefore deliberately
+irrelevant; do not add another ordering work item.
 
-The legacy registration constructor still creates its fixed default diagnostic
-configuration during file registration. The configured owner replaces the
-supported diagnostic policy before collection and then initializes STD. Because
-the public configuration cannot alter parser/runtime features, no already-parsed
-runtime setting differs. Move configuration/STD initialization into the lower
-constructor only when legacy callers are adapted or removed; do not create a
-second owner to make the code look cleaner.
-
-PR #248 added `wow_service::addon_check::check_addon`, which opens this owner from
-exact snapshots and returns a direct diagnostic/limitation result. It is not yet
-the public root/TOC/Library workflow.
+A Project generation is **not** part of configured owner construction or reuse.
+It is supplied only to `semantic_reports` when exact virtual semantic facts are
+requested. Ordinary diagnostics over an exact virtual snapshot must not fabricate
+or expose a Project publication identity.
 
 ## Diagnostic configuration
 
-The target `wowdev.json` may supply `emmy_diagnostics`, decoded directly as the
-pinned `EmmyrcDiagnostic`: `enable`, `disable`, `enables`, `globals`,
-`globalsRegex`, `severity`, and `diagnosticInterval`. Missing fields retain
-upstream defaults. Invalid typed values are configuration errors. The interval is
-editor scheduling data and has no effect on a one-shot CLI check.
+Decode explicit `emmy_diagnostics` as the pinned `EmmyrcDiagnostic` type. Invalid
+values are configuration errors; do not use a lenient discovery/fallback loader.
+Keep separate:
 
-Keep three controls distinct:
+1. Emmy diagnostic selection/severity;
+2. selected WoW checks and their semantic fact requests;
+3. frontend `fail_on`, which changes exit status but does not delete findings.
 
-1. upstream diagnostic configuration determines which language diagnostics are
-   collected and their configured severity;
-2. selected WoW checks determine which additional semantic facts/rules run;
-3. `fail_on` determines the CLI exit threshold without deleting diagnostics.
+Do not gate diagnostics through a framework code allowlist.
 
-Do not use the lenient upstream config-file loader for explicit operation config;
-it can log/skip invalid input or fall back to defaults. Do not gate diagnostics
-through a framework code allowlist.
+## Diagnostics and coordinates
 
-## Diagnostics and source locations
+Preserve for every configured upstream finding:
 
-PR #246 changed the framework diagnostic schema so every configured upstream
-finding can retain:
-
-- string, numeric, or missing upstream code;
+- string/numeric/missing upstream code as text;
 - exact bounded message;
-- actual upstream severity;
-- source path/content identity;
-- exact half-open UTF-8 byte span.
+- configured upstream severity;
+- source path and content identity;
+- half-open UTF-8 byte span.
 
-Four known families retain typed framework kinds; all other configured codes are
-`Other`, not discarded. The transitional LSP now publishes the retained message
-and severity, but still uses isolated one-file input.
+Pinned Emmy line/column conversion counts Unicode scalar values, not negotiated
+LSP code units. The framework converts to UTF-8 bytes against exact captured text,
+then the overlay converts to UTF-8/UTF-16 editor positions. Preserve CRLF and final
+empty-line behavior. Never apply a range to changed text.
 
-The pinned upstream LSP-shaped range is not already in the editor's negotiated
-encoding. [`LineIndex::get_line_col`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_parser/src/text/line_index.rs)
-counts Unicode scalar values, and
-[`LuaDocument::to_lsp_range`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/vfs/document.rs)
-copies those columns. The framework's
-[`syntax/coordinates.rs`](../crates/wow-emmy/src/syntax/coordinates.rs) converts
-that contract to UTF-8 bytes before Project's overlay converts to negotiated
-UTF-8/UTF-16 positions. Preserve captured text identity, CRLF handling and the
-final empty line. Never forward upstream `character` directly or apply a range
-to changed text.
+Library/STD diagnostics are input-health information, not Main findings. Virtual
+diagnostics become public only after exact mapping to the original XML/binding
+source; synthetic workspace paths are not user locations.
 
-Library and STD diagnostics are input-health information; they are not Main
-findings. Virtual XML diagnostics must be projected through the exact existing
-map before reaching the user. `check_addon` currently reports that projection as
-unavailable rather than fabricating a physical location.
-
-Diagnostics are static evidence. They do not prove event execution, runtime
-availability, combat/taint safety or complete Secret-value flow.
+<a id="addon-chunk-context"></a>
 
 ## Addon chunk context
 
 Pinned Emmy infers an unbound chunk `...` as homogeneous `any...`; workspace
-registration or unrelated globals do not assign the WoW chunk arguments. The
-public API has no WoW chunk-argument setting.
+registration alone does not provide WoW chunk arguments.
 
-Pinned Blizzard `AddOnsDocumentation.lua` states that ordinary addon files receive
-an addon table as the second result of `...`; the standard first result is the
-addon name. `AllowAddOnTableAccess: 1` controls later retrieval through
-`C_AddOns.GetAddOnLocalTable`; it does not create or suppress the chunk table.
+Pinned Blizzard documentation supports ordinary external chunks receiving
+`(addonName, addonTable)`. `AllowAddOnTableAccess` separately controls later table
+retrieval. For supported chunks:
 
-For supported ordinary external Lua chunks, the source-traced design is:
+1. create one analysis-only stable table per addon;
+2. identify only top-level chunk-owned ellipsis expressions with the Emmy AST;
+3. replace those expressions in memory with a helper call;
+4. preserve exact source maps and exclude helpers from user diagnostics/facts.
 
-1. create one analysis-only helper unit per addon with one stable private table
-   allocated outside a helper returning `(addonNameLiteral, privateTable)`;
-2. use Emmy's AST to identify ellipsis expressions owned by the top-level chunk,
-   including top-level control flow, but excluding nested function varargs,
-   comments, strings and user files;
-3. replace only those expressions in an in-memory view with a helper call;
-4. preserve identity mappings for unchanged text and map each replacement to the
-   original ellipsis span;
-5. compose those maps with XML maps where applicable;
-6. mark helper declarations/calls as context-only so they never become user
-   API/call/flow facts or output.
+Do not rewrite nested function varargs, strings or comments. External chunks,
+free inline XML scripts, reviewed handlers, binding callbacks, secure/bootstrap
+contexts and `SuppressLocalTableRef` are distinct.
 
-The pinned [`unwrapp_return_type`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/semantic/infer/infer_call/mod.rs)
-retains a multi-result call in final-expression position and selects the first
-slot otherwise. The second result's table identity survives in the multi-result
-value, and
-[`set_index_expr_owner`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/compilation/analyzer/lua/stats.rs)
-attaches fields to that referenced table identity. These mechanisms support the
-design; cross-file behavior and mappings remain unobserved until implemented.
+Context is required only where selected code consumes it. A `LuaTypes` run over
+files that do not use top-level ellipsis must not be globally partial merely
+because the ordinary helper is not yet implemented.
 
-Do not apply the ordinary two-result chunk model to every XML body or special
-Blizzard context. External chunks, free inline Script bodies, reviewed handler
-adapters, secure environments and bootstrap loads are distinct.
+## Updates
 
-`SuppressLocalTableRef` is different again. Selected Blizzard source still
-contains the restricted/internal metadata, while the reviewed Wowless donor uses
-a `nil` second value. That donor behavior is not enough to override the pinned
-Blizzard ordinary-chunk contract or establish current client arity. Treat the
-directive as unsupported context: do not fabricate a table, do not rewrite its
-chunk as an ordinary helper, and keep ellipsis-dependent conclusions explicitly
-limited. `AllowAddOnTableAccess` remains a separate retrieval permission.
+The upstream bulk update API removes/reindexes touched file IDs but does not prove
+that every unchanged semantic consumer of a deleted declaration was invalidated.
+Use conservative semantic rebuild until narrower invalidation is observed correct.
 
-## Updates and invalidation
+Reuse `ConfiguredAnalyzerSession` only when its exact compatibility contract
+holds. TOC/XML/dependency/channel/context/Library/config changes rebuild the
+selection and owner cold. Remove declarations, virtual units, maps and diagnostics
+together. Failed, cancelled or stale work never publishes.
 
-The pinned bulk update API removes indexes for touched file IDs and indexes the
-replacement IDs. It does not automatically reanalyze every unchanged consumer
-of a deleted global/type. Until narrower invalidation is demonstrated, retain the
-existing conservative semantic rebuild over the retained VFS while reusing
-unchanged source/syntax where valid.
+Cancellation is cooperative around framework stages. The pinned synchronous
+native call is not preemptible; check before and after it and do not claim more.
 
-`ConfiguredAnalyzerSession` is currently immutable. Reuse it only when its exact
-compatibility contract holds. A physical delta can use the older CAS-validated
-`AnalyzerSession` route only while selected membership, load context, Library
-identity and configuration remain unchanged. TOC/XML/dependency/Library/config
-changes rebuild selection/context and the owner cold.
-
-A successful replacement is published atomically. Failed, cancelled or stale
-work cannot clear or replace a newer result. Removal also removes declarations,
-virtual units, maps, diagnostics and later index rows.
-
-Cancellation is cooperative around framework stages/files. The pinned diagnostic
-API does not preempt an in-progress synchronous native call. Check before and
-after it and do not advertise preemption that does not exist.
+<a id="editor-boundary"></a>
 
 ## Editor boundary
 
-Upstream `emmylua_ls` owns general Lua completion, hover, definition, references,
-rename, signature help and symbols. Its private handlers are not an importable
-SDK. The framework's focused LSP/MCP should expose the same WoW project operations
-as CLI, not copy a complete language server.
+General completion, hover, definition, references, rename, signature help and
+symbols remain upstream EmmyLua. Framework LSP/MCP adapters expose WoW project,
+check, search and context operations through the same owners as CLI.
 
-Existing `navigation.rs` and `local_references.rs` use native declaration and
-reference identities for narrow same-file queries. Their one-file constructors
-are not whole-project language-server coverage. Retain useful algorithms only
-where a surviving WoW-specific consumer needs them and move that caller to the
-shared configured owner.
+The current overlay owns exact unsaved text, document version and negotiated
+coordinate conversion. The target passes that override into the shared selected
+project, accepts increasing nonconsecutive versions and rejects stale publication.
 
-The LSP overlay correctly owns exact unsaved text, client version, internal
-revision and UTF-8/UTF-16 conversion. It currently feeds a separate one-file
-analysis. The replacement passes exact text overrides to the same configured
-project owner, accepts increasing nonconsecutive client versions and rejects
-stale result publication.
+Existing same-file navigation helpers may be retained only where a surviving
+WoW-specific consumer needs them; they are not whole-project language-server
+coverage.
 
-## Current checkpoint
+## Verification boundary
 
-Implemented in `main`:
-
-- T12 / PR #246: full configured diagnostic payload and standalone STD;
-- T06/T13 / PR #247: configured Main/Library/virtual owner and optional semantic
-  collectors;
-- T14 / PR #248: direct Service language-check result;
-- T07/T15 / PR #249: compiled identity separated from report evidence;
-- T16 / PR #250: exact Main identity for owner reuse.
-
-Still open:
-
-- ordinary Project acquisition/configuration and public CLI wiring;
-- pure XML preparation for the direct route and exact XML projection;
-- addon chunk and evidence-scoped reviewed handler context;
-- generated-Library manifest handoff;
-- project-aware LSP reuse and executed editor scenarios;
-- any exact addon/editor observation.
-
-See [the trace register](IMPLEMENTATION_TRACE_REGISTER.md) for evidence and
-[the queue](REFACTOR_QUEUE.md) for the next implementation slice. Formatting,
-compilation and Clippy are build evidence only.
+Source inspection proves the contracts above. It does not prove a generated
+Library, addon command or editor workflow has run. Exact observations belong in
+[the trace register](IMPLEMENTATION_TRACE_REGISTER.md).
