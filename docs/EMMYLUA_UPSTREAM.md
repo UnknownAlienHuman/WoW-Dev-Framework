@@ -61,6 +61,15 @@ It is supplied only to `semantic_reports` when exact virtual semantic facts are
 requested. Ordinary diagnostics over an exact virtual snapshot must not fabricate
 or expose a Project publication identity.
 
+For the direct addon path use `EmmyBackendIdentity::compiled_pinned()`, Main
+universe `Project`, and one separate `BlizzardUi` Library snapshot per explicit
+annotation root. Apply existing Project Main and shared Library limits. Reject
+duplicate resolved roots or duplicate snapshot IDs; do not silently merge
+ambiguous Library origins. A Library parse/health failure is invalid caller input;
+the current `LibraryHealthFailed -> NativeFailure` mapping is a defect and must
+not become the CLI's internal-outage contract. Preserve the configured Library
+root and relative file in the error rather than a synthetic analyzer root.
+
 ## Diagnostic configuration
 
 Decode explicit `emmy_diagnostics` as the pinned `EmmyrcDiagnostic` type. Invalid
