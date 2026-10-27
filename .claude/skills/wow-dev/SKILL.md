@@ -20,10 +20,17 @@ unknowns. Never execute analyzed Lua or infer runtime safety from types.
 
 Finish one useful input-to-output path and remove its displaced platform code and
 instructions. Queue item 1 is staged: implement only the active vertical slice.
-The explicit physical-Lua `LuaTypes` command does not wait for product channel,
-`LoadWith`, implicit bindings, every XML handler or WoW rules. Unsupported
-selected context remains a scoped limitation; unrelated features do not make the
-requested scope globally partial.
+The explicit `retail` physical-Lua `LuaTypes` command does not wait for product
+channel, `LoadWith`, implicit bindings, every XML handler or WoW rules. Its
+Project plan is profile-free and `physical_lua`: included XML is retained as a
+located limitation but is not opened, so XML failure cannot erase direct Lua
+diagnostics. Use a standalone requested-scope mapper; do not use package-only or
+global completeness. Snapshots use the compiled pin, Main `Project`, and one
+`BlizzardUi` snapshot per Library root. Reject duplicate roots/IDs and treat
+Library parse failures as invalid input. XML-only physical input uses an empty
+Project snapshot plus a located limitation, never a dummy file. Unsupported
+selected context remains scoped; unrelated observations do not make the request
+partial.
 
 One manager/worktree; delegate nonoverlapping reads or paths. Preserve user
 source, configuration and unpublished changes. Follow root AGENTS for validation:
