@@ -1,8 +1,8 @@
 # Current implementation status
 
-**Documentation audit base:** `main` after PR #265 (`231c15065563ee8443d4353282f395aa000e1a4d`)  
+**Final documentation re-audit base:** `main` after PR #267 (`1e1772d1a4893bf3d2b6bb7eaf3617534dcbff7a`)  
 **Baseline documentation audit:** PR #244 / `c36a058` source baseline  
-**Active source decisions:** T01–T31 in
+**Active source decisions:** T01–T32 in
 [IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md)
 
 This is the only live delivery checkpoint. Domain guides define durable behavior;
@@ -38,7 +38,7 @@ identity, bounds, privacy or lock-lifetime behavior. Its reported
 `1085 passed / 13 failed / 23 ignored` run had no attached raw log and remains a
 reported observation, not a reproduced one.
 
-The follow-up audit found four current-document defects:
+The first follow-up audit found and corrected four current-document defects:
 
 1. live implementation status had been copied into README, AGENTS, owner guides,
    package summaries, queue prose and Issues; several copies stopped at PR #250;
@@ -50,8 +50,22 @@ The follow-up audit found four current-document defects:
    required snapshot/analysis IDs removed by PR #260, and #200/#201 still listed
    the T30 predicate fix as unfinished after PR #265.
 
-Those are documentation errors, not additional product requirements. The active
-docs now keep moving status here and keep owner guides stable.
+The final re-audit checked the complete old and current documentation again and
+found four remaining instruction defects:
+
+5. the staged first slice omitted that current Project TOC readers require the
+   legacy `ProfileIdentity`, including a positive Interface and publication-era
+   source/schema identities;
+6. metadata-by-effect admission was placed too late, allowing ordinary display or
+   `X-*` metadata to make the first independent `LuaTypes` result falsely partial;
+7. several active Issue bodies still copied old PR progress ledgers or described
+   the full future CLI surface as the immediate next change;
+8. four of the 329 baseline-register rows lacked the promised current `Home:`.
+
+These are documentation/owner-boundary corrections, not new platform scope. The
+active docs now keep moving status here, require a profile-free Project load
+target, stage metadata admission before the first result and keep owner guides
+stable.
 
 ## Implemented internal owners
 
@@ -80,6 +94,18 @@ compares the same order-insensitive set.
 There is still no ordinary public addon checker. The application uses the
 transitional `LocalCommand -> LocalProjectBackend -> generic Service` route.
 
+Current Project TOC readers still require the legacy `ProfileIdentity` and compare
+TOC Interface against its mandatory positive value. The direct route must extract
+a small `AddonLoadTarget` containing only flavor, optional positive target
+Interface and optional TOC condition context. Slice 1A supplies flavor only,
+retains missing/zero/positive source Interface metadata and must not fabricate a
+profile ID, source/report digest or schema registry merely to call the reader.
+
+T23 metadata-by-effect admission is also part of Slice 1A readiness: common
+display/localized/custom metadata must not block independent file enumeration,
+while actual selection/environment/callback and malformed directives remain
+typed or located limitations. Full special-load semantics remain later work.
+
 The existing direct result implements only `AddonCheckScope::LuaTypes`, but
 `check_addon` currently adds `AddonChunkContextUnavailable` and sets
 `completeness = Partial` unconditionally. That is conservative internal behavior,
@@ -89,10 +115,11 @@ unrequested WoW features cannot make every type-only run partial.
 
 The next work is deliberately split:
 
-1. **First usable `wow check`:** explicit root, explicit TOC, flavor, one or more
-   Library directories, bounded selected physical Lua, exact Main/Library
-   snapshots, existing `check_addon`, exact path projection, text/JSON output and
-   exit policy. No WoW rule by default.
+1. **First usable `wow check`:** extract the profile-free Project load target;
+   admit TOC metadata by effect; accept explicit root, explicit TOC, flavor and one
+   or more Library directories; capture bounded selected physical Lua; build exact
+   Main/Library snapshots; call existing `check_addon`; project exact user paths;
+   render text/JSON and exit policy. No target Interface or WoW rule by default.
 2. **Selected-context expansion:** dependencies, source-order/context receipt,
    source-projectable XML units, addon chunk arguments where used, XML handler
    adapters and coherent updates. Unsupported selected context remains a located
@@ -112,11 +139,15 @@ The exact order and acceptance conditions are in
 ## Readiness verdict
 
 - **Baseline document reconciliation:** complete.
-- **Current documentation consistency audit:** complete for the active canonical
-  docs and 21 open implementation Issues at the named base; corrections are
-  recorded in the trace and Issue audit.
+- **Complete old/new documentation re-audit:** complete for all 329 baseline
+  Markdown files, all 60 current Markdown files and all 21 open implementation
+  Issues at the named base; corrections are recorded in the trace and Issue audit.
+- **Canonical plan ready for Slice 1A implementation:** yes—use current status,
+  queue, implementation guide and the named owner code; do not implement from an
+  abbreviated README or stale Issue comment alone.
 - **Internal language-check owners:** partially implemented.
 - **First ordinary `wow check`:** open.
 - **Any addon/editor/search workflow observed:** no.
-- **Project ready for blind implementation from an abbreviated README/Issue:** no;
-  use the queue, owner guide and trace together.
+- **Guarantee that implementation contains no undiscovered defect:** no; the
+  documentation now makes known gaps explicit and prevents them from expanding
+  the first slice into another platform.
