@@ -1,20 +1,19 @@
 # EmmyLua adapter
 
-Current status: [PRs #246–#250 and open handoffs](../../docs/CURRENT_STATUS.md).
+Delivery state: [CURRENT_STATUS.md](../../docs/CURRENT_STATUS.md). Exact donor and
+owner contracts: [EMMYLUA_UPSTREAM.md](../../docs/EMMYLUA_UPSTREAM.md).
 
-Delivered: `ConfiguredAnalyzerSession` owns exact Main, explicit Library and
-optional virtual snapshots in one Lua 5.1 analysis; embedded STD and caller
-diagnostic configuration are applied once; diagnostics-only and explicit
-semantic collection are separate. Diagnostic code, exact message, severity and
-byte range reach the direct result. Exact Main identity is required for immutable
-owner reuse.
+`ConfiguredAnalyzerSession` owns exact Main, explicit Library and optional virtual
+snapshots in one Lua 5.1 analysis. It initializes embedded STD, applies caller
+diagnostic configuration once, and separates diagnostics-only from explicitly
+requested semantic collection.
 
-Reuse `configured_session.rs`, `session.rs`, `references.rs`, existing semantic
-collectors and coordinate mapping. Do not add another analyzer owner or repeat
-the diagnostic adapter. Remaining work is Project-owned ordinary acquisition and
-validated order/context plus narrow mapped addon/XML/binding adapters, coherent
-updates and project-aware frontend reuse.
+Library snapshots are canonicalized by exact snapshot ID before root assignment
+and registration; compatible-owner admission compares the same set. Project
+generation is not part of diagnostics-owner construction or reuse and is supplied
+only for explicit virtual semantic reports.
 
-Read [EmmyLua](../../docs/EMMYLUA_UPSTREAM.md) for the exact-pin contract and
-[Implementation](../../docs/IMPLEMENTATION.md#addon-configuration-and-emmy-analysis)
-for owner boundaries.
+Reuse `configured_session.rs`, `session.rs`, `references.rs`, semantic collectors
+and coordinate mapping. Do not add another analyzer owner or diagnostic adapter.
+Remaining work is Project-owned selected acquisition/source projection, narrow
+chunk/XML/binding context, coherent updates and project-aware frontend reuse.
