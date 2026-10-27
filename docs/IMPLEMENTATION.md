@@ -29,6 +29,8 @@ then remove displaced owners.
 
 ## Addon configuration and Emmy analysis
 
+<a id="first-implementation-slice"></a>
+
 ### First usable vertical slice
 
 The first public result is intentionally small: an offline `LuaTypes` check over
@@ -66,6 +68,13 @@ by selected units. The current unconditional addon-chunk fallback and hard-coded
 `Partial` result are transitional defects: unused top-level ellipsis cannot make
 every addon incomplete. When chunk context is needed, report the affected files
 or conclusions explicitly.
+
+<a id="load-units-and-addon-context"></a>
+<a id="selected-acquisition"></a>
+<a id="exact-load-context-handoff"></a>
+<a id="physical-and-virtual-main"></a>
+<a id="implicit-binding-documents"></a>
+<a id="addon-chunk-context"></a>
 
 ### Subsequent context slices
 
@@ -162,6 +171,8 @@ maps, diagnostics and later index rows together. Failed, cancelled or stale work
 never replaces a newer result. LSP overlays participate in the same identity.
 
 <a id="native-annotation-generation"></a>
+<a id="preserve-the-existing-pipeline"></a>
+<a id="one-native-generation"></a>
 
 ## Native annotation generation
 
@@ -184,6 +195,8 @@ manifest may carry maps/facts required by implemented checks. Do not add a secon
 manifest, converter or certification envelope.
 
 <a id="outputs-and-corrections"></a>
+<a id="annotation-projection-rules"></a>
+<a id="manifest-and-ordinary-reader"></a>
 
 ### Outputs and corrections
 
@@ -196,6 +209,7 @@ A real Library reader must consume successful output directly. Plain Lua remains
 a supported Library for typing.
 
 <a id="blizzard-ui-index-search-and-context"></a>
+<a id="small-navigation-operations"></a>
 
 ## Blizzard UI index, search and context
 
@@ -243,6 +257,8 @@ Request IDs are transport correlation only.
 
 CLI is the complete offline path. LSP/MCP are thin adapters. General Lua editor
 features remain upstream EmmyLua. See [FRONTENDS.md](FRONTENDS.md).
+
+<a id="completion-and-verification"></a>
 
 ## Removal rule
 
