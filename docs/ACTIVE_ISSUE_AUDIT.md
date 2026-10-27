@@ -1,34 +1,31 @@
 # Active Issue instruction audit
 
-**Audit base:** `main` after PR #265 (`231c15065563ee8443d4353282f395aa000e1a4d`)  
+**Audit base:** `main` after PR #267 (`1e1772d1a4893bf3d2b6bb7eaf3617534dcbff7a`)  
 **Scope:** all 21 open implementation Issues  
-**Runtime/source traces used:** T01–T31
+**Runtime/source traces used:** T01–T32
 
-Issue bodies are implementation instructions, but they are secondary to
+Issue bodies are task-specific instructions, secondary to
 [CURRENT_STATUS.md](CURRENT_STATUS.md), [REFACTOR_QUEUE.md](REFACTOR_QUEUE.md),
 [IMPLEMENTATION.md](IMPLEMENTATION.md) and the
-[trace register](IMPLEMENTATION_TRACE_REGISTER.md). An Issue must not preserve a
-stale result shape or re-add completed work.
+[trace register](IMPLEMENTATION_TRACE_REGISTER.md). An Issue must not copy a
+moving PR ledger, widen the active slice or preserve a removed result shape.
 
-The open draft PR #266 is not part of `main` and does not change this audit base.
+The open draft PR #266 is not delivered state and does not change this audit
+base.
 
 ## Method
 
-For every open Issue:
-
-- read the full body;
-- checked named production producers/readers rather than tests alone;
-- compared delivered/open claims with T24–T30;
-- checked whether the body copied moving PR status or defined a durable outcome;
-- marked material contradictions for correction.
+For every open Issue, the full body was read and compared with current production
+producers/readers, the staged queue and T01–T32. Tests and comments were evidence,
+not automatic product requirements.
 
 Statuses:
 
 - **confirmed** — the named problem and owner boundary still exist;
-- **reconciled** — the body is compatible with current owners and links live
-  status for moving details;
-- **corrected** — the body contained a material stale/false instruction and was
-  rewritten in this audit.
+- **reconciled** — the body already states a durable outcome compatible with the
+  canonical plan;
+- **corrected** — the body contained a stale, false or over-scoped instruction
+  and was rewritten.
 
 ## Register
 
@@ -36,63 +33,68 @@ Statuses:
 | --- | --- | --- |
 | #103 recognizer rules | confirmed | useful typed facts still need named diagnostics/search/navigation consumers; generic pack inventory is removable |
 | #106 Blizzard UI workflow | confirmed | no ordinary current-source body/symbol/search/context workflow exists |
-| #107 graph duplication | confirmed | useful origins/relations still pass through reconstruction/proof-heavy paths |
-| #109 coherent updates | reconciled | shared owner exists; selected membership/context/Library changes still require cold rebuild and atomic publication |
+| #107 graph duplication | confirmed | useful origins/relations still pass through reconstruction/proof-heavy paths; closed #196 is delivered history, not an open dependency |
+| #109 coherent updates | corrected | removed the PR diary; exact physical delta versus cold selected-context rebuild remains the durable task |
 | #111 Store lifecycle | confirmed | orphan administration can be removed first; retention/GC/recovery still have transitional callers |
-| #112 formats/documentation | reconciled | one live status source and small direct DTOs remain the target; baseline register is not a deletion backlog |
+| #112 formats/documentation | corrected | removed delivery ledgers; one live status source and small direct DTOs remain the durable boundary |
 | #113 performance | confirmed | there is no ordinary real workflow to measure yet |
-| #117 TOC/XML relationships | reconciled | exact selected context/maps are useful; special-load and binding facts remain later slices |
+| #117 TOC/XML relationships | corrected | removed lower-owner PR history; exact selected context/maps remain a later slice after the physical-Lua command |
 | #118 lineage/fingerprints | confirmed | named lineage routes are gone; fingerprint/proof plumbing still has transitional callers |
 | #122 readable context | confirmed | current public Context still depends on old packs/replay/source rereads |
-| #125 product completion | corrected | completion contract remains valid; stale “implementation stops at #250” prose removed in favor of live status |
+| #125 product completion | corrected | completion is staged observed behavior, not a moving implementation ledger |
 | #131 direct reads | confirmed | expensive reconstruction is above lazy Store membership/payload reads |
 | #169 direct FTS | confirmed | source bodies are not yet queried through one direct current index |
-| #191 umbrella | corrected | stale delivered-PR inventory replaced with the live status/queue boundary and first vertical slice |
-| #194 result DTOs | corrected | Issue falsely required snapshot and upstream-analysis IDs removed by #260; direct result is findings/completeness/limitations only |
+| #191 umbrella | corrected | live status and staged queue replace a copied delivery list |
+| #194 result DTOs | corrected | direct result is scope/completeness/diagnostics/limitations, with no removed receipts |
 | #195 recognizer handoff | confirmed | fixed built-in facts still round-trip through generic pack/plan/matcher consumers |
-| #197 CLI | reconciled | target remains direct ordinary config -> `addon_check`; first command is the explicit `LuaTypes` slice |
-| #198 LSP | reconciled | project reuse, version gaps, stale rejection and standard empty results remain open |
-| #199 MCP | reconciled | one useful profile plus metadata/unknown-notification behavior remains open |
-| #200 configuration/acquisition | corrected | T30 predicates are delivered, not remaining work; first command no longer waits for every special-load feature |
-| #201 end-to-end workflow | corrected | delivered T30 is separated from still-open context; first observation starts with explicit `LuaTypes` then expands |
+| #197 CLI | corrected | immediate command surface is Slice 1A only; auto TOC, target Interface, dependencies and WoW checks are later additions |
+| #198 LSP | corrected | removed PR ledger and fixed owner reuse wording; the adapter reuses the shared project/check owner |
+| #199 MCP | corrected | removed PR ledger and fixed owner reuse wording; one standard profile remains the task |
+| #200 configuration/acquisition | corrected | added the profile-free `AddonLoadTarget` and T23 metadata admission to Slice A |
+| #201 end-to-end workflow | corrected | first observation starts with explicit physical `LuaTypes`, then context and special loading |
 
 ## Material corrections
 
-### Issue #194
+### Profile-free Project admission
 
-The old body said `AddonCheckResult` contains Main/Library/virtual snapshot IDs and
-Main/virtual analysis IDs. PR #260 removed those fields and current code contains
-only scope, completeness, diagnostics and limitations. The Issue now forbids
-reintroducing the removed receipts.
+Current TOC readers require `ProfileIdentity`, including a mandatory positive
+Interface, source logical digest and schema identities. That is incompatible with
+the direct ordinary route. #200 now requires a small Project-owned load target
+with flavor, optional positive target Interface and optional TOC condition
+context. Slice A supplies flavor only and retains source Interface without
+fabricating a profile.
 
-### Issues #200 and #201
+### First-slice metadata and completeness
 
-Both bodies still listed the three-valued predicate correction as unfinished
-after PR #265. They also repeated the over-scoped plan in which channel,
-`LoadWith`, implicit bindings, secure context and complete XML behavior blocked the
-first public command. The corrected bodies use the queue's slices:
+T23 metadata-by-effect admission is now a Slice A prerequisite. Ordinary
+display/localized/custom metadata cannot make independent `LuaTypes` partial;
+actual selection/environment/callback and malformed directives remain typed or
+located limitations. T31 still removes the unconditional addon-chunk limitation
+and hard-coded `Partial`.
 
-1. explicit physical-Lua `LuaTypes` command;
-2. dependency/XML/chunk context;
-3. special loading;
-4. WoW checks and remaining adapters.
+### Active frontend/update Issues
 
-T30 remains an observation case, not implementation work.
+#109, #112, #117 and #197–#199 still copied old PR progress after the repository
+had established one live status source. Those bodies now state durable outcomes,
+current owner boundaries and staged work only.
 
-### Issues #125 and #191
+### Earlier corrections retained
 
-Their product outcomes were valid, but progress paragraphs stopped at PR #250.
-Moving delivery lists were removed. They now defer to current status and the queue
-rather than becoming additional live checkpoints.
+#125/#191 no longer duplicate delivery status. #194 no longer requires
+snapshot/analysis receipts removed from the direct result. #200/#201 no longer
+make channel, `LoadWith`, bindings, secure context and complete XML behavior
+prerequisites for the first command.
 
 ## Findings not converted into work
 
-- Library caller order is not an open bug: the configured Emmy owner sorts
-  Library snapshots by exact snapshot ID before registration and compares the same
-  canonical set for reuse.
+- Library caller order is not an open bug: the configured Emmy owner sorts exact
+  Library snapshot IDs before registration and compares the same canonical set
+  for reuse.
+- A closed Issue may remain a source-history reference; it is not an active
+  dependency unless the body says unfinished work remains.
 - A draft/open implementation PR is not delivered state.
-- Compilation/Clippy and a source trace do not close an Issue whose outcome is an
-  ordinary command or protocol result.
+- Compilation, Clippy and source inspection do not close an Issue whose outcome
+  is an ordinary command or protocol result.
 
 ## Maintenance rule
 
@@ -101,7 +103,7 @@ When a merge changes an owner/result boundary:
 1. update current status and the trace register;
 2. update the queue only when work order changes;
 3. update only affected Issue bodies;
-4. do not copy the new delivery list into README, AGENTS or domain guides.
+4. do not copy the new delivery list into README, AGENTS, skills or domain guides.
 
 Before deleting a subsystem, distinguish a production caller from a test/fixture,
 an absent route from an orphan export, and a historical baseline requirement from

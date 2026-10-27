@@ -38,6 +38,17 @@ CLI/config
 
 Requirements:
 
+- extract one small Project-owned `AddonLoadTarget` from the profile-bound loader:
+  explicit flavor, optional positive target Interface and optional
+  `TocLoadContext`; do not construct a synthetic `ProfileIdentity`, profile
+  digest, source identity or schema registry;
+- for Slice 1A use no target Interface and no conditional context: retain the
+  explicit TOC's missing/zero/positive Interface as source metadata and do not
+  reject it for compatibility until a positive target is actually supplied;
+- classify TOC metadata by effect before completeness: display/localized/custom
+  `X-*` and known non-selection metadata are nonblocking for independent
+  `LuaTypes`; dependency/selection/environment/callback and malformed directives
+  remain typed or located limitations; an empty key is malformed;
 - no Project IDs, generations, reports, proof objects, Reference/Rules, graph,
   store or publication;
 - empty/omitted WoW `checks` still runs Emmy diagnostics;

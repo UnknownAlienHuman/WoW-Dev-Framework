@@ -1,9 +1,9 @@
 # Implementation and documentation trace register
 
 **Baseline register:** [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md), PR #244  
-**Current audit base:** `main` after PR #265 (`231c15065563ee8443d4353282f395aa000e1a4d`)  
-**Current traces:** T01–T31  
-**Documentation corrections:** D01–D32
+**Current audit base:** `main` after PR #267 (`1e1772d1a4893bf3d2b6bb7eaf3617534dcbff7a`)  
+**Current traces:** T01–T32  
+**Documentation corrections:** D01–D36
 
 This file records post-baseline producer-to-consumer decisions and exact workflow
 observations. It is evidence, not another product specification. Current delivery
@@ -54,6 +54,7 @@ state is summarized in [CURRENT_STATUS.md](CURRENT_STATUS.md); work order lives 
 | T29 | reachable retained load/package issues -> limitations | implemented by #264 | unexecuted |
 | T30 | line/package predicates -> selected closure/completeness | implemented by #265; exact-head run #524 passed | unexecuted |
 | T31 | requested `LuaTypes` facts -> completeness | current `check_addon` always adds chunk limitation and returns `Partial`; correction required | unexecuted |
+| T32 | ordinary root/TOC/flavor -> profile-free Project load target -> selected plan | source-traced; current reader still requires legacy `ProfileIdentity` and positive Interface | unexecuted |
 
 ## Durable decisions
 
@@ -73,6 +74,27 @@ root + explicit TOC + flavor + Library
 Do not wait for product channel, `LoadWith`, implicit bindings, every XML handler
 or a WoW rule. Add those in later slices. Unsupported selected input is a scoped
 limitation; unavailable unrequested features are not global incompleteness.
+
+### T23/T32 — first-slice Project admission
+
+Current `ProjectInputDirectory::read_toc_project*` requires the legacy
+`ProfileIdentity`. That type carries a profile label, mandatory positive
+Interface, source logical digest, schema versions and other publication-era
+identity. Constructing a synthetic profile would reintroduce the platform the
+direct route is intended to bypass.
+
+Extract a small Project-owned `AddonLoadTarget` containing only explicit flavor,
+optional positive target Interface and optional TOC condition context. Slice 1A
+supplies flavor only. The explicit TOC's missing, zero or positive Interface is
+retained as source metadata and is not compared until a positive target exists.
+Legacy profile callers adapt into the small target; the ordinary route never
+adapts back into `ProfileIdentity`.
+
+T23 metadata-by-effect admission is required before Slice 1A can claim truthful
+completeness. Display/localized/custom and known non-selection metadata does not
+block independent Lua enumeration. Dependency/selection/environment/callback and
+malformed directives remain typed or located limitations. Full semantics for
+channel, triggers, bindings and secure contexts remain later slices.
 
 ### T06/T12–T16 — delivered lower owners
 
@@ -179,6 +201,23 @@ No item above is an observed addon workflow.
 | D30 | active Issue audit called #194 reconciled although it required fields removed by #260; #200/#201 still listed T30 as open | affected Issues and audit corrected |
 | D31 | a proposed Library-order defect ignored existing snapshot-ID sorting before registration | correction recorded; no new work item |
 | D32 | docs accepted unconditional addon-chunk limitation and hard-coded `Partial` for every `LuaTypes` result | T31 added; completeness must be dependency-scoped |
+| D33 | the staged first slice omitted that all current TOC readers require legacy `ProfileIdentity` and a positive Interface | T32 added; extract one profile-free `AddonLoadTarget` and adapt legacy callers into it |
+| D34 | metadata-by-effect classification was deferred behind the first command, so common display/`X-*` metadata could still cause false `Partial` | T23 is a Slice 1A prerequisite; special metadata semantics remain later |
+| D35 | active #109/#112/#117/#197/#198/#199 bodies still copied PR progress or widened the immediate slice | bodies rewritten as durable outcomes and staged work |
+| D36 | four baseline-register rows lacked the promised current `Home:` | errata recorded below; the immutable baseline register remains tied to its reviewed commit |
+
+### Baseline register errata
+
+The baseline register remains frozen as historical evidence. These four rows
+omitted only their current-home pointer; their read/source conclusions remain
+unchanged:
+
+| Baseline row | Current home |
+| --- | --- |
+| `crates/wow-project/DATA_MODEL.md` | [updates](IMPLEMENTATION.md#updates), [results and interfaces](IMPLEMENTATION.md#results-and-interfaces), [useful output](WOW_LINTER.md#7-useful-output-and-updates) |
+| `crates/wow-project/e2/REAL_ADDON_FIXTURE.md` | [completion and verification](IMPLEMENTATION.md#completion-and-verification), [queue](REFACTOR_QUEUE.md) |
+| `crates/wow-project/e3/DATA_MODEL.md` | [addon configuration](IMPLEMENTATION.md#addon-configuration-and-emmy-analysis), [updates](IMPLEMENTATION.md#updates), [typed relationships](IMPLEMENTATION.md#typed-source-relationships) |
+| `crates/wow-project/e3/SKELETON_INPUT_VIEW.md` | [source index/search/context](IMPLEMENTATION.md#blizzard-ui-index-search-and-context), [typed relationships](IMPLEMENTATION.md#typed-source-relationships) |
 
 ## Observations still required
 

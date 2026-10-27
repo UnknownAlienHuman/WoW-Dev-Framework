@@ -47,6 +47,12 @@ rules are subsequent slices unless the selected input actually requires them.
 Unsupported selected input remains a located scoped limitation; unrelated or
 unrequested features do not make `LuaTypes` globally partial.
 
+Project must extract a small profile-free load target from its current
+`ProfileIdentity`-bound TOC reader. Never fabricate a profile ID, source/report
+digest, schema registry or positive target Interface merely to enter the direct
+route. Slice 1A also classifies TOC metadata by effect so cosmetic/custom fields
+cannot create false incompleteness.
+
 Do not adapt the old `LocalCommand -> LocalProjectBackend -> generic Service`
 route, fabricate Reference/Rules/publication objects, or wrap the direct result
 inside component/capability/presentation models.
