@@ -64,11 +64,17 @@ or expose a Project publication identity.
 For the direct addon path use `EmmyBackendIdentity::compiled_pinned()`, Main
 universe `Project`, and one separate `BlizzardUi` Library snapshot per explicit
 annotation root. Apply existing Project Main and shared Library limits. Reject
-duplicate resolved roots or duplicate snapshot IDs; do not silently merge
-ambiguous Library origins. A Library parse/health failure is invalid caller input;
-the current `LibraryHealthFailed -> NativeFailure` mapping is a defect and must
-not become the CLI's internal-outage contract. Preserve the configured Library
-root and relative file in the error rather than a synthetic analyzer root.
+duplicate snapshot IDs, but do not confuse snapshot identity with physical input
+authority: universe changes can give the same physical file different IDs, and
+overlapping Library roots can share files while whole snapshots differ. Service
+must validate admitted role/root/file authority before opening Emmy.
+
+A Library parse/health failure is invalid caller input. Extend the error handoff
+to preserve source role, Library snapshot ID and root-relative file through
+`ConfiguredSessionError`; Service maps the snapshot ID to the configured root.
+The current `LibraryHealthFailed -> NativeFailure -> ComponentUnavailable` path is
+a defect. Never parse message text or expose a synthetic analyzer root to recover
+origin.
 
 ## Diagnostic configuration
 
