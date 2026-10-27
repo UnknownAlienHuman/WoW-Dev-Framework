@@ -128,7 +128,7 @@ Exact acceptance is in [REFACTOR_QUEUE.md](REFACTOR_QUEUE.md).
 
 - baseline/current documentation reconciliation: **complete at the named base**;
 - canonical Slice 1A plan: **ready after T23 and T32–T39 are implemented together,
-  including T31/T33/T36/T38/T39 refinements recorded through D81**;
+  including the active T31/T33/T36/T38/T39 refinements in the trace register**;
 - first ordinary `wow check`: **not implemented**;
 - any addon/editor/search workflow observed: **no**;
 - guarantee of no future runtime defect: **no**. Known profile, eager-XML,
