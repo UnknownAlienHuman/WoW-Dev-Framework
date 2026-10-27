@@ -34,10 +34,10 @@ trace register. The first public command is a small `LuaTypes` vertical slice:
 
 ```text
 ordinary explicit configuration
-  -> bounded selected addon and Library bytes
+  -> one public Service ordinary-check operation
+  -> Project target/scope plan + collision-free admitted bytes
   -> exact Main/Library snapshots
-  -> existing ConfiguredAnalyzerSession
-  -> existing wow-service::addon_check
+  -> existing ConfiguredAnalyzerSession / low-level check_addon
   -> text/JSON diagnostics, relevant limitations and exit status
 ```
 
@@ -58,11 +58,16 @@ Included XML remains an exact located limitation, not an acquisition failure tha
 erases physical diagnostics. Use a standalone scope-aware plan mapper; do not use
 package-only mapping or global `external_files_complete()` as the result.
 
-Build snapshots with the compiled analyzer pin, Main universe `Project` and one
-separate `BlizzardUi` snapshot per Library root. Reject duplicate roots/IDs, keep
-root-relative paths and make Library errors name root + relative file. An XML-only
-physical slice returns partial through an empty Project snapshot, never a dummy
-file.
+Use Project's held-root readers and validate actual admitted file authority.
+Reject duplicate roots, empty Library inventories, duplicate snapshot IDs and the
+same physical Lua file across roles/roots; allow disjoint nested roots and equal
+relative paths in distinct roots. Preserve root token + relative path on errors.
+
+Frontends call one narrow public Service operation that owns Project preparation,
+limitations, authority validation, snapshots and the lower check. They never
+construct `AddonCheckRequest` or attach limitations. Complete/partial results use
+stdout; typed pre-result errors use stderr. An XML-only physical slice returns
+partial through an empty Project snapshot, never a dummy file.
 
 Do not adapt the old `LocalCommand -> LocalProjectBackend -> generic Service`
 route, fabricate Reference/Rules/publication objects, or wrap the direct result
