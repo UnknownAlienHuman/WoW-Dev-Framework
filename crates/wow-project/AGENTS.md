@@ -1,20 +1,20 @@
 # Addon context
 
-Follow root [AGENTS.md](../../AGENTS.md),
-[current status](../../docs/CURRENT_STATUS.md), the active
-[queue slice](../../docs/REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check)
-and the relevant [implementation route](../../docs/IMPLEMENTATION.md).
+Follow root [AGENTS.md](../../AGENTS.md), current status, the active queue slice
+and the relevant implementation route.
 
-Project owns root/TOC/source selection, bounded bytes, exact user-path projection
-and the load/context facts required by the active slice. Slice 1A extracts a
-profile-free `AddonLoadTarget` from the existing reader, supplies explicit flavor
-with no target Interface/context, retains TOC Interface as source metadata, and
-selects physical Lua. It must not fabricate `ProfileIdentity` or its
-publication-era digests. Classify metadata by effect before completeness. Later
-slices add dependency/order context, XML/chunk mapping, then
-channel/triggers/bindings/secure special cases.
+Project owns root/TOC/source selection, exact bytes, plan identity and source
+projection. For Slice 1A:
 
-Preserve exact mapped ranges and source-backed unknowns; reuse Emmy for Lua
-semantics. Missing later-slice behavior limits only affected selected input or
-checks. An ordinary check must not require Project publication, replay hydration,
+1. replace profile-bound plan identity/validation with `AddonLoadTarget` plus
+   projection scope; do not fabricate `ProfileIdentity` or retain its digest;
+2. parse metadata/conditions, capture direct TOC Lua and retain but do not open
+   XML in `physical_lua` scope;
+3. return exact root-relative files plus a plan whose standalone mapper can
+   distinguish required blockers from optional/nonblocking observations;
+4. validate Main files against the same plan before snapshot construction.
+
+Later slices add dependency/order context, mapped XML/chunk context, then channel,
+triggers, bindings and secure/special cases. Reuse Emmy for Lua semantics. An
+ordinary check must not require Project publication, replay hydration,
 fingerprints or proof graph.

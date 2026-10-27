@@ -1,8 +1,8 @@
 # TOC load-context and source-order trace
 
-**Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
-**Runtime source owners reviewed through:** PR #250, `e40b64ffa1c16851fa657c0bd7fa0073e3cc33d9`
-**Scope:** ordinary configuration/acquisition traces T02–T05, addon-context trace T11, and follow-up metadata traces T22–T23
+**Original review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
+**Final Slice 1A source re-audit:** `28302632599bed087394dee83751815d13041579` (`main` after PR #268)
+**Scope:** ordinary acquisition traces T02–T05, addon-context trace T11, metadata trace T23 and direct first-slice traces T32–T34
 
 This is post-baseline source evidence for the first public `wow check`. It
 supplements [IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md);
@@ -248,17 +248,99 @@ valid empty language scope with load facts. Malformed selected TOC/root/path
 admission remains a hard failure; malformed included XML is a located unit
 failure whose dependent scope is incomplete.
 
+## Final Slice 1A source re-audit
+
+The final re-audit followed the exact `main` producer/consumer path intended by
+Slice 1A. It found three additional boundaries that the earlier load-context
+review did not state precisely enough.
+
+### 7. The retained plan, not only the reader argument, is profile-bound
+
+Every current `read_toc_project*` entry point accepts `ProfileIdentity`, but the
+dependency is retained after parsing as well. `ProjectLoadPlan` stores a mandatory
+positive target Interface, flavor and canonical profile digest;
+`validate_profile` requires exact equality, and the plan digest includes that
+profile identity. Merely changing a function parameter to `AddonLoadTarget` would
+still force the direct route to fabricate publication-era identity.
+
+Slice 1A must replace the retained identity boundary itself:
+
+```text
+AddonLoadTarget { flavor, optional positive target_interface, optional context }
++ projection scope
++ exact selected source identities
+-> ProjectLoadPlan identity and admission
+```
+
+Legacy profile callers may adapt a valid profile into this target. The direct
+route never creates a profile ID, source/report digest, schema registry,
+correction identity or generation. A changed target or projection scope produces
+a different plan identity.
+
+### 8. Current TOC loading is not a physical-Lua-only operation
+
+`Loader::expand` immediately captures and parses referenced XML before returning
+the physical Main inventory. A malformed included XML document can therefore
+abort the load before otherwise valid direct TOC Lua reaches Emmy. That
+contradicts the intended first slice, which explicitly defers XML semantics.
+
+Add an identity-bound projection scope such as `physical_lua`:
+
+- parse the selected TOC and its line predicates/metadata;
+- capture direct selected `.lua` files with current root/path/byte safety;
+- retain XML entries, source spans and selection state in the plan, but do not
+  open or parse XML;
+- surface selected deferred XML as a located source-selection limitation for the
+  requested `LuaTypes` result;
+- when selected deferred XML exists without physical Lua, use the supported
+  empty Project snapshot and return partial; never fabricate a dummy file or
+  report clean.
+
+Full XML traversal, mapped virtual units and XML-only admission belong to the
+next context slice. This is a projection of one Project owner, not a second
+loader.
+
+### 9. Package-plan limitations cannot serve the standalone first slice
+
+The current public Service mapper accepts only `ProjectPackageLoadPlan`. Its
+private load-issue mapper deliberately drops dependency placeholders because the
+package closure owns their final outcome. Slice 1A has one explicit TOC and no
+package closure, so reusing this mapper would lose required-dependency and other
+standalone blockers.
+
+Add one public scope-aware mapper over `ProjectLoadPlan`:
+
+```text
+ProjectLoadPlan + requested AddonCheckScope
+  -> only blockers required by that scope
+  -> located AddonCheckLimitation values
+```
+
+For Slice 1A, missing required dependencies, unresolved selected conditions,
+missing selected Lua, malformed load syntax and deferred selected XML can block
+completeness. Missing optional dependencies are normal. Source Interface without
+a positive target, display/localized/custom metadata and observations unused by
+`LuaTypes` remain retained Project facts, not direct limitations. Do not equate
+`LoadIssue::blocks_complete` or `ProjectLoadPlan::external_files_complete()` with
+requested-scope completeness.
+
+The plan and Main inventory must be validated against one another before snapshot
+construction. Reject duplicate Library roots/snapshot IDs. A caller-supplied
+malformed Library is invalid input and identifies configured root plus relative
+file; it is not an internal analyzer outage.
+
 ## Required owner changes
 
 ### `wow-project`
 
-- extract the small load target from `ProfileIdentity`;
+- replace reader and retained-plan profile identity with `AddonLoadTarget` plus projection scope;
 - share the finite dependency/directive table;
 - project typed package/per-unit execution context and ordinary addon-table
   retrieval/access metadata;
 - classify known lifecycle/error/display metadata without false global partial;
 - preserve exact selected order in a validated context receipt;
-- expose pure mapped XML preparation and located unit failures;
+- expose `physical_lua` TOC projection for Slice 1A and pure mapped XML preparation for the next slice;
+- expose a standalone scope-aware plan-to-limitation handoff;
 - allow virtual-only/empty language input without a dummy physical file.
 
 ### `wow-emmy`
@@ -271,8 +353,8 @@ failure whose dependent scope is incomplete.
 
 ### `wow-service`
 
-- ordinary acquisition passes snapshots **and** validated load/context data to
-  `addon_check`;
+- ordinary Slice 1A acquisition passes exact snapshots plus standalone scope-aware limitations to `addon_check`;
+- later context slices pass validated load/context data beside those snapshots;
 - type-only checking can use snapshots while reporting unsupported context as a
   limitation;
 - selected WoW checks request only the load/context facts they consume.

@@ -4,23 +4,22 @@ Delivery state: [CURRENT_STATUS.md](../../docs/CURRENT_STATUS.md). Owner boundar
 [IMPLEMENTATION.md](../../docs/IMPLEMENTATION.md#code-ownership).
 
 `addon_check` composes exact already-acquired Main, Library and optional virtual
-snapshots through `ConfiguredAnalyzerSession` and returns one direct result:
+snapshots through `ConfiguredAnalyzerSession` and returns scope, completeness,
+exact diagnostics and scoped limitations. The result contains no snapshot,
+analyzer, Project, report, proof, component or presentation receipts.
 
-- `LuaTypes` scope;
-- completeness;
-- exact diagnostics;
-- scoped limitations with optional source location.
+Slice 1A still needs:
 
-The public result contains no snapshot, analyzer, Project, report, proof,
-component or presentation receipts. Do not wrap it in legacy local/graph/replay
-result models.
+- a public standalone `ProjectLoadPlan -> AddonCheckLimitation` mapper for
+  `LuaTypes`; package-plan mapping is not a substitute;
+- only requested-scope blockers in `input_limitations`; Project observations such
+  as unused Interface/cosmetic metadata remain outside the direct result;
+- completeness derived from those blockers, not unconditional chunk context or
+  global Project completeness;
+- `LibraryHealthFailed` classified as caller invalid input with configured root +
+  relative file rather than internal `ComponentUnavailable`; duplicate roots/IDs
+  remain invalid input.
 
-Current `check_addon` still adds addon-chunk incompleteness and returns `Partial`
-unconditionally. That is transitional. Completeness must be derived from facts
-required by selected units and scope; unused chunk arguments or unavailable
-unrequested WoW features do not make every type-only run partial.
-
-Project owns ordinary configuration/acquisition, exact user-path projection,
-selected order/context and XML/binding maps. Service orchestrates those inputs and
-runs only explicitly selected WoW checks. CLI/LSP/MCP are thin adapters to the
-same owners.
+Project supplies canonical root-relative paths and exact source locations. CLI may
+join its configured root for text rendering; Service does not embed ambient
+absolute paths. CLI/LSP/MCP remain thin adapters to the same owners.
