@@ -1,186 +1,122 @@
 # CLI, editors and agents
 
-Read [current status](CURRENT_STATUS.md). CLI, LSP and MCP are adapters to the
-same Service check/search/context owners; they must not create parallel analysis
-or lifecycle platforms. General Lua language features remain upstream EmmyLua.
+CLI, LSP and MCP are thin adapters to the same Service owners. They do not create
+parallel analyzers, Project publication state, result hierarchies or lifecycle
+platforms. General Lua language intelligence remains upstream EmmyLua.
 
-## Current checkpoint
+Read [current status](CURRENT_STATUS.md) for delivery state and
+[the queue](REFACTOR_QUEUE.md) for implementation order. This guide defines the
+stable interface contract only.
 
-Delivered lower layers:
+<a id="current-checkpoint"></a>
+<a id="target-user-operations"></a>
+<a id="configuration-and-check-input"></a>
 
-- `ConfiguredAnalyzerSession` over exact Main/Library/optional virtual snapshots;
-- configured code/message/severity/range diagnostics;
-- direct `wow-service::addon_check` result over already-acquired snapshots;
-- compiled identity and exact Main reuse admission.
+## CLI
 
-Still pending:
-
-- ordinary root/TOC/flavor/product-channel/Library acquisition;
-- dependency closure, reverse triggers and exact selected order/context;
-- implicit bindings discovery and callback mapping;
-- public `wow check` adapter, rendering and exit policy;
-- addon chunk/UI handler context and exact XML/binding projection;
-- project-aware LSP reuse;
-- useful MCP check/search tools;
-- direct current source index/search/context.
-
-Existing `wow` check/status/LSP/MCP families are transitional and must not be
-presented as the target interface.
-
-## Target user operations
-
-The CLI is the complete offline entry point. It reads local source/configuration
-as data, never executes Lua or rewrites user files, and needs no remote service,
-editor extension or internal Project identity.
-
-Target shapes (names may still change):
+CLI is the complete offline path. The first usable command is a narrow `LuaTypes`
+vertical slice, not the complete Blizzard loader:
 
 ```text
-wow library build --source <checkout> --ref <ref> --flavor <flavor> [--toc <path>] --out <dir>
-wow check [--config wowdev.json] [--root <addon>] [--toc <path>] [--flavor <flavor>] [--channel <stable|ptr|beta>] [--library <dir>...]
-wow index --source <checkout> --ref <ref> --flavor <flavor> --channel <channel> --db <path>
-wow search --db <path> <query>
-wow context --db <path> --hit <id>
-wow lsp --transport stdio
-wow mcp --transport stdio
+wow check
+  --root <addon-dir>
+  --toc <explicit.toc>
+  --flavor <supported-flavor>
+  --library <dir> [--library <dir> ...]
+  [--config <wowdev.json>]
+  [--format text|json]
+  [--fail-on error|warning|information|hint]
 ```
 
-Search/context is auxiliary. Checking must run without an index. Navigation
-returns an exact selected hit, readable source and direct known relations—not a
-pack or prose-only summary.
+Later slices may add auto-selection, target Interface, product channel,
+dependency roots and selected WoW checks. They must not delay the explicit
+physical-Lua command.
 
-### Ordinary configuration
+CLI precedence and path bases are defined in
+[ordinary configuration](IMPLEMENTATION.md#ordinary-configuration).
 
-Config-relative directory paths use the config directory; CLI-relative directory
-paths use cwd. Relative TOC uses resolved addon root.
+<a id="check-results-and-command-status"></a>
 
-```json
-{
-  "root": "./",
-  "toc": "MyAddon.toc",
-  "flavor": "retail",
-  "channel": "stable",
-  "library": ["../WoWLibrary"],
-  "dependency_roots": ["../SharedAddons"],
-  "checks": [],
-  "fail_on": "error"
-}
-```
+Text and JSON render the same typed result:
 
-`channel` is Stable/PTR/Beta product selection, not flavor, Interface,
-game/glue or secure/global context. A normal explicitly selected installed-client
-target may default to Stable; otherwise channel is required when source uses a
-channel gate such as `OnlyBetaAndPTR`. Never infer it from repository ref/path.
+- selected scope and completeness;
+- diagnostics with exact code, message, severity and user-source range;
+- scoped limitations with optional exact source location.
 
-Optional `target_interface` enables explicit compatibility checking. Optional
-`emmy_diagnostics` is the pinned upstream diagnostic object. Repeated CLI
-`--library` replaces the configured array. Empty/omitted `checks` means no WoW
-rules while Emmy diagnostics remain enabled.
+The direct public result contains no snapshot, analyzer, Project generation,
+report, proof or component/capability identities.
 
-Dependency aliases, selected source metadata, secure/chunk context and selected
-order are Project-owned facts. This includes `AllowAddOnTableAccess`,
-`LoadSavedVariablesFirst`, unsupported `SuppressLocalTableRef`, `LoadWith` and
-implicit binding adapters. Project keeps exact raw source and returns ordinary
-scoped limitations when semantics are unsupported or donor-modeled. Frontends do
-not ask users for provenance taxonomy or internal receipts and do not reconstruct
-these values from filenames.
-
-Unknown check names are configuration errors. A recognized unavailable check is
-a scoped limitation and preserves independent findings.
-
-## Check results and command status
-
-Keep **findings** separate from **limitations/completeness**. Missing context or
-metadata cannot erase a diagnostic or manufacture clean. A disabled optional rule
-cannot make type checking partial.
+Recommended exit policy:
 
 | Exit | Meaning |
 | --- | --- |
-| `0` | requested analysis completed; no enabled diagnostic reached threshold |
-| `1` | completed; at least one enabled diagnostic reached threshold |
-| `2` | incomplete or required input/capability unavailable; retain findings |
-| `64` | invalid usage/configuration |
-| `130` | caller cancellation observed |
-| `4` | unexpected internal/serialization/output failure |
+| `0` | requested scope complete; no finding at/above `fail_on` |
+| `1` | finding at/above `fail_on` |
+| `2` | requested scope partial because a required selected input/fact is unavailable |
+| `4` | internal/component failure |
+| `64` | invalid configuration or usage |
+| `130` | cancelled |
 
-Warnings and lower severity remain visible below threshold. JSON carries
-findings and limitations explicitly. Static diagnostics do not prove runtime
-load, trigger/callback execution, combat/taint safety or complete Secret flow.
+A limitation unrelated to the requested scope does not force exit `2`.
 
-`wow-service::addon_check` already supplies the direct DTO, but consumes exact
-snapshots and currently reports partial addon context. CLI must call it instead of
-the old generic component result.
-
-## Locations and document updates
-
-Internal ranges are half-open UTF-8 bytes over exact captured content. Displayed
-positions derive from that content. LSP uses negotiated encoding and binds every
-diagnostic to the exact document/result version.
-
-Pinned Emmy columns are Unicode scalar counts despite LSP-shaped types. Preserve
-scalar -> UTF-8 byte conversion, then Project UTF-8/UTF-16 conversion. Never
-forward upstream `character` directly or apply old ranges to changed text.
-
-Unsaved text stays in memory. Ordered edits apply to successive states. Client
-versions increase but may have gaps; internal revisions are separate. Stale,
-rejected or cancelled results cannot replace newer diagnostics.
-
-Cancellation is truthful/cooperative. Do not call a synchronous native analyzer
-call preemptible.
-
+<a id="locations-and-document-updates"></a>
 <a id="stdio-protocol-behavior"></a>
-
-## CLI adapter
-
-CLI owns arguments/config precedence, ordinary input validation, cancellation,
-text/JSON rendering and exit status. It does not construct another Emmy owner,
-Reference/Rules for type-only work, Project publication, graph/store or reports.
-Human logs use stderr; stdout contains the requested result. Output failure must
-not emit a second success or replay a completed mutation.
+<a id="lsp-adapter"></a>
 
 ## LSP adapter
 
-Use one LSP 3.18 stdio profile. `Content-Length`/CRLF framing, UTF-8 JSON body,
-protocol-only stdout and stderr logging. Unsupported requests return protocol
-errors; valid no-match returns standard null/empty.
+Use one LSP 3.18 stdio profile and the same configured Project/Service check used
+by CLI.
 
-Keep overlay text/version/revision/root/edit/coordinate ownership, but pass exact
-overrides into the same configured addon-check project. Do not create a second
-one-file snapshot in the frontend.
+Keep:
 
-General completion/hover/definition/references/rename/signature/symbols remain
-upstream EmmyLua. Framework navigation is only WoW-specific selected index/context.
-Empty references is valid. Publish only exact document-version diagnostics;
-accept 3 -> 5 and reject stale results. Preserve related exact Library/XML/
-binding locations and hide synthetic wrappers.
+- exact unsaved text, document version and root isolation;
+- UTF-8/UTF-16 negotiation and checked range conversion;
+- increasing nonconsecutive client versions;
+- stale/cancelled result rejection;
+- standard `null`/empty results for supported no-match requests;
+- protocol-only stdout, bounded frames and stderr logging.
+
+Do not build isolated one-file Emmy owners in the adapter. Pass exact overlays to
+the shared selected project. Only exact physical or mapped XML user locations are
+published; helper/synthetic paths are never diagnostics.
+
+Completion, hover, definition, references, rename, signature help and general
+symbols remain upstream EmmyLua unless a retained WoW-specific source/index
+operation has a named consumer.
+
+<a id="mcp-adapter"></a>
 
 ## MCP adapter
 
-Use one MCP 2025-11-25 stdio profile with one UTF-8 JSON-RPC message per line and
-protocol-only stdout. Advertise only implemented tools backed by the same Service
-owners: configured check, direct body/symbol search and readable context when
-implemented.
+Use one bounded MCP 2025-11-25 stdio profile. Advertise only implemented tools
+backed by the same Service owners as CLI:
 
-Accept bounded opaque `_meta` where permitted. Valid unknown notification gets no
-response and does not close the session. Malformed/unsupported requests are
-errors without corrupting later state. No profile families, generic invoke,
-resource manifests without resources or Context pack continuation platform.
+- addon check;
+- direct source body/symbol search;
+- readable exact context.
 
-## Source query adapters
+Accept bounded opaque extension `_meta` where the protocol permits it. A valid
+unknown notification receives no reply and does not close the session. Malformed
+envelopes and unsupported requests remain distinct. JSON-RPC IDs are transport
+correlation only.
 
-A query selects exact addon/UI/API scope and exact revision/flavor/channel/context.
-Equal names in different scopes remain distinct. Complete zero matches differs
-from missing/partial index or truncation. Context quotes exact indexed source and
-finite direct known dependency/trigger/load/callback/type/reference relations;
-it never applies stale spans to newer text.
+Do not expose internal profiles, registry/schema digests, effect classes,
+Project/report identities, Context packs or durable result receipts.
 
-CLI/LSP/MCP serialize the same typed result once. Request IDs are transport
-correlation, not durable content identities.
+## Configuration and output safety
 
-## Verification boundary
+- Source/configuration remains user-owned and read-only.
+- Paths are resolved once by the frontend and validated by Project.
+- Output is bounded and deterministic.
+- Primary diagnostics survive scoped limitations.
+- Cancellation is advertised only at actual cooperative checkpoints; a
+  synchronous native Emmy call is not described as preemptible.
 
-A frontend is incomplete until ordinary input reaches the real owner and a useful
-result is observed. Record exact command/framed sequence, input identities,
-result and cancellation/empty/error behavior in
-[IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md). Build,
-Clippy and source review are not protocol/product observations.
+<a id="completion-and-verification"></a>
+
+## Observation
+
+An adapter is complete only after the trace register records the exact command or
+framed sequence, input identities and visible result. Build/Clippy and unit owner
+construction are not frontend acceptance.

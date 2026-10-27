@@ -1,241 +1,122 @@
 # Current implementation status
 
-**Consistency review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
-**Runtime implementation review:** PRs #259–#265 own T24–T30; previous delivered slices are PRs #246–#250
-**Documentation/source reconciliation:** PR #257, based on `main` after PR #256
-**Documentation baseline:** PR #244, merge `0fdc34c4a8afb1af51ec47d2038734d02500af42`
+**Documentation audit base:** `main` after PR #265 (`231c15065563ee8443d4353282f395aa000e1a4d`)  
+**Baseline documentation audit:** PR #244 / `c36a058` source baseline  
+**Active source decisions:** T01–T31 in
+[IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md)
 
-This is the authoritative current-state checkpoint. It does not replace
-[ARCHITECTURE.md](ARCHITECTURE.md), [IMPLEMENTATION.md](IMPLEMENTATION.md), or
-the baseline [AUDIT.md](AUDIT.md). Runtime product wiring remains incomplete;
-source-trace/documentation work changes implementation instructions but not
-workflow observation status.
+This is the only live delivery checkpoint. Domain guides define durable behavior;
+the queue orders work; the trace register carries evidence. README files and
+Issue summaries must link here instead of copying a moving implementation list.
 
-## Verification vocabulary
+## Status vocabulary
 
-- **baseline reviewed** — the source/document claim was checked at the baseline;
-- **traced** — a named producer, handoff and consumer support the recorded
-  decision;
-- **implemented** — code is in `main` and passed the named exact-head
-  repository/format/compile/Clippy gate;
-- **observed** — an ordinary command or protocol sequence was actually run with
-  recorded input/result;
-- **open** — the product handoff is absent, incomplete or transitional.
+- **baseline reviewed** — the old document requirement was read and reconciled;
+- **traced** — named producer, handoff and consumer support the recorded decision;
+- **implemented** — code exists in `main` and passed its recorded code gate;
+- **observed** — an ordinary command or protocol sequence was executed and its
+  visible result recorded;
+- **open** — the handoff is absent, incomplete or transitional.
 
-Build and Clippy never promote a workflow to **observed**.
+Compilation, Clippy and source review never make a workflow **observed**.
 
-## Documentation and audit status
+## Documentation audit
 
-PR #244 completed the old-document reconciliation:
+The PR #244 baseline reconciliation remains valid:
 
-- all 329 baseline Markdown files were read;
-- 287 applicable document requirements were traced to source owners/readers;
+- 329 baseline Markdown files were read;
+- 287 applicable requirements were traced to source owners/readers;
 - 42 policy, notice, descriptive-data or retired-governance rows were marked not
   applicable;
 - no baseline row remains `partial` or `not_checked`;
-- superseded E1/E2/E3/platform specifications were removed from the active tree;
-- useful behavior, donors, defects and removal boundaries were retained.
+- obsolete E1/E2/E3/platform specifications were removed from the active tree.
 
-These figures describe document requirements, not Rust code coverage or runtime
-qualification.
+The supplied Claude audit was useful diagnosis, not a complete final audit. Its
+named source defects were checked; its blanket recommendation to delete eight
+failing tests was rejected because several still encode useful admission,
+identity, bounds, privacy or lock-lifetime behavior. Its reported
+`1085 passed / 13 failed / 23 ignored` run had no attached raw log and remains a
+reported observation, not a reproduced one.
 
-The supplied Claude review independently reported a full baseline test run of
-1,085 passed, 13 failed and 23 ignored. Its diagnosis was used as input, but no
-raw run log was attached. Every named failure was separately traced at source
-level. The blanket recommendation to delete eight tests was rejected because
-several preserve useful admission, identity, bounds, privacy or lock-lifetime
-behavior.
+The follow-up audit found four current-document defects:
 
-PRs #251–#254 reconciled active guides and all 21 open Issues with post-#250 code,
-repaired local anchors and added repository validation for local Markdown
-paths/anchors. PR #255 then closed deeper T02–T05/T11 specification gaps:
-complete dependency aliases, selected load-context facts, proper three-valued
-selection and a separate exact selected-order/context handoff beside path-sorted
-snapshots.
+1. live implementation status had been copied into README, AGENTS, owner guides,
+   package summaries, queue prose and Issues; several copies stopped at PR #250;
+2. the first `wow check` slice had expanded back into almost the complete Blizzard
+   load model, blocking a useful vertical result;
+3. `ConfiguredAnalyzerSession` documentation still tied virtual owner reuse to a
+   Project generation after PR #259 removed that dependency;
+4. the active Issue audit still called Issue #194 reconciled although its body
+   required snapshot/analysis IDs removed by PR #260, and #200/#201 still listed
+   the T30 predicate fix as unfinished after PR #265.
 
-PR #256 recorded the next special-load layer:
+Those are documentation errors, not additional product requirements. The active
+docs now keep moving status here and keep owner guides stable.
 
-- explicit Stable/PTR/Beta channel for `OnlyBetaAndPTR`;
-- typed `LoadWith` reverse triggers, distinct from dependencies;
-- unlisted `Bindings*.xml` source plus the reviewed donor selection/callback
-  model;
-- known nonblocking `DefaultState` metadata;
-- `SavedVariablesMachine` declaration scope without user-data reads;
-- official `Interface: 0` source that current parsing incorrectly hard-rejects;
-- official `Secure: 1` metadata whose exact semantics are not established by the
-  reviewed Project or donor source and therefore must remain a scoped unsupported
-  context rather than a guessed alias.
+## Implemented internal owners
 
-These findings are T19–T21 in
-[IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md) and
-[TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
+| Trace | Delivered behavior | User workflow |
+| --- | --- | --- |
+| T12 / #246 | configured Emmy diagnostics preserve code, exact message, severity and byte range; standalone Lua 5.1 STD is initialized | unexecuted |
+| T06/T13 / #247 | one exact Main + explicit Library + optional virtual configured Emmy owner; diagnostics and optional semantic collection share it | unexecuted |
+| T14 / #248 | direct `wow-service::addon_check` result without Reference, Rules, Project publication, graph, store or presentation construction | unexecuted |
+| T07/T15 / #249 | compiled Emmy identity is separated from compatibility-report evidence | unexecuted |
+| T16 / #250 | immutable owner reuse requires exact Main plus canonical Library/virtual/config compatibility | unexecuted |
+| T24 / #259 | direct virtual diagnostics are snapshot-owned; Project generation is required only by explicit virtual semantic reports | unexecuted |
+| T25 / #260 | direct public result contains diagnostics and limitations, not snapshot or upstream-analysis receipts | unexecuted |
+| T26 / #261 | exact input limitations can carry an optional validated source location | unexecuted |
+| T27 / #262 | unprojected virtual findings remain internal rather than exposing synthetic workspace locations | unexecuted |
+| T28 / #263 | one finite direct limitation-code surface covers Project outcomes | unexecuted |
+| T29 / #264 | reachable retained Project load/package issues map to that surface without raw-root rebinding or unreachable-package false partial status | unexecuted |
+| T30 / #265 | TOC line/package predicates use one three-valued reduction; definitely excluded source no longer poisons completeness | unexecuted |
 
-PR #257 records seven documentation/maintenance defects after #256: active
-summaries still exposed the pre-T17/T19 handoff; donor models had been promoted
-into client claims; exact-current-head status fields became stale through their
-own merge; a proposed generic “evidence class” handoff would have recreated a
-proof layer; an orphan CI marker had no reader; the ordinary addon-table contract
-and `AllowAddOnTableAccess` were omitted while `SuppressLocalTableRef` was
-overclaimed; and current `LoadSavedVariablesFirst`/`EscalateErrorDuringLoad`
-metadata was absent even though the parser turns it into blocking unknown issues.
-T22–T23 and D12–D18 record the corrections. Exact raw source, narrow adapters and
-scoped limitations remain; no runtime status changes from this documentation work.
+The canonical Library order concern was rechecked and is **not** an open defect:
+`RegisteredMemberAnalysis::new` sorts Library snapshots by exact snapshot ID before
+workspace-root assignment and registration; `ConfiguredAnalyzerSession::compatible`
+compares the same order-insensitive set.
 
-PR #259 fixes the first post-#250 runtime boundary defect found during continued
-review: direct mapped virtual diagnostics required `ProjectGenerationId` even
-though the diagnostic collector used only the exact virtual snapshot. T24 keeps
-configured-owner construction/reuse snapshot-owned and moves generation to the
-optional virtual semantic-report call that actually consumes it. This does not
-wire or observe the ordinary addon workflow.
+## Open product boundary
 
-PR #260 removes the remaining internal receipts from the serializable direct
-result: Main/Library/virtual snapshot IDs and upstream analysis IDs had no
-production reader and contradicted the ordinary workflow's no-report/no-digest
-surface. Each diagnostic still carries exact source role, path, content SHA-256
-and byte span. Lower-owner identities remain where internal semantic admission
-actually consumes them.
+There is still no ordinary public addon checker. The application uses the
+transitional `LocalCommand -> LocalProjectBackend -> generic Service` route.
 
-PR #261 adds the missing limitation handoff required by ordinary Project
-preparation. `AddonCheckRequest` can carry one or more input limitations, each
-with an optional validated exact source location. A caller-supplied same-code
-limitation suppresses only the less informative Service fallback; distinct
-located failures remain in the direct result. This is a structural seam, not an
-observed Project workflow.
+The existing direct result implements only `AddonCheckScope::LuaTypes`, but
+`check_addon` currently adds `AddonChunkContextUnavailable` and sets
+`completeness = Partial` unconditionally. That is conservative internal behavior,
+not the target contract. Completeness must depend on facts required by the
+selected scope and selected units; unused chunk arguments or unavailable
+unrequested WoW features cannot make every type-only run partial.
 
-PR #262 corrects the corresponding visibility boundary: a virtual Emmy finding
-cannot be emitted with its synthetic workspace path while exact XML source
-projection is unavailable. Virtual units stay registered in the same configured
-owner and can affect shared analysis, but only exact physical Main diagnostics
-are public until Project supplies the virtual-to-XML map. The result keeps an
-explicit projection limitation instead of fabricating a user location.
+The next work is deliberately split:
 
-PR #263 supplies the missing finite limitation categories needed by the direct
-Project handoff: selected-source, dependency closure, unresolved load selection,
-compatibility, unsupported load context, chunk, virtual projection, XML handler,
-binding and generated-Library metadata. Detailed Project issue enums remain in
-Project; messages and exact locations remain on individual limitations.
+1. **First usable `wow check`:** explicit root, explicit TOC, flavor, one or more
+   Library directories, bounded selected physical Lua, exact Main/Library
+   snapshots, existing `check_addon`, exact path projection, text/JSON output and
+   exit policy. No WoW rule by default.
+2. **Selected-context expansion:** dependencies, source-order/context receipt,
+   source-projectable XML units, addon chunk arguments where used, XML handler
+   adapters and coherent updates. Unsupported selected context remains a located
+   limitation without suppressing independent diagnostics.
+3. **Special loading:** product channel, `LoadWith`, implicit bindings,
+   zero-Interface compatibility, secure/special contexts and remaining metadata.
+   These must not block the first type-check command when the selected input does
+   not require them.
+4. **WoW checks:** generated-Library metadata consumption, corrected Blizzard
+   projection semantics and direct selected API/Secret rules.
+5. **Adapters and source tooling:** project-aware LSP/MCP, then the direct SQLite
+   body/symbol index and readable context.
 
-PR #264 connects the existing native load/package issue owners to that finite
-surface without re-trusting caller declarations. `project_package_limitations`
-consumes the retained `ProjectPackageLoadPlan`, maps only blocking issues from the
-same reachable package closure registered in analyzer Main. It skips parser-stage
-dependency placeholders in favor of package-closure outcomes, skips normal missing
-optional dependencies/nonblocking duplicates, leaves the stale inline-Lua marker
-to the actual XML preparation owner, and suppresses the aggregate file-closure
-issue when exact retained reasons exist. When Project retained a complete
-source span, the limitation uses the Project-owned collision-free
-`packages/<package>/<source>` path plus retained digest/span; source-less cycle or
-aggregate load-state issues remain honestly unlocated. Ordinary configuration
-still has to project package-qualified paths to configured user roots and invoke
-the mapper; T23 metadata/XML/binding producers remain open.
-
-PR #265 fixes the source-selection truth table across line predicates,
-package-wide filters and TOC completeness. Known allow/exclude results are no
-longer poisoned by unrelated unknown values; a definite exclusion dominates an
-unknown conjunct; malformed/unsupported clauses use the same conjunction; and a
-record already proven excluded retains source evidence without creating a false
-blocking issue or incomplete selected-file enumeration. Code run #521 passed;
-no addon workflow was executed.
-
-## Implemented after the baseline
-
-| Slice | Delivered behavior | Evidence | Runtime observation |
-| --- | --- | --- | --- |
-| T12 / PR #246 | configured Emmy diagnostics retain code, exact message, severity and byte range; standalone Lua 5.1 STD is initialized | run #418 passed | unexecuted |
-| T06/T13 / PR #247 | one exact Main + Library + optional virtual configured owner with caller diagnostics, STD and explicit semantic collection | run #422 passed | unexecuted |
-| T14 / PR #248 | direct `wow-service::addon_check` result without Reference, Rules, publication, graph, store or presentation platform | run #425 passed | unexecuted |
-| T07/T15 / PR #249 | compiled provenance separated from compatibility-report evidence | run #440 passed | unexecuted |
-| T16 / PR #250 | configured-owner reuse requires exact Main plus Library/virtual/config compatibility | run #445 passed | unexecuted |
-| T24 / PR #259 | direct virtual diagnostics require only the exact snapshot; Project generation remains only for explicit virtual semantic facts | run #480 passed | unexecuted |
-| T25 / PR #260 | direct result exposes diagnostics/limitations without snapshot or analysis receipts | run #486 passed | unexecuted |
-| T26 / PR #261 | direct request/result preserves exact located input limitations without another result model | run #491 passed | unexecuted |
-| T27 / PR #262 | unprojected virtual diagnostics remain internal; public findings require exact physical or projected source locations | run #495 passed | unexecuted |
-| T28 / PR #263 | finite direct limitation categories cover the ordinary Project result surface without string-only classification | run #499 passed | unexecuted |
-| T29 / PR #264 | reachable native blocking load/package issues map to finite direct categories; retained spans use Project-owned package-qualified locations and source-less issues remain unlocated | run #510 passed | unexecuted |
-| T30 / PR #265 | line/package TOC predicates use one three-valued reduction; excluded records retain evidence without false blocking completeness | code run #521 passed; final PR gate required before merge | unexecuted |
-
-These twelve internal building blocks exist after PR #265. No ordinary addon input
-reaches them through the public command yet.
-
-## Open path to the first usable command
-
-```text
-ordinary CLI/config
-  -> root + flavor + channel + TOC/dependencies/triggers
-  -> exact selected package/unit context and order
-  -> implicit binding documents + bounded Main/Library/XML acquisition
-  -> mapped virtual Lua preparation
-  -> existing ConfiguredAnalyzerSession
-  -> existing wow-service::addon_check
-  -> text/JSON diagnostics, limitations and exit status
-```
-
-Open work includes:
-
-- normal root/TOC/flavor/channel/Library configuration and ambiguity;
-- a small load target independent of `ProfileIdentity`/publication receipts;
-- complete dependency aliases and typed `LoadWith` triggers;
-- `UseSecureEnvironment`, per-unit `LoadIntoEnvironment`, ordinary
-  `(addonName, addonTable)` chunk context and `AllowAddOnTableAccess`;
-  `SuppressLocalTableRef` remains unsupported legacy/internal metadata rather
-  than a guessed suppression adapter;
-- `LoadSavedVariablesFirst`, `EscalateErrorDuringLoad` and nonblocking display/
-  localized/custom metadata without false global partial status;
-- exact selected order/context beside path-sorted snapshots;
-- Stable/PTR/Beta admission, official zero-Interface compatibility uncertainty,
-  and unresolved `Secure` metadata;
-- bounded exact `Bindings*.xml` discovery and callback context;
-- known nonblocking `DefaultState` and machine SavedVariables declarations;
-- independent-unit preservation after malformed included/bindings XML;
-- ordinary orchestration invoking the delivered native issue mapper plus the
-  remaining XML/binding/current-metadata limitation producers;
-- public `wow check` wiring, rendering, exit and cancellation;
-- XML-only Main and exact virtual-to-XML diagnostic projection;
-- exact physical package diagnostic projection from namespaced analyzer paths to
-  configured logical source paths;
-- addon chunk/private table plus reviewed handler/binding adapters and scoped
-  limitations where client parity is unverified;
-- generated-Library manifest consumption;
-- corrected `StrideIndex`, `NilableContents`, `MayReturnNothing`, mixins and
-  member environment;
-- semantic API binding and Secret uncertainty fixes before WoW rules;
-- coherent updates after TOC/XML/bindings/dependency/trigger/Library/channel/
-  context changes;
-- project-aware LSP, standard empty results, MCP protocol behavior and direct
-  current source search/context with real SQLite interruption.
-
-[TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md) covers dependency aliases,
-execution context, predicates and selected order.
-[TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md) covers product
-channel, reverse triggers, implicit bindings, known lifecycle/persistence
-metadata and official unsupported compatibility/security facts.
-
-`LuaWorkspaceSnapshot` remains path-sorted for exact identity; it is not runtime
-order. `check_addon` consumes exact snapshots and truthfully returns `Partial`
-because addon chunk context is missing; virtual input also lacks final source
-projection/handler context. It no longer requires a Project generation merely to
-collect virtual diagnostics, its public result exposes no lower-owner receipts,
-and exact Project preparation limitations can reach that same result with their
-source locations intact. Until exact XML projection is supplied, virtual findings
-remain internal rather than leaking synthetic workspace paths as user locations.
-The finite T28 categories and reachable-closure T29 native mapper exist;
-configured-root projection, ordinary orchestration and remaining producer-
-specific mappings are still open.
+The exact order and acceptance conditions are in
+[REFACTOR_QUEUE.md](REFACTOR_QUEUE.md).
 
 ## Readiness verdict
 
 - **Baseline document reconciliation:** complete.
-- **Current-guide/Issue reconciliation:** complete through PR #257 plus the
-  delivered T24–T30 runtime corrections; local links and anchors are mechanically
-  checked.
-- **Baseline source architecture/error register:** complete for retained baseline
-  requirements.
-- **Current implementation tracing:** active; T17–T30 are traced, with T24–T30
-  implemented by PRs #259–#265 and the ordinary route still open.
-- **Lower first-slice owners:** defined and partially implemented.
-- **First ordinary user workflow:** not implemented or observed.
-- **Ready for blind execution without producer-to-reader tracing:** no.
-
-Do not reopen the old platform or repeat T06/T12–T16/T24–T30. Continue from
-ordinary acquisition/context/CLI and update the trace register whenever a
-boundary or observed result changes.
+- **Current documentation consistency audit:** complete for the active canonical
+  docs and 21 open implementation Issues at the named base; corrections are
+  recorded in the trace and Issue audit.
+- **Internal language-check owners:** partially implemented.
+- **First ordinary `wow check`:** open.
+- **Any addon/editor/search workflow observed:** no.
+- **Project ready for blind implementation from an abbreviated README/Issue:** no;
+  use the queue, owner guide and trace together.
