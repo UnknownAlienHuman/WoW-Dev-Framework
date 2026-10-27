@@ -29,15 +29,35 @@ wow check
 Later slices add auto-selection, target Interface, channel, dependency roots and
 WoW checks; they do not delay physical Lua.
 
+### Configuration and path bases
+
 Read one explicit config only, max 256 KiB, through Project's component-wise
 no-follow helper. Reuse duplicate-key/depth-bounded `StrictJson`; reject unknown
 outer fields and duplicate scalar CLI options. No implicit discovery. If config
 fails, only an already admitted CLI `--format` selects JSON error output.
 
-Merge before validating required root, relative TOC, exact `retail` and Libraries.
-CLI scalars replace config scalars; one or more CLI Libraries replace the array
-(max 64). Defaults: text, `fail_on: error`, upstream default diagnostics. Slice 1A
-has no WoW-check option.
+Path origin is part of deterministic configuration:
+
+- a relative `--config` path resolves from process cwd;
+- relative CLI `--root` and every CLI `--library` resolve from cwd;
+- relative `root` and `library` values inside config resolve from the resolved
+  config file's parent directory;
+- `toc`, whether supplied by config or CLI, is always a canonical relative `.toc`
+  path and resolves only after scalar merge, against the final resolved addon
+  root—not cwd or the config directory;
+- absolute root/Library values remain absolute;
+- joining/normalization is lexical (`.`/`..` reduction as applicable) and never
+  calls filesystem canonicalization or follows a root link. Project later opens
+  the resolved descriptor component-by-component without following links.
+
+CLI scalar values replace config scalar values while retaining the winning
+value's origin base. One or more CLI `--library` options replace the entire config
+Library array and therefore all use cwd; otherwise each config Library uses the
+config directory. A CLI root override changes the final root used by either
+config or CLI TOC. Merge before requiring root, TOC, exact `retail` and Libraries.
+
+Defaults: text, `fail_on: error`, upstream default diagnostics. Slice 1A has no
+WoW-check option.
 
 Pinned diagnostic input is not trusted directly. Prevalidate keys
 `disable`, `enable`, `globals`, `globalsRegex`, `severity`, `enables`; compile all
@@ -47,9 +67,10 @@ sort severity by code, preserve `enable`, and omit LS-only interval. Therefore
 omitted diagnostics, `{}` and reordered/duplicated set-like entries are equivalent
 when analysis behavior is identical.
 
-The frontend resolves caller-facing path bases, then calls one public Service
-operation. It does not open addon/Library source, compute path authority, parse
-TOC/XML, construct snapshots/lower requests or attach limitations.
+The frontend resolves caller-facing path descriptors with the rules above, then
+calls one public Service operation. It does not open addon/Library source, compute
+path authority, parse TOC/XML, construct snapshots/lower requests or attach
+limitations.
 
 <a id="check-results-and-command-status"></a>
 
