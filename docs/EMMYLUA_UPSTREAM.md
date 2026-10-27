@@ -20,179 +20,145 @@ diagnostics. Do not build a parallel parser/type checker or import private
 
 ## Source roles and engine setup
 
-Use one analysis owner with explicit roles:
+Use one owner with explicit roles:
 
 - **Main** — selected addon source diagnosed for the user;
 - **Library** — Blizzard/addon declarations used to resolve Main;
-- **Virtual Main** — mapped selected XML/binding Lua, still user source after
-  exact projection;
-- **STD** — upstream Lua declarations, neither user source nor WoW API authority.
+- **Virtual Main** — mapped selected XML/binding Lua after exact projection;
+- **STD** — upstream Lua declarations, not user source or WoW API authority.
 
-Set Lua 5.1 explicitly and call `init_std_lib(None)` once in the retained owner.
-`EmmyLuaAnalysis::new()` does not load STD and workspace roots do not discover
-files automatically.
-
-STD typing is not proof that the WoW client exposes a host API. Availability
-checks require the resolved symbol plus selected WoW facts.
+Set Lua 5.1 explicitly and call `init_std_lib(None)` once. Workspace roots do not
+discover files automatically. STD typing is not proof that the client exposes a
+host API.
 
 <a id="configured-analyzer-session"></a>
 
 ## Configured owner
 
-`wow-emmy::ConfiguredAnalyzerSession` owns exact caller-supplied Main, explicit
-Library and optional virtual snapshots with caller diagnostic configuration.
-Diagnostics-only collection does not run optional semantic collectors.
+`ConfiguredAnalyzerSession` owns exact Main, explicit Libraries, optional virtual
+snapshot and diagnostic configuration. Diagnostics-only collection does not run
+optional semantic collectors.
 
-Owner compatibility requires:
+Reuse requires:
 
 - exact Main snapshot ID;
-- the same Library snapshot-ID set;
+- same Library snapshot-ID set;
 - exact optional virtual snapshot ID;
-- equivalent diagnostic configuration;
-- a healthy retained owner.
+- equivalent **analysis-relevant** diagnostic configuration;
+- healthy owner.
 
-`RegisteredMemberAnalysis::new` sorts Library snapshots by exact snapshot ID
-before assigning roots and registering files. `compatible` sorts the same IDs
-before comparison. Caller Library argument order is therefore deliberately
-irrelevant; do not add another ordering work item.
+Library snapshots are sorted by exact ID before registration and compared as the
+same set; caller argument order is irrelevant. Project generation is not part of
+diagnostic-owner construction/reuse and is supplied only for explicit virtual
+semantic reports.
 
-A Project generation is **not** part of configured owner construction or reuse.
-It is supplied only to `semantic_reports` when exact virtual semantic facts are
-requested. Ordinary diagnostics over an exact virtual snapshot must not fabricate
-or expose a Project publication identity.
+For the direct path use `EmmyBackendIdentity::compiled_pinned()`, Main universe
+`Project`, one `BlizzardUi` Library snapshot per root and retained limits. Snapshot
+identity is not selected-host-path authority: Project/Service rejects duplicate
+nonserialized normalized root+relative-path authorities before Emmy opens. Do not
+infer authority from bytes, snapshot ID or inode/file ID.
 
-For the direct addon path use `EmmyBackendIdentity::compiled_pinned()`, Main
-universe `Project`, and one separate `BlizzardUi` Library snapshot per explicit
-annotation root. Apply existing Project Main and shared Library limits. Reject
-duplicate snapshot IDs, but do not confuse snapshot identity with input-path
-authority: universe changes can give one selected host path different IDs, and
-nested Library roots can overlap while whole snapshots differ. Before Emmy opens,
-Project/Service must reject duplicate nonserialized `InputPathAuthority` keys
-(normalized absolute root key + canonical relative path). Do not infer authority
-from bytes, snapshot IDs or inode/file IDs.
-
-A Library parse/health failure is invalid caller input. Extend the error handoff
-to preserve source role, Library snapshot ID and root-relative file through
-`ConfiguredSessionError`; Service maps the snapshot ID to a request-local root
-token and returns its operation-specific input error. The current
+A Library parse/health failure is caller invalid input. Carry source role,
+Library snapshot ID and relative file through `ConfiguredSessionError`; Service
+maps the ID to request-local root ordinal. The current
 `LibraryHealthFailed -> NativeFailure -> ComponentUnavailable` path is a defect.
-Never parse message text or expose a synthetic analyzer root to recover origin.
+Never recover origin by message parsing or synthetic analyzer paths.
 
 ## Diagnostic configuration
 
-Decode explicit `emmy_diagnostics` into the pinned `EmmyrcDiagnostic` type, but
-do not rely on its permissive serde boundary: at the pinned revision the struct
-lacks `deny_unknown_fields`, and `LuaDiagnosticConfig::new` logs then silently
-drops invalid `globalsRegex` entries. Prevalidate exactly the analysis-relevant
-pinned keys and compile every supplied regular expression; unknown keys and
-invalid expressions are configuration errors. Reject `diagnosticInterval` for
-the direct checker. At this revision only `emmylua_ls` text/watched-file handlers
-consume it as debounce state; `emmylua_code_analysis` does not. Do not let it
-change `ConfiguredAnalyzerSession` compatibility. Later LSP debounce is frontend
-state. Do not use `.emmyrc` discovery or a lenient fallback.
+Pinned `EmmyrcDiagnostic` lacks `deny_unknown_fields`; `LuaDiagnosticConfig::new`
+logs then drops invalid `globalsRegex`. The direct checker therefore:
+
+1. prevalidates exactly analysis-relevant keys: `disable`, `enable`, `globals`,
+   `globalsRegex`, `severity`, `enables`;
+2. compiles every supplied regex;
+3. rejects unknown keys/invalid expressions;
+4. rejects `diagnosticInterval` — at this revision it is consumed only by
+   `emmylua_ls` debounce, not code analysis;
+5. uses no `.emmyrc` discovery or lenient fallback.
+
+`EmmyAnalysisConfiguration::equivalent` must compare a canonical semantic
+projection, not raw serialized `EmmyrcDiagnostic`. Preserve `enable`; convert
+`disable` and `enables` to sorted/deduplicated diagnostic-code sets; sort/dedup
+`globals` and `globalsRegex`; sort severity entries by diagnostic code; omit
+`diagnosticInterval`. Pinned analysis turns the first three list families into
+sets/OR-matched regexes, so order and duplicates have no semantic effect. Thus
+omitted diagnostics, `{}`, reordered lists and duplicate entries reuse the same
+owner when analysis semantics are identical, while a real analysis change forces
+a cold owner. LS debounce remains frontend state.
+
 Keep separate:
 
 1. Emmy diagnostic selection/severity;
-2. selected WoW checks and their semantic fact requests;
-3. frontend `fail_on`, which changes exit status but does not delete findings.
+2. selected WoW checks and semantic fact requests;
+3. frontend `fail_on`, which changes exit only.
 
-Do not gate diagnostics through a framework code allowlist.
-
-CLI `fail_on` is a frontend decision over the preserved severity. Rank Error >
-Warning > Information > Hint explicitly; do not use the enum's derived ordering.
-An upstream diagnostic without severity remains `Unknown` and conservatively
-meets every threshold rather than allowing an unranked finding to produce a clean
-exit.
+Do not gate findings through a framework allowlist. Rank Error > Warning >
+Information > Hint explicitly at the frontend; preserved `Unknown` conservatively
+meets every threshold.
 
 <a id="diagnostics-and-source-locations"></a>
 
 ## Diagnostics and coordinates
 
-Preserve for every configured upstream finding:
+Preserve upstream code, exact bounded message, configured severity, source path/
+content identity and half-open UTF-8 byte span. Pinned columns count Unicode scalar
+values, not negotiated LSP units; convert against exact captured text, then the
+overlay converts UTF-8/UTF-16. Preserve CRLF/final empty lines and never apply old
+ranges to changed text.
 
-- string/numeric/missing upstream code as text;
-- exact bounded message;
-- configured upstream severity;
-- source path and content identity;
-- half-open UTF-8 byte span.
-
-Pinned Emmy line/column conversion counts Unicode scalar values, not negotiated
-LSP code units. The framework converts to UTF-8 bytes against exact captured text,
-then the overlay converts to UTF-8/UTF-16 editor positions. Preserve CRLF and final
-empty-line behavior. Never apply a range to changed text.
-
-Library/STD diagnostics are input-health information, not Main findings. Virtual
-diagnostics become public only after exact mapping to the original XML/binding
-source; synthetic workspace paths are not user locations.
+Library/STD diagnostics are input health, not Main findings. Virtual diagnostics
+become public only after exact original-source mapping; synthetic workspace paths
+are never user locations.
 
 <a id="addon-chunk-context"></a>
 
 ## Addon chunk context
 
-Pinned Emmy infers an unbound chunk `...` as homogeneous `any...`; workspace
-registration alone does not provide WoW chunk arguments.
+Pinned Emmy infers unbound chunk `...` as homogeneous `any...`; registration does
+not provide WoW chunk arguments. Blizzard documents ordinary external chunks as
+receiving `(addonName, addonTable)`; `AllowAddOnTableAccess` is separate later
+retrieval permission.
 
-Pinned Blizzard documentation supports ordinary external chunks receiving
-`(addonName, addonTable)`. `AllowAddOnTableAccess` separately controls later table
-retrieval. For supported chunks:
+For supported chunks, later Slice 1B creates one analysis-only stable table per
+addon, rewrites only chunk-owned ellipsis in memory, preserves exact maps and
+hides helpers. Nested function varargs, strings/comments, free inline scripts,
+handlers, bindings, secure/bootstrap and suppressed-table contexts are distinct.
 
-1. create one analysis-only stable table per addon;
-2. identify only top-level chunk-owned ellipsis expressions with the Emmy AST;
-3. replace those expressions in memory with a helper call;
-4. preserve exact source maps and exclude helpers from user diagnostics/facts.
-
-Do not rewrite nested function varargs, strings or comments. External chunks,
-free inline XML scripts, reviewed handlers, binding callbacks, secure/bootstrap
-contexts and `SuppressLocalTableRef` are distinct.
-
-Context is required only where selected code consumes it. Add one bounded
-`ConfiguredAnalyzerSession` collector that reuses the same registered Main syntax
-trees as diagnostics. It walks Lua expression nodes, matches only
-`LuaLiteralExpr`/`LuaLiteralToken::Dots`, and excludes any match with an enclosing
-`LuaClosureExpr` before the chunk root. It returns the lowest-starting exact
-`{ path, content_sha256, span }` requirement per Main file. Do not scan raw text,
-do not launch a second parser/analysis, and do not match parameter lists, doc
-tags, strings or comments. Service verifies the returned path/content pair
-against the exact Main snapshot before emitting a located chunk-context
-limitation. A `LuaTypes` run over files without such use is not globally partial
-merely because helper injection is deferred to Slice 1B.
+Slice 1A adds only a bounded requirement collector on the same configured owner:
+walk registered Main expression nodes, match `LuaLiteralExpr`/
+`LuaLiteralToken::Dots`, exclude matches with an enclosing `LuaClosureExpr`, and
+return the lowest-starting exact `{path, content_sha256, span}` per file. Named,
+local and anonymous functions all contain `LuaClosureExpr` at the pinned parser
+revision. Do not raw-scan text or launch another parse/analysis. Service verifies
+records against exact Main and limits only affected files.
 
 <a id="updates-and-cancellation"></a>
 
 ## Updates
 
-The upstream bulk update API removes/reindexes touched file IDs but does not prove
-that every unchanged semantic consumer of a deleted declaration was invalidated.
-Use conservative semantic rebuild until narrower invalidation is observed correct.
-
-Reuse `ConfiguredAnalyzerSession` only when its exact compatibility contract
-holds. TOC/XML/dependency/channel/context/Library/config changes rebuild the
-selection and owner cold. Remove declarations, virtual units, maps and diagnostics
-together. Failed, cancelled or stale work never publishes.
+Use conservative semantic rebuild until narrower invalidation is observed.
+Reuse only when exact snapshot/config semantics match. TOC/XML/dependency/channel/
+context/Library/analysis-config changes rebuild cold. LS debounce is not analyzer
+identity. Remove declarations, virtual units, maps and diagnostics together;
+failed/cancelled/stale work never publishes.
 
 Cancellation is cooperative around framework stages. The pinned synchronous
-native call is not preemptible; check before and after it and do not claim more.
+native call is not preemptible; check before/after and do not claim more.
 
 <a id="editor-boundary"></a>
 
 ## Editor boundary
 
 General completion, hover, definition, references, rename, signature help and
-symbols remain upstream EmmyLua. Framework LSP/MCP adapters expose WoW project,
-check, search and context operations through the same owners as CLI.
-
-The current overlay owns exact unsaved text, document version and negotiated
-coordinate conversion. The target passes that override into the shared selected
-project, accepts increasing nonconsecutive versions and rejects stale publication.
-
-Existing same-file navigation helpers may be retained only where a surviving
-WoW-specific consumer needs them; they are not whole-project language-server
-coverage.
+symbols remain upstream EmmyLua. Framework LSP/MCP expose project/check/search/
+context through the same Service owners as CLI. The overlay owns exact unsaved
+text/version/root/coordinate state and rejects stale publication. LS debounce is
+adapter state and does not enter analysis configuration.
 
 <a id="verification-boundary"></a>
 
 ## Verification boundary
 
-Source inspection proves the contracts above. It does not prove a generated
-Library, addon command or editor workflow has run. Exact observations belong in
-[the trace register](IMPLEMENTATION_TRACE_REGISTER.md).
+Source inspection proves contracts, not a run. Exact generated-Library/addon/
+editor observations belong in the trace register.

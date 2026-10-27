@@ -4,7 +4,7 @@
 **Current audit base:** `main` after PR #269
 (`f674ccc7615d63c76c0781aef2150e49ea442bf8`)  
 **Current traces:** T01–T39  
-**Documentation corrections:** D01–D80
+**Documentation corrections:** D01–D81
 
 This file records producer-to-consumer decisions and exact observations. It is
 evidence, not another product specification. Current delivery state is in
@@ -35,10 +35,10 @@ evidence, not another product specification. Current delivery state is in
 | T10 | builder output -> ordinary Library metadata/maps | traced; manifest reader open | unexecuted |
 | T11 | addon chunk arguments -> mapped context | traced; injection open | unexecuted |
 | T12 | upstream diagnostic -> direct result | implemented #246 | unexecuted |
-| T13 | diagnostic config -> selected collection | implemented #247; strict CLI admission open | unexecuted |
+| T13 | diagnostic config -> selected collection | owner implemented #247; strict admission/canonical semantic projection open | unexecuted |
 | T14 | exact snapshots -> direct findings/limitations | implemented #248 | unexecuted |
 | T15 | compiled identity vs report evidence | implemented #249 | unexecuted |
-| T16 | exact snapshots/config -> owner reuse | implemented #250 | unexecuted |
+| T16 | exact snapshots/config -> owner reuse | snapshot admission implemented #250; canonical semantic diagnostic-config equivalence open | unexecuted |
 | T17 | TOC metadata/file clauses -> package/unit context | traced; handoff open | unexecuted |
 | T18 | selected order -> snapshots + validated context | traced; context open | unexecuted |
 | T19 | channel + `LoadWith` -> reachability/trigger | traced; open | unexecuted |
@@ -87,8 +87,9 @@ Current `check_addon` adds chunk incompleteness to every run. Add one bounded
 collector to the same configured Emmy owner. Walk registered Main expression AST,
 match `LuaLiteralExpr`/`LuaLiteralToken::Dots`, exclude any match inside a
 `LuaClosureExpr`, retain the lowest-starting exact path/content/span per affected
-file, and validate it against exact Main in Service. No raw scan or second parser.
-Only affected files are limited; helper injection remains Slice 1B.
+file, and validate it against exact Main in Service. Named, local and anonymous
+functions all contain a closure node at the pinned parser revision. No raw scan or
+second parser. Only affected files are limited; helper injection remains Slice 1B.
 
 ### T36 — safe root/path authority
 
@@ -135,16 +136,38 @@ relative_path? relative to role root
 Input/resource refusal is invalid input; analyzer/serialization/I/O invariants are
 internal. Do not inflate global `ServiceError` into another provenance platform.
 
+### T13/T16/T39 — strict, canonical diagnostic configuration
+
+Pinned `EmmyrcDiagnostic` is permissive, invalid regexes are silently dropped and
+`diagnosticInterval` is consumed only by EmmyLua LS debounce. Slice 1A therefore
+prevalidates exactly `disable`, `enable`, `globals`, `globalsRegex`, `severity`,
+`enables`, compiles every regex, rejects unknown keys/invalid expressions and
+rejects `diagnosticInterval`.
+
+Current `EmmyAnalysisConfiguration::equivalent` compares raw serialized JSON.
+That incorrectly distinguishes omitted diagnostics from `{}` because upstream
+default has `diagnostic_interval: Some(500)` while an omitted optional field
+decodes as `None`; it also treats reordered/duplicated set-like fields as changes.
+Replace it with a canonical analysis projection:
+
+- preserve `enable`;
+- sort/dedup `disable` and `enables` by diagnostic code;
+- sort/dedup `globals` and `globalsRegex`;
+- sort `severity` by diagnostic code;
+- omit `diagnosticInterval` entirely.
+
+Pinned analysis turns those list families into sets or OR-matched regexes, so
+order/duplicates have no semantic effect. Omitted diagnostics, `{}`, reordering
+and duplicates reuse the same owner; real semantic changes rebuild cold. LS
+debounce remains adapter state.
+
 ### T39 — strict config, deterministic result and publication
 
 - One explicit no-follow Project config read, 256 KiB; `StrictJson` duplicate-key/
   depth bounds; unknown outer fields rejected; no implicit discovery.
 - Required after merge: root, explicit relative TOC, `retail`, nonempty Libraries.
-  Defaults: text, `fail_on: error`, upstream default Emmy diagnostics.
+  Defaults: text, `fail_on: error`, upstream default diagnostics.
 - CLI scalar overrides replace config; repeated CLI Libraries replace the array.
-- Strictly prevalidate pinned nested diagnostic keys and compile `globalsRegex`.
-  Reject `diagnosticInterval`: pinned code analysis never reads it; LS uses it only
-  for debounce, so it is not analyzer identity.
 - Slice 1A exposes no WoW-check option and runs zero WoW rules.
 - Deterministic order: diagnostics by role/path/span/code/message; limitations by
   code/location/message.
@@ -176,7 +199,8 @@ None is an observed addon workflow.
 ## Later retained decisions
 
 - T08/T09: reuse only while selected membership/context/authority/Library/virtual/
-  analysis config match; stale work never publishes.
+  canonical analysis config match; LS debounce is not owner identity; stale work
+  never publishes.
 - T10: keep one optional typed `source-report.json`; plain Lua remains valid.
 - T11/T22: ordinary chunk injection, later retrieval permission and special
   contexts are distinct.
@@ -210,6 +234,7 @@ None is an observed addon workflow.
 | D78 | ambiguous error root/path fields -> capped message, role-relative path, Library-only zero-based root index |
 | D79 | audit recopied the full contract into secondary instructions -> AGENTS/skills/package README reduced to navigation/owners/prohibitions |
 | D80 | upstream `diagnosticInterval` is LS debounce only -> reject it in direct checker; exclude from analyzer compatibility |
+| D81 | raw JSON config equality treated default/`{}` and reordered/duplicated sets as different -> canonical analysis projection excluding LS interval |
 
 ### Baseline register errata
 
@@ -235,8 +260,9 @@ Do not mark observed without exact input/result. Minimum Slice 1A observations:
 - malformed Library with structured root/path;
 - duplicate path authority rejected; disjoint nested roots and equal relative paths
   in distinct roots accepted;
-- strict diagnostic config, including invalid regex/unknown key and rejected
-  `diagnosticInterval`;
+- invalid diagnostic regex/unknown key/rejected `diagnosticInterval`;
+- omitted diagnostics vs `{}` and reordered/duplicated set-like fields reuse the
+  same owner, while a real semantic change forces cold rebuild;
 - text/JSON result/error channels, output bound and deterministic exits;
 - later dependency/XML/chunk injection, updates, LSP/MCP, source search/context and
   truthful cancellation.

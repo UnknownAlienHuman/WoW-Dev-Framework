@@ -16,116 +16,97 @@ widen the active slice or preserve a removed result shape.
 | #103 recognizer rules | confirmed | keep only typed facts with a named diagnostic/search/navigation consumer |
 | #106 Blizzard UI workflow | confirmed | later direct body/symbol/search/context workflow |
 | #107 graph duplication | corrected | use loaded/generated Library and direct origins; closed #196 is historical delivery |
-| #109 coherent updates | corrected | update one target/scope/root-authority/session owner; no second session/profile identity |
+| #109 coherent updates | corrected | update one target/scope/authority/config/session owner; no second session/profile identity |
 | #111 Store lifecycle | corrected | caller census is a source snapshot; recheck before deletion |
-| #112 formats/documentation | corrected | small target/plan/input-origin/result formats; no profile/plan-version replacement platform |
+| #112 formats/documentation | corrected | small target/authority/result/error formats; no replacement platform |
 | #113 performance | confirmed | measure one real workflow only after it exists |
-| #117 TOC/XML relationships | reconciled | Slice 1B+ context/index work; XML does not block Slice 1A physical diagnostics |
+| #117 TOC/XML relationships | reconciled | Slice 1B+ work; XML does not block physical diagnostics |
 | #118 lineage/fingerprints | confirmed | remove remaining fingerprint/proof plumbing with real callers |
 | #122 readable context | confirmed | direct located result over exact indexed text |
-| #125 product completion | reconciled | final observed workflows, not a progress ledger |
-| #131 direct reads | confirmed | later-process direct index read without Project/Emmy/Graph replay |
-| #169 direct FTS | confirmed | body/symbol rows in the same direct current index |
-| #191 umbrella | corrected | moving delivery list removed; current status/queue/trace own state |
-| #194 result DTOs | corrected | one Service-owned assembly; only requested-scope blockers enter the result |
-| #195 recognizer handoff | corrected | old commit census is historical; recheck actual callers before each removal |
-| #197 CLI | corrected | strict explicit config, one Service call, root-relative results, typed stderr errors and exit precedence |
-| #198 LSP | reconciled | later adapter calls the same public Service operation, never the lower request constructor |
-| #199 MCP | reconciled | later standard profile calls the same public Service operation |
-| #200 Project input | corrected | target/scope plan, physical projection, root/file authority and structured failures |
-| #201 end-to-end | corrected | first observation covers authority collisions, partial input and actionable errors |
+| #125 product completion | reconciled | final observed workflows, not progress ledger |
+| #131 direct reads | confirmed | later-process direct index read without replay |
+| #169 direct FTS | confirmed | body/symbol rows in the same current index |
+| #191 umbrella | corrected | current status/queue/trace own moving state |
+| #194 result DTOs | corrected | one Service assembly; requested blockers only |
+| #195 recognizer handoff | corrected | old census is historical; recheck callers |
+| #197 CLI | corrected | strict config, one Service call, exact output/error/exit |
+| #198 LSP | reconciled | same public Service owner; LS debounce outside analyzer identity |
+| #199 MCP | reconciled | same public Service owners; no parallel assembly |
+| #200 Project input | corrected | target/scope plan, safe roots, path authority, structured failures |
+| #201 end-to-end | corrected | first observation covers authority/config/partial/error behavior |
 
 ## Material source corrections
 
-### Root overlap is a normalized input-path problem
+### Root overlap is a selected-path problem
 
-Duplicate root and snapshot-ID checks are insufficient. Snapshot identity includes
-universe/content, so one selected host path may receive different Main/Library
-IDs; nested recursive Library roots may overlap while whole snapshots differ.
-A role/ordinal root slot plus relative path alone is insufficient because the
-same path has a different relative spelling under nested roots.
+Snapshot/root IDs are insufficient. Project wraps crate-private component-wise
+`open_workspace`, retains request-local `InputRootId` plus nonserialized lexical
+absolute root descriptor, and derives a portable case-folded
+`InputPathAuthority = root descriptor + canonical relative path`. Reject duplicate
+joined authorities, not root ancestry. Equal relative paths in distinct roots and
+disjoint nested roots remain valid. Do not use inode/file ID, content, hard-link
+or snapshot identity. Ambient `ProjectInputDirectory::open` is not Slice 1A's
+trust boundary.
 
-Project must wrap crate-private `open_workspace`, retain request-local
-`InputRootId` (role plus ordinal) and a nonserialized lexical absolute root
-descriptor, then derive one conservative portable case-folded
-`InputPathAuthority` per admitted Lua using Project's existing case-collision
-policy. Case-only spellings intentionally collapse, but inode/content/hard-link
-identity is not used. Reject duplicate path authorities across roles/roots, not
-root ancestry. Equal relative paths in distinct roots remain valid when joined
-authorities differ; identical whole Library snapshots remain duplicate input.
-Legacy ambient `ProjectInputDirectory::open` is not the Slice 1A root boundary.
+### Service owns trusted assembly
 
-### The frontend cannot be the trusted assembler
+The lower request accepts independent snapshots and limitations. One public
+Service ordinary-check operation owns Project preparation, plan/Main/authority
+validation, requested blockers, snapshot construction, snapshot/root mapping,
+same-owner Emmy requirement collection and lower invocation. Frontends resolve
+config/render only.
 
-The lower request accepts caller-supplied snapshots and arbitrary limitations.
-Without one Service-owned ordinary operation, CLI/LSP/MCP could combine a plan's
-blockers with unrelated Main bytes. Service owns Project preparation, plan/Main
-binding, root/file-authority validation, requested-scope limitation projection,
-snapshot construction and the call to the lower check. Frontends resolve ordinary
-config and render only.
+### Input failures keep structured origin
 
-### Input failures require structured origin
+Carry stable code, role, snapshot/`InputRootId`, role-relative path and bounded
+message. Library parse failure becomes caller `invalid_input`, not component
+outage. Project file-specific failures keep root/path. Never recover origin from
+messages, absolute paths or synthetic analyzer roots. Use a small operation error
+(`invalid_input | cancelled | internal`), not global error-provenance expansion.
 
-Current Library parse failure keeps only a relative path, loses it at the
-configured-session boundary and becomes internal component failure. Carry source
-role, snapshot/`InputRootId` and relative path as fields; Service maps the snapshot
-to request-local `InputRootId` and returns a small operation-specific error whose
-public class is only `invalid_input`, `cancelled`, or `internal`. Project attaches
-root ID/path to every file-specific acquisition error. Source/workspace/diagnostic/
-result-size budget refusal is invalid input; analyzer invariants, serialization
-defects and output I/O are internal. Message parsing, absolute paths and synthetic
-analyzer roots are not admissible provenance; do not expand global `ServiceError`
-into a provenance platform.
+### Partial input differs from invalid input
 
-### CLI success and error channels are separate
+Missing root/explicit TOC, unsafe bytes/path, unrecoverable TOC syntax, malformed
+Library or caller-driven budget refusal is pre-result invalid input. A safely
+parsed TOC naming a missing child Lua, required dependency, unresolved included
+condition, deferred XML or selected typing context is partial and preserves
+findings. Repeated Main occurrences, Interface without target, `LoadWith` and
+unused metadata remain observations.
 
-Strict explicit config is one regular no-follow file read through the narrow
-Project config helper. It reuses duplicate-key/depth-bounded `StrictJson`, rejects
-unknown outer fields and is capped at 256 KiB. Merge config and CLI before validating
-required fields; defaults are text, `fail_on: error` and upstream Emmy diagnostic
-settings. Library input is capped at 64 roots,
-8,192 files and 256 MiB aggregate; each root must yield Lua. Complete/partial
-results are pre-encoded under a 32 MiB cap and written once to stdout. Pre-result
-errors go once to stderr; JSON leaves stdout empty. Exceeding the public result
-size is invalid input (`64`); serialization invariants, write failure and
-cancellation-handler setup are internal (`4`). Check cancellation after encoding
-and before the first byte; after commit, no retry/replacement/second envelope.
-Error messages are capped at 4 KiB; `root_index` is Library-only and zero-based,
-and paths are relative to the role's configured root.
-Explicit Error > Warning > Information > Hint ranking controls `fail_on`; visible
-`Unknown` severity conservatively triggers every threshold. Diagnostics and
-limitations use explicit role/path/span/code ordering in both text and JSON.
+Top-level chunk ellipsis is detected by one bounded collector on the same
+configured Emmy AST: `LuaLiteralToken::Dots` without enclosing `LuaClosureExpr`,
+one exact occurrence record per affected file. No raw scan/second parser.
 
-### Partial input is not the same as invalid input
+### Strict config and output
 
-A missing addon root/explicit TOC, unsafe path or bytes, unrecoverable TOC syntax,
-resource-bound refusal or malformed Library is a pre-result `invalid_input`. A
-missing direct Lua named by a safely parsed TOC, unresolved required dependency or
-condition, deferred XML, selected environment uncertainty or actual top-level
-chunk ellipsis is a located partial result and preserves independent diagnostics.
-Ellipsis ownership is determined by a bounded collector on the same configured
-Emmy AST (`LuaLiteralToken::Dots` without an enclosing `LuaClosureExpr`), not by
-raw text or a second parse/session. It retains the lowest-starting exact occurrence
-per affected file.
-Repeated Main occurrences, Interface without a positive target, `LoadWith` and
-unused lifecycle/display/custom metadata remain observations for `LuaTypes`.
+Read one explicit 256 KiB no-follow config using duplicate-key/depth-bounded
+`StrictJson`; reject unknown fields and implicit discovery. Merge CLI/config before
+required-field validation. Defaults are text, `fail_on: error`, upstream default
+diagnostics. Aggregate Library bounds are 64 roots, 8,192 files, 256 MiB.
 
-Slice 1A exposes no WoW-check option. It runs configured Emmy diagnostics and zero
-WoW rules. Human text escapes control characters; typed/JSON strings stay exact.
+Pre-encode result/error <= 32 MiB and write one envelope. Results stdout; admitted-
+format pre-result errors stderr; early grammar errors text stderr. Check
+cancellation after encoding/before first byte. Error message <= 4 KiB; Library-only
+zero-based root index; role-relative path. Explicit severity rank controls
+`fail_on`; preserved `Unknown` meets every threshold.
 
-### Pinned diagnostic configuration is not strict by itself
+### Pinned diagnostic config needs strict admission and semantic identity
 
-At the pinned EmmyLua revision, `EmmyrcDiagnostic` has no
-`deny_unknown_fields`, and `LuaDiagnosticConfig::new` logs then drops invalid
-`globalsRegex` entries. Slice 1A therefore prevalidates the exact nested key set
-and compiles every expression before constructing upstream configuration. Unknown
-or invalid nested settings are `invalid_input`, not silently repaired behavior.
-`diagnosticInterval` is rejected by the direct checker: the pinned code-analysis
-crate never reads it, while LS handlers use it only for debounce. It cannot be a
-no-op CLI setting or part of analyzer-owner compatibility.
+Pinned `EmmyrcDiagnostic` lacks unknown-field rejection, invalid `globalsRegex`
+entries are logged/dropped, and `diagnosticInterval` is consumed only by EmmyLua
+LS debounce. Direct checker prevalidates exact keys/regexes and rejects interval.
+
+Current `EmmyAnalysisConfiguration::equivalent` raw-compares serialized JSON,
+which falsely distinguishes omitted diagnostics from `{}` (`Some(500)` vs `None`)
+and reordered/duplicated set-like fields. Replace it with a canonical analysis
+projection: preserve `enable`; sort/dedup `disable`, `enables`, `globals`,
+`globalsRegex`; sort severity by diagnostic code; omit interval. Equivalent
+analysis semantics reuse one owner; real semantic changes rebuild cold. LS
+debounce remains LSP state.
 
 ## Maintenance rule
 
-When an owner/result boundary changes, update current status and trace; update the
-queue only if order changes; update only affected Issue bodies. Before deleting
-code or trusting an old census, recheck current production callers.
+When an owner/result boundary changes, update current status and trace; queue only
+if order changes; only affected Issues. Before deletion or trusting a census,
+recheck production callers. Secondary instructions link to canon rather than
+copying it.

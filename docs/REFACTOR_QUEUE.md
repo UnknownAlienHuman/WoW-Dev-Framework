@@ -65,7 +65,7 @@ CLI/config
 #### Safe roots, files and snapshots
 
 - Read config and source only through a narrow Project API wrapping crate-private
-  component-wise no-follow `open_workspace`; do not use legacy ambient
+  component-wise no-follow `open_workspace`; do not use ambient
   `ProjectInputDirectory::open`.
 - Each root gets request-local `InputRootId = role + ordinal`, original display
   label, normalized lexical absolute authority descriptor and held directory.
@@ -99,24 +99,30 @@ CLI/config
   text scan or second parser/session. Service validates records against Main and
   limits only affected files. Injection is Slice 1B.
 
-#### Strict config and diagnostics
+#### Strict and canonical diagnostic configuration
 
-- Read at most one explicitly named no-follow config, 256 KiB. Reuse
-  duplicate-key/depth-bounded `StrictJson`; reject unknown outer fields and
-  duplicate scalar CLI options. No implicit discovery.
+- Read at most one explicit no-follow config, 256 KiB. Reuse duplicate-key/depth-
+  bounded `StrictJson`; reject unknown outer fields and duplicate scalar options.
+  No implicit discovery.
 - CLI scalar values replace config scalars; repeated CLI Libraries replace the
   array. Merge before validating required fields.
 - Pinned `EmmyrcDiagnostic` is permissive. Prevalidate exactly `disable`, `enable`,
   `globals`, `globalsRegex`, `severity`, `enables`; compile every regex. Reject
   unknown nested keys, invalid regex and `diagnosticInterval`. At the pinned
   revision that field is LS debounce only, not code-analysis configuration.
+- Replace raw-JSON config equality with canonical analysis semantics in
+  `EmmyAnalysisConfiguration::equivalent`: preserve `enable`; sort/dedup
+  `disable`, `enables`, `globals`, `globalsRegex`; sort severity by diagnostic
+  code; omit `diagnosticInterval`. Omitted diagnostics, `{}`, reordered or
+  duplicated set-like entries reuse the same owner; real semantic changes force
+  cold rebuild. LS debounce remains frontend state.
 - No `.emmyrc` discovery or lenient fallback.
 
 #### Errors, result and exit
 
 - Carry stable code, role, snapshot/`InputRootId`, role-relative path and bounded
   message through Project/Emmy/Service. `LibraryHealthFailed` is caller input, not
-  `ComponentUnavailable`; never recover origin from message text/synthetic paths.
+  `ComponentUnavailable`; never recover origin from strings/synthetic paths.
 - Public operation error codes are exactly `invalid_input`, `cancelled`,
   `internal`. Message <= 4 KiB. `root_index` is Library-only and zero-based;
   paths are role-relative. Do not enlarge global `ServiceError` into a provenance
@@ -137,7 +143,8 @@ CLI/config
 Record exact commands/results for:
 
 1. valid clean typed call and invalid typed call;
-2. top-level ellipsis partial plus nested-function/string/comment near-negatives;
+2. top-level ellipsis partial plus named/local/anonymous-function, string/comment
+   near-negatives;
 3. required-dependency or deferred-XML partial preserving diagnostics;
 4. safely referenced missing child Lua partial;
 5. clean empty Main and deferred-XML empty Main partial;
@@ -145,7 +152,9 @@ Record exact commands/results for:
 7. duplicate authority rejected; disjoint nested roots and equal relative paths in
    distinct roots accepted;
 8. unknown diagnostic key, invalid regex and rejected `diagnosticInterval`;
-9. text/JSON result/error channels, size bound and exit precedence.
+9. omitted diagnostics vs `{}` and reordered/duplicated set-like fields reuse one
+   owner; a real semantic diagnostic change rebuilds cold;
+10. text/JSON result/error channels, size bound and exit precedence.
 
 <a id="source-traced-replacement-boundary"></a>
 
