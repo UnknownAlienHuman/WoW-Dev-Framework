@@ -16,7 +16,7 @@ handoffs. It does not copy the moving PR/status ledger.
 | Ketho-style `.lua` declarations and source maps | `wow-annotations`, `wow-ketho-literals` |
 | Lua 5.1 parsing, types and diagnostics | `wow-emmy::ConfiguredAnalyzerSession` over pinned EmmyLua |
 | Addon root, TOC/load selection, exact bytes, XML/maps and context | `wow-project` |
-| Direct addon check orchestration/result | `wow-service::addon_check` |
+| Direct addon check orchestration/result | one narrow public operation in `wow-service::addon_check`; lower exact-snapshot request/check remain internal |
 | Current source index | direct `rusqlite`/FTS5 owner, ultimately `wow-store` or a smaller retained replacement |
 | CLI/LSP/MCP | thin adapters in `apps/wow` to the same Service owners |
 | Shared primitives | `wow-core` only when multiple retained owners genuinely share them |
@@ -37,11 +37,12 @@ The first public result is an offline `LuaTypes` check over explicit local input
 
 ```text
 root + explicit TOC + flavor + Library directories
+  -> strict resolved ordinary input
+  -> one Service prepared-addon operation
   -> AddonLoadTarget + physical_lua Project plan
   -> standalone scope-aware limitations + admitted physical Main
-  -> compiled-pin Main/Library snapshots
-  -> existing ConfiguredAnalyzerSession
-  -> existing wow-service::addon_check
+  -> collision-free compiled-pin Main/Library snapshots
+  -> existing ConfiguredAnalyzerSession / low-level check_addon
   -> root-relative text/JSON result and exit status
 ```
 
@@ -136,24 +137,69 @@ Use existing values directly:
   discovery.
 
 Keep canonical root-relative source paths in snapshots, diagnostics and exact
-locations. The CLI already knows the configured root and may join it for human
-text; JSON preserves the canonical relative identity. Do not put ambient absolute
-paths into semantic identity.
+locations. The frontend knows the configured display root and may join it for
+human text; JSON preserves the relative identity. Ambient absolute paths do not
+enter semantic snapshot/result identity.
 
-A Library parse/health failure is caller input failure. Correct the current
-`LibraryHealthFailed -> NativeFailure -> ComponentUnavailable` mapping so invalid
-Library content does not look like an internal component outage. Preserve the
-configured Library-root identity plus root-relative offending file in the error;
-never expose only an ambiguous relative path or a synthetic analyzer root.
+#### Input-root and file authority
+
+Resolve config-relative and CLI-relative paths lexically to normalized absolute
+descriptors; do not call a filesystem canonicalizer that can follow a root link.
+Project then opens each root component-by-component without following links and
+reuses `read_lua_library`/inventory admission. Configuration decoding is strict
+(`deny_unknown_fields` or equivalent), bounded and explicit; there is no implicit
+config discovery. Every Library root must produce at least one admitted Lua file.
+
+Keep a nonsemantic root token and admitted root-relative path for validation and
+error projection. Reject:
+
+- duplicate resolved roots;
+- duplicate Library snapshot IDs;
+- the same admitted physical Lua file appearing in Main and Library, or in two
+  Library roots.
+
+Do not reject root ancestry alone: a nested generated Library is allowed when its
+admitted files are disjoint from selected Main and other Libraries. Conversely,
+identical relative paths in distinct roots are valid when they refer to distinct
+admitted files. Validate the actual selected file authorities before Emmy
+registration; universe/snapshot ID does not detect cross-role duplication.
+
+#### One public Service operation
+
+Add one narrow public Service operation for ordinary addon checking. It owns the
+whole trusted assembly:
+
+1. receive already-resolved ordinary config/display roots from the frontend;
+2. ask Project to open/acquire the target-bound plan, admitted Main and Libraries;
+3. validate plan/Main and root/file authority consistency;
+4. derive requested-scope limitations;
+5. build exact snapshots and map their IDs to configured roots;
+6. construct the lower `AddonCheckRequest` and call existing `check_addon`.
+
+The frontend never calls `with_input_limitations`, never manufactures snapshots
+and never attaches a plan's limitations to independently supplied Main bytes.
+Keep the exact-snapshot constructor/check crate-internal or otherwise unavailable
+to CLI/LSP/MCP. This is a direct use-case function, not another generic backend,
+registry or result hierarchy.
+
+#### Structured input failures
+
+Preserve structured source role, snapshot/root token and root-relative path across
+Project acquisition, `EmmyMemberCallError`, `ConfiguredSessionError` and Service.
+`LibraryHealthFailed` must carry the Library snapshot ID as well as the relative
+file; Service maps that ID to the configured root and classifies the failure as
+invalid caller input. Project attaches a relative path to every file-specific
+UTF-8, NUL, read, language, digest/length and source-admission failure. Never
+recover origin by parsing message strings or synthetic Emmy workspace paths.
 
 #### Direct result
 
-Pass only blocking standalone limitations to `AddonCheckRequest`. Preserve Emmy
-findings even when relevant input is partial. `AddonCheckScope::LuaTypes`
-completeness is `Complete` exactly when every fact required by selected physical
-units is available. Remove the unconditional addon-chunk fallback and hard-coded
-`Partial`; later context is a limitation only for units/conclusions that consume
-it.
+Only the Service operation may pass blocking standalone limitations into the
+lower request. Preserve Emmy findings when relevant input is partial.
+`AddonCheckScope::LuaTypes` is `Complete` exactly when every fact required by
+selected physical units is available. Remove the unconditional addon-chunk
+fallback and hard-coded `Partial`; later context limits only units/conclusions
+that consume it.
 
 <a id="load-units-and-addon-context"></a>
 <a id="selected-acquisition"></a>
@@ -188,6 +234,11 @@ Slice 1A accepts only:
 - exact `flavor: retail`;
 - nonempty `library` array;
 - optional `emmy_diagnostics`, `fail_on` and output format.
+
+Decode one explicitly named bounded config with unknown fields rejected. Reject
+unknown/duplicate scalar CLI options; repeated CLI `--library` deliberately
+replaces the configured array. Resolve paths once, but Project performs root and
+file admission. Each Library root must contain at least one admitted `.lua` file.
 
 Later slices add optional unambiguous TOC selection, `channel`, positive
 `target_interface`, `dependency_roots` and selected WoW `checks`. Their absence
@@ -228,18 +279,21 @@ role/path/digest/origin/addon/environment/phase and relevant load facts.
 
 ### One direct check operation
 
-A mature check performs only the stages required by its selected scope:
+A mature check performs only the stages required by its selected scope through
+one Service use-case operation:
 
-1. resolve ordinary config and target;
+1. admit strict ordinary config and resolved root descriptors;
 2. select exact source and dependencies needed by that scope;
 3. capture bounded physical/Library/XML/binding bytes;
-4. prepare mapped virtual units and relevant context;
-5. build exact snapshots and validated source projection;
-6. open or reuse one compatible configured Emmy owner;
-7. collect language diagnostics and only semantic facts requested by selected
+4. validate that no admitted physical Lua file appears in conflicting roles;
+5. prepare mapped virtual units and relevant context;
+6. derive only requested-scope limitations;
+7. build exact snapshots and source projection;
+8. open or reuse one compatible configured Emmy owner;
+9. collect language diagnostics and only semantic facts requested by selected
    WoW checks;
-8. run those checks directly;
-9. return findings, scoped limitations and exit status.
+10. run those checks directly;
+11. return findings, scoped limitations and exit status.
 
 Optional component health is not a global clean gate.
 
