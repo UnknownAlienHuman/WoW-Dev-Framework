@@ -33,66 +33,127 @@ then remove displaced owners.
 
 ### First usable vertical slice
 
-The first public result is intentionally small: an offline `LuaTypes` check over
-explicit local input.
-
-Required input:
-
-- addon root;
-- explicit TOC path;
-- explicit supported flavor;
-- one or more explicit Library directories;
-- optional Emmy diagnostic configuration and `fail_on` threshold.
-
-The path is:
+The first public result is an offline `LuaTypes` check over explicit local input:
 
 ```text
-ordinary config
-  -> bounded selected physical Lua bytes
-  -> exact Main and canonical Library snapshots
+root + explicit TOC + flavor + Library directories
+  -> AddonLoadTarget + physical_lua Project plan
+  -> standalone scope-aware limitations + admitted physical Main
+  -> compiled-pin Main/Library snapshots
   -> existing ConfiguredAnalyzerSession
   -> existing wow-service::addon_check
-  -> projected user locations, text/JSON result and exit status
+  -> root-relative text/JSON result and exit status
 ```
 
-No WoW rule is enabled by default. Search, SQLite, Reference, Rules, publication,
-graph, replay and source regeneration are not prerequisites.
+No WoW rule, dependency universe, XML execution context, search index, Reference,
+Rules, publication, graph, replay or source regeneration is required.
 
-The current TOC readers take the legacy `ProfileIdentity`, whose profile label,
-positive Interface, source digest and schema identities belong to old
-publication/replay workflows. The direct path must first extract one small
-Project-owned `AddonLoadTarget` (or equivalently narrow typed value):
+#### Project target and plan identity
 
-- explicit flavor;
+Add a small validated `AddonLoadTarget` owned by Project:
+
+- exact canonical flavor `retail` (the only Slice 1A flavor);
 - optional positive target Interface;
 - optional `TocLoadContext`.
 
-It contains no profile ID, generation, source/report digest, schema registry or
-correction-set identity. Slice 1A uses the explicit flavor with no target
-Interface and no conditional context. The selected TOC's own Interface metadata
-is retained as source: missing or zero is unknown, and a positive value is not
-compared until a positive target is actually supplied. Legacy profile-bound
-callers may adapt their profile into this target; the ordinary route must never
-fabricate a `ProfileIdentity` merely to reuse the reader.
+`ProjectLoadPlan` identity and admission must bind this target directly. Replace
+its mandatory `target_interface` and `target_profile_digest` dependency on
+`ProfileIdentity`; changing target or projection scope changes plan identity.
+Legacy profile callers may adapt their existing profile into `AddonLoadTarget`.
+The ordinary route never constructs a profile ID, source/report digest, schema
+registry, correction identity or generation.
 
-Before `LuaTypes` completeness is computed, TOC metadata is classified by effect.
-Display/localized/custom `X-*` fields and known non-selection lifecycle metadata
-remain source-backed but do not make independent file enumeration partial.
-Dependency, selection, environment, callback and malformed directives remain
-typed or located limitations. An empty metadata key is malformed input, not an
-innocuous unknown field. This admission classification is required in Slice 1A;
-full channel, trigger, secure and binding semantics remain later slices.
+Slice 1A supplies flavor only. Parse and retain missing, zero and positive source
+Interface values independently; compatibility is evaluated only when a positive
+target Interface is supplied. Invalid Interface syntax remains invalid input.
 
-This slice must return a useful result before the complete Blizzard loading model
-is implemented. Unsupported selected input is a scoped limitation. Product
-channel, reverse triggers, implicit bindings or an unrequested WoW check do not
-make an unrelated type-only result partial.
+#### Physical projection scope
 
-`AddonCheckScope::LuaTypes` completeness is computed from facts actually required
-by selected units. The current unconditional addon-chunk fallback and hard-coded
-`Partial` result are transitional defects: unused top-level ellipsis cannot make
-every addon incomplete. When chunk context is needed, report the affected files
-or conclusions explicitly.
+The existing loader recursively opens XML while selecting Main. That cannot be
+the first-slice boundary because malformed XML currently aborts otherwise usable
+physical Lua.
+
+Add an explicit plan scope such as `physical_lua` and bind it into the plan digest:
+
+- parse the selected TOC and metadata/conditions;
+- capture included direct `.lua` files under existing Project bounds;
+- retain included XML records and exact TOC spans, but do not open or parse XML;
+- emit a located `SourceSelectionIncomplete` limitation for each included XML
+  branch deferred to Slice 1B;
+- preserve physical diagnostics despite missing/malformed/deferred XML;
+- reject unsafe selection/path/input errors;
+- when selected deferred XML exists but physical Lua is empty, build the supported
+  empty `Project` snapshot and return a located partial result; never add a dummy
+  source or report clean.
+
+Full recursive XML expansion remains the Slice 1B plan scope.
+
+#### Metadata and standalone limitations
+
+T23 metadata-by-effect admission is a Slice 1A prerequisite. Display/localized,
+custom `X-*` and known non-selection metadata remain source-backed observations
+and do not block independent `LuaTypes`. Empty/malformed keys and directives that
+can change selected files/environment/callback context remain invalid or located
+limitations.
+
+Add a public standalone mapper:
+
+```text
+ProjectLoadPlan + requested AddonCheckScope
+  -> Vec<AddonCheckLimitation>
+```
+
+It uses exact retained source digests/spans and interprets issues for the selected
+scope rather than copying global `blocks_complete` or
+`external_files_complete()`:
+
+- unresolved required dependency -> `DependencyResolutionIncomplete`;
+- normal optional-dependency absence -> no limitation;
+- unresolved included condition -> `LoadSelectionUnresolved`;
+- missing/unsupported direct selected source or deferred included XML ->
+  `SourceSelectionIncomplete`;
+- Interface metadata with no positive target -> retained observation, no
+  `CompatibilityUnresolved`;
+- cosmetic/unknown metadata not consumed by `LuaTypes` -> retained observation,
+  no direct limitation.
+
+Only a reason the requested scope cannot be complete enters
+`AddonCheckLimitation`. Project observations are not mislabeled as blockers.
+
+#### Snapshot and path construction
+
+Use existing values directly:
+
+- `EmmyBackendIdentity::compiled_pinned()` once;
+- Main snapshot: universe `Project`, admitted `ProjectInputFile` values and
+  existing Project Main ceilings (1,024 files, 1 MiB/file, 16 MiB total);
+- each explicit annotation-Library directory: one separate universe `BlizzardUi`
+  snapshot under `wow_core::library_limits` (4,096 files, 8 MiB/file, 64 MiB
+  total). Separate snapshots allow identical relative paths in different roots;
+- reject duplicate resolved Library roots and duplicate snapshot IDs rather than
+  silently merging them;
+- caller diagnostic settings become `EmmyAnalysisConfiguration`; no `.emmyrc`
+  discovery.
+
+Keep canonical root-relative source paths in snapshots, diagnostics and exact
+locations. The CLI already knows the configured root and may join it for human
+text; JSON preserves the canonical relative identity. Do not put ambient absolute
+paths into semantic identity.
+
+A Library parse/health failure is caller input failure. Correct the current
+`LibraryHealthFailed -> NativeFailure -> ComponentUnavailable` mapping so invalid
+Library content does not look like an internal component outage. Preserve the
+configured Library-root identity plus root-relative offending file in the error;
+never expose only an ambiguous relative path or a synthetic analyzer root.
+
+#### Direct result
+
+Pass only blocking standalone limitations to `AddonCheckRequest`. Preserve Emmy
+findings even when relevant input is partial. `AddonCheckScope::LuaTypes`
+completeness is `Complete` exactly when every fact required by selected physical
+units is available. Remove the unconditional addon-chunk fallback and hard-coded
+`Partial`; later context is a limitation only for units/conclusions that consume
+it.
 
 <a id="load-units-and-addon-context"></a>
 <a id="selected-acquisition"></a>
@@ -124,7 +185,7 @@ Slice 1A accepts only:
 
 - `root`;
 - explicit `toc`;
-- explicit `flavor`;
+- exact `flavor: retail`;
 - nonempty `library` array;
 - optional `emmy_diagnostics`, `fail_on` and output format.
 
