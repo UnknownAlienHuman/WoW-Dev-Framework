@@ -33,7 +33,11 @@ dependency roots and selected WoW checks. They must not delay the explicit
 physical-Lua command.
 
 CLI precedence and path bases are defined in
-[ordinary configuration](IMPLEMENTATION.md#ordinary-configuration).
+[ordinary configuration](IMPLEMENTATION.md#ordinary-configuration). Read one
+explicit bounded config only; reject unknown fields and duplicate scalar options.
+Repeated CLI `--library` deliberately replaces configured roots. The frontend
+resolves display paths, then calls one public Service ordinary-check operation; it
+does not open source, construct snapshots or attach limitations.
 
 <a id="check-results-and-command-status"></a>
 
@@ -70,6 +74,16 @@ precedence is deterministic: invalid input `64`; observed cancellation `130`;
 internal/output failure `4`; otherwise a partial result `2`; otherwise a finding
 at/above threshold `1`; otherwise `0`. Findings remain in partial output.
 
+A complete or partial `AddonCheckResult` is encoded once on stdout.
+Configuration, selected-source, Library, cancellation and internal failures that
+occur after output format is admitted but before a result use stderr. In JSON
+mode stderr receives one bounded object such as
+`{"error":{"code":"invalid_input","message":"...","root":"...","path":"..."}}`;
+stdout stays empty. CLI syntax/option failures before format admission use one
+concise text usage error on stderr. Text mode writes one concise error line. A
+failed stdout/stderr write returns `4` without retrying the operation or emitting
+a second envelope.
+
 <a id="locations-and-document-updates"></a>
 <a id="stdio-protocol-behavior"></a>
 <a id="lsp-adapter"></a>
@@ -89,8 +103,10 @@ Keep:
 - protocol-only stdout, bounded frames and stderr logging.
 
 Do not build isolated one-file Emmy owners in the adapter. Pass exact overlays to
-the shared selected project. Only exact physical or mapped XML user locations are
-published; helper/synthetic paths are never diagnostics.
+the same public Service ordinary-check operation used by CLI; never construct the
+lower exact-snapshot request or attach limitations in the adapter. Only exact
+physical or mapped XML user locations are published; helper/synthetic paths are
+never diagnostics.
 
 Completion, hover, definition, references, rename, signature help and general
 symbols remain upstream EmmyLua unless a retained WoW-specific source/index
@@ -101,7 +117,7 @@ operation has a named consumer.
 ## MCP adapter
 
 Use one bounded MCP 2025-11-25 stdio profile. Advertise only implemented tools
-backed by the same Service owners as CLI:
+backed by the same public Service operations as CLI:
 
 - addon check;
 - direct source body/symbol search;
