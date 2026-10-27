@@ -1,20 +1,26 @@
 # Product operations
 
-Current status: [delivered owners and open handoffs](../../docs/CURRENT_STATUS.md).
+Delivery state: [CURRENT_STATUS.md](../../docs/CURRENT_STATUS.md). Owner boundaries:
+[IMPLEMENTATION.md](../../docs/IMPLEMENTATION.md#code-ownership).
 
-Delivered: `addon_check.rs` composes exact already-acquired Main, Library and
-optional virtual snapshots through `ConfiguredAnalyzerSession` and returns a
-plain diagnostic/limitation result without Reference, Rules, Project publication,
-graph, store or presentation construction. It is intentionally partial until a
-validated Project order/context handoff, addon chunks and exact XML/binding
-projection plus handler/callback context are connected.
+`addon_check` composes exact already-acquired Main, Library and optional virtual
+snapshots through `ConfiguredAnalyzerSession` and returns one direct result:
 
-Remaining work is ordinary configuration/acquisition orchestration, selected WoW
-checks, coherent updates, and thin CLI/LSP/MCP adapters to the same owners. The
-complete first-command checklist is queue item 1; this README does not narrow it.
-The legacy local/graph/replay/lifecycle/result routes remain removal work as
-their real callers move; do not wrap the direct result in those models.
+- `LuaTypes` scope;
+- completeness;
+- exact diagnostics;
+- scoped limitations with optional source location.
 
-See [Implementation](../../docs/IMPLEMENTATION.md#code-ownership),
-[frontends](../../docs/FRONTENDS.md) and the
-[trace register](../../docs/IMPLEMENTATION_TRACE_REGISTER.md).
+The public result contains no snapshot, analyzer, Project, report, proof,
+component or presentation receipts. Do not wrap it in legacy local/graph/replay
+result models.
+
+Current `check_addon` still adds addon-chunk incompleteness and returns `Partial`
+unconditionally. That is transitional. Completeness must be derived from facts
+required by selected units and scope; unused chunk arguments or unavailable
+unrequested WoW features do not make every type-only run partial.
+
+Project owns ordinary configuration/acquisition, exact user-path projection,
+selected order/context and XML/binding maps. Service orchestrates those inputs and
+runs only explicitly selected WoW checks. CLI/LSP/MCP are thin adapters to the
+same owners.
