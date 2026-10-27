@@ -1,9 +1,10 @@
 # Implementation and documentation trace register
 
-**Baseline register:** [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md), PR #244
-**Current audit base:** `main` after PR #268 (`28302632599bed087394dee83751815d13041579`)
-**Current traces:** T01–T35
-**Documentation corrections:** D01–D46
+**Baseline register:** [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md), PR #244  
+**Current audit base:** `main` after PR #269
+(`f674ccc7615d63c76c0781aef2150e49ea442bf8`)  
+**Current traces:** T01–T39  
+**Documentation corrections:** D01–D54
 
 This file records post-baseline producer-to-consumer decisions and exact workflow
 observations. It is evidence, not another product specification. Current delivery
@@ -12,259 +13,245 @@ state is summarized in [CURRENT_STATUS.md](CURRENT_STATUS.md); work order lives 
 
 ## Status language
 
-- **traced** — named source producer, handoff and reader support the decision;
-- **partially implemented** — useful code exists but the visible handoff is
-  incomplete;
-- **implemented** — code exists in `main` and passed the recorded code gate;
+- **traced** — named producer, handoff and reader support the decision;
+- **partially implemented** — useful code exists but the visible handoff is incomplete;
+- **implemented** — code exists in `main` and passed its recorded code gate;
 - **observed** — an ordinary command/protocol input and visible result were run;
 - **unexecuted** — no end-to-end observation exists.
 
 ## Active traces
 
-| ID | Chain | Code status | User observation |
+| ID | Chain | Code status | Observation |
 | --- | --- | --- | --- |
 | T01 | public `wow check` -> direct Service result | open; transitional generic route remains | unexecuted |
-| T02 | ordinary config -> root/TOC/flavor/Library/dependency selection | traced; explicit first-slice adapter open | unexecuted |
-| T03 | target/load context -> TOC/package admission | T30 predicates implemented; broader target/context open | unexecuted |
-| T04 | bounded disk/Library bytes -> exact snapshots | lower readers exist; direct selected handoff open | unexecuted |
-| T05 | selected XML -> mapped virtual Lua | extraction/maps exist; direct projection handoff open | unexecuted |
+| T02 | ordinary config -> root/TOC/flavor/Library selection | traced; strict adapter open | unexecuted |
+| T03 | target/load context -> TOC/package admission | predicates implemented; broader context open | unexecuted |
+| T04 | bounded disk/Library bytes -> exact snapshots | lower readers exist; direct handoff open | unexecuted |
+| T05 | selected XML -> mapped virtual Lua | extraction/maps exist; direct projection open | unexecuted |
 | T06 | Main/Library/virtual -> one configured Emmy owner | implemented by #247 | unexecuted |
 | T07 | compiled Emmy pin -> runtime identity | implemented by #249 | unexecuted |
 | T08 | unsaved text -> configured project diagnostics | overlay exists; shared owner open | unexecuted |
 | T09 | source/config changes -> coherent diagnostics/index | traced; selected-load rebuild open | unexecuted |
 | T10 | builder output -> ordinary Library metadata/maps | traced; manifest reader open | unexecuted |
 | T11 | addon chunk arguments -> mapped analysis context | traced; open | unexecuted |
-| T12 | upstream diagnostic -> framework/direct result | implemented by #246 | unexecuted |
-| T13 | caller diagnostic config -> optional semantic collectors | implemented by #247 | unexecuted |
+| T12 | upstream diagnostic -> direct result | implemented by #246 | unexecuted |
+| T13 | diagnostic config -> optional semantic collection | implemented by #247 | unexecuted |
 | T14 | exact snapshots -> direct findings/limitations | implemented by #248 | unexecuted |
 | T15 | compiled identity vs report evidence | implemented by #249 | unexecuted |
-| T16 | exact snapshots/config -> configured-owner reuse | implemented by #250; Library set is canonicalized before registration | unexecuted |
-| T17 | TOC metadata/file clauses -> package/per-unit context | source-traced; metadata/context handoff open | unexecuted |
-| T18 | selected load order -> snapshots plus validated context | source-traced; separate context open | unexecuted |
+| T16 | exact snapshots/config -> owner reuse | implemented by #250; Library set canonicalized | unexecuted |
+| T17 | TOC metadata/file clauses -> package/unit context | source-traced; handoff open | unexecuted |
+| T18 | selected load order -> snapshots + validated context | source-traced; context open | unexecuted |
 | T19 | product channel + `LoadWith` -> reachability/trigger | source-traced; open | unexecuted |
 | T20 | implicit `Bindings*.xml` -> mapped callbacks | source-traced; open | unexecuted |
-| T21 | source Interface zero + unsupported `Secure` -> admission | source-traced; open | unexecuted |
-| T22 | ordinary chunk table + retrieval/suppression metadata | source-traced; open | unexecuted |
-| T23 | TOC metadata -> issue class/completeness | correction designed; not implemented in `main` | unexecuted |
+| T21 | Interface zero + unsupported `Secure` -> admission | source-traced; open | unexecuted |
+| T22 | chunk table + retrieval/suppression metadata | source-traced; open | unexecuted |
+| T23 | TOC metadata -> issue class/completeness | designed; not implemented in `main` | unexecuted |
 | T24 | virtual snapshot -> diagnostics without Project publication identity | implemented by #259 | unexecuted |
 | T25 | direct result without snapshot/analysis receipts | implemented by #260 | unexecuted |
 | T26 | selected-input limitation -> optional exact location | implemented by #261 | unexecuted |
-| T27 | virtual diagnostic -> exact XML location | #262 hides unprojected findings; final projection open | unexecuted |
+| T27 | virtual diagnostic -> exact XML location | #262 hides unprojected findings; projection open | unexecuted |
 | T28 | Project issue -> finite direct limitation category | implemented by #263 | unexecuted |
-| T29 | reachable retained load/package issues -> limitations | implemented by #264 | unexecuted |
-| T30 | line/package predicates -> selected closure/completeness | implemented by #265; exact-head run #524 passed | unexecuted |
-| T31 | requested `LuaTypes` facts -> completeness | current `check_addon` always adds chunk limitation and returns `Partial`; correction required | unexecuted |
-| T32 | ordinary root/TOC/flavor -> profile-free target -> target-bound plan identity/validation | source-traced; current plan still stores mandatory Interface/profile digest | unexecuted |
-| T33 | physical TOC plan -> scope-aware standalone limitations + preserved physical Main | source-traced; current loader eagerly parses XML and Service maps package plans only | unexecuted |
-| T34 | admitted Main/Library -> compiled-pin snapshots + canonical result paths/input errors | source-traced; direct construction/error mapping open | unexecuted |
-| T35 | empty physical Main + deferred selected units -> partial direct result without dummy source | source-traced; workspace/session accept empty Main, Project route open | unexecuted |
+| T29 | retained reachable package issues -> limitations | implemented by #264 | unexecuted |
+| T30 | line/package predicates -> closure/completeness | implemented by #265 | unexecuted |
+| T31 | requested `LuaTypes` facts -> completeness | unconditional chunk limitation/`Partial` remains | unexecuted |
+| T32 | ordinary root/TOC/flavor -> profile-free target-bound plan | source-traced; current plan still profile-bound | unexecuted |
+| T33 | physical plan -> standalone scope blockers + physical Main | source-traced; current loader opens XML/package mapper only | unexecuted |
+| T34 | admitted Main/Library -> compiled-pin snapshots + canonical errors/paths | source-traced; direct construction open | unexecuted |
+| T35 | empty physical Main + deferred units -> partial without dummy source | source-traced; direct route open | unexecuted |
+| T36 | resolved roots + admitted Lua -> collision-free role/root authority | source-traced; cross-role authority validation open | unexecuted |
+| T37 | ordinary config -> one Service-owned prepared-addon operation -> lower check | source-traced; trusted assembly open | unexecuted |
+| T38 | file failure -> structured invalid-input origin -> root/relative path | source-traced; origin currently flattened | unexecuted |
+| T39 | strict CLI config + result/error streams -> deterministic exit | source-traced; direct frontend open | unexecuted |
 
 ## Durable decisions
 
 ### T01–T05 — first public path
 
-The first command is a small explicit `LuaTypes` vertical slice:
-
 ```text
-root + explicit TOC + flavor + Library
-  -> bounded selected physical Lua
-  -> exact Main/Library snapshots
-  -> existing ConfiguredAnalyzerSession
-  -> existing addon_check
-  -> exact user locations and text/JSON output
+root + explicit TOC + retail + Library roots
+  -> one public Service ordinary-check operation
+  -> target/scope-bound Project input + requested blockers
+  -> collision-free exact Main/Library snapshots
+  -> existing ConfiguredAnalyzerSession / low-level check_addon
+  -> root-relative text/JSON output
 ```
 
-Do not wait for product channel, `LoadWith`, implicit bindings, every XML handler
-or a WoW rule. Add those in later slices. Unsupported selected input is a scoped
-limitation; unavailable unrequested features are not global incompleteness.
+Do not wait for channel, `LoadWith`, bindings, complete XML context or WoW rules.
+Unavailable unrequested features are not global incompleteness.
 
-### T23/T32–T35 — first-slice Project admission
+### T23/T31–T35 — Project admission and completeness
 
-Current `read_toc_project*` and `ProjectLoadPlan` are both profile-bound. The plan
-stores mandatory `target_interface` and `target_profile_digest`, and
-`validate_profile` requires exact equality. T32 therefore replaces plan identity
-and validation, not merely the function argument, with `AddonLoadTarget` plus an
-explicit projection scope. Legacy callers adapt into that target; the direct
-route never fabricates a profile.
+- Replace `ProjectLoadPlan`'s mandatory Interface/profile digest and
+  `validate_profile` boundary with `AddonLoadTarget` plus projection scope.
+  Legacy callers adapt profiles into the target; the direct path never fabricates
+  one.
+- `physical_lua` retains TOC XML records/spans but does not open XML. Deferred XML
+  is a located limitation and cannot erase physical Lua diagnostics.
+- Add a requested-scope mapper over one `ProjectLoadPlan`; package-only mapping and
+  global `blocks_complete`/`external_files_complete()` are not substitutes.
+- Cosmetic/custom and known non-selection metadata stays Project observation;
+  malformed or selection/context-changing input stays invalid/limited.
+- Use compiled pin, Main universe `Project`, one `BlizzardUi` snapshot per Library
+  root, retained ceilings and root-relative result paths.
+- Empty physical Main with selected deferred XML uses an empty Project snapshot
+  plus a located partial limitation, not a dummy file or clean result.
+- Remove unconditional addon-chunk incompleteness. `LuaTypes` completeness follows
+  only facts required by selected units.
 
-T33 separates Slice 1A from recursive XML. Current `Loader::expand` opens and
-parses every selected XML before returning Main; one malformed XML aborts physical
-Lua. A `physical_lua` plan retains TOC XML records/spans but defers opening them,
-marks selected XML scope incomplete and preserves direct Lua diagnostics. The
-scope is part of plan identity.
+### T36 — input-root and admitted-file authority
 
-The only public Project limitation mapper currently accepts
-`ProjectPackageLoadPlan`; its private load mapper drops dependency placeholders
-because package closure normally owns them. Slice 1A needs a standalone,
-requested-scope mapper over `ProjectLoadPlan`. It must not equate generic
-`blocks_complete`/`external_files_complete` with `LuaTypes` completeness.
-Nonblocking Project observations never become `AddonCheckLimitation`.
+Snapshot IDs do not prove host-file separation: universe changes can give one
+physical file different Main/Library IDs, while overlapping recursive Library
+roots can share files without equal whole-snapshot IDs.
 
-T23 metadata-by-effect admission remains a prerequisite: cosmetic/custom and
-known non-selection metadata does not block independent typing; malformed or
-selection/context-changing directives remain exact errors/limitations.
+Project retains a nonsemantic root token plus admitted relative path and rejects:
 
-T34 fixes the final direct handoff: compiled-pin backend; Main `Project` snapshot;
-one `BlizzardUi` snapshot per Library directory under existing ceilings; reject
-duplicate resolved roots/snapshot IDs; canonical root-relative result paths; and
-classify caller Library parse failure as invalid input with its configured root
-and relative file rather than `ComponentUnavailable`.
+- duplicate resolved roots;
+- duplicate Library snapshot IDs;
+- the same admitted physical Lua file in Main and Library, or in two Libraries;
+- an explicit Library root that yields no admitted Lua files.
 
-T35 records the source-supported empty-Main boundary. `LuaWorkspaceSnapshot::build`
-and the configured owner do not require a Main file. When selected deferred XML
-exists but Slice 1A has no physical Lua, use an empty `Project` snapshot plus the
-located blocker and return `Partial`; never fabricate a dummy source or call the
-result clean.
+Do not reject root ancestry alone. Nested roots are valid when admitted file sets
+are disjoint. Equal relative paths in distinct roots are valid when they are
+distinct admitted files. Reuse component-wise no-follow root opening,
+case/UTF-8/language checks and existing byte/file ceilings.
 
-### T06/T12–T16 — delivered lower owners
+### T37 — one trusted Service assembly boundary
 
-- #246 preserves configured code, exact message, severity and byte range.
-- #247 delivers one Lua 5.1 Main/Library/virtual owner with STD and caller config.
-- #248 delivers the direct Service result.
+The lower `AddonCheckRequest::new` plus `with_input_limitations` can combine
+arbitrary snapshots and unrelated blockers. There is no production caller proving
+correct assembly. Add one narrow public Service use-case operation that owns:
+
+1. Project target/scope preparation and exact acquisition;
+2. plan/Main and root/file-authority validation;
+3. requested-scope limitation projection;
+4. snapshot construction and snapshot-ID -> configured-root mapping;
+5. lower request construction and `check_addon` invocation.
+
+CLI/LSP/MCP call only this operation. They do not open source, build snapshots or
+attach limitations. Keep the exact-snapshot constructor/check internal once
+callers move. This is a direct function, not a generic backend or registry.
+
+### T38 — structured input-error origin
+
+Current Library health failure keeps only a relative path, loses it at the
+configured-session boundary and becomes internal `ComponentUnavailable`. Carry:
+
+- source role;
+- snapshot/root token;
+- root-relative file;
+- stable error code and bounded message.
+
+Service maps the snapshot ID to the configured Library root and returns invalid
+caller input. Project attaches relative paths to every file-specific read, UTF-8,
+NUL, language, digest/length or admission error. Never parse message text or
+synthetic analyzer paths to recover origin.
+
+### T39 — strict config and output/error streams
+
+Read one explicit bounded config, reject unknown fields and duplicate scalar
+options, and make repeated CLI `--library` replace the configured array. There is
+no implicit config discovery.
+
+- Complete/partial `AddonCheckResult`: encode once on stdout.
+- Input/cancel/internal failure after format admission: stderr; under JSON, one
+  bounded typed object and empty stdout.
+- CLI syntax/option failure before format admission: one text usage error on
+  stderr.
+- Output failure: exit `4`, no retry and no second envelope.
+
+Exit precedence: invalid input `64`; observed cancellation `130`; internal/output
+failure `4`; partial result `2`; threshold finding `1`; otherwise `0`.
+
+### Delivered lower owners: T06/T12–T16 and T24–T30
+
+- #246 preserves diagnostic code/message/severity/range.
+- #247 provides one Lua 5.1 Main/Library/virtual owner with STD and caller config.
+- #248 provides the lower direct result.
 - #249 separates compiled provenance from report evidence.
-- #250 requires exact Main compatibility.
+- #250 gates reuse on exact Main; Library snapshots are sorted by exact ID before
+  registration and compared as the same canonical set.
+- #259–#265 remove generation from diagnostics ownership, remove public receipts,
+  retain located limitations, hide unprojected virtual paths, define finite codes,
+  map the retained reachable package closure and fix three-valued predicates.
 
-`RegisteredMemberAnalysis::new` sorts Library snapshots by exact snapshot ID
-before assigning roots and registering files. `ConfiguredAnalyzerSession::compatible`
-compares the same order-insensitive snapshot-ID set. Library argument order is
-therefore not an unresolved reuse defect.
+None is an observed addon workflow.
 
-### T08/T09 — updates
+### Later retained decisions
 
-Use one configured owner. A physical delta is valid only while selected
-membership, relevant context, Library set, virtual input and configuration remain
-exact. TOC/XML/dependency/channel/context/Library changes rebuild selection and
-owner cold. Failed/cancelled/stale work never publishes over newer input.
-
-### T10 — generated Library manifest
-
-Keep one optional typed `source-report.json` beside ordinary Lua. Plain Lua remains
-valid for typing. Read only maps/facts consumed by implemented checks; do not add
-another artifact envelope or converter.
-
-### T11/T22/T31 — addon chunk context and completeness
-
-Pinned Blizzard documentation supports ordinary `(addonName, addonTable)`.
-`AllowAddOnTableAccess` is separate retrieval permission.
-`SuppressLocalTableRef` remains unsupported special context; donor `nil` behavior
-is not client authority.
-
-Current `check_addon` has scope `LuaTypes` but unconditionally adds
-`AddonChunkContextUnavailable` and sets `Partial`. Target completeness is based on
-facts actually required by selected units. A file that never uses top-level `...`
-must not force every type-only result partial. Context-dependent files remain
-explicitly limited until the mapped helper exists.
-
-### T17/T18 — load facts and order
-
-Use finite dependency aliases and three-valued predicates. Keep exact selected
-package/TOC/XML/callback order in a validated Project value beside path-sorted
-snapshots. Emmy registration order is not a WoW runtime emulator.
-
-### T19–T23 — special source context
-
-- product channel is distinct from flavor/Interface/environment;
-- `LoadWith` is a reverse trigger, not a dependency;
-- binding callbacks are mapped callback units with reviewed `keystate`, not addon
-  chunks;
-- source `Interface: 0` is unknown compatibility, not a positive target;
-- TOC `Secure` remains raw unsupported semantics;
-- known lifecycle/persistence/error/retrieval/display/custom metadata does not
-  make independent Lua enumeration partial;
-- unknown metadata remains located Project information and limits only checks that
-  consume it.
-
-Focused evidence lives in [TOC_LOAD_CONTEXT_AUDIT.md](TOC_LOAD_CONTEXT_AUDIT.md)
-and [TOC_TRIGGER_BINDINGS_AUDIT.md](TOC_TRIGGER_BINDINGS_AUDIT.md).
-
-### T24–T30 — corrected direct boundary
-
-- #259 removes Project generation from diagnostics-owner construction/reuse;
-  generation remains only for explicit virtual semantic reports.
-- #260 removes public snapshot/analysis receipts.
-- #261 carries located input limitations.
-- #262 withholds synthetic virtual locations.
-- #263 provides finite limitation codes.
-- #264 maps only the analyzed reachable package closure and retains Project-owned
-  package-qualified locations where exact spans exist.
-- #265 applies one three-valued predicate reduction and preserves excluded source
-  evidence without false blocking completeness.
-
-No item above is an observed addon workflow.
+- T08/T09: reuse one owner only while membership/context/Library/virtual/config are
+  exact; relevant selection changes rebuild cold and stale work never publishes.
+- T10: keep one optional typed `source-report.json`; plain Lua remains valid.
+- T11/T22: ordinary chunk context, retrieval permission and special/suppressed
+  contexts are distinct.
+- T17/T18: exact WoW order/context is a validated Project value beside path-sorted
+  analysis snapshots.
+- T19–T23: channel, triggers, bindings, Interface zero, raw unsupported `Secure`
+  and metadata classes remain distinct and scoped.
 
 ## Documentation reconciliation ledger
 
 | ID | Drift/error | Resolution |
 | --- | --- | --- |
-| D01–D08 | delivered #246–#250 owners, stale links/run numbers and active instructions disagreed | reconciled by #251–#254 |
-| D09 | dependency aliases, execution context and selected order were incomplete | source-traced as T17/T18 |
-| D10 | product channel, reverse triggers, implicit bindings and machine SavedVariables were absent | source-traced as T19/T20 |
-| D11 | official zero Interface and unresolved `Secure` were mishandled | source-traced as T21 |
-| D12 | summaries omitted the post-#255 load handoff | corrected in post-#256 review |
-| D13 | donor comparison was written as client authority | authority boundaries made explicit |
-| D14 | status embedded an exact “current main” SHA and became stale by merging | use immutable review bases, not self-referential head claims |
-| D15 | proposed generic evidence class would recreate a proof layer | rejected; keep raw source and scoped limitations |
-| D16 | orphan CI marker had no reader | removed |
-| D17 | chunk contract omitted Blizzard `AllowAddOnTableAccess` distinction | recorded as T22 |
-| D18 | current known TOC metadata was globally blocking | recorded as T23 |
-| D19 | virtual diagnostics required unused Project generation | corrected by #259 |
-| D20 | direct result exposed internal receipts | corrected by #260 |
-| D21 | input limitations lost exact location | corrected by #261 |
-| D22 | public result leaked synthetic virtual paths | corrected by #262 |
-| D23 | direct limitation codes could not classify Project outcomes | corrected by #263 |
-| D24 | first mapper re-trusted roots and included unreachable packages | corrected by #264 |
-| D25 | parser placeholders survived after semantic owners had newer outcomes | corrected by #264 |
-| D26 | unknown predicates overrode known inclusion/exclusion | corrected by #265 |
-| D27 | README, AGENTS, owner guides, package summaries and Issues copied live PR status and diverged | only current status/trace may enumerate delivered slices |
-| D28 | first implementation slice again required nearly the whole Blizzard loader before one command | queue split into explicit `LuaTypes`, context and special-load slices |
-| D29 | Emmy guide still tied configured virtual-owner compatibility to Project generation after #259 | generation restricted to explicit virtual semantic reports |
-| D30 | active Issue audit called #194 reconciled although it required fields removed by #260; #200/#201 still listed T30 as open | affected Issues and audit corrected |
-| D31 | a proposed Library-order defect ignored existing snapshot-ID sorting before registration | correction recorded; no new work item |
-| D32 | docs accepted unconditional addon-chunk limitation and hard-coded `Partial` for every `LuaTypes` result | T31 added; completeness must be dependency-scoped |
-| D33 | the staged first slice omitted that all current TOC readers require legacy `ProfileIdentity` and a positive Interface | T32 added; extract one profile-free `AddonLoadTarget` and adapt legacy callers into it |
-| D34 | metadata-by-effect classification was deferred behind the first command, so common display/`X-*` metadata could still cause false `Partial` | T23 is a Slice 1A prerequisite; special metadata semantics remain later |
-| D35 | active #109/#112/#117/#197/#198/#199 bodies still copied PR progress or widened the immediate slice | bodies rewritten as durable outcomes and staged work |
-| D36 | four baseline-register rows lacked the promised current `Home:` | errata recorded below; the immutable baseline register remains tied to its reviewed commit |
-| D37 | `AddonLoadTarget` was documented only as a reader argument while `ProjectLoadPlan` identity and validation remained profile-digest/mandatory-Interface bound | T32 now replaces the retained plan identity boundary itself |
-| D38 | Slice 1A claimed physical-only work but the reused loader eagerly opened/parsed XML and could abort before returning physical Main | T33 adds an identity-bound `physical_lua` projection with located deferred-XML limitation |
-| D39 | Service exposed only package-plan limitations and dropped dependency placeholders; a standalone TOC check could lose required-dependency/load issues | T33 adds a scope-aware standalone plan mapper |
-| D40 | generic `blocks_complete`/`external_files_complete` and direct limitations were not distinguished from nonblocking Project observations | only requested-scope blockers enter `AddonCheckLimitation` |
-| D41 | snapshot backend/universe/per-directory Library/limit/path/error mapping was unspecified, inviting profile reuse or wrong internal-failure classification | T34 fixes the exact direct construction and error boundary |
-| D42 | current status had become an audit diary and active Issues still contained stale dependency/checkpoint prose | status reduced to current truth; affected Issues reconciled |
-| D43 | Slice 1A named a supported flavor without one canonical accepted value | accept exactly `retail`; add other flavors only in later explicit slices |
-| D44 | empty physical Main under deferred XML had no exact outcome and invited dummy files or hard failure | T35 uses an empty Project snapshot plus a located partial limitation |
-| D45 | multiple Library roots could produce duplicate snapshot IDs and ambiguous parse-error paths | reject duplicate roots/IDs and retain configured root + relative offending file |
-| D46 | CLI listed exit codes but not precedence when partial results also contained findings | invalid/cancel/internal precede result; partial precedes threshold finding, then clean |
+| D01–D08 | delivered #246–#250 owners, links/runs and instructions disagreed | reconciled by #251–#254 |
+| D09–D11 | dependency/context/order, channel/triggers/bindings, zero Interface/`Secure` incomplete | traced as T17–T21 |
+| D12–D18 | summaries, donor authority, self-staling status, generic evidence, orphan marker, chunk retrieval and metadata classes | corrected; T22/T23 added |
+| D19–D26 | generation, receipts, locations, virtual paths, limitation codes, root trust/placeholders and predicates | corrected by #259–#265 |
+| D27 | live status copied into many guides/Issues | only current status/trace enumerate delivery |
+| D28 | first slice again required most of Blizzard loading | split into physical, selected-context and special-load slices |
+| D29 | Emmy guide still required Project generation | generation restricted to explicit virtual semantic reports |
+| D30 | active Issues required removed receipts/repeated delivered T30 | affected Issues corrected |
+| D31 | proposed Library-order defect ignored existing canonical sorting | rejected; no work item |
+| D32 | docs accepted unconditional chunk limitation/`Partial` | T31 added |
+| D33 | first slice hid legacy profile/positive-Interface requirement | T32 added |
+| D34 | metadata classification came after first result | T23 made Slice 1A prerequisite |
+| D35 | active Issue bodies copied progress/widened immediate slice | rewritten as durable staged work |
+| D36 | four baseline rows lacked current `Home:` | errata recorded below |
+| D37 | only reader argument changed while retained plan stayed profile-bound | T32 replaces plan identity/validation |
+| D38 | physical slice reused eager XML loader | T33 adds identity-bound `physical_lua` |
+| D39 | package mapper could drop standalone dependency/load blockers | standalone scope mapper required |
+| D40 | global completeness was conflated with requested-scope blockers | observations and limitations separated |
+| D41 | snapshot/universe/limits/paths/error mapping underspecified | T34 fixes exact handoff |
+| D42 | status became audit diary and Issues retained stale dependencies | status/Issues reduced to current truth |
+| D43 | first-slice flavor was not canonical | accept exactly `retail` |
+| D44 | empty physical Main invited dummy/hard failure | T35 defines empty snapshot + partial |
+| D45 | duplicate roots/IDs and Library error paths underspecified | reject duplicates; retain root + file |
+| D46 | exit precedence was unspecified | T39 defines deterministic order |
+| D47 | duplicate roots/IDs did not catch the same physical Lua across roles | T36 validates admitted file authority |
+| D48 | blanket nested-root rejection would reject valid disjoint generated Libraries | reject file-set intersection, not ancestry |
+| D49 | frontend could combine unrelated plan limitations and snapshots | T37 creates Service-owned assembly |
+| D50 | Library failure lost root/snapshot origin and became internal failure | T38 carries structured origin |
+| D51 | Project file-specific errors dropped relative path | T38 requires path attachment |
+| D52 | config unknown fields/nonempty admitted Library roots underspecified | T36/T39 require strict config/admission |
+| D53 | result vs pre-result JSON streams unspecified | T39 defines stdout/stderr contract |
+| D54 | #191 copied moving delivery state and #195 presented old caller census as current | affected Issues require live status/caller recheck |
 
 ### Baseline register errata
 
-The baseline register remains frozen as historical evidence. Three applicable
-rows omitted the promised current-home pointer; one descriptive/not-applicable
-row also benefits from an explicit navigation home. Their read/source conclusions
-remain unchanged:
+The baseline register remains historical. These rows retain their original
+read/source conclusions and use these current homes:
 
 | Baseline row | Current home |
 | --- | --- |
-| `crates/wow-project/DATA_MODEL.md` | [updates](IMPLEMENTATION.md#updates), [results and interfaces](IMPLEMENTATION.md#results-and-interfaces), [useful output](WOW_LINTER.md#7-useful-output-and-updates) |
-| `crates/wow-project/e2/REAL_ADDON_FIXTURE.md` | [completion and verification](IMPLEMENTATION.md#completion-and-verification), [queue](REFACTOR_QUEUE.md) |
-| `crates/wow-project/e3/DATA_MODEL.md` | [addon configuration](IMPLEMENTATION.md#addon-configuration-and-emmy-analysis), [updates](IMPLEMENTATION.md#updates), [typed relationships](IMPLEMENTATION.md#typed-source-relationships) |
-| `crates/wow-project/e3/SKELETON_INPUT_VIEW.md` | [source index/search/context](IMPLEMENTATION.md#blizzard-ui-index-search-and-context), [typed relationships](IMPLEMENTATION.md#typed-source-relationships) |
+| `crates/wow-project/DATA_MODEL.md` | [updates](IMPLEMENTATION.md#updates), [results](IMPLEMENTATION.md#results-and-interfaces) |
+| `crates/wow-project/e2/REAL_ADDON_FIXTURE.md` | [completion](IMPLEMENTATION.md#completion-and-verification), [queue](REFACTOR_QUEUE.md) |
+| `crates/wow-project/e3/DATA_MODEL.md` | [addon configuration](IMPLEMENTATION.md#addon-configuration-and-emmy-analysis), [typed relationships](IMPLEMENTATION.md#typed-source-relationships) |
+| `crates/wow-project/e3/SKELETON_INPUT_VIEW.md` | [source index](IMPLEMENTATION.md#blizzard-ui-index-search-and-context), [typed relationships](IMPLEMENTATION.md#typed-source-relationships) |
 
 ## Observations still required
 
-Do not mark a trace observed without exact input and visible result. Minimum
-observations are:
+Do not mark a trace observed without exact input and visible result. Minimum first
+observations include:
 
-- explicit physical-Lua `wow check`: valid and invalid typed call, exact
-  code/message/severity/user path;
-- relevant limitation without losing independent diagnostics;
-- dependency and XML/chunk slices after they are implemented;
-- generated and plain-Lua Library through the same check;
-- coherent source/config updates;
-- LSP unsaved/version/stale-result behavior;
-- MCP metadata/unknown-notification behavior;
-- later-process body/symbol search and readable exact context;
-- truthful cancellation at supported checkpoints.
+- valid and invalid typed calls with exact root-relative code/message/severity/range;
+- partial required-dependency or deferred-XML result preserving diagnostics;
+- XML-only physical slice through empty Main;
+- malformed Library with structured root + relative file;
+- duplicate/same-file role collision rejected, nested disjoint roots accepted, and
+  equal relative paths in distinct roots accepted;
+- text/JSON result/error channels and deterministic exits;
+- later dependency/XML/chunk, updates, LSP/MCP, source search/context and truthful
+  cancellation scenarios.
 
 Update this register only when source evidence changes a boundary or an exact
 workflow changes status. Do not turn it into a percentage dashboard or PR diary.
