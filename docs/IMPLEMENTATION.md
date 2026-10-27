@@ -58,6 +58,31 @@ ordinary config
 No WoW rule is enabled by default. Search, SQLite, Reference, Rules, publication,
 graph, replay and source regeneration are not prerequisites.
 
+The current TOC readers take the legacy `ProfileIdentity`, whose profile label,
+positive Interface, source digest and schema identities belong to old
+publication/replay workflows. The direct path must first extract one small
+Project-owned `AddonLoadTarget` (or equivalently narrow typed value):
+
+- explicit flavor;
+- optional positive target Interface;
+- optional `TocLoadContext`.
+
+It contains no profile ID, generation, source/report digest, schema registry or
+correction-set identity. Slice 1A uses the explicit flavor with no target
+Interface and no conditional context. The selected TOC's own Interface metadata
+is retained as source: missing or zero is unknown, and a positive value is not
+compared until a positive target is actually supplied. Legacy profile-bound
+callers may adapt their profile into this target; the ordinary route must never
+fabricate a `ProfileIdentity` merely to reuse the reader.
+
+Before `LuaTypes` completeness is computed, TOC metadata is classified by effect.
+Display/localized/custom `X-*` fields and known non-selection lifecycle metadata
+remain source-backed but do not make independent file enumeration partial.
+Dependency, selection, environment, callback and malformed directives remain
+typed or located limitations. An empty metadata key is malformed input, not an
+innocuous unknown field. This admission classification is required in Slice 1A;
+full channel, trigger, secure and binding semantics remain later slices.
+
 This slice must return a useful result before the complete Blizzard loading model
 is implemented. Unsupported selected input is a scoped limitation. Product
 channel, reverse triggers, implicit bindings or an unrequested WoW check do not
@@ -95,25 +120,25 @@ results that consume it.
 
 ### Ordinary configuration
 
-Target configuration contains:
+Slice 1A accepts only:
 
 - `root`;
-- explicit `toc` for the first slice, later optional only when selection is
-  unambiguous;
-- `flavor`;
-- optional `channel` (`stable`, `ptr`, `beta`) for channel-gated source;
-- optional positive `target_interface`;
+- explicit `toc`;
+- explicit `flavor`;
 - nonempty `library` array;
-- optional `dependency_roots`, selected WoW `checks`, `emmy_diagnostics` and
-  `fail_on`.
+- optional `emmy_diagnostics`, `fail_on` and output format.
+
+Later slices add optional unambiguous TOC selection, `channel`, positive
+`target_interface`, `dependency_roots` and selected WoW `checks`. Their absence
+must not be filled with guesses or synthetic legacy identities.
 
 CLI paths resolve from cwd; config paths resolve from the config directory;
 relative TOC resolves from the addon root. CLI values override config. Repeated
 CLI `--library` replaces the configured array.
 
-No user supplies Project IDs, generations, profile/report digests, receipts,
-proof manifests or graph budgets. Plain Lua Libraries remain valid for typing;
-missing generated metadata limits only checks that require it.
+No user supplies Project IDs, generations, `ProfileIdentity`, profile/report
+digests, receipts, proof manifests or graph budgets. Plain Lua Libraries remain
+valid for typing; missing generated metadata limits only checks that require it.
 
 ### Load and context facts
 
