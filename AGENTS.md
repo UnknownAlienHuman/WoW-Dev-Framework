@@ -1,103 +1,76 @@
 # Contributor instructions
 
-Read [current status](docs/CURRENT_STATUS.md) and the
-[manifesto](docs/ARCHITECTURE.md) in full. For implementation, read the relevant
-route in [IMPLEMENTATION.md](docs/IMPLEMENTATION.md), its domain rules in
-[WOW_LINTER.md](docs/WOW_LINTER.md), and the actual caller/owner code.
-[REFACTOR_QUEUE.md](docs/REFACTOR_QUEUE.md) orders work and is the complete
-checklist for its current item; README, skill and package summaries are navigation
-only and cannot narrow it. [AUDIT.md](docs/AUDIT.md) is baseline redesign evidence,
-not a live progress page or mandatory context for every patch. User instructions
-override this workflow. Old Issue comments and removed specifications cannot
-expand the product.
+Read, in order:
+
+1. [current status](docs/CURRENT_STATUS.md);
+2. [architecture](docs/ARCHITECTURE.md);
+3. the active item in [the queue](docs/REFACTOR_QUEUE.md);
+4. the relevant owner route in [IMPLEMENTATION.md](docs/IMPLEMENTATION.md) and
+   domain behavior in [WOW_LINTER.md](docs/WOW_LINTER.md);
+5. the actual producer, handoff and consumer code.
+
+`CURRENT_STATUS.md` is the only live delivery checkpoint. The
+[trace register](docs/IMPLEMENTATION_TRACE_REGISTER.md) records evidence and
+observations. README files, package summaries, Issue history and removed
+specifications are secondary and cannot expand or narrow the current task.
 
 ## Work
 
-- Use one manager and one worktree/branch. Delegate bounded reads or disjoint
-  paths to workers. Check current branches/PRs and preserve unpublished work.
-  Coordination needs a clear owner and short handoff, not leases or status diaries.
-- Finish a useful input-to-output path. Change the actual producer and consumer
-  together, and remove displaced options, models and documentation. Keep helpers
-  local until more than one real caller needs them.
-- Read the relevant [donor code](docs/DONORS.md) before copying its semantics.
-  EmmyLua owns Lua analysis; existing Reference/Annotations own Blizzard/Ketho
-  projection. Do not invent WoW APIs, load rules or runtime guarantees.
-- Keep source locations, partial-input errors and cancellation meaningful. Never
-  execute analyzed Lua or rewrite user files as part of checking/index cleanup.
-- After two failed attempts at the same approach, inspect the failed assumption
-  and change method. Do not repeat expensive commands without new evidence.
+- One manager, one worktree/branch. Delegate only bounded reads or disjoint paths.
+- Finish one useful producer-to-user path. Change the real producer and consumer
+  together; remove displaced wrappers, options and prose with their last caller.
+- Reuse [pinned donors](docs/DONORS.md) only after reading the exact relevant
+  source. Blizzard facts, Ketho annotation behavior and Wowless comparison
+  behavior are different authority classes.
+- Keep source bytes, locations, ambiguity, incomplete input and cancellation
+  honest. Never execute analyzed Lua or rewrite user source.
+- After two failed attempts at one approach, identify the failed assumption and
+  change method.
 
-## First public `wow check`
+## First public check
 
-Do **not** recreate the lower owners delivered after PR #244:
-
-- PR #246 preserves upstream diagnostic code/message/severity/range;
-- PR #247 delivers `wow_emmy::ConfiguredAnalyzerSession` over exact Main,
-  explicit Library and optional virtual snapshots, with Lua 5.1, embedded STD,
-  caller diagnostic configuration, and separate diagnostic/semantic collection;
-- PR #248 delivers `wow_service::addon_check::check_addon` and its direct
-  diagnostic/limitation result;
-- PR #249 delivers compiled Emmy identity without fabricated compatibility-report
-  hashes;
-- PR #250 requires exact Main snapshot identity for configured-owner reuse.
-
-The authoritative handoff is
-[queue item 1](docs/REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check). Do not
-implement from this abbreviated route alone:
+Do not recreate analyzer or result owners already marked **implemented** in the
+trace register. The first public command is a small `LuaTypes` vertical slice:
 
 ```text
-ordinary configuration
-  -> Project-selected TOC/dependencies/triggers/channel and bounded source
-  -> validated exact selected order/execution context plus mapped XML/bindings
-  -> exact Main/Library/virtual snapshots
+ordinary explicit configuration
+  -> bounded selected addon and Library bytes
+  -> exact Main/Library snapshots
   -> existing ConfiguredAnalyzerSession
-  -> existing wow-service addon_check
-  -> CLI text/JSON result and exit status
+  -> existing wow-service::addon_check
+  -> text/JSON diagnostics, relevant limitations and exit status
 ```
 
-Follow the [source-traced boundary](docs/REFACTOR_QUEUE.md#source-traced-replacement-boundary)
-and [exact owner split](docs/REFACTOR_QUEUE.md#exact-owner-split). Reuse
-`ProjectInputDirectory`, `ProjectInputFile`, selected load plans and XML maps, but
-not `ProjectConfiguration`/`ProjectInputInventory` publication requirements.
-Project owns flavor versus product channel, target/source Interface, dependency
-versus `LoadWith`, selected order, execution/private-table context, implicit
-bindings and unresolved security metadata. The CLI owns argument precedence,
-cancellation, rendering and exit status only.
+It must not wait for every Blizzard load feature. Product channel, `LoadWith`,
+implicit bindings, secure/special contexts, full XML handler context and WoW
+rules are subsequent slices unless the selected input actually requires them.
+Unsupported selected input remains a located scoped limitation; unrelated or
+unrequested features do not make `LuaTypes` globally partial.
 
-Do not satisfy the old `LocalCommand`/`LocalProjectBackend`/generic `Service`
-constructors with fabricated Reference, Rules, compatibility or Project state.
-Do not wrap `check_addon` inside the old component/capability result. Empty
-`checks` means no WoW rule; upstream diagnostics remain enabled. Legacy
-`ProfileIdentity`, generation and replay wrappers remain only for their current
-callers while those callers move.
+Do not adapt the old `LocalCommand -> LocalProjectBackend -> generic Service`
+route, fabricate Reference/Rules/publication objects, or wrap the direct result
+inside component/capability/presentation models.
 
-## Verification during this rewrite
+## Validation
 
-Write the product first. For Rust changes run formatting and the smallest strict
-Clippy invocation covering the affected crates/callers. Clippy already compiles
-those targets; do not repeat `cargo check`. **Do not add or run tests until the
-product is functionally complete, as directed by the owner.** Record known
-failures without turning test repair or corpus campaigns into implementation
-prerequisites. Do not delete a test merely because it fails; remove obsolete
-expectations only with their retired behavior.
+Write the product path first. For Rust changes run formatting and the smallest
+strict Clippy invocation covering affected crates and callers. Do not duplicate
+that with a separate `cargo check`. Tests remain deferred until the product is
+functionally complete, as directed by the owner.
 
-For documentation, inspect links, source claims, current `main`, merged PRs and
-instruction consistency. Do not build the Rust workspace for prose alone. A
-build or source review does not prove that a user workflow works; describe its
-status accurately.
+For documentation changes:
 
-Update [the post-merge implementation trace register](docs/IMPLEMENTATION_TRACE_REGISTER.md)
-when a newly traced source chain changes an implementation boundary or a real
-observation changes an executed status. Update
-[CURRENT_STATUS.md](docs/CURRENT_STATUS.md) when merged implementation changes
-what contributors should do next. Update the exhaustive
-[baseline review register](docs/AUDIT_REGISTRY.md) only when correcting its
-329-document reconciliation. Keep document reading, source tracing,
-implementation evidence and executed verification distinct.
+- inspect source claims, current `main`, links/anchors and instruction consistency;
+- compare old requirements with their current owner or explicit retirement;
+- update the active register immediately when a finding changes a boundary;
+- do **not** build the Rust workspace or cite Clippy as documentation evidence.
+
+A build, source trace or document review never promotes a user workflow to
+**observed**. Observation requires the exact ordinary command or protocol
+sequence, input and visible result recorded in the trace register.
 
 ## Handoff
 
-Publish one coherent branch/PR when authorized, after checking the remote head.
-State the change, verification and remaining limitation briefly. Do not add
-acceptance tiers, proof archives or progress-report bureaucracy to the product.
-Keep copied third-party code/data attribution and required notices.
+Publish one coherent branch/PR after rereading the remote head. State the change,
+document checks and remaining limitations briefly. Do not create acceptance-tier,
+proof-archive or status-diary machinery.
