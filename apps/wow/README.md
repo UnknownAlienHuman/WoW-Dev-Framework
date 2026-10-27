@@ -1,27 +1,15 @@
 # `wow` application
 
-`wow-cli` is the target offline entry point. Delivery state lives in
-[current status](../../docs/CURRENT_STATUS.md); interface contracts are in
-[FRONTENDS.md](../../docs/FRONTENDS.md).
+`wow-cli` is the offline frontend. Delivery state lives in
+[current status](../../docs/CURRENT_STATUS.md); command/config/result contracts
+live in [FRONTENDS](../../docs/FRONTENDS.md); implementation order lives in the
+[queue](../../docs/REFACTOR_QUEUE.md).
 
-Current `status`/`check` still use the transitional `LocalCommand` route and are
-not the target public setup.
+Current check/status routes are transitional. Slice 1A replaces them with one
+ordinary `wow check` adapter to the public Service operation. The application owns
+argument/config precedence, caller-facing display roots, rendering and exit
+status only. Project/Service own source admission, authority, limitations,
+snapshots and analysis assembly.
 
-Slice 1A is exactly:
-
-```text
-root + explicit TOC + flavor=retail + Library roots
-  -> Project AddonLoadTarget + physical_lua plan
-  -> standalone scope-aware limitations + exact snapshots
-  -> existing wow_service::addon_check
-  -> text/JSON and exit status
-```
-
-The application owns config/CLI precedence, rendering and exit status. It does
-not fabricate profiles/Reference/Rules/publication objects, parse XML/load facts
-itself or wrap the direct result in component/capability models. Result paths are
-canonical relative to the configured root; text may display the joined path while
-JSON preserves the relative identity.
-
-Channel, dependencies, full XML, `LoadWith`, bindings, secure context and WoW
-rules are later slices. Source is read as data and never executed or rewritten.
+Do not duplicate the Slice 1A contract here. Do not open source, parse load facts,
+construct lower requests or preserve legacy profile/publication/result machinery.

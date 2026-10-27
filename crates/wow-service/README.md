@@ -1,25 +1,18 @@
 # Product operations
 
-Delivery state: [CURRENT_STATUS.md](../../docs/CURRENT_STATUS.md). Owner boundaries:
-[IMPLEMENTATION.md](../../docs/IMPLEMENTATION.md#code-ownership).
+Delivery state: [CURRENT_STATUS](../../docs/CURRENT_STATUS.md). Owner boundaries:
+[IMPLEMENTATION](../../docs/IMPLEMENTATION.md#code-ownership).
 
-`addon_check` composes exact already-acquired Main, Library and optional virtual
-snapshots through `ConfiguredAnalyzerSession` and returns scope, completeness,
-exact diagnostics and scoped limitations. The result contains no snapshot,
-analyzer, Project, report, proof, component or presentation receipts.
+The existing lower `addon_check` composes exact snapshots and returns scope,
+completeness, diagnostics and limitations. It is not the frontend trust boundary.
+Slice 1A adds one narrow public Service operation that owns Project preparation,
+plan/input binding, requested-scope limitations, exact snapshot construction,
+same-owner Emmy requirements, structured operation errors and invocation of the
+lower check.
 
-Slice 1A still needs:
-
-- a public standalone `ProjectLoadPlan -> AddonCheckLimitation` mapper for
-  `LuaTypes`; package-plan mapping is not a substitute;
-- only requested-scope blockers in `input_limitations`; Project observations such
-  as unused Interface/cosmetic metadata remain outside the direct result;
-- completeness derived from those blockers, not unconditional chunk context or
-  global Project completeness;
-- `LibraryHealthFailed` classified as caller invalid input with configured root +
-  relative file rather than internal `ComponentUnavailable`; duplicate roots/IDs
-  remain invalid input.
-
-Project supplies canonical root-relative paths and exact source locations. CLI may
-join its configured root for text rendering; Service does not embed ambient
-absolute paths. CLI/LSP/MCP remain thin adapters to the same owners.
+CLI/LSP/MCP call only that public operation. They never construct the lower
+request or attach limitations. Keep observations out of requested-scope blockers,
+preserve structured source origin, and do not introduce a generic backend,
+registry, receipt, publication or result hierarchy. Exact contracts live in
+[IMPLEMENTATION](../../docs/IMPLEMENTATION.md#first-implementation-slice) and the
+[queue](../../docs/REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check).

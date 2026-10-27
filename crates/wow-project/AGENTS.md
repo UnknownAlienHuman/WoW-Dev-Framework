@@ -1,20 +1,15 @@
 # Addon context
 
-Follow root [AGENTS.md](../../AGENTS.md), current status, the active queue slice
-and the relevant implementation route.
+Follow root AGENTS, current status, the active queue slice and
+[Project ownership](../../docs/IMPLEMENTATION.md#code-ownership).
 
-Project owns root/TOC/source selection, exact bytes, plan identity and source
-projection. For Slice 1A:
+Project owns safe root/file admission, target/scope-bound TOC selection, exact
+bytes, selected source authority, plan identity, source projection and
+source-located input failures. Slice 1A adds one narrow public preparation/config
+boundary around the existing component-wise no-follow opener; the legacy ambient
+`ProjectInputDirectory::open` is not its trust boundary.
 
-1. replace profile-bound plan identity/validation with `AddonLoadTarget` plus
-   projection scope; do not fabricate `ProfileIdentity` or retain its digest;
-2. parse metadata/conditions, capture direct TOC Lua and retain but do not open
-   XML in `physical_lua` scope;
-3. return exact root-relative files plus a plan whose standalone mapper can
-   distinguish required blockers from optional/nonblocking observations;
-4. validate Main files against the same plan before snapshot construction.
-
-Later slices add dependency/order context, mapped XML/chunk context, then channel,
-triggers, bindings and secure/special cases. Reuse Emmy for Lua semantics. An
-ordinary check must not require Project publication, replay hydration,
-fingerprints or proof graph.
+Return one direct non-deserializable prepared value to Service. Do not add
+publication, replay, proof, frontend rendering or another loader/result owner.
+The exact Slice 1A admission and limitation rules live only in the canonical queue
+and implementation guide.

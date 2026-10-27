@@ -2,158 +2,231 @@
 
 Read [current status](CURRENT_STATUS.md), [architecture](ARCHITECTURE.md),
 [WoW behavior](WOW_LINTER.md) and the active
-[queue item](REFACTOR_QUEUE.md). This guide defines durable ownership and direct
-handoffs. It does not copy the moving PR/status ledger.
+[queue item](REFACTOR_QUEUE.md). This guide defines durable owner boundaries and
+handoffs, not PR history.
 
 <a id="code-ownership"></a>
 
 ## Code ownership
 
-| Responsibility | Reuse / target owner |
+| Responsibility | Owner |
 | --- | --- |
 | Blizzard checkout/ref/TOC/API input | `apps/wow-reference-builder` plus bounded source helpers |
-| Normalized Blizzard facts, aliases and corrections | `wow-reference` |
-| Ketho-style `.lua` declarations and source maps | `wow-annotations`, `wow-ketho-literals` |
-| Lua 5.1 parsing, types and diagnostics | `wow-emmy::ConfiguredAnalyzerSession` over pinned EmmyLua |
-| Addon root, TOC/load selection, exact bytes, XML/maps and context | `wow-project` |
-| Direct addon check orchestration/result | `wow-service::addon_check` |
-| Current source index | direct `rusqlite`/FTS5 owner, ultimately `wow-store` or a smaller retained replacement |
-| CLI/LSP/MCP | thin adapters in `apps/wow` to the same Service owners |
-| Shared primitives | `wow-core` only when multiple retained owners genuinely share them |
+| Normalized Blizzard facts/corrections | `wow-reference` |
+| Ketho-style Lua declarations/maps | `wow-annotations`, `wow-ketho-literals` |
+| Lua 5.1 parsing/types/diagnostics | `wow-emmy::ConfiguredAnalyzerSession` over pinned EmmyLua |
+| Addon root, TOC selection, exact bytes, XML/maps/context | `wow-project` |
+| Ordinary addon-check use case/result | one narrow public operation in `wow-service::addon_check`; lower exact-snapshot request/check internal |
+| Current source index/search/context | one rebuildable direct `rusqlite`/FTS5 owner |
+| CLI/LSP/MCP | thin adapters in `apps/wow` |
 
-Do not add another analyzer, result hierarchy, Project publication path, graph
-proof layer or compatibility-report adapter for ordinary checking. Move callers,
-then remove displaced owners.
+Do not add another analyzer, loader, result hierarchy, Project publication path,
+proof layer, registry or compatibility-report adapter. Change the real producer
+and reader together, then remove displaced owners.
 
 <a id="addon-configuration-and-emmy-analysis"></a>
+<a id="first-implementation-slice"></a>
 
 ## Addon configuration and Emmy analysis
 
-<a id="first-implementation-slice"></a>
-
-### First usable vertical slice
-
-The first public result is an offline `LuaTypes` check over explicit local input:
+### Slice 1A: one trusted physical-Lua path
 
 ```text
-root + explicit TOC + flavor + Library directories
-  -> AddonLoadTarget + physical_lua Project plan
-  -> standalone scope-aware limitations + admitted physical Main
-  -> compiled-pin Main/Library snapshots
-  -> existing ConfiguredAnalyzerSession
-  -> existing wow-service::addon_check
-  -> root-relative text/JSON result and exit status
+strict root + explicit TOC + retail + Library roots
+  -> one public Service ordinary-check operation
+  -> profile-free target/scope Project plan + admitted path authority
+  -> requested-scope blockers + exact physical Main
+  -> compiled-pin Project Main + per-root BlizzardUi Libraries
+  -> existing ConfiguredAnalyzerSession / internal check_addon
+  -> root-relative text/JSON result or typed pre-result error
 ```
 
 No WoW rule, dependency universe, XML execution context, search index, Reference,
 Rules, publication, graph, replay or source regeneration is required.
 
-#### Project target and plan identity
+#### Target and retained plan identity
 
-Add a small validated `AddonLoadTarget` owned by Project:
+Project adds `AddonLoadTarget { flavor: retail, target_interface: Option<positive>,
+toc_context: Option<TocLoadContext> } + projection scope` and binds it directly
+into `ProjectLoadPlan`. Replace mandatory `ProfileIdentity` digest and positive-
+Interface admission; do not merely change the reader argument. Legacy callers may
+adapt a real profile. The ordinary route never fabricates profile/source/report/
+schema/correction/generation identity.
 
-- exact canonical flavor `retail` (the only Slice 1A flavor);
-- optional positive target Interface;
-- optional `TocLoadContext`.
+Slice 1A supplies `retail`, no target Interface/context. Retain missing/zero/
+positive source Interface; evaluate compatibility only with a positive target.
+Invalid Interface syntax is invalid input.
 
-`ProjectLoadPlan` identity and admission must bind this target directly. Replace
-its mandatory `target_interface` and `target_profile_digest` dependency on
-`ProfileIdentity`; changing target or projection scope changes plan identity.
-Legacy profile callers may adapt their existing profile into `AddonLoadTarget`.
-The ordinary route never constructs a profile ID, source/report digest, schema
-registry, correction identity or generation.
+#### Physical projection
 
-Slice 1A supplies flavor only. Parse and retain missing, zero and positive source
-Interface values independently; compatibility is evaluated only when a positive
-target Interface is supplied. Invalid Interface syntax remains invalid input.
+Add identity-bound `physical_lua` to the existing Project owner:
 
-#### Physical projection scope
+- parse explicit TOC/selection metadata;
+- capture direct selected `.lua` under retained bounds;
+- retain XML records/exact TOC spans, but do not open XML;
+- emit located `SourceSelectionIncomplete` per selected deferred XML branch;
+- preserve physical diagnostics when XML is missing/malformed;
+- reject unsafe root/path/TOC bytes or unrecoverable syntax;
+- allow empty `Project` snapshot: complete with no selected unit/blocker, partial
+  with deferred selected input. Never add dummy source.
 
-The existing loader recursively opens XML while selecting Main. That cannot be
-the first-slice boundary because malformed XML currently aborts otherwise usable
-physical Lua.
+Full XML expansion is Slice 1B, not a second loader.
 
-Add an explicit plan scope such as `physical_lua` and bind it into the plan digest:
-
-- parse the selected TOC and metadata/conditions;
-- capture included direct `.lua` files under existing Project bounds;
-- retain included XML records and exact TOC spans, but do not open or parse XML;
-- emit a located `SourceSelectionIncomplete` limitation for each included XML
-  branch deferred to Slice 1B;
-- preserve physical diagnostics despite missing/malformed/deferred XML;
-- reject unsafe selection/path/input errors;
-- when selected deferred XML exists but physical Lua is empty, build the supported
-  empty `Project` snapshot and return a located partial result; never add a dummy
-  source or report clean.
-
-Full recursive XML expansion remains the Slice 1B plan scope.
-
-#### Metadata and standalone limitations
+#### Metadata and requested-scope limitations
 
 T23 metadata-by-effect admission is a Slice 1A prerequisite. Display/localized,
-custom `X-*` and known non-selection metadata remain source-backed observations
-and do not block independent `LuaTypes`. Empty/malformed keys and directives that
-can change selected files/environment/callback context remain invalid or located
-limitations.
+custom `X-*` and known non-selection metadata remain Project observations.
+Malformed keys or selected-file/environment/callback-changing directives remain
+invalid or located.
 
-Add a public standalone mapper:
+The public standalone mapper belongs in Service to avoid Project -> Service
+dependency:
 
 ```text
-ProjectLoadPlan + requested AddonCheckScope
-  -> Vec<AddonCheckLimitation>
+ProjectLoadPlan + AddonCheckScope -> Vec<AddonCheckLimitation>
 ```
 
-It uses exact retained source digests/spans and interprets issues for the selected
-scope rather than copying global `blocks_complete` or
-`external_files_complete()`:
+For `LuaTypes`:
 
-- unresolved required dependency -> `DependencyResolutionIncomplete`;
-- normal optional-dependency absence -> no limitation;
-- unresolved included condition -> `LoadSelectionUnresolved`;
-- missing/unsupported direct selected source or deferred included XML ->
-  `SourceSelectionIncomplete`;
-- Interface metadata with no positive target -> retained observation, no
-  `CompatibilityUnresolved`;
-- cosmetic/unknown metadata not consumed by `LuaTypes` -> retained observation,
-  no direct limitation.
+| Source state | Outcome |
+| --- | --- |
+| missing/unreadable addon root or explicit TOC; unsafe path/bytes; invalid TOC encoding/NUL; unrecoverable syntax; config/source/Library budget refusal | pre-result `invalid_input` |
+| safely parsed TOC names missing direct Lua | located `SourceSelectionIncomplete`, continue, `Partial` |
+| required dependency, included condition, selected XML or recoverable selected-context uncertainty unresolved | located scope blocker, `Partial` |
+| optional absence; repeated TOC occurrence; Interface without target; `LoadWith`; unused lifecycle/display/custom metadata | Project observation, no limitation |
+| affected file uses chunk-owned top-level `...` or selected context changes typing | located context limitation, `Partial` |
+| malformed caller Library/config/source | pre-result `invalid_input` with structured origin |
+| native panic/poisoning/impossible validated-owner mismatch | `internal` |
 
-Only a reason the requested scope cannot be complete enters
-`AddonCheckLimitation`. Project observations are not mislabeled as blockers.
+Do not derive completeness from global `blocks_complete()` or
+`external_files_complete()`.
 
-#### Snapshot and path construction
+#### Safe roots and selected-path authority
 
-Use existing values directly:
+Frontend resolves path bases lexically for display. Project is the trust boundary
+and exposes one narrow preparation/config entry wrapping crate-private component-
+wise `open_workspace`; Slice 1A must not use ambient
+`ProjectInputDirectory::open`.
 
-- `EmmyBackendIdentity::compiled_pinned()` once;
-- Main snapshot: universe `Project`, admitted `ProjectInputFile` values and
-  existing Project Main ceilings (1,024 files, 1 MiB/file, 16 MiB total);
-- each explicit annotation-Library directory: one separate universe `BlizzardUi`
-  snapshot under `wow_core::library_limits` (4,096 files, 8 MiB/file, 64 MiB
-  total). Separate snapshots allow identical relative paths in different roots;
-- reject duplicate resolved Library roots and duplicate snapshot IDs rather than
-  silently merging them;
-- caller diagnostic settings become `EmmyAnalysisConfiguration`; no `.emmyrc`
-  discovery.
+Each opened root retains request-local `InputRootId = role + ordinal`, original
+display descriptor, nonserialized normalized absolute authority descriptor and
+held no-follow capability. Reject descriptor text above 32 KiB; admit local Unix
+absolute and Windows drive-absolute roots; unsupported UNC/device prefixes are
+invalid.
 
-Keep canonical root-relative source paths in snapshots, diagnostics and exact
-locations. The CLI already knows the configured root and may join it for human
-text; JSON preserves the canonical relative identity. Do not put ambient absolute
-paths into semantic identity.
+For each unique admitted Lua:
 
-A Library parse/health failure is caller input failure. Correct the current
-`LibraryHealthFailed -> NativeFailure -> ComponentUnavailable` mapping so invalid
-Library content does not look like an internal component outage. Preserve the
-configured Library-root identity plus root-relative offending file in the error;
-never expose only an ambiguous relative path or a synthetic analyzer root.
+```text
+InputPathAuthority = normalized absolute root descriptor
+                   + canonical relative path
+```
 
-#### Direct result
+Slash-normalize and Unicode-lowercase with Project's conservative portable case
+policy. This is selected-path authority, not inode/file-ID/hard-link/content/
+filesystem-canonical/snapshot identity. Reject duplicate authorities, not root
+ancestry. Nested roots and equal relative paths are valid when joined authority
+differs. Repeated TOC records are not duplicate files.
 
-Pass only blocking standalone limitations to `AddonCheckRequest`. Preserve Emmy
-findings even when relevant input is partial. `AddonCheckScope::LuaTypes`
-completeness is `Complete` exactly when every fact required by selected physical
-units is available. Remove the unconditional addon-chunk fallback and hard-coded
-`Partial`; later context is a limitation only for units/conclusions that consume
-it.
+Each Library root must yield Lua. Reject duplicate root authority keys and
+duplicate whole snapshot IDs. Fixed aggregate ceilings: 64 Library roots, 8,192
+files, 256 MiB, plus existing per-root limits. No budget flags.
+
+#### Exact snapshots and paths
+
+Use `EmmyBackendIdentity::compiled_pinned()` once; Main universe `Project`; one
+separate universe `BlizzardUi` snapshot per Library root; canonical role-relative
+paths. Frontend may join display root for text. Absolute/path-authority data never
+enters semantic identity or JSON.
+
+#### One public Service operation
+
+The ordinary operation owns:
+
+1. merged strict config/display descriptors;
+2. Project target/scope plan, admitted Main/Libraries and path authorities;
+3. plan/Main/authority validation;
+4. requested-scope blockers;
+5. exact snapshots and request-local snapshot/root mapping;
+6. one configured Emmy owner, requirement/diagnostic collection and internal
+   lower invocation;
+7. one result or operation-specific error.
+
+CLI/LSP/MCP never open source, construct `AddonCheckRequest`, call
+`with_input_limitations`, build snapshots or attach blockers. Keep lower request/
+check internal after callers move. This is a use-case function, not generic
+backend.
+
+#### Structured failures
+
+Carry stable code, role, snapshot/`InputRootId`, role-relative path and bounded
+message through Project -> Emmy -> configured session -> Service.
+`LibraryHealthFailed` retains Library snapshot/path so Service maps it to request-
+local root. Never parse messages or synthetic paths.
+
+Public operation error:
+
+```text
+invalid_input | cancelled | internal
+message <= 4 KiB
+role? = main | library | config
+root_index? only for library, zero-based
+relative_path? relative to role root
+```
+
+File-specific Project read/UTF-8/NUL/language/digest/length/admission failure keeps
+root/path. Source/workspace/diagnostic/result-size refusal from caller input is
+`invalid_input`; analyzer/serialization/cancellation-handler/I/O invariants are
+`internal`. Do not enlarge global `ServiceError` into provenance platform.
+
+#### Same-owner chunk requirement
+
+Remove unconditional chunk limitation/hard-coded `Partial`. Add one bounded
+collector on the same `ConfiguredAnalyzerSession`/registered Main AST:
+
+- walk expression nodes;
+- match `LuaLiteralExpr` with `LuaLiteralToken::Dots`;
+- reject matches with enclosing `LuaClosureExpr` before chunk root;
+- retain lowest-starting exact `{path, content_sha256, span}` per file;
+- never raw-scan or start another parser/session.
+
+Service validates records against exact Main and limits only affected files.
+Helper injection remains Slice 1B.
+
+<a id="ordinary-configuration"></a>
+
+### Ordinary configuration
+
+Slice 1A fields only: `root`, explicit relative `.toc`, exact `flavor: retail`,
+nonempty `library`, optional `emmy_diagnostics`, `format`, `fail_on`.
+
+Read at most one explicitly named config through Project no-follow helper, 256 KiB.
+Reuse duplicate-key/depth-bounded `StrictJson`, then outer
+`deny_unknown_fields`. No implicit discovery.
+
+Pinned `EmmyrcDiagnostic` is permissive and silently drops invalid
+`globalsRegex`. Prevalidate exactly `disable`, `enable`, `globals`,
+`globalsRegex`, `severity`, `enables`; compile every regex; reject unknown keys,
+invalid expressions and `diagnosticInterval`. At the pinned revision interval is
+EmmyLua-LS debounce only, not code analysis. No `.emmyrc` discovery/fallback.
+
+Raw JSON equality is not diagnostic semantic equality. Define one canonical
+analysis projection in `EmmyAnalysisConfiguration::equivalent`:
+
+- preserve `enable`;
+- sort/dedup `disable` and `enables` by diagnostic code;
+- sort/dedup `globals` and `globalsRegex`;
+- sort severity entries by diagnostic code;
+- omit `diagnosticInterval` entirely.
+
+Pinned analysis treats the list families as sets or OR-matched regexes, so order/
+duplicates have no effect. Omitted diagnostics, `{}`, reordering and duplicates
+must reuse one owner when analysis semantics match. A real analysis change forces
+cold owner. LS debounce remains frontend state.
+
+CLI scalars replace config scalars; repeated CLI Libraries replace config array.
+Defaults: text, `fail_on: error`, upstream default diagnostics. If config fails,
+only explicitly admitted CLI `--format` selects JSON error; otherwise text. Slice
+1A exposes no WoW checks and runs zero WoW rules.
 
 <a id="load-units-and-addon-context"></a>
 <a id="selected-acquisition"></a>
@@ -162,99 +235,38 @@ it.
 <a id="implicit-binding-documents"></a>
 <a id="addon-chunk-context"></a>
 
-### Subsequent context slices
+### Later context slices
 
-Add context only through existing narrow owners:
+1. required/available optional dependencies and exact selected order;
+2. source-projectable XML virtual units and exact projection;
+3. ordinary `(addonName, addonTable)` only for affected top-level ellipsis;
+4. reviewed handlers and coherent updates;
+5. channel, `LoadWith`, bindings, target Interface and secure/special context;
+6. generated metadata and selected WoW checks.
 
-1. required/available optional dependencies and exact selected package/file order;
-2. source-projectable XML Lua and exact virtual-to-XML diagnostics;
-3. ordinary `(addonName, addonTable)` chunk context where top-level `...` is used;
-4. reviewed UI handler parameters and coherent add/edit/remove/rename updates;
-5. product channel, `LoadWith`, implicit bindings, sentinel Interface and
-   secure/special contexts;
-6. generated-Library metadata and explicitly selected WoW checks.
-
-Each slice preserves independent language findings. Missing context limits only
-results that consume it.
-
-<a id="ordinary-configuration"></a>
-
-### Ordinary configuration
-
-Slice 1A accepts only:
-
-- `root`;
-- explicit `toc`;
-- exact `flavor: retail`;
-- nonempty `library` array;
-- optional `emmy_diagnostics`, `fail_on` and output format.
-
-Later slices add optional unambiguous TOC selection, `channel`, positive
-`target_interface`, `dependency_roots` and selected WoW `checks`. Their absence
-must not be filled with guesses or synthetic legacy identities.
-
-CLI paths resolve from cwd; config paths resolve from the config directory;
-relative TOC resolves from the addon root. CLI values override config. Repeated
-CLI `--library` replaces the configured array.
-
-No user supplies Project IDs, generations, `ProfileIdentity`, profile/report
-digests, receipts, proof manifests or graph budgets. Plain Lua Libraries remain
-valid for typing; missing generated metadata limits only checks that require it.
-
-### Load and context facts
-
-When their slices are implemented, Project owns:
-
-- finite required dependency aliases: `Dep`, `Dependencies`, `DependsOn`,
-  `RequiredDep`, `RequiredDeps`;
-- optional aliases: `OptionalDep`, `OptionalDeps`;
-- three-valued allow/exclude predicates;
-- exact package/TOC/XML/callback order separate from path-sorted snapshots;
-- package/per-unit environment, phase and ordinary/special chunk context;
-- `OnlyBetaAndPTR`, `LoadWith`, implicit `Bindings*.xml`, `DefaultState` and
-  SavedVariables declarations;
-- source `Interface: 0` as unknown compatibility, not a positive target;
-- raw unsupported `Secure` semantics without guessing an alias.
-
-`LoadWith` is a reverse trigger, not a dependency. Binding callbacks receive only
-reviewed callback context such as `keystate`; they are not addon chunks. User
-SavedVariables contents are never opened or inferred.
-
-Path-sorted `LuaWorkspaceSnapshot` identity is not WoW runtime order. Context
-requiring order uses a separate immutable validated Project value binding source
-role/path/digest/origin/addon/environment/phase and relevant load facts.
+Missing context limits only affected units. Path-sorted snapshots are analysis
+identity, not WoW execution order; exact order/context stays separate validated
+Project data.
 
 <a id="one-direct-check-operation"></a>
 
-### One direct check operation
+### Mature direct operation
 
-A mature check performs only the stages required by its selected scope:
-
-1. resolve ordinary config and target;
-2. select exact source and dependencies needed by that scope;
-3. capture bounded physical/Library/XML/binding bytes;
-4. prepare mapped virtual units and relevant context;
-5. build exact snapshots and validated source projection;
-6. open or reuse one compatible configured Emmy owner;
-7. collect language diagnostics and only semantic facts requested by selected
-   WoW checks;
-8. run those checks directly;
-9. return findings, scoped limitations and exit status.
-
-Optional component health is not a global clean gate.
+For selected scope: resolve strict input, acquire bytes, validate authority,
+prepare required context, derive required blockers, build exact snapshots/maps,
+reuse/open one compatible Emmy owner, collect requested facts/rules and return one
+result. Optional component health is not a global gate.
 
 <a id="updates"></a>
 
 ### Updates
 
-Reuse an immutable configured owner only while exact Main, canonical Library set,
-virtual snapshot and diagnostic configuration match. A physical delta is allowed
-only while selected membership and relevant context are unchanged.
-
-TOC/XML/bindings/dependency/channel/context/Library/config changes rebuild the
-selection and owner cold. Delete/rename removes declarations, virtual units,
-maps, diagnostics and later index rows together. Failed, cancelled or stale work
-never replaces a newer result. LSP overlays participate in the same identity.
+Reuse only while exact Main, canonical Library set, virtual snapshot and canonical
+analysis-relevant diagnostic projection match. LS debounce is not analyzer
+identity. Delta only while selected membership, target, projection, context and
+authority set are unchanged. TOC/XML/dependency/channel/context/Library/config
+changes rebuild cold. Remove declarations/maps/diagnostics/index rows together;
+failed/cancelled/stale work never publishes.
 
 <a id="native-annotation-generation"></a>
 <a id="preserve-the-existing-pipeline"></a>
@@ -262,23 +274,17 @@ never replaces a newer result. LSP overlays participate in the same identity.
 
 ## Native annotation generation
 
-Reuse the existing source-to-output path:
-
 ```text
 wow-reference-builder
   -> wow-reference native model/corrections
   -> wow-annotations + wow-ketho-literals
-  -> ordinary .lua files + optional source-report.json
+  -> ordinary .lua + optional source-report.json
 ```
 
-Read [KETHO_RUST_PORT.md](KETHO_RUST_PORT.md) for exact missing semantics:
-callable/member environment, `MayReturnNothing`, `NilableContents`, stride groups,
-mixins, Secret/restriction facts and source maps. Use only annotation syntax
-supported by the pinned Emmy consumer and record conservative losses.
-
-The builder reads source as data; it never executes donor Lua. One optional typed
-manifest may carry maps/facts required by implemented checks. Do not add a second
-manifest, converter or certification envelope.
+Read [KETHO_RUST_PORT.md](KETHO_RUST_PORT.md). Preserve environment,
+`MayReturnNothing`, `NilableContents`, stride, mixin, restriction/Secret and maps
+or report conservative loss. Never execute donor Lua. One optional typed manifest;
+plain Lua valid. No second producer/converter/certification envelope.
 
 <a id="outputs-and-corrections"></a>
 <a id="annotation-projection-rules"></a>
@@ -286,78 +292,52 @@ manifest, converter or certification envelope.
 
 ### Outputs and corrections
 
-Emit inert bounded `.lua` once. Corrections are explicit, source-guarded and
-separate from final emission. An accepted correction does not prove the resulting
-declaration was emitted successfully. Preserve original source, replacement,
-reason, generated span and unresolved conflicts.
-
-A real Library reader must consume successful output directly. Plain Lua remains
-a supported Library for typing.
+Emit inert bounded Lua once. Corrections are explicit/source-guarded and separate
+from emission. Preserve origin/replacement/reason/span/conflicts. Accepted
+correction does not prove emission. Ordinary Library reader consumes output.
 
 <a id="blizzard-ui-index-search-and-context"></a>
 <a id="small-navigation-operations"></a>
 
 ## Blizzard UI index, search and context
 
-Checking works without an index. The later source workflow uses one rebuildable
-SQLite database with normal tables for selected source identity, exact file body,
-symbols/spans and only useful TOC/XML/type/call relations. FTS indexes source
-bodies, not filenames alone.
-
-A later process must query without reconstructing Project/Emmy/Graph owners.
-Updates replace changed rows and delete removed rows transactionally. Context
-renders exact indexed text or a disk reread only after content identity matches.
-
-Remove nested SQLite -> hex -> JSON, replay recapture, generic Store lifecycle,
-Search retained-result/federation machinery and Context packs after their real
-callers move.
+Checking works without index. Later use one rebuildable SQLite DB with selected
+identity, exact bodies, symbols/spans and consumed relations; body FTS; later-
+process query without Project/Emmy/Graph replay; transactional updates; exact
+indexed context or identity-checked reread. Remove nested SQLite->hex->JSON,
+replay, generic lifecycle, federation and Context packs after final readers move.
 
 <a id="typed-source-relationships"></a>
 
 ## Typed source relationships
 
-Keep only relationships consumed by diagnostics, search or navigation:
-
-- callable/source origin;
-- dependency/trigger and selected file order;
-- XML include/template/script/binding relations;
-- selected type/call/reference relations.
-
-Preserve exact location, ambiguity and incomplete coverage. Do not serialize
-fixed Rust facts through generic pack/plan/matcher/proof layers and then convert
-them back.
+Keep only consumed callable origin, dependency/trigger/order, XML include/template/
+script/binding and selected type/call/reference relations. Preserve exact location,
+ambiguity and incomplete coverage. No pack/plan/matcher/proof round-trip.
 
 <a id="results-and-interfaces"></a>
 
 ## Results and interfaces
 
-Each workflow returns one small typed result. Addon checking separates:
+Addon result = findings + completeness + located limitations; no internal receipts.
+Deterministic diagnostics order: role/path/span/code/message. Limitations:
+code/location/message. Threshold rank Error > Warning > Information > Hint;
+preserved `Unknown` meets every threshold. Partial exit 2 precedes finding exit 1.
 
-- diagnostics/findings;
-- completeness;
-- scoped limitations with optional exact location.
+Pre-encode escaped text/JSON <= 32 MiB, check cancellation, then one write.
+Result -> stdout; pre-result error -> stderr. First byte commits the sole envelope.
+Oversize result invalid_input/64; serializer/I/O internal/4. Human text visibly
+escapes controls; typed/JSON strings exact.
 
-The public direct result contains no snapshot, analysis, Project, report or proof
-receipts. CLI/LSP/MCP serialize the same owner result at their protocol edge.
-Request IDs are transport correlation only.
-
-CLI is the complete offline path. LSP/MCP are thin adapters. General Lua editor
-features remain upstream EmmyLua. See [FRONTENDS.md](FRONTENDS.md).
+CLI/LSP/MCP are thin adapters; general Lua editor features remain upstream Emmy.
+See [FRONTENDS.md](FRONTENDS.md).
 
 <a id="completion-and-verification"></a>
 
-## Removal rule
+## Removal and verification
 
-Remove old compatibility/certification reports, publication/replay wrappers,
-generic result/capability models, matcher/proof graph paths and lifecycle
-administration only with their last real caller. Do not preserve disabled aliases
-or move the same platform into a new crate.
+Remove reports, publication/replay, generic results, matcher/proof graph and
+lifecycle only with final caller. Do not preserve aliases/rename platform.
 
-For every change trace:
-
-```text
-user input -> producer -> handoff -> reader -> visible result
-```
-
-Finish that path, record the evidence in the trace register, and do not confuse a
-build gate with product observation.
+Trace `user input -> producer -> handoff -> reader -> visible result`. Build,
+Clippy and source review are not product observation.
