@@ -47,11 +47,22 @@ rules are subsequent slices unless the selected input actually requires them.
 Unsupported selected input remains a located scoped limitation; unrelated or
 unrequested features do not make `LuaTypes` globally partial.
 
-Project must extract a small profile-free load target from its current
-`ProfileIdentity`-bound TOC reader. Never fabricate a profile ID, source/report
-digest, schema registry or positive target Interface merely to enter the direct
-route. Slice 1A also classifies TOC metadata by effect so cosmetic/custom fields
-cannot create false incompleteness.
+Slice 1A accepts exactly flavor `retail`. Project must extract a small
+profile-free load target from its current
+`ProfileIdentity`-bound TOC reader **and replace the retained plan's profile
+identity/validation**. Never fabricate a profile ID, source/report digest, schema
+registry or positive target Interface.
+
+Slice 1A uses a plan scope that captures direct TOC Lua without opening XML.
+Included XML remains an exact located limitation, not an acquisition failure that
+erases physical diagnostics. Use a standalone scope-aware plan mapper; do not use
+package-only mapping or global `external_files_complete()` as the result.
+
+Build snapshots with the compiled analyzer pin, Main universe `Project` and one
+separate `BlizzardUi` snapshot per Library root. Reject duplicate roots/IDs, keep
+root-relative paths and make Library errors name root + relative file. An XML-only
+physical slice returns partial through an empty Project snapshot, never a dummy
+file.
 
 Do not adapt the old `LocalCommand -> LocalProjectBackend -> generic Service`
 route, fabricate Reference/Rules/publication objects, or wrap the direct result
