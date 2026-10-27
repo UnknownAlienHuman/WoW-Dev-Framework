@@ -4,6 +4,9 @@ This guide records the durable contract with the pinned EmmyLua donor. Delivery
 state lives in [CURRENT_STATUS.md](CURRENT_STATUS.md); implementation order lives
 in [REFACTOR_QUEUE.md](REFACTOR_QUEUE.md).
 
+<a id="current-checkpoint"></a>
+<a id="pinned-upstream-contract"></a>
+
 ## Pinned donor
 
 The workspace pins `emmylua_code_analysis` and `emmylua_parser` to revision
@@ -31,6 +34,8 @@ files automatically.
 
 STD typing is not proof that the WoW client exposes a host API. Availability
 checks require the resolved symbol plus selected WoW facts.
+
+<a id="configured-analyzer-session"></a>
 
 ## Configured owner
 
@@ -67,6 +72,8 @@ Keep separate:
 3. frontend `fail_on`, which changes exit status but does not delete findings.
 
 Do not gate diagnostics through a framework code allowlist.
+
+<a id="diagnostics-and-source-locations"></a>
 
 ## Diagnostics and coordinates
 
@@ -111,6 +118,8 @@ Context is required only where selected code consumes it. A `LuaTypes` run over
 files that do not use top-level ellipsis must not be globally partial merely
 because the ordinary helper is not yet implemented.
 
+<a id="updates-and-cancellation"></a>
+
 ## Updates
 
 The upstream bulk update API removes/reindexes touched file IDs but does not prove
@@ -140,6 +149,8 @@ project, accepts increasing nonconsecutive versions and rejects stale publicatio
 Existing same-file navigation helpers may be retained only where a surviving
 WoW-specific consumer needs them; they are not whole-project language-server
 coverage.
+
+<a id="verification-boundary"></a>
 
 ## Verification boundary
 
