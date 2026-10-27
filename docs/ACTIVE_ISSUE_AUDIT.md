@@ -37,14 +37,23 @@ widen the active slice or preserve a removed result shape.
 
 ## Material source corrections
 
-### Root overlap is a file-authority problem
+### Root overlap is a normalized input-path problem
 
 Duplicate root and snapshot-ID checks are insufficient. Snapshot identity includes
-universe/content, so one physical file may receive different Main and Library IDs;
-overlapping recursive Library roots may share files while whole snapshots differ.
-Validate admitted file authorities after acquisition and reject the same file
-across roles/roots. Do not reject nested roots when selected file sets are
-disjoint, and do not reject equal relative paths in distinct roots.
+universe/content, so one selected host path may receive different Main/Library
+IDs; nested recursive Library roots may overlap while whole snapshots differ.
+A role/ordinal root slot plus relative path alone is insufficient because the
+same path has a different relative spelling under nested roots.
+
+Project must wrap crate-private `open_workspace`, retain request-local
+`InputRootId` (role plus ordinal) and a nonserialized lexical absolute root
+descriptor, then derive one conservative portable case-folded
+`InputPathAuthority` per admitted Lua using Project's existing case-collision
+policy. Case-only spellings intentionally collapse, but inode/content/hard-link
+identity is not used. Reject duplicate path authorities across roles/roots, not
+root ancestry. Equal relative paths in distinct roots remain valid when joined
+authorities differ; identical whole Library snapshots remain duplicate input.
+Legacy ambient `ProjectInputDirectory::open` is not the Slice 1A root boundary.
 
 ### The frontend cannot be the trusted assembler
 
@@ -59,18 +68,61 @@ config and render only.
 
 Current Library parse failure keeps only a relative path, loses it at the
 configured-session boundary and becomes internal component failure. Carry source
-role, snapshot/root token and relative path as fields; Service maps the snapshot
-to the configured Library root and returns invalid input. Project attaches paths
-to every file-specific acquisition error. Message parsing and synthetic analyzer
-roots are not admissible provenance.
+role, snapshot/`InputRootId` and relative path as fields; Service maps the snapshot
+to request-local `InputRootId` and returns a small operation-specific error whose
+public class is only `invalid_input`, `cancelled`, or `internal`. Project attaches
+root ID/path to every file-specific acquisition error. Source/workspace/diagnostic/
+result-size budget refusal is invalid input; analyzer invariants, serialization
+defects and output I/O are internal. Message parsing, absolute paths and synthetic
+analyzer roots are not admissible provenance; do not expand global `ServiceError`
+into a provenance platform.
 
 ### CLI success and error channels are separate
 
-Strict explicit config rejects unknown fields; each Library root must yield an
-admitted Lua inventory. Complete/partial results are written once to stdout.
-Usage/input/cancel/internal failures occur before a result and go to stderr; JSON
-mode uses one bounded typed error object and leaves stdout empty. Output failure
-never causes a retry or a second envelope.
+Strict explicit config is one regular no-follow file read through the narrow
+Project config helper. It reuses duplicate-key/depth-bounded `StrictJson`, rejects
+unknown outer fields and is capped at 256 KiB. Merge config and CLI before validating
+required fields; defaults are text, `fail_on: error` and upstream Emmy diagnostic
+settings. Library input is capped at 64 roots,
+8,192 files and 256 MiB aggregate; each root must yield Lua. Complete/partial
+results are pre-encoded under a 32 MiB cap and written once to stdout. Pre-result
+errors go once to stderr; JSON leaves stdout empty. Exceeding the public result
+size is invalid input (`64`); serialization invariants, write failure and
+cancellation-handler setup are internal (`4`). Check cancellation after encoding
+and before the first byte; after commit, no retry/replacement/second envelope.
+Error messages are capped at 4 KiB; `root_index` is Library-only and zero-based,
+and paths are relative to the role's configured root.
+Explicit Error > Warning > Information > Hint ranking controls `fail_on`; visible
+`Unknown` severity conservatively triggers every threshold. Diagnostics and
+limitations use explicit role/path/span/code ordering in both text and JSON.
+
+### Partial input is not the same as invalid input
+
+A missing addon root/explicit TOC, unsafe path or bytes, unrecoverable TOC syntax,
+resource-bound refusal or malformed Library is a pre-result `invalid_input`. A
+missing direct Lua named by a safely parsed TOC, unresolved required dependency or
+condition, deferred XML, selected environment uncertainty or actual top-level
+chunk ellipsis is a located partial result and preserves independent diagnostics.
+Ellipsis ownership is determined by a bounded collector on the same configured
+Emmy AST (`LuaLiteralToken::Dots` without an enclosing `LuaClosureExpr`), not by
+raw text or a second parse/session. It retains the lowest-starting exact occurrence
+per affected file.
+Repeated Main occurrences, Interface without a positive target, `LoadWith` and
+unused lifecycle/display/custom metadata remain observations for `LuaTypes`.
+
+Slice 1A exposes no WoW-check option. It runs configured Emmy diagnostics and zero
+WoW rules. Human text escapes control characters; typed/JSON strings stay exact.
+
+### Pinned diagnostic configuration is not strict by itself
+
+At the pinned EmmyLua revision, `EmmyrcDiagnostic` has no
+`deny_unknown_fields`, and `LuaDiagnosticConfig::new` logs then drops invalid
+`globalsRegex` entries. Slice 1A therefore prevalidates the exact nested key set
+and compiles every expression before constructing upstream configuration. Unknown
+or invalid nested settings are `invalid_input`, not silently repaired behavior.
+`diagnosticInterval` is rejected by the direct checker: the pinned code-analysis
+crate never reads it, while LS handlers use it only for debounce. It cannot be a
+no-op CLI setting or part of analyzer-owner compatibility.
 
 ## Maintenance rule
 

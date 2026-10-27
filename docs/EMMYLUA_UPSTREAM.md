@@ -64,22 +64,32 @@ or expose a Project publication identity.
 For the direct addon path use `EmmyBackendIdentity::compiled_pinned()`, Main
 universe `Project`, and one separate `BlizzardUi` Library snapshot per explicit
 annotation root. Apply existing Project Main and shared Library limits. Reject
-duplicate snapshot IDs, but do not confuse snapshot identity with physical input
-authority: universe changes can give the same physical file different IDs, and
-overlapping Library roots can share files while whole snapshots differ. Service
-must validate admitted role/root/file authority before opening Emmy.
+duplicate snapshot IDs, but do not confuse snapshot identity with input-path
+authority: universe changes can give one selected host path different IDs, and
+nested Library roots can overlap while whole snapshots differ. Before Emmy opens,
+Project/Service must reject duplicate nonserialized `InputPathAuthority` keys
+(normalized absolute root key + canonical relative path). Do not infer authority
+from bytes, snapshot IDs or inode/file IDs.
 
 A Library parse/health failure is invalid caller input. Extend the error handoff
 to preserve source role, Library snapshot ID and root-relative file through
-`ConfiguredSessionError`; Service maps the snapshot ID to the configured root.
-The current `LibraryHealthFailed -> NativeFailure -> ComponentUnavailable` path is
-a defect. Never parse message text or expose a synthetic analyzer root to recover
-origin.
+`ConfiguredSessionError`; Service maps the snapshot ID to a request-local root
+token and returns its operation-specific input error. The current
+`LibraryHealthFailed -> NativeFailure -> ComponentUnavailable` path is a defect.
+Never parse message text or expose a synthetic analyzer root to recover origin.
 
 ## Diagnostic configuration
 
-Decode explicit `emmy_diagnostics` as the pinned `EmmyrcDiagnostic` type. Invalid
-values are configuration errors; do not use a lenient discovery/fallback loader.
+Decode explicit `emmy_diagnostics` into the pinned `EmmyrcDiagnostic` type, but
+do not rely on its permissive serde boundary: at the pinned revision the struct
+lacks `deny_unknown_fields`, and `LuaDiagnosticConfig::new` logs then silently
+drops invalid `globalsRegex` entries. Prevalidate exactly the analysis-relevant
+pinned keys and compile every supplied regular expression; unknown keys and
+invalid expressions are configuration errors. Reject `diagnosticInterval` for
+the direct checker. At this revision only `emmylua_ls` text/watched-file handlers
+consume it as debounce state; `emmylua_code_analysis` does not. Do not let it
+change `ConfiguredAnalyzerSession` compatibility. Later LSP debounce is frontend
+state. Do not use `.emmyrc` discovery or a lenient fallback.
 Keep separate:
 
 1. Emmy diagnostic selection/severity;
@@ -87,6 +97,12 @@ Keep separate:
 3. frontend `fail_on`, which changes exit status but does not delete findings.
 
 Do not gate diagnostics through a framework code allowlist.
+
+CLI `fail_on` is a frontend decision over the preserved severity. Rank Error >
+Warning > Information > Hint explicitly; do not use the enum's derived ordering.
+An upstream diagnostic without severity remains `Unknown` and conservatively
+meets every threshold rather than allowing an unranked finding to produce a clean
+exit.
 
 <a id="diagnostics-and-source-locations"></a>
 
@@ -129,9 +145,17 @@ Do not rewrite nested function varargs, strings or comments. External chunks,
 free inline XML scripts, reviewed handlers, binding callbacks, secure/bootstrap
 contexts and `SuppressLocalTableRef` are distinct.
 
-Context is required only where selected code consumes it. A `LuaTypes` run over
-files that do not use top-level ellipsis must not be globally partial merely
-because the ordinary helper is not yet implemented.
+Context is required only where selected code consumes it. Add one bounded
+`ConfiguredAnalyzerSession` collector that reuses the same registered Main syntax
+trees as diagnostics. It walks Lua expression nodes, matches only
+`LuaLiteralExpr`/`LuaLiteralToken::Dots`, and excludes any match with an enclosing
+`LuaClosureExpr` before the chunk root. It returns the lowest-starting exact
+`{ path, content_sha256, span }` requirement per Main file. Do not scan raw text,
+do not launch a second parser/analysis, and do not match parameter lists, doc
+tags, strings or comments. Service verifies the returned path/content pair
+against the exact Main snapshot before emitting a located chunk-context
+limitation. A `LuaTypes` run over files without such use is not globally partial
+merely because helper injection is deferred to Slice 1B.
 
 <a id="updates-and-cancellation"></a>
 

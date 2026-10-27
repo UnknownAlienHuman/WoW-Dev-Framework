@@ -19,11 +19,11 @@ vertical slice, not the complete Blizzard loader:
 
 ```text
 wow check
-  --root <addon-dir>
-  --toc <explicit.toc>
-  --flavor retail
-  --library <dir> [--library <dir> ...]
   [--config <wowdev.json>]
+  [--root <addon-dir>]
+  [--toc <explicit.toc>]
+  [--flavor retail]
+  [--library <dir> ...]
   [--format text|json]
   [--fail-on error|warning|information|hint]
 ```
@@ -33,11 +33,24 @@ dependency roots and selected WoW checks. They must not delay the explicit
 physical-Lua command.
 
 CLI precedence and path bases are defined in
-[ordinary configuration](IMPLEMENTATION.md#ordinary-configuration). Read one
-explicit bounded config only; reject unknown fields and duplicate scalar options.
-Repeated CLI `--library` deliberately replaces configured roots. The frontend
-resolves display paths, then calls one public Service ordinary-check operation; it
-does not open source, construct snapshots or attach limitations.
+[ordinary configuration](IMPLEMENTATION.md#ordinary-configuration). Read at most
+one explicit 256 KiB config through a narrow Project helper that opens its parent
+and file component-by-component without following links; decode with existing
+duplicate-key/depth-bounded `StrictJson`, reject unknown outer fields and duplicate
+scalar options. Prevalidate exactly the analysis-relevant pinned
+`emmy_diagnostics` keys and compile every `globalsRegex`; reject
+`diagnosticInterval` because it is LS-only debounce state. Pinned upstream
+otherwise accepts unknown keys and silently drops invalid expressions. If config
+cannot be read/decoded, use an explicit CLI
+`--format` only after the complete CLI grammar is admitted; otherwise emit the
+text error form. The merged configuration must contain root, explicit TOC, exact
+flavor `retail` and at least one Library root. CLI scalar options replace
+configured scalars; one or more CLI `--library` options replace configured roots,
+with at most 64 accepted. Defaults are text output, `fail_on: error` and upstream
+default Emmy diagnostics. The explicit TOC is a canonical relative `.toc` path
+under the addon root. The frontend resolves display/base paths, then calls one
+public Service ordinary-check operation; it does not open addon/Library source,
+compute path-authority keys, construct snapshots or attach limitations.
 
 <a id="check-results-and-command-status"></a>
 
@@ -47,16 +60,22 @@ Text and JSON render the same typed result:
 - diagnostics with exact code, message, severity and user-source range;
 - scoped limitations with optional exact source location.
 
+Both formats use one deterministic Service order: diagnostics by role, canonical
+path, byte span, code and message; limitations by code, optional location and
+message. Filesystem enumeration and derived enum ordering do not affect output.
+
 The direct public result contains no snapshot, analyzer, Project generation,
 report, proof or component/capability identities. Paths are canonical relative to
 the configured addon root; text rendering may show `root/path`, while JSON keeps
 the relative identity the caller supplied with the root. Ambient absolute paths
 never enter snapshot/result identity.
 
-Malformed configuration, unsafe/missing selected input and malformed Library
-content are invalid input (`64`), not partial success or internal component
-failure. A retained source branch that was safely selected but is deferred or
-unresolved is a scoped partial result (`2`) with independent diagnostics.
+Malformed configuration, missing/unreadable addon root or explicit TOC, unsafe
+source path/bytes and malformed Library content are invalid input (`64`), not
+partial success or internal component failure. A missing direct Lua file named by
+a safely parsed TOC, required dependency, unresolved included condition or
+deferred selected XML is a scoped partial result (`2`) with independent
+diagnostics.
 
 Recommended exit policy:
 
@@ -70,19 +89,32 @@ Recommended exit policy:
 | `130` | cancelled |
 
 A limitation unrelated to the requested scope does not force exit `2`. Exit
-precedence is deterministic: invalid input `64`; observed cancellation `130`;
-internal/output failure `4`; otherwise a partial result `2`; otherwise a finding
-at/above threshold `1`; otherwise `0`. Findings remain in partial output.
+precedence is deterministic: invalid input/resource refusal `64`; observed
+cancellation `130`; internal/output I/O failure `4`; otherwise a partial result
+`2`; otherwise a finding at/above threshold `1`; otherwise `0`. Findings remain
+in partial output. Compare severity with an explicit Error > Warning > Information
+> Hint ranking, never derived enum ordering. Preserve `Unknown` and treat it as
+meeting every threshold because it cannot be proven lower.
 
-A complete or partial `AddonCheckResult` is encoded once on stdout.
-Configuration, selected-source, Library, cancellation and internal failures that
-occur after output format is admitted but before a result use stderr. In JSON
-mode stderr receives one bounded object such as
-`{"error":{"code":"invalid_input","message":"...","root":"...","path":"..."}}`;
-stdout stays empty. CLI syntax/option failures before format admission use one
-concise text usage error on stderr. Text mode writes one concise error line. A
-failed stdout/stderr write returns `4` without retrying the operation or emitting
-a second envelope.
+A complete or partial `AddonCheckResult` is rendered into a bounded 32 MiB
+buffer, then written once to stdout. Configuration, selected-source, Library,
+cancellation and internal failures after output format is admitted are rendered
+once to stderr. In JSON mode stderr receives one bounded object such as
+`{"error":{"code":"invalid_input","message":"...","role":"library","root_index":0,"relative_path":"..."}}`;
+stdout stays empty. Error messages are capped at 4 KiB. `root_index` is emitted
+only for `role: library` and is zero-based in the merged Library list;
+configuration/Main errors omit it. Public operation error codes are exactly
+`invalid_input`,
+`cancelled`, and `internal`. CLI syntax/option failures before format admission
+use one concise text usage error. Human output uses JSON-style visible escaping for untrusted messages; the typed/
+JSON result preserves exact strings. Text mode writes one concise error line. If
+the fully escaped/encoded result exceeds 32 MiB, emit one `invalid_input` error
+(exit `64`) with empty stdout. After encoding, check cancellation once before
+the first output byte; a stop there emits only the cancellation error and exits
+`130`. Once the write starts, do not replace or append another envelope; finish
+the single write or return `4` on I/O failure. Serializer invariants,
+cancellation-handler setup or stdout/stderr write failure return `4` without
+retrying the operation.
 
 <a id="locations-and-document-updates"></a>
 <a id="stdio-protocol-behavior"></a>
@@ -97,7 +129,7 @@ Keep:
 
 - exact unsaved text, document version and root isolation;
 - UTF-8/UTF-16 negotiation and checked range conversion;
-- increasing nonconsecutive client versions;
+- increasing nonconsecutive versions;
 - stale/cancelled result rejection;
 - standard `null`/empty results for supported no-match requests;
 - protocol-only stdout, bounded frames and stderr logging.

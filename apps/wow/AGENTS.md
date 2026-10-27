@@ -1,13 +1,14 @@
 # CLI and protocols
 
-Follow root AGENTS, current status, the active queue slice and FRONTENDS.
+Follow root AGENTS, current status, the active queue slice and
+[FRONTENDS](../../docs/FRONTENDS.md).
 
-Slice 1A parses only strict explicit root, TOC, flavor `retail`, Library roots,
-diagnostic settings, format and threshold. Resolve display paths, then call the
-single public Service ordinary-check operation.
+The application owns CLI/config precedence, display paths, rendering and exit
+status. For Slice 1A it calls the single public Service ordinary-check operation.
+It does not open addon/Library source, compute source authority, parse TOC/XML,
+construct snapshots/lower requests, attach limitations or fabricate internal
+identities.
 
-Do not open source, construct Project/Emmy snapshots, call the lower
-`AddonCheckRequest`, attach limitations, parse XML/load facts or fabricate
-profiles/Reference/Rules/publication identities. Render root-relative results;
-write complete/partial results to stdout and typed pre-result errors to stderr.
-Never retry after output failure or emit a second envelope.
+Use the strict config and output/error contracts in FRONTENDS. Advertise only
+working commands. Never retry an operation after output begins or emit a second
+envelope.

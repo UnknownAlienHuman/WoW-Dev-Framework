@@ -1,28 +1,18 @@
 # Product operations
 
-Delivery state: [CURRENT_STATUS.md](../../docs/CURRENT_STATUS.md). Owner boundaries:
-[IMPLEMENTATION.md](../../docs/IMPLEMENTATION.md#code-ownership).
+Delivery state: [CURRENT_STATUS](../../docs/CURRENT_STATUS.md). Owner boundaries:
+[IMPLEMENTATION](../../docs/IMPLEMENTATION.md#code-ownership).
 
 The existing lower `addon_check` composes exact snapshots and returns scope,
-completeness, diagnostics and limitations without legacy platform receipts. It is
-not a safe frontend boundary because its public request accepts independently
-supplied snapshots and arbitrary limitations.
+completeness, diagnostics and limitations. It is not the frontend trust boundary.
+Slice 1A adds one narrow public Service operation that owns Project preparation,
+plan/input binding, requested-scope limitations, exact snapshot construction,
+same-owner Emmy requirements, structured operation errors and invocation of the
+lower check.
 
-Slice 1A adds one narrow public Service operation that owns:
-
-- Project target/scope preparation and plan/Main validation;
-- held-root acquisition and same-file authority checks across Main/Libraries;
-- standalone requested-scope limitations;
-- compiled-pin Main/per-root Library snapshots;
-- snapshot-ID -> configured-root mapping for structured input failures;
-- construction of the lower request and invocation of existing `check_addon`.
-
-CLI/LSP/MCP call only that operation. They never call `with_input_limitations`,
-construct snapshots or combine a plan with unrelated Main bytes. Keep the lower
-request/check crate-internal once callers move.
-
-Only requested-scope blockers enter the result. Project observations remain
-Project data. Remove unconditional chunk incompleteness. Preserve role, root
-token/snapshot ID and relative path through errors; malformed caller input is
-invalid input, not `ComponentUnavailable`. Ambient absolute paths are display
-context, not result identity.
+CLI/LSP/MCP call only that public operation. They never construct the lower
+request or attach limitations. Keep observations out of requested-scope blockers,
+preserve structured source origin, and do not introduce a generic backend,
+registry, receipt, publication or result hierarchy. Exact contracts live in
+[IMPLEMENTATION](../../docs/IMPLEMENTATION.md#first-implementation-slice) and the
+[queue](../../docs/REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check).

@@ -2,7 +2,8 @@
 
 **Original review base:** `0784d0cb5f2c709fa7d6778f6ad7448df7a8cb77` (`main` after PR #256)
 **Final Slice 1A source re-audit:** `28302632599bed087394dee83751815d13041579` (`main` after PR #268)
-**Scope:** ordinary acquisition traces T02–T05, addon-context trace T11, metadata trace T23 and direct first-slice traces T32–T34
+**Scope:** ordinary acquisition traces T02–T05, addon-context trace T11,
+metadata trace T23 and direct first-slice traces T32–T39
 
 This is post-baseline source evidence for the first public `wow check`. It
 supplements [IMPLEMENTATION_TRACE_REGISTER.md](IMPLEMENTATION_TRACE_REGISTER.md);
@@ -237,7 +238,7 @@ need load semantics.
 
 Two already recorded defects remain in the same producer chain:
 
-- `read_toc_source` rejects Main when no physical Lua file exists, before mapped
+- `read_toc_source` rejects Main when no physical Lua source exists, before mapped
   XML units can form the language program;
 - `Loader::expand` propagates `xml::parse(...)?`, so one malformed included XML
   document aborts the entire selected closure instead of preserving independent
@@ -316,13 +317,22 @@ ProjectLoadPlan + requested AddonCheckScope
   -> located AddonCheckLimitation values
 ```
 
-For Slice 1A, missing required dependencies, unresolved selected conditions,
-missing selected Lua, malformed load syntax and deferred selected XML can block
-completeness. Missing optional dependencies are normal. Source Interface without
-a positive target, display/localized/custom metadata and observations unused by
-`LuaTypes` remain retained Project facts, not direct limitations. Do not equate
-`LoadIssue::blocks_complete` or `ProjectLoadPlan::external_files_complete()` with
-requested-scope completeness.
+For Slice 1A, a missing direct Lua file named by a safely parsed TOC,
+missing required dependency, unresolved selected condition, recoverable unknown
+syntax/file kind, selected environment/context change and deferred selected XML
+can block completeness. Missing addon root/explicit TOC, unsafe paths, invalid
+TOC bytes or unrecoverable syntax are pre-result invalid input. Missing optional
+dependencies, repeated occurrences of one admitted Main file, source Interface
+without a positive target, `LoadWith`, lifecycle/display/custom metadata and
+observations unused by `LuaTypes` remain retained Project facts, not direct
+limitations. Do not equate `LoadIssue::blocks_complete` or
+`ProjectLoadPlan::external_files_complete()` with requested-scope completeness.
+
+Chunk context is also scope-dependent: use a bounded collector on the same
+configured Emmy owner, matching `LuaLiteralToken::Dots` only outside any enclosing
+`LuaClosureExpr`, and add one located limitation per affected Main file; nested
+function varargs, strings and comments do not count. Binding/injection remains the
+next context slice.
 
 The plan and Main inventory must be validated against one another before snapshot
 construction. Reject duplicate Library roots/snapshot IDs. A caller-supplied
@@ -341,7 +351,7 @@ file; it is not an internal analyzer outage.
 - preserve exact selected order in a validated context receipt;
 - expose `physical_lua` TOC projection for Slice 1A and pure mapped XML preparation for the next slice;
 - expose a standalone scope-aware plan-to-limitation handoff;
-- allow virtual-only/empty language input without a dummy physical file.
+- allow virtual-only/empty language input without a dummy physical source.
 
 ### `wow-emmy`
 

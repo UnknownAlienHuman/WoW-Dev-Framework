@@ -63,37 +63,69 @@ The implementation boundary is now explicit:
    `LuaTypes`. Required dependencies, unresolved included conditions, missing
    selected Lua and deferred XML block that scope. Optional absence, unused source
    Interface and nonblocking metadata remain Project observations.
-4. **Input-root authority.** Resolve path bases lexically without following root
-   links, then open every addon and Library root once through Project's
-   component-wise held-root/no-follow readers. Reject duplicate roots, empty Library
-   inventories, duplicate snapshot IDs and any same admitted physical Lua file
-   appearing in more than one role or Library root. Mere ancestor/descendant roots
-   are not rejected when their admitted file sets are disjoint. Relative-path
-   equality across distinct roots is allowed.
+4. **Input-root authority.** Project must expose one safe preparation entry that
+   uses its crate-private component-wise `open_workspace`; Slice 1A must not use
+   legacy ambient `ProjectInputDirectory::open`. Each opened root retains a
+   request-local role/ordinal `InputRootId` and a nonserialized normalized
+   absolute root descriptor. Every unique admitted Lua gets a conservative portable
+   `InputPathAuthority` from the lexical absolute descriptor plus its canonical
+   relative path, slash-normalized and Unicode-lowercased. This intentionally
+   treats case-only spellings as one authority but never claims inode/object
+   identity. Reject duplicate authorities, empty Library
+   inventories and duplicate snapshot IDs. Repeated TOC occurrences are load
+   records, not duplicate authorities. Nested roots and equal relative paths are
+   allowed when authority sets are disjoint. Distinct admitted paths are not
+   collapsed by content digest, inode, hard-link or snapshot identity.
 5. **One Service orchestration boundary.** A single narrow public Service
    operation owns Project preparation, plan/Main binding, scope limitation
    projection, input-authority validation, snapshot construction and the call to
    the existing low-level `check_addon`. Frontends must not construct
    `AddonCheckRequest`, attach arbitrary limitations or combine a plan with
    unrelated snapshots.
-6. **Structured input failures.** Preserve source role, snapshot/root token and
+6. **Structured input failures.** Preserve source role, snapshot/`InputRootId` and
    root-relative path through Project/Emmy/ConfiguredSession/Service. In
    particular, `LibraryHealthFailed` is invalid caller input and maps its snapshot
-   back to the configured Library root; it is not `ComponentUnavailable` and is
-   never recovered by parsing message text or synthetic analyzer paths.
-7. **Exact result and frontend contract.** Main uses the compiled pin and universe
-   `Project`; each Library root becomes one `BlizzardUi` snapshot under retained
-   limits. Canonical paths are root-relative. Empty physical Main with deferred
-   XML is an empty Project snapshot plus a located partial limitation. Successful
-   or partial results go to stdout; pre-result input/cancel/internal errors after
-   format admission go to stderr, with one bounded JSON error object when
-   `--format json` is selected. CLI syntax/option errors before format admission
-   use one text usage error on stderr. Unknown config fields are rejected; no
-   implicit config discovery.
+   back to a request-local root ordinal; it is not `ComponentUnavailable`. Use one
+   small addon-check operation error with only `invalid_input`, `cancelled`, or
+   `internal`, not a universal `ServiceError` provenance
+   expansion, and never recover origin from message text or synthetic paths.
+7. **Strict config and exact result contract.** Read an explicit config only
+   through a narrow Project helper wrapping the crate-private no-follow opener;
+   legacy ambient `ProjectInputDirectory::open` is not a Slice 1A trust boundary.
+   Main uses the compiled pin and universe
+   `Project`; each Library root becomes one `BlizzardUi` snapshot. Retain per-root
+   limits and add fixed aggregate ceilings: 64 roots, 8,192 Library files and
+   256 MiB. Canonical paths are root-relative. Empty Main is complete only when
+   no language unit/blocker was selected; deferred XML makes it partial. Config
+   is one explicit regular no-follow file using existing duplicate-key/depth-
+   bounded JSON, a 256 KiB cap and unknown-field rejection. CLI/config merge
+   defaults to text, `fail_on: error` and upstream default Emmy diagnostics. Slice
+   1A has no WoW-check option; it always runs zero WoW rules. Strictly prevalidate
+   the nested diagnostic object and every `globalsRegex`, because pinned upstream
+   accepts unknown keys and silently drops invalid regexes. Reject the upstream
+   `diagnosticInterval` key in Slice 1A: it is consumed only by EmmyLua LS debounce,
+   not code analysis, and must not create a false analyzer-configuration identity.
+   Render a complete
+   result/error into a bounded 32 MiB buffer before one write: results to stdout,
+   admitted-format errors to stderr, early usage errors as text. Sort diagnostics
+   and limitations by explicit role/path/span/code keys before either rendering.
+   Diagnostic/result volume beyond the public bound is `invalid_input`;
+   serializer defects, cancellation-handler setup and output I/O are `internal`
+   (`4`). Check cancellation after encoding and before the first output byte;
+   once output starts, never replace or append another envelope. Operation-error
+   messages are capped at 4 KiB; only Library errors carry a zero-based
+   `root_index`, and all paths are role-relative. Severity thresholding uses
+   an explicit Error > Warning > Information > Hint ranking; `Unknown` remains
+   visible and conservatively meets every threshold.
 
 `check_addon` must stop adding unconditional chunk-context incompleteness and
-hard-coded `Partial`. Completeness follows only facts required by selected
-`LuaTypes` units.
+hard-coded `Partial`. The same configured Emmy owner must expose a bounded Main
+requirement collector over its registered AST: match only
+`LuaLiteralExpr`/`LuaLiteralToken::Dots` with no enclosing `LuaClosureExpr`,
+return at most one exact path/content/span record per file, and never scan raw
+text or start another parser/session. Service validates that report against the
+exact Main snapshot and limits only affected files. Completeness follows only
+facts required by selected `LuaTypes` units.
 
 ## Ordered work
 
@@ -115,7 +147,8 @@ The exact acceptance conditions are in
 ## Readiness verdict
 
 - baseline/current documentation reconciliation: **complete at the named base**;
-- canonical Slice 1A plan: **ready after T32–T39 are implemented together**;
+- canonical Slice 1A plan: **ready after T23 and T32–T39 are implemented
+  together, including the T31/T33/T36/T38/T39 refinements recorded through D80**;
 - first ordinary `wow check`: **not implemented**;
 - any addon/editor/search workflow observed: **no**;
 - guarantee of no future runtime defect: **no**. The documentation now closes the

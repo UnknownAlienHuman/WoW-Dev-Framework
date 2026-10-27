@@ -9,90 +9,56 @@ Read, in order:
    domain behavior in [WOW_LINTER.md](docs/WOW_LINTER.md);
 5. the actual producer, handoff and consumer code.
 
-`CURRENT_STATUS.md` is the only live delivery checkpoint. The
-[trace register](docs/IMPLEMENTATION_TRACE_REGISTER.md) records evidence and
-observations. README files, package summaries, Issue history and removed
-specifications are secondary and cannot expand or narrow the current task.
+`CURRENT_STATUS.md` is the only live delivery checkpoint. The queue is the only
+ordered work list; the trace register records evidence and observations. README,
+package guidance, skills, Issues and historical specifications cannot expand or
+narrow the active slice.
 
 ## Work
 
 - One manager, one worktree/branch. Delegate only bounded reads or disjoint paths.
-- Finish one useful producer-to-user path. Change the real producer and consumer
-  together; remove displaced wrappers, options and prose with their last caller.
+- Finish one producer-to-user path. Change the real producer and consumer together;
+  remove displaced wrappers, options and prose with their last caller.
 - Reuse [pinned donors](docs/DONORS.md) only after reading the exact relevant
-  source. Blizzard facts, Ketho annotation behavior and Wowless comparison
-  behavior are different authority classes.
-- Keep source bytes, locations, ambiguity, incomplete input and cancellation
-  honest. Never execute analyzed Lua or rewrite user source.
+  source. Blizzard facts, Ketho behavior and Wowless comparison behavior have
+  different authority.
+- Preserve exact bytes, locations, ambiguity, incomplete input and cancellation.
+  Never execute analyzed Lua or rewrite user source.
 - After two failed attempts at one approach, identify the failed assumption and
   change method.
 
-## First public check
+## Active slice
 
-Do not recreate analyzer or result owners already marked **implemented** in the
-trace register. The first public command is a small `LuaTypes` vertical slice:
+Implement Slice 1A exactly as specified in
+[the queue](docs/REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check) and
+[the owner guide](docs/IMPLEMENTATION.md#first-implementation-slice). Do not copy
+that contract here or invent missing policy.
 
-```text
-ordinary explicit configuration
-  -> one public Service ordinary-check operation
-  -> Project target/scope plan + collision-free admitted bytes
-  -> exact Main/Library snapshots
-  -> existing ConfiguredAnalyzerSession / low-level check_addon
-  -> text/JSON diagnostics, relevant limitations and exit status
-```
+Critical boundaries:
 
-It must not wait for every Blizzard load feature. Product channel, `LoadWith`,
-implicit bindings, secure/special contexts, full XML handler context and WoW
-rules are subsequent slices unless the selected input actually requires them.
-Unsupported selected input remains a located scoped limitation; unrelated or
-unrequested features do not make `LuaTypes` globally partial.
-
-Slice 1A accepts exactly flavor `retail`. Project must extract a small
-profile-free load target from its current
-`ProfileIdentity`-bound TOC reader **and replace the retained plan's profile
-identity/validation**. Never fabricate a profile ID, source/report digest, schema
-registry or positive target Interface.
-
-Slice 1A uses a plan scope that captures direct TOC Lua without opening XML.
-Included XML remains an exact located limitation, not an acquisition failure that
-erases physical diagnostics. Use a standalone scope-aware plan mapper; do not use
-package-only mapping or global `external_files_complete()` as the result.
-
-Use Project's held-root readers and validate actual admitted file authority.
-Reject duplicate roots, empty Library inventories, duplicate snapshot IDs and the
-same physical Lua file across roles/roots; allow disjoint nested roots and equal
-relative paths in distinct roots. Preserve root token + relative path on errors.
-
-Frontends call one narrow public Service operation that owns Project preparation,
-limitations, authority validation, snapshots and the lower check. They never
-construct `AddonCheckRequest` or attach limitations. Complete/partial results use
-stdout; typed pre-result errors use stderr. An XML-only physical slice returns
-partial through an empty Project snapshot, never a dummy file.
-
-Do not adapt the old `LocalCommand -> LocalProjectBackend -> generic Service`
-route, fabricate Reference/Rules/publication objects, or wrap the direct result
-inside component/capability/presentation models.
+- frontends call one narrow public Service operation;
+- Service owns Project preparation, requested-scope limitations, exact snapshots,
+  same-owner Emmy requirements and the lower check;
+- Project owns safe root/file admission and selected source authority;
+- no `ProfileIdentity`, publication/replay/proof, Reference/Rules, graph/store,
+  second parser/analyzer, generic result hierarchy or hidden compatibility route;
+- channel, dependencies, full XML/chunk injection, bindings, secure contexts and
+  WoW checks remain later slices unless the queue explicitly moves them.
 
 ## Validation
 
 Write the product path first. For Rust changes run formatting and the smallest
-strict Clippy invocation covering affected crates and callers. Do not duplicate
-that with a separate `cargo check`. Tests remain deferred until the product is
-functionally complete, as directed by the owner.
+strict Clippy invocation covering affected crates and callers; do not duplicate it
+with a separate `cargo check`. Tests remain deferred until functional completion,
+as directed by the owner.
 
-For documentation changes:
+For documentation changes, inspect source claims, current `main`, links/anchors
+and instruction consistency. Update the trace immediately when a finding changes a
+boundary. Do not cite compilation or Clippy as documentation evidence.
 
-- inspect source claims, current `main`, links/anchors and instruction consistency;
-- compare old requirements with their current owner or explicit retirement;
-- update the active register immediately when a finding changes a boundary;
-- do **not** build the Rust workspace or cite Clippy as documentation evidence.
+A build, source trace or document review never makes a workflow **observed**.
+Observation requires the exact ordinary command/protocol input and visible result
+recorded in the trace register.
 
-A build, source trace or document review never promotes a user workflow to
-**observed**. Observation requires the exact ordinary command or protocol
-sequence, input and visible result recorded in the trace register.
-
-## Handoff
-
-Publish one coherent branch/PR after rereading the remote head. State the change,
-document checks and remaining limitations briefly. Do not create acceptance-tier,
-proof-archive or status-diary machinery.
+Publish one coherent branch/PR after rereading the remote head. Do not create
+acceptance-tier, proof-archive, migration-inventory or status-diary machinery.
