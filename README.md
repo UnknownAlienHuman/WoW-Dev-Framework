@@ -1,81 +1,61 @@
 # WoW Dev Framework
 
-A **World of Warcraft addon linter**, written in Rust on top of
-[EmmyLua](https://github.com/EmmyLuaLs/emmylua-analyzer-rust), Blizzard's API/UI
+A **World of Warcraft addon linter** written in Rust on top of
+[EmmyLua](https://github.com/EmmyLuaLs/emmylua-analyzer-rust), Blizzard API/UI
 source and the useful annotation semantics from
 [Ketho](https://github.com/Ketho/vscode-wow-api).
 
-The product should catch Lua/type errors and selected WoW-specific mistakes while
-an addon is being written: API calls, optional/multiple returns, callbacks,
-widgets, TOC/XML loading and supported restrictions. Generated libraries remain
-ordinary `.lua` files. Source lookup serves diagnostics and development; it is
-not a prerequisite for checking an addon.
+The product has three workflows:
 
-## Current status
+1. generate an ordinary `.lua` Library from a selected Blizzard source revision;
+2. check addon Lua with EmmyLua plus narrowly selected WoW-aware checks;
+3. index selected Blizzard/addon source and return readable located search and
+   navigation results.
 
-The documentation/source audit was consolidated in PR #244. The authoritative
-live checkpoint is [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md); the baseline
-[audit](docs/AUDIT.md) remains tied to the commit it names.
+Checking does not require a search index, editor extension, remote service or
+Project publication/proof identities. Analyzed Lua is read as data and never
+executed or rewritten.
 
-Runtime implementation currently stops at PR #250. PRs #251–#256 reconcile
-current guides, Issues and additional source/load requirements; they do not add
-runtime behavior.
+## Status
 
-Implemented internal components:
+The 329-document baseline reconciliation is complete. Its evidence remains in
+[the baseline audit](docs/AUDIT.md) and
+[baseline register](docs/AUDIT_REGISTRY.md).
 
-- PR #246 preserves configured Emmy diagnostic codes, exact messages, severities
-  and source ranges instead of filtering to four families;
-- PR #247 provides one configured Main + Library + optional virtual Emmy owner,
-  fixes Lua 5.1, initializes embedded STD once, and separates diagnostics-only
-  collection from requested semantic collection;
-- PR #248 provides `wow-service::addon_check`, a direct snapshot-to-result path
-  that does not construct the old Reference/Rules/publication/graph/store stack;
-- PR #249 distinguishes compiled Emmy provenance from compatibility-report
-  evidence, so the direct path need not fabricate report hashes;
-- PR #250 requires exact Main snapshot identity for configured-owner reuse.
+[Current status](docs/CURRENT_STATUS.md) is the **only live implementation
+checkpoint**. The [trace register](docs/IMPLEMENTATION_TRACE_REGISTER.md) records
+source decisions and exact observations. README files and contributor summaries
+must not copy a moving list of delivered PRs or narrow the active queue.
 
-These are internal components, not a usable public addon checker. The ordinary
-Project path still has to preserve product channel, dependencies versus
-`LoadWith`, exact selected order/execution context, implicit bindings,
-Interface/security uncertainty, XML mappings and addon/callback context before
-calling them. CLI wiring, WoW metadata/rule repairs, project-aware LSP reuse and
-direct source index/search also remain open. No end-to-end addon or editor
-workflow is marked observed.
+No ordinary end-to-end addon, editor or source-search workflow is currently
+marked observed.
 
-The complete current checklist is
-[queue item 1](docs/REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check); this
-README is only a status/navigation summary.
-
-## Current executable entry points
+## Current executables
 
 ```sh
 cargo run --locked -p wow-cli --bin wow -- --help
 cargo run --locked -p wow-reference-builder -- --help
 ```
 
-The existing generator's exact interface is documented in
-[its README](apps/wow-reference-builder/README.md). The simple `wow check`, index
-and search interfaces in [FRONTENDS.md](docs/FRONTENDS.md) are target behavior
-until their ordinary inputs reach the delivered lower owners.
+The current `wow` command still exposes transitional internal routes. Target
+`wow check`, index, search and context shapes are documented in
+[FRONTENDS.md](docs/FRONTENDS.md) and are not claims of delivered commands.
 
-## Development documentation
+## Documentation
 
-- [Current status](docs/CURRENT_STATUS.md): implemented slices, open handoffs and
-  verification level.
-- [Architecture](docs/ARCHITECTURE.md): purpose, requirements and boundaries.
-- [WoW linting behavior](docs/WOW_LINTER.md): language/game semantics.
-- [Implementation](docs/IMPLEMENTATION.md): existing code to reuse and target
-  producer-to-consumer paths.
-- [Implementation trace register](docs/IMPLEMENTATION_TRACE_REGISTER.md):
-  post-merge source traces, implementation evidence and unexecuted observations.
-- [Donors](docs/DONORS.md): pinned modules, ideas and reuse boundaries.
-- [Queue](docs/REFACTOR_QUEUE.md): the next coherent implementation slices.
+- [Architecture](docs/ARCHITECTURE.md): product and scope.
+- [WoW linter behavior](docs/WOW_LINTER.md): language and game semantics.
+- [Implementation](docs/IMPLEMENTATION.md): owner boundaries and direct paths.
+- [Queue](docs/REFACTOR_QUEUE.md): ordered vertical slices.
+- [Current status](docs/CURRENT_STATUS.md): delivered, open and observed state.
+- [Trace register](docs/IMPLEMENTATION_TRACE_REGISTER.md): evidence and decisions.
+- [Donors](docs/DONORS.md): pinned sources and reuse boundaries.
+- [Documentation index](docs/README.md): remaining focused guides.
 
-Contributors start with [AGENTS.md](AGENTS.md). The full guide index is
-[docs/README.md](docs/README.md). Historical platform specifications remain in
-Git history, not as competing instructions in the working tree.
+Contributors start with [AGENTS.md](AGENTS.md). Historical platform
+specifications remain in Git history, not as competing instructions.
 
 ## License
 
-Framework-owned code is MIT. Preserve third-party notices; Blizzard/Ketho input
-material retains its own provenance and applicable terms.
+Framework-owned code is MIT. Preserve third-party notices and the provenance and
+terms of Blizzard-derived input data.
