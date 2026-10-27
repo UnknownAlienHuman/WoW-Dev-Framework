@@ -1,50 +1,41 @@
 # Documentation
 
-Start with [current status](CURRENT_STATUS.md), then the full
-[manifesto](ARCHITECTURE.md), and read only the guide needed for the task. The
-code is the implementation; target documents describe the intended product, and
-baseline audit documents describe the commit they name rather than silently
-tracking later merges.
+Start with [current status](CURRENT_STATUS.md), then
+[architecture](ARCHITECTURE.md) and the active item in
+[the queue](REFACTOR_QUEUE.md). Read only the owner/domain guide needed for the
+change.
 
 | Question | Read |
 | --- | --- |
-| What is implemented now, and what remains unobserved? | [Current status](CURRENT_STATUS.md) |
-| What are we building? | [Architecture](ARCHITECTURE.md) |
-| What must a correct WoW linter understand? | [WoW behavior](WOW_LINTER.md) |
-| Which code should change, and in what order? | [Implementation](IMPLEMENTATION.md), [queue](REFACTOR_QUEUE.md) |
-| Which post-merge implementation boundaries were source-traced, implemented, or observed? | [Implementation trace register](IMPLEMENTATION_TRACE_REGISTER.md) |
-| Which ordinary TOC/load facts require exact context and donor/source distinction? | [TOC load context](TOC_LOAD_CONTEXT_AUDIT.md), [triggers and bindings](TOC_TRIGGER_BINDINGS_AUDIT.md) |
-| Were the active GitHub Issues checked against their current production callers? | [Active Issue caller audit](ACTIVE_ISSUE_AUDIT.md) |
-| What can be reused? | [Donors](DONORS.md) |
-| How are Blizzard facts converted to annotations? | [Ketho/native projection](KETHO_RUST_PORT.md) |
-| How is EmmyLua configured and updated? | [EmmyLua](EMMYLUA_UPSTREAM.md) |
-| How do users, editors and agents access it? | [CLI/LSP/MCP](FRONTENDS.md) |
-| What did the baseline source audit establish? | [Verified baseline audit](AUDIT.md) |
-| Which baseline documents and code paths were checked? | [Baseline review register](AUDIT_REGISTRY.md) |
-| How do contributors work? | [AGENTS.md](../AGENTS.md) |
+| What is delivered, open and actually observed? | [Current status](CURRENT_STATUS.md) |
+| What are we building and excluding? | [Architecture](ARCHITECTURE.md) |
+| What must the WoW-aware linter understand? | [WoW behavior](WOW_LINTER.md) |
+| Which owner changes and in what direct path? | [Implementation](IMPLEMENTATION.md) |
+| What is the next vertical slice? | [Queue](REFACTOR_QUEUE.md) |
+| Which source decisions and observations support it? | [Trace register](IMPLEMENTATION_TRACE_REGISTER.md) |
+| Which old documents and requirements were reconciled? | [Baseline register](AUDIT_REGISTRY.md) |
+| What did the baseline source audit establish? | [Baseline audit](AUDIT.md) |
+| Which active Issues were checked as instructions? | [Active Issue audit](ACTIVE_ISSUE_AUDIT.md) |
+| Which TOC/load details were source-traced? | [Load context](TOC_LOAD_CONTEXT_AUDIT.md), [triggers and bindings](TOC_TRIGGER_BINDINGS_AUDIT.md) |
+| How does EmmyLua own parsing/types/diagnostics? | [EmmyLua](EMMYLUA_UPSTREAM.md) |
+| How are Blizzard facts converted to a Library? | [Ketho/native projection](KETHO_RUST_PORT.md) |
+| What code may be reused? | [Donors](DONORS.md) |
+| How do CLI/LSP/MCP expose the owners? | [Frontends](FRONTENDS.md) |
 
-`AUDIT.md` and `AUDIT_REGISTRY.md` are tied to the reviewed `c36a058` baseline.
-They remain evidence and design input, not a live progress page.
-`IMPLEMENTATION_TRACE_REGISTER.md` records new producer-to-consumer traces and
-executed observations after PR #244. `ACTIVE_ISSUE_AUDIT.md` records the current
-caller check for the open Issue instruction surface. `CURRENT_STATUS.md`
-reconciles those records with the named review base. None of these documents is a
-readiness percentage.
+## Authority and maintenance
 
-For current work, authority is deliberately narrow:
+- `CURRENT_STATUS.md` is the **only live delivery checkpoint**.
+- `REFACTOR_QUEUE.md` is the ordered work list, not a PR history.
+- `IMPLEMENTATION_TRACE_REGISTER.md` records source decisions and exact
+  observations.
+- `AUDIT.md` and `AUDIT_REGISTRY.md` remain tied to the baseline commit they name.
+- Owner/domain guides define durable contracts, not moving lists of merged PRs.
+- README, AGENTS, skills, package summaries and Issue bodies are navigation and
+  task-specific instructions; they must link to live status instead of copying it.
 
-1. `CURRENT_STATUS.md` states what is delivered, open and observed;
-2. the relevant `REFACTOR_QUEUE.md` item is the complete ordered implementation
-   checklist;
-3. `IMPLEMENTATION_TRACE_REGISTER.md` records evidence and decisions;
-4. domain/owner guides define behavior and ownership.
+Only the live status and trace register may enumerate current delivered slices or
+verification runs. This prevents a merge from leaving half the documentation one
+or more implementation steps behind.
 
-README, AGENTS, skill and package summaries are navigation only. An abbreviated
-summary cannot omit or override a queue requirement. This prevents a later donor
-finding or source trace from being copied into some summaries while others stay
-stale.
-
-Package READMEs are navigation to code, not separate product specifications.
-Historical audits, contracts and command recipes remain available at their Git
-revisions. Compile-time fixtures and third-party notices are data, not design
-instructions.
+Historical platform specifications remain in Git history. Compile-time fixtures
+and third-party notices are data/attribution, not active architecture.
