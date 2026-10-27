@@ -29,11 +29,12 @@ Path:
 
 ```text
 CLI/config
+  -> strict resolved ordinary input
+  -> one Service prepared-addon operation
   -> AddonLoadTarget + physical_lua Project plan
   -> scope-aware standalone limitations + selected physical Lua
-  -> compiled-pin Main + per-directory Library snapshots
-  -> existing ConfiguredAnalyzerSession
-  -> existing wow-service::addon_check
+  -> collision-free compiled-pin Main + per-directory Library snapshots
+  -> existing ConfiguredAnalyzerSession / low-level check_addon
   -> root-relative text/JSON output and exit status
 ```
 
@@ -57,14 +58,28 @@ Requirements:
   package observations are not limitations;
 - never derive the direct result from `ProjectLoadPlan::external_files_complete()`
   alone;
+- decode one explicit bounded config strictly: reject unknown fields and
+  duplicate scalar CLI options; repeated CLI `--library` replaces the config
+  array; no implicit config discovery;
+- resolve path bases lexically without filesystem canonicalization, then open
+  roots through Project's component-wise no-follow boundary and reuse its
+  inventory/Library readers; require each Library root to yield at least one Lua
+  file;
 - use `EmmyBackendIdentity::compiled_pinned()`, Main universe `Project`, and one
   separate `BlizzardUi` snapshot per explicit Library directory under the
-  existing Main/Library ceilings; reject duplicate resolved roots/snapshot IDs
-  and preserve configured root + relative file on Library input failure;
+  existing Main/Library ceilings;
+- reject duplicate resolved roots/snapshot IDs and any same admitted physical Lua
+  file across Main/Library or two Library roots; allow overlapping roots only
+  when their admitted file sets are disjoint, and allow equal relative paths in
+  distinct roots;
 - keep canonical root-relative paths in snapshot/result identity; join the root
   only for human rendering;
-- map malformed caller Library input to invalid input, not internal component
-  failure;
+- preserve structured role + snapshot/root token + relative path for every
+  file-specific acquisition/analyzer failure; map malformed caller Library input
+  to invalid input, not internal component failure;
+- expose one narrow public Service operation that binds plan, admitted files,
+  scope limitations, snapshots and lower `check_addon`; frontends never construct
+  `AddonCheckRequest` or call `with_input_limitations`;
 - no Project IDs, generations, reports, proof objects, Reference/Rules, graph,
   store or publication;
 - empty/omitted WoW `checks` runs no WoW rule while Emmy diagnostics remain on;
@@ -74,7 +89,12 @@ Requirements:
 - source/config is never rewritten or executed;
 - apply deterministic exits: invalid input `64`, observed cancellation `130`,
   internal/output failure `4`, partial result `2`, threshold finding `1`, else `0`;
-  preserve findings in partial output.
+  preserve findings in partial output;
+- successful/partial results use stdout; pre-result input/cancel/internal errors
+  after format admission use stderr. Under `--format json`, stderr contains one
+  bounded typed error object and stdout remains empty; CLI syntax errors before
+  format admission use one text usage error. Never emit a second error after a
+  partial stdout write.
 
 Observe one valid typed call, one invalid argument, one required-dependency or
 included-XML partial result that still preserves diagnostics, one malformed
