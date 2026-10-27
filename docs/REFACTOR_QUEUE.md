@@ -21,47 +21,65 @@ Input:
 
 - addon root;
 - explicit TOC;
-- explicit flavor;
-- one or more explicit Library directories;
+- exact flavor `retail`;
+- one or more explicit annotation-Library directories;
 - optional `emmy_diagnostics`, output format and `fail_on`.
 
 Path:
 
 ```text
 CLI/config
-  -> bounded explicit TOC and selected physical Lua
-  -> exact Main + canonical Library snapshots
+  -> AddonLoadTarget + physical_lua Project plan
+  -> scope-aware standalone limitations + selected physical Lua
+  -> compiled-pin Main + per-directory Library snapshots
   -> existing ConfiguredAnalyzerSession
   -> existing wow-service::addon_check
-  -> exact user paths, text/JSON output and exit status
+  -> root-relative text/JSON output and exit status
 ```
 
 Requirements:
 
-- extract one small Project-owned `AddonLoadTarget` from the profile-bound loader:
-  explicit flavor, optional positive target Interface and optional
-  `TocLoadContext`; do not construct a synthetic `ProfileIdentity`, profile
-  digest, source identity or schema registry;
-- for Slice 1A use no target Interface and no conditional context: retain the
-  explicit TOC's missing/zero/positive Interface as source metadata and do not
-  reject it for compatibility until a positive target is actually supplied;
-- classify TOC metadata by effect before completeness: display/localized/custom
-  `X-*` and known non-selection metadata are nonblocking for independent
-  `LuaTypes`; dependency/selection/environment/callback and malformed directives
-  remain typed or located limitations; an empty key is malformed;
+- replace profile-bound plan identity/validation, not only the reader argument:
+  `ProjectLoadPlan` binds flavor, optional positive target Interface, optional
+  TOC context and projection scope directly; legacy callers adapt into that
+  target; the direct route never fabricates `ProfileIdentity` or its digests;
+- with no target Interface, retain missing/zero/positive source Interface without
+  compatibility rejection; malformed numeric syntax remains invalid;
+- classify metadata by effect before completeness;
+- use `physical_lua` scope: capture direct TOC `.lua`, retain but do not open XML,
+  and emit exact located incompleteness for each included deferred XML branch;
+  malformed XML cannot suppress physical diagnostics; when deferred XML exists
+  without physical Lua, use an empty Project snapshot and return partial—never a
+  dummy file or clean result;
+- add `project_load_limitations(plan, LuaTypes)`. Required dependencies,
+  unresolved included conditions, missing/unsupported direct files and deferred
+  XML are blocking; optional absence, unused Interface metadata and nonblocking
+  package observations are not limitations;
+- never derive the direct result from `ProjectLoadPlan::external_files_complete()`
+  alone;
+- use `EmmyBackendIdentity::compiled_pinned()`, Main universe `Project`, and one
+  separate `BlizzardUi` snapshot per explicit Library directory under the
+  existing Main/Library ceilings; reject duplicate resolved roots/snapshot IDs
+  and preserve configured root + relative file on Library input failure;
+- keep canonical root-relative paths in snapshot/result identity; join the root
+  only for human rendering;
+- map malformed caller Library input to invalid input, not internal component
+  failure;
 - no Project IDs, generations, reports, proof objects, Reference/Rules, graph,
   store or publication;
-- empty/omitted WoW `checks` still runs Emmy diagnostics;
+- empty/omitted WoW `checks` runs no WoW rule while Emmy diagnostics remain on;
 - preserve upstream code, exact message, severity and half-open byte range;
-- project analyzer paths back to exact configured user paths;
 - return findings even when selected input has a relevant limitation;
-- compute completeness from facts required by `LuaTypes` and selected units;
-  remove the unconditional addon-chunk limitation/hard-coded `Partial` result;
-- ordinary source/config is never rewritten or executed;
-- render documented exit codes and truthful cancellation.
+- remove the unconditional addon-chunk limitation/hard-coded `Partial`;
+- source/config is never rewritten or executed;
+- apply deterministic exits: invalid input `64`, observed cancellation `130`,
+  internal/output failure `4`, partial result `2`, threshold finding `1`, else `0`;
+  preserve findings in partial output.
 
-Observe one valid typed call, one invalid argument and one invalid/missing input.
-Record the exact command, input and result.
+Observe one valid typed call, one invalid argument, one required-dependency or
+included-XML partial result that still preserves diagnostics, one malformed
+Library/input case, and one invalid/missing source input. Record exact command,
+input and result.
 
 ### 1B. Dependency, XML and chunk context
 
