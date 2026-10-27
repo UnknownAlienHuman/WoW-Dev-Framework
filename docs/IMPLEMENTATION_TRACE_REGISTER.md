@@ -1,9 +1,9 @@
 # Implementation and documentation trace register
 
-**Baseline register:** [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md), PR #244  
-**Current audit base:** `main` after PR #267 (`1e1772d1a4893bf3d2b6bb7eaf3617534dcbff7a`)  
-**Current traces:** T01–T32  
-**Documentation corrections:** D01–D36
+**Baseline register:** [AUDIT_REGISTRY.md](AUDIT_REGISTRY.md), PR #244
+**Current audit base:** `main` after PR #268 (`28302632599bed087394dee83751815d13041579`)
+**Current traces:** T01–T35
+**Documentation corrections:** D01–D46
 
 This file records post-baseline producer-to-consumer decisions and exact workflow
 observations. It is evidence, not another product specification. Current delivery
@@ -54,7 +54,10 @@ state is summarized in [CURRENT_STATUS.md](CURRENT_STATUS.md); work order lives 
 | T29 | reachable retained load/package issues -> limitations | implemented by #264 | unexecuted |
 | T30 | line/package predicates -> selected closure/completeness | implemented by #265; exact-head run #524 passed | unexecuted |
 | T31 | requested `LuaTypes` facts -> completeness | current `check_addon` always adds chunk limitation and returns `Partial`; correction required | unexecuted |
-| T32 | ordinary root/TOC/flavor -> profile-free Project load target -> selected plan | source-traced; current reader still requires legacy `ProfileIdentity` and positive Interface | unexecuted |
+| T32 | ordinary root/TOC/flavor -> profile-free target -> target-bound plan identity/validation | source-traced; current plan still stores mandatory Interface/profile digest | unexecuted |
+| T33 | physical TOC plan -> scope-aware standalone limitations + preserved physical Main | source-traced; current loader eagerly parses XML and Service maps package plans only | unexecuted |
+| T34 | admitted Main/Library -> compiled-pin snapshots + canonical result paths/input errors | source-traced; direct construction/error mapping open | unexecuted |
+| T35 | empty physical Main + deferred selected units -> partial direct result without dummy source | source-traced; workspace/session accept empty Main, Project route open | unexecuted |
 
 ## Durable decisions
 
@@ -75,26 +78,43 @@ Do not wait for product channel, `LoadWith`, implicit bindings, every XML handle
 or a WoW rule. Add those in later slices. Unsupported selected input is a scoped
 limitation; unavailable unrequested features are not global incompleteness.
 
-### T23/T32 — first-slice Project admission
+### T23/T32–T35 — first-slice Project admission
 
-Current `ProjectInputDirectory::read_toc_project*` requires the legacy
-`ProfileIdentity`. That type carries a profile label, mandatory positive
-Interface, source logical digest, schema versions and other publication-era
-identity. Constructing a synthetic profile would reintroduce the platform the
-direct route is intended to bypass.
+Current `read_toc_project*` and `ProjectLoadPlan` are both profile-bound. The plan
+stores mandatory `target_interface` and `target_profile_digest`, and
+`validate_profile` requires exact equality. T32 therefore replaces plan identity
+and validation, not merely the function argument, with `AddonLoadTarget` plus an
+explicit projection scope. Legacy callers adapt into that target; the direct
+route never fabricates a profile.
 
-Extract a small Project-owned `AddonLoadTarget` containing only explicit flavor,
-optional positive target Interface and optional TOC condition context. Slice 1A
-supplies flavor only. The explicit TOC's missing, zero or positive Interface is
-retained as source metadata and is not compared until a positive target exists.
-Legacy profile callers adapt into the small target; the ordinary route never
-adapts back into `ProfileIdentity`.
+T33 separates Slice 1A from recursive XML. Current `Loader::expand` opens and
+parses every selected XML before returning Main; one malformed XML aborts physical
+Lua. A `physical_lua` plan retains TOC XML records/spans but defers opening them,
+marks selected XML scope incomplete and preserves direct Lua diagnostics. The
+scope is part of plan identity.
 
-T23 metadata-by-effect admission is required before Slice 1A can claim truthful
-completeness. Display/localized/custom and known non-selection metadata does not
-block independent Lua enumeration. Dependency/selection/environment/callback and
-malformed directives remain typed or located limitations. Full semantics for
-channel, triggers, bindings and secure contexts remain later slices.
+The only public Project limitation mapper currently accepts
+`ProjectPackageLoadPlan`; its private load mapper drops dependency placeholders
+because package closure normally owns them. Slice 1A needs a standalone,
+requested-scope mapper over `ProjectLoadPlan`. It must not equate generic
+`blocks_complete`/`external_files_complete` with `LuaTypes` completeness.
+Nonblocking Project observations never become `AddonCheckLimitation`.
+
+T23 metadata-by-effect admission remains a prerequisite: cosmetic/custom and
+known non-selection metadata does not block independent typing; malformed or
+selection/context-changing directives remain exact errors/limitations.
+
+T34 fixes the final direct handoff: compiled-pin backend; Main `Project` snapshot;
+one `BlizzardUi` snapshot per Library directory under existing ceilings; reject
+duplicate resolved roots/snapshot IDs; canonical root-relative result paths; and
+classify caller Library parse failure as invalid input with its configured root
+and relative file rather than `ComponentUnavailable`.
+
+T35 records the source-supported empty-Main boundary. `LuaWorkspaceSnapshot::build`
+and the configured owner do not require a Main file. When selected deferred XML
+exists but Slice 1A has no physical Lua, use an empty `Project` snapshot plus the
+located blocker and return `Partial`; never fabricate a dummy source or call the
+result clean.
 
 ### T06/T12–T16 — delivered lower owners
 
@@ -205,12 +225,23 @@ No item above is an observed addon workflow.
 | D34 | metadata-by-effect classification was deferred behind the first command, so common display/`X-*` metadata could still cause false `Partial` | T23 is a Slice 1A prerequisite; special metadata semantics remain later |
 | D35 | active #109/#112/#117/#197/#198/#199 bodies still copied PR progress or widened the immediate slice | bodies rewritten as durable outcomes and staged work |
 | D36 | four baseline-register rows lacked the promised current `Home:` | errata recorded below; the immutable baseline register remains tied to its reviewed commit |
+| D37 | `AddonLoadTarget` was documented only as a reader argument while `ProjectLoadPlan` identity and validation remained profile-digest/mandatory-Interface bound | T32 now replaces the retained plan identity boundary itself |
+| D38 | Slice 1A claimed physical-only work but the reused loader eagerly opened/parsed XML and could abort before returning physical Main | T33 adds an identity-bound `physical_lua` projection with located deferred-XML limitation |
+| D39 | Service exposed only package-plan limitations and dropped dependency placeholders; a standalone TOC check could lose required-dependency/load issues | T33 adds a scope-aware standalone plan mapper |
+| D40 | generic `blocks_complete`/`external_files_complete` and direct limitations were not distinguished from nonblocking Project observations | only requested-scope blockers enter `AddonCheckLimitation` |
+| D41 | snapshot backend/universe/per-directory Library/limit/path/error mapping was unspecified, inviting profile reuse or wrong internal-failure classification | T34 fixes the exact direct construction and error boundary |
+| D42 | current status had become an audit diary and active Issues still contained stale dependency/checkpoint prose | status reduced to current truth; affected Issues reconciled |
+| D43 | Slice 1A named a supported flavor without one canonical accepted value | accept exactly `retail`; add other flavors only in later explicit slices |
+| D44 | empty physical Main under deferred XML had no exact outcome and invited dummy files or hard failure | T35 uses an empty Project snapshot plus a located partial limitation |
+| D45 | multiple Library roots could produce duplicate snapshot IDs and ambiguous parse-error paths | reject duplicate roots/IDs and retain configured root + relative offending file |
+| D46 | CLI listed exit codes but not precedence when partial results also contained findings | invalid/cancel/internal precede result; partial precedes threshold finding, then clean |
 
 ### Baseline register errata
 
-The baseline register remains frozen as historical evidence. These four rows
-omitted only their current-home pointer; their read/source conclusions remain
-unchanged:
+The baseline register remains frozen as historical evidence. Three applicable
+rows omitted the promised current-home pointer; one descriptive/not-applicable
+row also benefits from an explicit navigation home. Their read/source conclusions
+remain unchanged:
 
 | Baseline row | Current home |
 | --- | --- |
