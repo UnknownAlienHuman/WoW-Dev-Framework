@@ -1,20 +1,14 @@
 # Addon context
 
-Follow root [AGENTS.md](../../AGENTS.md), current status, the active queue slice
-and the relevant implementation route.
+Follow root AGENTS, current status and the active queue slice.
 
-Project owns root/TOC/source selection, exact bytes, plan identity and source
-projection. For Slice 1A:
+Project owns root/file authority, TOC selection, exact bytes, plan identity and
+source projection. Slice 1A uses one profile-free target-bound `physical_lua`
+plan, standalone scope limitations and exact admitted-file records.
 
-1. replace profile-bound plan identity/validation with `AddonLoadTarget` plus
-   projection scope; do not fabricate `ProfileIdentity` or retain its digest;
-2. parse metadata/conditions, capture direct TOC Lua and retain but do not open
-   XML in `physical_lua` scope;
-3. return exact root-relative files plus a plan whose standalone mapper can
-   distinguish required blockers from optional/nonblocking observations;
-4. validate Main files against the same plan before snapshot construction.
-
-Later slices add dependency/order context, mapped XML/chunk context, then channel,
-triggers, bindings and secure/special cases. Reuse Emmy for Lua semantics. An
-ordinary check must not require Project publication, replay hydration,
-fingerprints or proof graph.
+Reuse component-wise no-follow root opening and existing inventory/Library
+readers. Reject duplicate roots, empty Library inventories and the same admitted
+physical Lua file across roles/roots; do not reject disjoint nested roots or equal
+relative paths in distinct roots. Attach root-relative path to every file-specific
+failure. Return structured data to the one Service operation; do not add
+publication, replay, proof or public result owners.
