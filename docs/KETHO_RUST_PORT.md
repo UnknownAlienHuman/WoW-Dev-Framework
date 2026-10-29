@@ -61,8 +61,13 @@ test execution follows the owner policy in [AGENTS.md](../AGENTS.md).
 
 At `c36a058`, `FieldFact` models type/inner type/nilability/default/stride;
 `CallableFact` models documentation/arguments/returns; `SystemFacts` models
-system environment. Raw data is retained, but the typed/emitted contract does
-not cover several meaningful fields from the reviewed Blizzard revision:
+system environment. That system-level value is already used to select whole
+registrations in the Reference and annotation projections
+([`native_view.rs`](../crates/wow-reference/src/native_view.rs),
+[`native.rs`](../crates/wow-annotations/src/native.rs)). Raw data is retained,
+but `CallableFact` has no callable-level `Environment` field, so a member override
+does not reach the typed/emitted contract. Other meaningful fields from the
+reviewed Blizzard revision are also not covered:
 
 | Field | Required change |
 | --- | --- |

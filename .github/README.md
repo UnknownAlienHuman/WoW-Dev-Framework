@@ -2,18 +2,24 @@
 
 Current workflows:
 
-- `quick-check.yml`: repository policy, Markdown local-path/anchor validation,
-  synchronized skill copies, formatting, workspace compilation and strict
-  Clippy, plus exact-head/source evidence. It does not run the test suite. Green
-  Quick is build/document-integrity evidence, not working addon/API coverage.
-- `current-source-bundle.yml`: generates and uploads Lua from selected sources,
-  rejects input failures and reports partial projection. Its old `Mainline`
-  environment default does not solve the API-context defect recorded in the
-  [baseline audit](../docs/AUDIT.md).
-- `branch-hygiene.yml`: guarded cleanup of merged ancestor branches.
+- `quick-check.yml` always runs repository policy checks and records the checked
+  commit, tree, and Rust version. It runs formatting and strict workspace Clippy
+  for Rust/build changes and any other non-documentation-only change, or when the
+  comparison base is unavailable. Only recognized documentation-only changes
+  skip those checks.
+  It does not run tests or a separate compilation step. A green run is policy,
+  formatting, and applicable Clippy evidence, not addon workflow coverage.
+- `current-source-bundle.yml` generates Lua annotations from selected upstream
+  sources and uploads the output and source reports. Projection limitations are
+  reported; input failures fail the workflow. The current `Mainline` environment
+  default still conflates client flavor with API context; see the
+  [recorded defect](../docs/AUDIT.md#flavor-is-confused-with-api-environment).
+- `branch-hygiene.yml` is a manually dispatched branch cleanup workflow. It
+  defaults to dry-run and checks the main revision and branch eligibility before
+  deletion.
 
-The duplicate compile/archive ceremony is not a product requirement. The current
-implementation checkpoint and open handoffs are in
-[CURRENT_STATUS.md](../docs/CURRENT_STATUS.md); contributor validation policy is
-in [AGENTS.md](../AGENTS.md). Do not add corpus/coverage/certification jobs as a
-prerequisite to the owner-directed product-first implementation.
+Contributor workflow and validation guidance lives in the root
+[AGENTS.md](../AGENTS.md) and [CONTRIBUTING.md](../CONTRIBUTING.md). The live
+implementation status and ordered work queue are in
+[CURRENT_STATUS.md](../docs/CURRENT_STATUS.md) and
+[REFACTOR_QUEUE.md](../docs/REFACTOR_QUEUE.md).

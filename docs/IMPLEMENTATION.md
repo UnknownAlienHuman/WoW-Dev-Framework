@@ -1,9 +1,11 @@
 # Implementation: finish the WoW linter
 
-Read [current status](CURRENT_STATUS.md), [architecture](ARCHITECTURE.md),
-[WoW behavior](WOW_LINTER.md) and the active
-[queue item](REFACTOR_QUEUE.md). This guide defines durable owner boundaries and
-handoffs, not PR history.
+This guide owns source admission and Service assembly for the ordinary checker.
+[Current status](CURRENT_STATUS.md) says what exists; the
+[queue](REFACTOR_QUEUE.md) orders implementation. Command/config/output semantics
+live in [FRONTENDS.md](FRONTENDS.md); engine-specific behavior lives in
+[EMMYLUA_UPSTREAM.md](EMMYLUA_UPSTREAM.md). Read the relevant sections, not every
+audit. The contract below is a target until current status marks it delivered.
 
 <a id="code-ownership"></a>
 
@@ -72,6 +74,8 @@ Add identity-bound `physical_lua` to the existing Project owner:
 
 Full XML expansion is Slice 1B, not a second loader.
 
+<a id="requested-scope-limitations"></a>
+
 #### Metadata and requested-scope limitations
 
 T23 metadata-by-effect admission is a Slice 1A prerequisite. Display/localized,
@@ -79,7 +83,7 @@ custom `X-*` and known non-selection metadata remain Project observations.
 Malformed keys or selected-file/environment/callback-changing directives remain
 invalid or located.
 
-The public standalone mapper belongs in Service to avoid Project -> Service
+The standalone scope mapper belongs in Service to avoid Project -> Service
 dependency:
 
 ```text
@@ -90,12 +94,13 @@ For `LuaTypes`:
 
 | Source state | Outcome |
 | --- | --- |
-| missing/unreadable addon root or explicit TOC; unsafe path/bytes; invalid TOC encoding/NUL; unrecoverable syntax; config/source/Library budget refusal | pre-result `invalid_input` |
+| missing/unreadable addon root or explicit TOC; unsafe path/bytes; invalid TOC encoding/NUL; unrecoverable TOC syntax; config/source/Library budget refusal | pre-result `invalid_input` |
 | safely parsed TOC names missing direct Lua | located `SourceSelectionIncomplete`, continue, `Partial` |
 | required dependency, included condition, selected XML or recoverable selected-context uncertainty unresolved | located scope blocker, `Partial` |
 | optional absence; repeated TOC occurrence; Interface without target; `LoadWith`; unused lifecycle/display/custom metadata | Project observation, no limitation |
 | affected file uses chunk-owned top-level `...` or selected context changes typing | located context limitation, `Partial` |
-| malformed caller Library/config/source | pre-result `invalid_input` with structured origin |
+| Main Lua syntax/type mistake | ordinary diagnostic, not an input-admission error |
+| malformed Library/config or source encoding/NUL failure | pre-result `invalid_input` with structured origin |
 | native panic/poisoning/impossible validated-owner mismatch | `internal` |
 
 Do not derive completeness from global `blocks_complete()` or
@@ -140,9 +145,12 @@ enters semantic identity or JSON.
 
 #### One public Service operation
 
-The ordinary operation owns:
+The frontend parses flags and merges config values under
+[the path/precedence rules](FRONTENDS.md#configuration-and-path-bases). Reading
+the explicit config uses Project's bounded no-follow helper; the frontend never
+opens addon or Library source. The ordinary Service operation then owns:
 
-1. merged strict config/display descriptors;
+1. validated merged input/display descriptors;
 2. Project target/scope plan, admitted Main/Libraries and path authorities;
 3. plan/Main/authority validation;
 4. requested-scope blockers;
@@ -160,73 +168,35 @@ backend.
 
 Carry stable code, role, snapshot/`InputRootId`, role-relative path and bounded
 message through Project -> Emmy -> configured session -> Service.
-`LibraryHealthFailed` retains Library snapshot/path so Service maps it to request-
-local root. Never parse messages or synthetic paths.
+`LibraryHealthFailed` retains Library snapshot/path so Service can identify the
+request-local root. It is caller invalid input, not component unavailability.
+Never recover origin by parsing messages or synthetic paths.
 
-Public operation error:
-
-```text
-invalid_input | cancelled | internal
-message <= 4 KiB
-role? = main | library | config
-root_index? only for library, zero-based
-relative_path? relative to role root
-```
-
-File-specific Project read/UTF-8/NUL/language/digest/length/admission failure keeps
-root/path. Source/workspace/diagnostic/result-size refusal from caller input is
-`invalid_input`; analyzer/serialization/cancellation-handler/I/O invariants are
-`internal`. Do not enlarge global `ServiceError` into provenance platform.
+Preserve file context on read/encoding/NUL/language/digest/length/admission errors.
+Map them using the [scope table](#requested-scope-limitations) and the
+[public error contract](FRONTENDS.md#check-results-and-command-status).
+Do not enlarge global `ServiceError` into a provenance framework.
 
 #### Same-owner chunk requirement
 
-Remove unconditional chunk limitation/hard-coded `Partial`. Add one bounded
-collector on the same `ConfiguredAnalyzerSession`/registered Main AST:
-
-- walk expression nodes;
-- match `LuaLiteralExpr` with `LuaLiteralToken::Dots`;
-- reject matches with enclosing `LuaClosureExpr` before chunk root;
-- retain lowest-starting exact `{path, content_sha256, span}` per file;
-- never raw-scan or start another parser/session.
-
-Service validates records against exact Main and limits only affected files.
-Helper injection remains Slice 1B.
+Remove unconditional chunk limitation/hard-coded `Partial`. Collect affected
+Main chunks with [the configured owner's AST collector](EMMYLUA_UPSTREAM.md#addon-chunk-context),
+validate each returned path/content/span against exact Main and limit only
+those files. Helper injection is later Slice 1B. Do not add a second parse or
+analysis session to discover these requirements.
 
 <a id="ordinary-configuration"></a>
 
 ### Ordinary configuration
 
-Slice 1A fields only: `root`, explicit relative `.toc`, exact `flavor: retail`,
-nonempty `library`, optional `emmy_diagnostics`, `format`, `fail_on`.
+The exact input keys, path origins, overrides, defaults and output choices are in
+[FRONTENDS.md](FRONTENDS.md#configuration-and-path-bases). Validate required fields
+after merging. Use the existing `StrictJson` machinery for duplicate/depth bounds;
+no config discovery or lenient fallback.
 
-Read at most one explicitly named config through Project no-follow helper, 256 KiB.
-Reuse duplicate-key/depth-bounded `StrictJson`, then outer
-`deny_unknown_fields`. No implicit discovery.
-
-Pinned `EmmyrcDiagnostic` is permissive and silently drops invalid
-`globalsRegex`. Prevalidate exactly `disable`, `enable`, `globals`,
-`globalsRegex`, `severity`, `enables`; compile every regex; reject unknown keys,
-invalid expressions and `diagnosticInterval`. At the pinned revision interval is
-EmmyLua-LS debounce only, not code analysis. No `.emmyrc` discovery/fallback.
-
-Raw JSON equality is not diagnostic semantic equality. Define one canonical
-analysis projection in `EmmyAnalysisConfiguration::equivalent`:
-
-- preserve `enable`;
-- sort/dedup `disable` and `enables` by diagnostic code;
-- sort/dedup `globals` and `globalsRegex`;
-- sort severity entries by diagnostic code;
-- omit `diagnosticInterval` entirely.
-
-Pinned analysis treats the list families as sets or OR-matched regexes, so order/
-duplicates have no effect. Omitted diagnostics, `{}`, reordering and duplicates
-must reuse one owner when analysis semantics match. A real analysis change forces
-cold owner. LS debounce remains frontend state.
-
-CLI scalars replace config scalars; repeated CLI Libraries replace config array.
-Defaults: text, `fail_on: error`, upstream default diagnostics. If config fails,
-only explicitly admitted CLI `--format` selects JSON error; otherwise text. Slice
-1A exposes no WoW checks and runs zero WoW rules.
+Delegate strict diagnostic admission and canonical semantic configuration reuse
+to [the Emmy adapter](EMMYLUA_UPSTREAM.md#diagnostic-configuration). Frontend
+`fail_on` and protocol debounce are presentation state, not analyzer identity.
 
 <a id="load-units-and-addon-context"></a>
 <a id="selected-acquisition"></a>
@@ -319,18 +289,11 @@ ambiguity and incomplete coverage. No pack/plan/matcher/proof round-trip.
 
 ## Results and interfaces
 
-Addon result = findings + completeness + located limitations; no internal receipts.
-Deterministic diagnostics order: role/path/span/code/message. Limitations:
-code/location/message. Threshold rank Error > Warning > Information > Hint;
-preserved `Unknown` meets every threshold. Partial exit 2 precedes finding exit 1.
-
-Pre-encode escaped text/JSON <= 32 MiB, check cancellation, then one write.
-Result -> stdout; pre-result error -> stderr. First byte commits the sole envelope.
-Oversize result invalid_input/64; serializer/I/O internal/4. Human text visibly
-escapes controls; typed/JSON strings exact.
-
-CLI/LSP/MCP are thin adapters; general Lua editor features remain upstream Emmy.
-See [FRONTENDS.md](FRONTENDS.md).
+Addon result = findings + completeness + located limitations, with exact public
+source locations and no internal receipts. Service determines completeness and
+orders the typed result; thin adapters apply
+[the rendering/error/exit contract](FRONTENDS.md#check-results-and-command-status).
+General Lua editor features remain upstream EmmyLua.
 
 <a id="completion-and-verification"></a>
 

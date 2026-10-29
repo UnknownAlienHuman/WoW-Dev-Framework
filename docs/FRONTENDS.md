@@ -13,7 +13,7 @@ Read [current status](CURRENT_STATUS.md) and the
 
 ## CLI
 
-First usable command:
+**Planned Slice 1A interface — not implemented in the current CLI:**
 
 ```text
 wow check
@@ -30,6 +30,16 @@ Later slices add auto-selection, target Interface, channel, dependency roots and
 WoW checks; they do not delay physical Lua.
 
 ### Configuration and path bases
+
+The JSON object accepts only `root`, `toc`, `flavor`, `library`,
+`emmy_diagnostics`, `format` and `fail_on`. Paths/flavor/format/threshold are
+strings; `library` is an array of directory strings; `emmy_diagnostics` is the
+pinned diagnostic object. Root, TOC, exact `retail` and at least one Library are
+required after config/CLI merge. For example:
+
+```json
+{"root":"./MyAddon","toc":"MyAddon.toc","flavor":"retail","library":["./wow-library"]}
+```
 
 Read one explicit config only, max 256 KiB, through Project's component-wise
 no-follow helper. Reuse duplicate-key/depth-bounded `StrictJson`; reject unknown
@@ -59,13 +69,8 @@ config or CLI TOC. Merge before requiring root, TOC, exact `retail` and Librarie
 Defaults: text, `fail_on: error`, upstream default diagnostics. Slice 1A has no
 WoW-check option.
 
-Pinned diagnostic input is not trusted directly. Prevalidate keys
-`disable`, `enable`, `globals`, `globalsRegex`, `severity`, `enables`; compile all
-regexes; reject unknown keys, invalid regex and `diagnosticInterval`. Normalize
-analysis semantics for owner reuse: sort/dedup set-like diagnostic lists/regexes,
-sort severity by code, preserve `enable`, and omit LS-only interval. Therefore
-omitted diagnostics, `{}` and reordered/duplicated set-like entries are equivalent
-when analysis behavior is identical.
+Diagnostic settings use [strict Emmy admission and canonical semantics](EMMYLUA_UPSTREAM.md#diagnostic-configuration).
+`fail_on` changes exit status only, not collected diagnostics or analyzer reuse.
 
 The frontend resolves caller-facing path descriptors with the rules above, then
 calls one public Service operation. It does not open addon/Library source, compute
@@ -86,10 +91,10 @@ Public result contains no snapshot/analyzer/Project/report/proof identities.
 Paths are relative to configured addon root; text may show `root/path`, JSON keeps
 relative identity. Absolute/path-authority data never enters output.
 
-Malformed config, root/explicit TOC, unsafe bytes/paths, source/Library budget or
-Library content is invalid input (`64`). A safely selected missing child Lua,
-required dependency, unresolved included condition or deferred XML is partial
-(`2`) and preserves findings.
+Service classifies failures and limitations under the
+[scope table](IMPLEMENTATION.md#requested-scope-limitations). Main Lua syntax/type
+errors are findings, not invalid input. A partial result preserves independent
+findings; it never becomes a clean result by discarding unavailable input.
 
 | Exit | Meaning |
 | --- | --- |
@@ -105,7 +110,9 @@ explicitly; visible `Unknown` meets every threshold.
 
 Pre-encode at most 32 MiB, then write once. Complete/partial result -> stdout.
 Admitted-format pre-result error -> stderr; early grammar error -> text stderr.
-JSON error is one bounded object such as
+Public pre-result error codes are exactly `invalid_input`, `cancelled` and
+`internal`. Optional `role` is `config`, `main` or `library`. JSON error is one
+bounded object such as
 `{"error":{"code":"invalid_input","message":"...","role":"library","root_index":0,"relative_path":"..."}}`.
 Message <= 4 KiB; `root_index` only for Library and zero-based; paths role-relative.
 Check cancellation after encoding/before first byte. Once output starts, no retry,

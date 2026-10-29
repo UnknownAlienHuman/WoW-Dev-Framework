@@ -11,5 +11,6 @@ boundary around the existing component-wise no-follow opener; the legacy ambient
 
 Return one direct non-deserializable prepared value to Service. Do not add
 publication, replay, proof, frontend rendering or another loader/result owner.
-The exact Slice 1A admission and limitation rules live only in the canonical queue
-and implementation guide.
+The exact Slice 1A admission and limitation rules live in the
+[implementation contract](../../docs/IMPLEMENTATION.md#first-implementation-slice);
+the queue orders work.

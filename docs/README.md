@@ -1,41 +1,50 @@
 # Documentation
 
-Start with [current status](CURRENT_STATUS.md), then
-[architecture](ARCHITECTURE.md) and the active item in
-[the queue](REFACTOR_QUEUE.md). Read only the owner/domain guide needed for the
-change.
+Start with [current status](CURRENT_STATUS.md) and
+[architecture](ARCHITECTURE.md), then select one [queue item](REFACTOR_QUEUE.md).
+Read its linked owner/domain sections and actual code. The historical audits are
+background, not a prerequisite to implementation.
 
-| Question | Read |
+## Working guides
+
+| Need | Read |
 | --- | --- |
-| What is delivered, open and actually observed? | [Current status](CURRENT_STATUS.md) |
-| What are we building and excluding? | [Architecture](ARCHITECTURE.md) |
-| What must the WoW-aware linter understand? | [WoW behavior](WOW_LINTER.md) |
-| Which owner changes and in what direct path? | [Implementation](IMPLEMENTATION.md) |
-| What is the next vertical slice? | [Queue](REFACTOR_QUEUE.md) |
-| Which source decisions and observations support it? | [Trace register](IMPLEMENTATION_TRACE_REGISTER.md) |
-| Which old documents and requirements were reconciled? | [Baseline register](AUDIT_REGISTRY.md) |
-| What did the baseline source audit establish? | [Baseline audit](AUDIT.md) |
-| Which active Issues were checked as instructions? | [Active Issue audit](ACTIVE_ISSUE_AUDIT.md) |
-| Which TOC/load details were source-traced? | [Load context](TOC_LOAD_CONTEXT_AUDIT.md), [triggers and bindings](TOC_TRIGGER_BINDINGS_AUDIT.md) |
-| How does EmmyLua own parsing/types/diagnostics? | [EmmyLua](EMMYLUA_UPSTREAM.md) |
-| How are Blizzard facts converted to a Library? | [Ketho/native projection](KETHO_RUST_PORT.md) |
-| What code may be reused? | [Donors](DONORS.md) |
-| How do CLI/LSP/MCP expose the owners? | [Frontends](FRONTENDS.md) |
+| What exists and what is next? | [Current status](CURRENT_STATUS.md), [queue](REFACTOR_QUEUE.md) |
+| Product purpose and exclusions | [Architecture](ARCHITECTURE.md) |
+| Code owners and the active check contract | [Implementation](IMPLEMENTATION.md) |
+| WoW semantics and known static-analysis limits | [WoW linter](WOW_LINTER.md) |
+| CLI/config/output and later protocol adapters | [Frontends](FRONTENDS.md) |
+| Pinned Lua engine, diagnostic configuration and chunk context | [EmmyLua](EMMYLUA_UPSTREAM.md) |
+| Blizzard/Ketho annotation generation | [Native projection](KETHO_RUST_PORT.md) |
+| Exact sources and reuse boundaries | [Donors](DONORS.md) |
+| Contribution workflow | [AGENTS.md](../AGENTS.md) |
 
-## Authority and maintenance
+## Maintaining the documentation
 
-- `CURRENT_STATUS.md` is the **only live delivery checkpoint**.
-- `REFACTOR_QUEUE.md` is the ordered work list, not a PR history.
-- `IMPLEMENTATION_TRACE_REGISTER.md` records source decisions and exact
-  observations.
-- `AUDIT.md` and `AUDIT_REGISTRY.md` remain tied to the baseline commit they name.
-- Owner/domain guides define durable contracts, not moving lists of merged PRs.
-- README, AGENTS, skills, package summaries and Issue bodies are navigation and
-  task-specific instructions; they must link to live status instead of copying it.
+- Status owns delivered/open behavior; the queue owns work order and completion
+  cases. Neither repeats the implementation contract.
+- Implementation owns source admission and Service assembly. Frontends owns
+  command/config/output semantics; EmmyLua owns engine-specific rules; WoW linter
+  owns game semantics. Link across these boundaries rather than copying rules.
+- [Implementation traces](IMPLEMENTATION_TRACE_REGISTER.md) retain source
+  pointers and actual observations. Update the affected row when it changes;
+  do not add a correction counter or another progress log.
+- [Documentation work](AUDIT_REGISTRY.md) tracks cleanup and ongoing maintenance.
+  A source trace, compiled change and executed workflow are different evidence.
 
-Only the live status and trace register may enumerate current delivered slices or
-verification runs. This prevents a merge from leaving half the documentation one
-or more implementation steps behind.
+README/package instructions and Issues route to these guides. Existing fixtures
+and old specifications do not add product scope.
 
-Historical platform specifications remain in Git history. Compile-time fixtures
-and third-party notices are data/attribution, not active architecture.
+## Background evidence
+
+Read only for the question being investigated:
+
+- [Baseline source audit](AUDIT.md) and the
+  [historical document inventory](AUDIT_REGISTRY.md#historical-baseline).
+- [Issue audit at its named revision](ACTIVE_ISSUE_AUDIT.md).
+- [TOC/load context](TOC_LOAD_CONTEXT_AUDIT.md) and
+  [triggers/bindings](TOC_TRIGGER_BINDINGS_AUDIT.md).
+
+Historical findings may have been fixed; compare them with current status and
+code. Git retains old contracts and audit detail. Third-party notices remain
+attribution, not architecture.

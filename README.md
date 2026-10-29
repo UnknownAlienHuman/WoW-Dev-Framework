@@ -5,7 +5,7 @@ A **World of Warcraft addon linter** written in Rust on top of
 source and the useful annotation semantics from
 [Ketho](https://github.com/Ketho/vscode-wow-api).
 
-The product has three workflows:
+The product targets three workflows:
 
 1. generate an ordinary `.lua` Library from a selected Blizzard source revision;
 2. check addon Lua with EmmyLua plus narrowly selected WoW-aware checks;
@@ -18,17 +18,15 @@ executed or rewritten.
 
 ## Status
 
-The 329-document baseline reconciliation is complete. Its evidence remains in
-[the baseline audit](docs/AUDIT.md) and
-[baseline register](docs/AUDIT_REGISTRY.md).
+Development is focused on connecting the first ordinary addon checker. The
+current executable still exposes transitional internal routes; target commands
+in [FRONTENDS.md](docs/FRONTENDS.md) are not yet delivered interfaces.
 
-[Current status](docs/CURRENT_STATUS.md) is the **only live implementation
-checkpoint**. The [trace register](docs/IMPLEMENTATION_TRACE_REGISTER.md) records
-source decisions and exact observations. README files and contributor summaries
-must not copy a moving list of delivered PRs or narrow the active queue.
-
-No ordinary end-to-end addon, editor or source-search workflow is currently
-marked observed.
+Read [current status](docs/CURRENT_STATUS.md) for existing code and open gaps,
+then [the queue](docs/REFACTOR_QUEUE.md) for the next implementation step.
+No ordinary addon, editor or source-search workflow is recorded as executed.
+Historical audits are linked from the
+[documentation work register](docs/AUDIT_REGISTRY.md).
 
 ## Current executables
 

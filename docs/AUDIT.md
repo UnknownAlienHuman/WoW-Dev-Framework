@@ -6,9 +6,11 @@
 [`e7aa82019dc298e0351c7159d60c2a9b916b9b67`](https://github.com/Gethe/wow-ui-source/commit/e7aa82019dc298e0351c7159d60c2a9b916b9b67),
 commit labeled 12.1.5 (70529), 2026-10-22.
 
-This records source-verified findings and their implementation consequences.
-The [review register](AUDIT_REGISTRY.md) separately accounts for every baseline
-Markdown file, preserved ideas, code traces and remaining questions. Reading a
+This is a historical source audit at the revision above, not a description of
+current delivery. See [CURRENT_STATUS.md](CURRENT_STATUS.md) for today's code.
+The [pinned historical register](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/8ab892f040c42a9877836be8bd9818b98b1455d8/docs/AUDIT_REGISTRY.md)
+accounts for every baseline Markdown file, preserved idea, trace and open question.
+[The current register](AUDIT_REGISTRY.md) tracks documentation maintenance. Reading a
 document is not verification of its implementation. The supplied Claude review
 is `AUDIT_REVIEW_2026-10-23.md`, reviewing the same project commit.
 Implementation is in [IMPLEMENTATION.md](IMPLEMENTATION.md), ordered work in
@@ -516,7 +518,7 @@ scope/coverage distinctions. These live once in
 Third-party notices remain. `wow-annotations/src/aliases.rs` embeds its notice;
 `wow-service/e3/native-primary-pack/artifact.md` is also retained unchanged because
 existing tests embed it. That fixture is data, not an active specification.
-Non-Markdown fixtures and CI workflows are unchanged. CLI help pointers and
+In that rewrite, non-Markdown fixtures and CI workflows were unchanged. CLI help pointers and
 source comments that named deleted guides now point to the current documentation;
 no analysis or command logic changed.
 
