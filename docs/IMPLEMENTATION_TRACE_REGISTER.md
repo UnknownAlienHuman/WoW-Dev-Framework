@@ -24,7 +24,7 @@ were run during this review.
 | T07 | compiled Emmy pin -> runtime identity | implemented #249 | unexecuted |
 | T08 | unsaved text -> configured project diagnostics | overlay exists; shared owner open | unexecuted |
 | T09 | source/config changes -> coherent diagnostics/index | traced; rebuild route open | unexecuted |
-| T10 | builder output -> ordinary Library metadata/maps | traced; manifest reader open | unexecuted |
+| T10 | builder output -> ordinary Library metadata/maps | traced; typed handoff and complete-output publication open | unexecuted |
 | T11 | addon chunk arguments -> mapped context | traced; injection open | unexecuted |
 | T12 | upstream diagnostic -> direct result | implemented #246 | unexecuted |
 | T13 | diagnostic config -> selected collection | owner implemented #247; strict admission/canonical semantics/global disable open | unexecuted |
@@ -69,6 +69,7 @@ were run during this review.
 | T13 | [diagnostic collector](../crates/wow-emmy/src/syntax/analyzer.rs) treats the pinned donor's global-off `None` as unavailable; [configured error mapping](../crates/wow-emmy/src/configured_session.rs) turns it into native failure | [Global disable](EMMYLUA_UPSTREAM.md#diagnostic-configuration) |
 | T38 | [configured errors](../crates/wow-emmy/src/configured_session.rs) and [lower check mapping](../crates/wow-service/src/addon_check.rs) flatten Library input failure | [Structured failures](IMPLEMENTATION.md#structured-failures) |
 | T39 | [lower result](../crates/wow-service/src/addon_check.rs) sorts by derived struct order, not the specified keys; [legacy output](../apps/wow/src/output.rs) bounds text after growth and appends a newline outside the [bounded JSON writer](../crates/wow-service/src/local/response.rs) | [Order, encoding and exits](FRONTENDS.md#check-results-and-command-status) |
+| T10 | [builder](../apps/wow-reference-builder/src/lib.rs) reports source byte counts, not text/raw values, and writes directly into its destination; [legacy cache reader](../crates/wow-service/src/local/native_artifact/wire.rs) consumes different envelopes and ignores metadata/maps | [Typed Library handoff](KETHO_RUST_PORT.md#output-and-source-locations), [generation publication](KETHO_RUST_PORT.md#existing-source-to-output-path) |
 | T08–T11/T17–T22/T27 | [load-context trace](TOC_LOAD_CONTEXT_AUDIT.md), [trigger/binding trace](TOC_TRIGGER_BINDINGS_AUDIT.md), [baseline source audit](AUDIT.md) | [Later slices](REFACTOR_QUEUE.md#1b-dependencies-xml-and-chunk-injection), [WoW semantics](WOW_LINTER.md) |
 
 T23 remains in draft [PR #266](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/266),

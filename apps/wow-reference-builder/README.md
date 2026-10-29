@@ -13,6 +13,11 @@ wow-reference-builder generate <checkout> <ref> <GeneratedApi.toc> <environment>
 It reads local committed Git blobs, parses restricted APIDocumentation data
 through Reference, and emits ordinary `.lua` files plus `source-report.json`. The
 output directory must not exist. Source and generated stubs are never executed.
+The builder writes directly into that directory and does not remove it on
+failure. A failed or cancelled run may leave partial or complete output there;
+use a fresh destination for retries and inspect any existing destination before
+deciding what to do with it.
+
 The selected TOC must provide a nonempty flat list of unique relative `.lua`
 paths; paths are resolved beneath the TOC's directory. Blank and `#` lines,
 including ordinary `##metadata` lines, are ignored rather than interpreted.

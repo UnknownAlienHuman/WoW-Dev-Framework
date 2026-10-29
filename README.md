@@ -18,9 +18,7 @@ executed or rewritten.
 
 ## Status
 
-Development is focused on connecting the first ordinary addon checker. The
-current executable still exposes transitional internal routes; target commands
-in [FRONTENDS.md](docs/FRONTENDS.md) are not yet delivered interfaces.
+Development is focused on connecting the first ordinary addon checker.
 
 Read [current status](docs/CURRENT_STATUS.md) for existing code and open gaps,
 then [the queue](docs/REFACTOR_QUEUE.md) for the next implementation step.
@@ -35,9 +33,11 @@ cargo run --locked -p wow-cli --bin wow -- --help
 cargo run --locked -p wow-reference-builder -- --help
 ```
 
-The current `wow` command still exposes transitional internal routes. Target
-`wow check`, index, search and context shapes are documented in
-[FRONTENDS.md](docs/FRONTENDS.md) and are not claims of delivered commands.
+The `wow` executable exposes transitional routes. The planned `wow check`
+contract is described in [FRONTENDS.md](docs/FRONTENDS.md); direct source index,
+search and context work is queued in
+[the implementation order](docs/REFACTOR_QUEUE.md#4-direct-source-index-search-and-context).
+None of these planned interfaces is claimed as delivered.
 
 ## Documentation
 

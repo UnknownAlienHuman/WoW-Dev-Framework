@@ -28,8 +28,12 @@ computed expressions retain their original location and an explicit limitation.
 The current command is documented in
 [the builder README](../apps/wow-reference-builder/README.md). It writes a new
 output directory, `.lua` files and `source-report.json`; exit 3 means partial.
-The output is not loaded or executed by the game. An ordinary Library reader
-consumes the files directly.
+The current builder writes directly into its new destination; a failure may
+leave partial or complete output there. The desired publication boundary is
+narrow: write the files and report together from tool-owned staging, then publish
+while preserving any existing destination. The builder does not yet provide
+that behavior. The output is not loaded or executed by the game. An ordinary
+Library reader consumes the files directly.
 
 ## Semantics already worth retaining
 
@@ -215,14 +219,20 @@ requested check is decided per check and its evidence, as described in
 [diagnostics and completeness](WOW_LINTER.md#7-useful-output-and-updates). It does
 not certify a complete Blizzard API inventory.
 
-Metadata is useful only if the check reader receives it. At the baseline,
-sidecars contain field names/source links; values remain in raw documents.
-`local/native_artifact/wire.rs::LibraryBinding` deserializes `metadata_sidecars`
-as `IgnoredAny`; raw-field retention in `source-report.json` does not establish
-typed WoW semantics. Emit and read only the typed context, restriction and
-origin fields selected checks use. Read these beside the
-generated Lua without reopening the original checkout or regenerating facts.
-Absent metadata disables the affected WoW check, not ordinary Lua typing.
+Metadata is useful only if the check reader receives it. Projection-time
+`DocumentationDocument` retains raw field values in memory, but the builder
+report does not serialize registrations or source text: `source_inputs` records
+path, SHA-256 and byte count only. `MetadataSidecar` records a field name and
+source link, not its value.
+
+The builder emits `wow-native-source-build/2`. The legacy
+`local/native_artifact/wire.rs` cache reader accepts separate Service report
+envelopes, rejects this builder report and ignores metadata/map contents. The
+ordinary reader still needs a direct handoff. Put the selected typed context,
+restriction and origin fields beside generated Lua and read them without the
+original checkout or regeneration; retain source bytes only where exact source
+context/navigation requires them. Plain Lua remains valid for the first check.
+Absent metadata limits the affected requested WoW check, not ordinary Lua typing.
 
 Source-map support also has a specific consumer boundary. `NavigationIndex`
 supports exact bidirectional lookups, including external source scopes. The
@@ -237,8 +247,9 @@ without regenerating the Library or relabeling an alias as a Blizzard API.
 Mappings refer to exact source bytes and declaration/member ranges. Keep
 original source, corrected value and generated span distinct. Generated
 identifiers/directives must be valid and escaped; unsafe/unrepresentable data
-must not alter a later declaration. One rejected declaration need not discard
-independent valid declarations, but the omission must remain visible.
+must not alter a later declaration. A render or conversion rejection can leave
+independent valid declarations intact; a normalization failure can omit its
+containing registration. In either case, keep the omission visible.
 
 Shared output/acquisition ceilings already exist in `wow-core::library_limits`
 (4,096 files, 8 MiB/file, 64 MiB total). This does not establish the same capacity

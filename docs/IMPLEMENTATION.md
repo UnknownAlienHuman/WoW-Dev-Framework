@@ -266,8 +266,9 @@ wow-reference-builder
 
 Read [KETHO_RUST_PORT.md](KETHO_RUST_PORT.md). Preserve environment,
 `MayReturnNothing`, `NilableContents`, stride, mixin, restriction/Secret and maps
-or report conservative loss. Never execute donor Lua. One optional typed manifest;
-plain Lua valid. No second producer/converter/certification envelope.
+or report conservative loss. Never execute donor Lua. Extend the existing report
+only with consumed typed fields; plain Lua remains valid without it. No second
+producer/converter/certification envelope.
 
 <a id="outputs-and-corrections"></a>
 <a id="annotation-projection-rules"></a>

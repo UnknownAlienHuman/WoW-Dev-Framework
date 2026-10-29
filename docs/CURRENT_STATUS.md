@@ -15,7 +15,7 @@ interface in [FRONTENDS.md](FRONTENDS.md) is planned.
 | EmmyLua | One Lua 5.1 Main/Library/virtual session, STD, upstream diagnostics and exact byte ranges | Strict diagnostic admission, global-disable handling and semantic configuration equivalence |
 | Direct Service checker | Lower exact-snapshot request/result and finite located limitations | Public source-to-result orchestration and requested-scope blockers; lower request/check are still publicly exported |
 | Project | Bounded file/Library readers, TOC/XML parsing, package predicates and source maps | Profile-free physical-Lua plan and safe preparation API |
-| Annotation generation | Native Reference/Annotations/Ketho pipeline | Callable Environment, return groups, nilable contents and other documented projection gaps |
+| Annotation generation | Native Reference/Annotations/Ketho pipeline | Direct Library metadata/map handoff, failure-safe output and [projection gaps](KETHO_RUST_PORT.md) |
 | CLI/LSP/MCP and source lookup | Transitional platform routes | Shared ordinary check and later direct SQLite lookup |
 
 The direct lower checker currently adds chunk-context incompleteness

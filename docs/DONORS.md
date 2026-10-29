@@ -41,6 +41,26 @@ the reviewed comparison for annotation behavior, not a promise of byte-for-byte
 output parity. Gethe's revision is the primary input for source-sensitive WoW
 facts. Keep these roles distinct when a donor and current client data disagree.
 
+## Updating a reviewed revision
+
+Updating a local checkout or running the current-source workflow does not update
+this reviewed baseline or the compiled engine. The guarded checkout updater is
+documented in [repository maintenance](../tools/xtask/README.md#updating-an-explicitly-selected-source-checkout).
+
+- For EmmyLua, keep both dependency pins in [Cargo.toml](../Cargo.toml),
+  [Cargo.lock](../Cargo.lock) and the revision/tree/crate-version constants in
+  [`syntax.rs`](../crates/wow-emmy/src/syntax.rs) aligned with the same source.
+  Review the used parser/config/diagnostic APIs and affected adapter together.
+  While the [legacy compiled probe](../crates/wow-emmy/src/compatibility/compiled_probe.rs)
+  remains a caller, its measured source digest must also match; it is not a
+  prerequisite for an ordinary addon check.
+- For Blizzard/Ketho/Wowless facts, inspect the changed source used by the task
+  and update this table plus the affected owner guide. When a generation report
+  is emitted, keep its exact revision; a moving branch name does not replace it.
+- Preserve notices and historical source citations. A new reviewed revision
+  does not change which revision existing copied code came from. Record only
+  behavior actually rechecked; fetching newer data does not establish compatibility.
+
 ## WoW source facts and limits
 
 Use Gethe's selected Blizzard API docs and authored Lua/XML/TOC as the source

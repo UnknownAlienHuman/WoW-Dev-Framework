@@ -90,12 +90,15 @@ reading user data. Use [WoW semantics](WOW_LINTER.md), not guesses at client tim
 
 ## 2. Generated Library semantics and selected WoW checks
 
-Use the existing native builder and ordinary Library reader. Add one optional
-`source-report.json` while keeping plain Lua valid; correct callable Environment,
-return groups, nilable contents, stride, mixins and selected restriction/Secret
-semantics. Then add one useful direct WoW check with correct semantic binding.
-Run only selected checks. Preserve source maps and explicit projection loss;
-no provider/capability/evidence platform.
+Use the existing native builder and ordinary Library reader. Extend the existing
+`source-report.json` with the selected typed metadata and consume it optionally,
+keeping plain Lua valid. Follow the [output/handoff contract](KETHO_RUST_PORT.md#output-and-source-locations)
+and [generation publication boundary](KETHO_RUST_PORT.md#existing-source-to-output-path);
+the current report is not a raw-source bundle or a legacy cache envelope.
+Correct callable Environment, return groups, nilable contents, stride, mixins and
+selected restriction/Secret semantics. Then add one useful direct WoW check with
+correct semantic binding. Run only selected checks. Preserve source maps and
+explicit projection loss; no provider/capability/evidence platform.
 
 ## 3. Thin LSP/MCP adapters
 
