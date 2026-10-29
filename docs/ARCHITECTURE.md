@@ -48,8 +48,9 @@ preserved merely because they already exist.
 
 **Make correctness local and explainable.** A rule names the source fact and
 program operation behind its finding. Unknown data is not an absent API. A
-partial library cannot make a check look clean. Static analysis does not certify
-combat, taint, secret-value safety or arbitrary dynamic Lua execution.
+partial or unknown Library cannot make a requested check that depends on its
+coverage look clean. Static analysis does not certify combat, taint,
+secret-value safety or arbitrary dynamic Lua execution.
 
 **Reuse work without inventing infrastructure.** Load declarations once per
 session, share parsed data, update changed files and query a normal SQLite index

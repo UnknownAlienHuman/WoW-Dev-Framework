@@ -25,8 +25,8 @@ Implement in this order, joining producer and consumer as each becomes usable:
 | Step | Change | Existing code to inspect |
 | --- | --- | --- |
 | 1 | Classify TOC metadata by effect (T23); reuse/reconcile draft #266 | `crates/wow-project/src/load/toc.rs`, `metadata.rs`, `package_closure/projection.rs` |
-| 2 | Profile-free target, physical-Lua selection and safe prepared source (T32–T36) | `crates/wow-project/src/load/mod.rs`, `disk.rs`, `disk/library.rs` |
-| 3 | Same-session chunk requirements, structured Library errors and canonical diagnostic settings (T31/T38/T13/T16) | `crates/wow-emmy/src/configured_session.rs`, `configuration.rs` |
+| 2 | Profile-free target, physical-Lua selection, empty Main and safe source/error classification (T32–T36/T38) | `crates/wow-project/src/load/mod.rs`, `disk.rs`, `disk/library.rs` |
+| 3 | Same-session chunk requirements, structured Library errors and canonical settings/global disable (T31/T38/T13/T16) | `crates/wow-emmy/src/configured_session.rs`, `configuration.rs`, `syntax/analyzer.rs` |
 | 4 | One public Service operation owns preparation, blockers and exact snapshots; internalize the lower request/check (T37/T38) | `crates/wow-service/src/addon_check.rs`, `addon_check/project_limitations.rs`, `lib.rs` |
 | 5 | Connect ordinary CLI/config/result/errors (T01/T02/T39) | `apps/wow/src/args.rs`, `main.rs`, `output.rs` |
 
@@ -60,12 +60,14 @@ merging code alone does not mark a case observed.
 - Clean and invalid typed calls retain exact root-relative diagnostics.
 - Top-level ellipsis limits affected files; function varargs, strings and comments
   do not. Missing child Lua, required dependencies and deferred XML remain partial
-  while independent diagnostics survive.
+  while independent diagnostics survive. Missing child parents and leaves agree;
+  permission/symlink/I/O failures are not reported as absence.
 - Empty selected input is complete; deferred-only input is partial. Malformed
   Library retains structured root/path. Duplicate authority is refused; disjoint
   nested roots and equal relative paths under distinct roots work.
 - Invalid diagnostic keys/regex/interval are refused. Equivalent default/set-like
-  settings reuse one owner; real analysis changes rebuild it.
+  settings reuse one owner; real analysis changes rebuild it. Global diagnostics
+  off suppresses collection without hiding Library health failures or blockers.
 - Config outside cwd, CLI overrides and TOC use their specified path bases.
   Text/JSON, errors, resource bounds, cancellation and exit precedence follow
   [the frontend contract](FRONTENDS.md#check-results-and-command-status).

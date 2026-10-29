@@ -74,14 +74,24 @@ Add identity-bound `physical_lua` to the existing Project owner:
 
 Full XML expansion is Slice 1B, not a second loader.
 
+There are two existing Main nonempty gates to change as part of this path:
+`disk.rs::read_lua_inventory` rejects an empty inventory, and
+`load/mod.rs::read_toc_source` rejects a Main plan with no Lua files. Refactor
+those gates for Main so an empty addon can produce an empty snapshot; retain the
+nonempty-Lua requirement for each Library root.
+
 <a id="requested-scope-limitations"></a>
 
 #### Metadata and requested-scope limitations
 
-T23 metadata-by-effect admission is a Slice 1A prerequisite. Display/localized,
-custom `X-*` and known non-selection metadata remain Project observations.
-Malformed keys or selected-file/environment/callback-changing directives remain
-invalid or located.
+T23 metadata-by-effect admission is a Slice 1A prerequisite. Malformed TOC
+metadata syntax or an invalid key is `invalid_input`. A syntactically valid but
+unsupported directive that can change selected files, environment or callback
+context produces a source-located limitation for only the affected requested
+scope. Cosmetic, localized, custom `X-*` and known non-selection metadata stay
+Project observations. Preserve unrecognized package keys/spans; limit only a
+requested check that needs their unresolved selection/context semantics. An
+unfamiliar name alone does not imply such a dependency or an execution effect.
 
 The standalone scope mapper belongs in Service to avoid Project -> Service
 dependency:
@@ -94,8 +104,9 @@ For `LuaTypes`:
 
 | Source state | Outcome |
 | --- | --- |
-| missing/unreadable addon root or explicit TOC; unsafe path/bytes; invalid TOC encoding/NUL; unrecoverable TOC syntax; config/source/Library budget refusal | pre-result `invalid_input` |
-| safely parsed TOC names missing direct Lua | located `SourceSelectionIncomplete`, continue, `Partial` |
+| missing/unreadable addon root, explicit TOC or Library root; unsafe path/bytes; invalid TOC encoding/NUL; unrecoverable TOC syntax; config/source/Library budget refusal | pre-result `invalid_input` with the selected role/path origin |
+| safely parsed TOC names missing direct Lua; `NotFound` while safely traversing that selected child path or acquiring its file | located `SourceSelectionIncomplete` at the original TOC span, continue, `Partial` |
+| selected child traversal/file acquisition fails because of a symlink/special file, permission, or other I/O error | pre-result `invalid_input` with the selected role/path origin; never classify every read failure as missing |
 | required dependency, included condition, selected XML or recoverable selected-context uncertainty unresolved | located scope blocker, `Partial` |
 | optional absence; repeated TOC occurrence; Interface without target; `LoadWith`; unused lifecycle/display/custom metadata | Project observation, no limitation |
 | affected file uses chunk-owned top-level `...` or selected context changes typing | located context limitation, `Partial` |
@@ -113,11 +124,13 @@ and exposes one narrow preparation/config entry wrapping crate-private component
 wise `open_workspace`; Slice 1A must not use ambient
 `ProjectInputDirectory::open`.
 
+Admit only host-native absolute roots: Unix absolute paths on Unix and drive-
+absolute paths on Windows. Do not interpret a path string for another operating
+system as a host path; UNC and device paths remain unsupported.
+
 Each opened root retains request-local `InputRootId = role + ordinal`, original
 display descriptor, nonserialized normalized absolute authority descriptor and
-held no-follow capability. Reject descriptor text above 32 KiB; admit local Unix
-absolute and Windows drive-absolute roots; unsupported UNC/device prefixes are
-invalid.
+held no-follow capability. Reject descriptor text above 32 KiB.
 
 For each unique admitted Lua:
 

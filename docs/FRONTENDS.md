@@ -87,6 +87,11 @@ and located scoped limitations. Deterministic Service order:
 - diagnostics: role, canonical path, byte start/end, code, message;
 - limitations: code, optional location, message.
 
+Use explicit sort keys in Service. Derived struct field order is not this
+contract: the current lower diagnostic puts category/code/message before path,
+and the limitation puts message before location. Optional locations sort absent
+first, then by canonical path and byte start/end.
+
 Public result contains no snapshot/analyzer/Project/report/proof identities.
 Paths are relative to configured addon root; text may show `root/path`, JSON keeps
 relative identity. Absolute/path-authority data never enters output.
@@ -98,7 +103,7 @@ findings; it never becomes a clean result by discarding unavailable input.
 
 | Exit | Meaning |
 | --- | --- |
-| `0` | complete, no finding at/above threshold |
+| `0` | complete, no enabled finding at/above threshold |
 | `1` | finding at/above threshold |
 | `2` | requested scope partial |
 | `4` | internal/serialization/output failure |
@@ -106,9 +111,14 @@ findings; it never becomes a clean result by discarding unavailable input.
 | `130` | observed cancellation |
 
 Precedence: 64, 130, 4, 2, 1, 0. Rank Error > Warning > Information > Hint
-explicitly; visible `Unknown` meets every threshold.
+explicitly; visible `Unknown` meets every threshold. Completeness and an empty
+report have the [scope-relative meaning](WOW_LINTER.md#7-useful-output-and-updates)
+defined for the requested checks and diagnostic configuration.
 
-Pre-encode at most 32 MiB, then write once. Complete/partial result -> stdout.
+Encode the typed result into a buffer capped at 32 MiB, including escaped bytes
+and the final newline, then write once. Enforce the limit while appending; reuse
+a bounded writer rather than building an unbounded JSON value/string and checking
+its length afterwards. Complete/partial result -> stdout.
 Admitted-format pre-result error -> stderr; early grammar error -> text stderr.
 Public pre-result error codes are exactly `invalid_input`, `cancelled` and
 `internal`. Optional `role` is `config`, `main` or `library`. JSON error is one

@@ -1,14 +1,15 @@
 # Implementation trace register
 
-**Source review:** `8ab892f040c42a9877836be8bd9818b98b1455d8`, 2026-10-28.
+**Source review:** `8ab892f040c42a9877836be8bd9818b98b1455d8`, 2026-10-29.
 [Current status](CURRENT_STATUS.md) summarizes delivery;
 [the queue](REFACTOR_QUEUE.md) orders work. This register keeps bounded source
 traces and actual observations; it does not repeat implementation requirements.
 
 **traced** means source inspected; **implemented** means code exists;
 **observed** means ordinary input and visible result were executed. A lower
-implemented owner is not a complete public workflow. Prior code gates are in the
-linked PR history; this review ran no product build or tests.
+implemented owner is not a complete public workflow. Compiler/CI checks are in
+the linked PR history; they do not establish observed behavior. No product tests
+were run during this review.
 
 ## Active traces
 
@@ -26,7 +27,7 @@ linked PR history; this review ran no product build or tests.
 | T10 | builder output -> ordinary Library metadata/maps | traced; manifest reader open | unexecuted |
 | T11 | addon chunk arguments -> mapped context | traced; injection open | unexecuted |
 | T12 | upstream diagnostic -> direct result | implemented #246 | unexecuted |
-| T13 | diagnostic config -> selected collection | owner implemented #247; strict admission/canonical semantics open | unexecuted |
+| T13 | diagnostic config -> selected collection | owner implemented #247; strict admission/canonical semantics/global disable open | unexecuted |
 | T14 | exact snapshots -> direct findings/limitations | implemented #248 | unexecuted |
 | T15 | compiled identity vs report evidence | implemented #249 | unexecuted |
 | T16 | exact snapshots/config -> owner reuse | snapshot admission #250; semantic config equivalence open | unexecuted |
@@ -47,12 +48,12 @@ linked PR history; this review ran no product build or tests.
 | T31 | selected Main requirements -> scope completeness | traced; unconditional chunk fallback remains | unexecuted |
 | T32 | ordinary target -> profile-free target/scope plan | traced; current plan profile-bound | unexecuted |
 | T33 | physical plan -> standalone blockers + Main | traced; current loader opens XML/package mapper only | unexecuted |
-| T34 | admitted Main/Libraries -> exact snapshots/paths/errors | traced; construction open | unexecuted |
-| T35 | empty Main + deferred units -> partial without dummy | traced; route open | unexecuted |
+| T34 | admitted Main/Libraries -> exact snapshots/paths/errors | traced; construction and child-read classification open | unexecuted |
+| T35 | empty Main + deferred units -> partial without dummy | traced; two Main nonempty gates remain | unexecuted |
 | T36 | opened roots + admitted paths -> collision-free authority | traced; authority validation open | unexecuted |
 | T37 | ordinary config -> one Service assembly -> lower check | traced; operation open | unexecuted |
 | T38 | file failure -> structured operation error | traced; origin flattened | unexecuted |
-| T39 | strict config/result/error streams -> deterministic exit | traced; frontend open | unexecuted |
+| T39 | strict config/result/error streams -> deterministic exit | traced; frontend, explicit order and bounded rendering open | unexecuted |
 
 ## Source owners behind the open boundaries
 
@@ -60,10 +61,14 @@ linked PR history; this review ran no product build or tests.
 | --- | --- | --- |
 | T01/T02/T37/T39 | [CLI dispatch](../apps/wow/src/main.rs), [arguments](../apps/wow/src/args.rs), [legacy operation](../crates/wow-service/src/local/response.rs); ordinary route absent | [Service assembly](IMPLEMENTATION.md#first-implementation-slice), [frontends](FRONTENDS.md) |
 | T23/T32/T33/T35 | [TOC](../crates/wow-project/src/load/toc.rs), [metadata](../crates/wow-project/src/load/metadata.rs), [profile-bound/eager-XML loader](../crates/wow-project/src/load/mod.rs) | [Physical plan and scope](IMPLEMENTATION.md#first-implementation-slice) |
+| T35 | [inventory reader](../crates/wow-project/src/disk.rs) rejects empty Main; [TOC reader](../crates/wow-project/src/load/mod.rs) separately rejects Main with no Lua | [Empty physical Main](IMPLEMENTATION.md#physical-projection) |
 | T34/T36 | [component-wise root opener](../crates/wow-project/src/disk.rs), [Library reader](../crates/wow-project/src/disk/library.rs); direct preparation/authority handoff absent | [Safe roots and snapshots](IMPLEMENTATION.md#safe-roots-and-selected-path-authority) |
+| T34/T38 | [disk `read`/`descend`](../crates/wow-project/src/disk.rs) maps every leaf metadata error to missing, but missing parents/open failures to read failure; [loader](../crates/wow-project/src/load/mod.rs) recovers only missing | [Selected-child failure classes](IMPLEMENTATION.md#requested-scope-limitations) |
 | T31/T37 | [lower checker](../crates/wow-service/src/addon_check.rs) always adds chunk limitation/Partial; [lib.rs](../crates/wow-service/src/lib.rs) publicly exports lower request/check | [same-owner requirement](EMMYLUA_UPSTREAM.md#addon-chunk-context), [Service ownership](IMPLEMENTATION.md#first-implementation-slice) |
 | T13/T16 | [configuration equality](../crates/wow-emmy/src/configuration.rs) compares serialized settings; [configured owner](../crates/wow-emmy/src/configured_session.rs) already exists | [Diagnostic semantics](EMMYLUA_UPSTREAM.md#diagnostic-configuration) |
+| T13 | [diagnostic collector](../crates/wow-emmy/src/syntax/analyzer.rs) treats the pinned donor's global-off `None` as unavailable; [configured error mapping](../crates/wow-emmy/src/configured_session.rs) turns it into native failure | [Global disable](EMMYLUA_UPSTREAM.md#diagnostic-configuration) |
 | T38 | [configured errors](../crates/wow-emmy/src/configured_session.rs) and [lower check mapping](../crates/wow-service/src/addon_check.rs) flatten Library input failure | [Structured failures](IMPLEMENTATION.md#structured-failures) |
+| T39 | [lower result](../crates/wow-service/src/addon_check.rs) sorts by derived struct order, not the specified keys; [legacy output](../apps/wow/src/output.rs) bounds text after growth and appends a newline outside the [bounded JSON writer](../crates/wow-service/src/local/response.rs) | [Order, encoding and exits](FRONTENDS.md#check-results-and-command-status) |
 | T08–T11/T17–T22/T27 | [load-context trace](TOC_LOAD_CONTEXT_AUDIT.md), [trigger/binding trace](TOC_TRIGGER_BINDINGS_AUDIT.md), [baseline source audit](AUDIT.md) | [Later slices](REFACTOR_QUEUE.md#1b-dependencies-xml-and-chunk-injection), [WoW semantics](WOW_LINTER.md) |
 
 T23 remains in draft [PR #266](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/266),

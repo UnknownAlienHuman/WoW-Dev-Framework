@@ -19,6 +19,7 @@ instructions.
 | Review current code and documentation at `8ab892f` | Complete; current owner paths traced |
 | Consolidate canonical contracts and contributor navigation | Complete; implementation, frontend and Emmy rules have one home each |
 | Remove stale templates and validation machinery | Complete; current task templates and proportional CI checks |
+| Review failure, empty-input and completeness boundaries | Complete; source-backed defects remain open in T13/T34/T35/T38/T39, with precise owner contracts |
 | Synchronize documentation with each implementation change | Ongoing; update the relevant status, queue, guide, or trace only when its facts change |
 | Record ordinary user-workflow observations | Deferred until the product paths are ready |
 

@@ -210,6 +210,10 @@ relationship and its origin without treating every mixin as inheritance.
 Emit normal inert `.lua` declarations once. Keep extra API context/restriction
 facts and source maps beside them when a real consumer needs them. A user-supplied
 plain Lua Library remains supported for types without a generator certificate.
+Plain Lua input supports typing; whether missing Library coverage limits a
+requested check is decided per check and its evidence, as described in
+[diagnostics and completeness](WOW_LINTER.md#7-useful-output-and-updates). It does
+not certify a complete Blizzard API inventory.
 
 Metadata is useful only if the check reader receives it. At the baseline,
 sidecars contain field names/source links; values remain in raw documents.

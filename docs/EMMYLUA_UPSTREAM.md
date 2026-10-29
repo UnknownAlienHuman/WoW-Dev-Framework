@@ -87,6 +87,25 @@ omitted diagnostics, `{}`, reordered lists and duplicate entries reuse the same
 owner when analysis semantics are identical, while a real analysis change forces
 a cold owner. LS debounce remains frontend state.
 
+The global `enable` switch is distinct from the `disable` code set. At the pinned
+[donor implementation](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/diagnostic/lua_diagnostic.rs#L52),
+`enable: false` makes `diagnose_file` return `None`; disabling individual codes
+filters findings while diagnostic collection remains enabled. The adapter must
+normalize `None` to an empty configured diagnostic report only when the validated
+configuration explicitly sets global `enable: false`. Every other non-cancelled
+`None` remains a diagnostics-unavailable failure. The current
+[`collect_registered`](../crates/wow-emmy/src/syntax/analyzer.rs) treats every
+non-cancelled `None` as `DiagnosticsUnavailable`, then
+[`syntax_error`](../crates/wow-emmy/src/configured_session.rs) maps it to
+`NativeFailure`; correct that owner path without treating the source as valid.
+
+With global diagnostics off, an empty report records suppression, not a clean
+Lua check. Still validate exact Main and Library registration/health, preserve
+cancellation, and retain Project's missing-source or scope limitations. Successful
+Library parsing establishes only parse health of the supplied files, not Blizzard
+API/type coverage; missing or partial Library authority remains unknown, never
+proof of API absence.
+
 Keep separate:
 
 1. Emmy diagnostic selection/severity;

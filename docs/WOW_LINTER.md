@@ -160,10 +160,12 @@ known restricted error-policy flag and does not make independent language
 analysis partial.
 
 Retain localized display metadata, icon/category/group fields and `X-*` custom
-metadata without limiting language work. An unrecognized package metadata key is
-reported and limits only checks whose selection/context could depend on it; it
-does not invalidate already enumerated files. Unknown inline/file directives can
-change selection and therefore remain located unit limitations.
+metadata without limiting language work. Preserve an unrecognized package key
+and its span as an observation. It limits a requested check only when that check
+needs selection/context semantics which remain unresolved; an unfamiliar name
+alone does not invalidate enumerated files or make all Lua analysis partial.
+Unknown inline/file directives can change selection and therefore remain located
+unit limitations.
 
 ### Exact selected order and context
 
@@ -258,9 +260,22 @@ metadata. Do not build another whole-program dataflow engine or auto-insert guar
 
 A diagnostic has stable code, severity, message, exact file/range and optional
 related location. Keep findings separate from limitations such as partial Library,
-unknown channel/trigger/compatibility/security context, malformed binding XML or
-cancellation. Known findings survive partial input; unexamined scope never reports
-clean.
+unknown channel/trigger/compatibility/security context or malformed binding XML.
+Known findings survive partial input; unexamined requested scope never reports
+clean. Cancellation ends the operation without publishing a new check result.
+
+`Complete` means the requested checks finished over the admitted selected Main,
+Libraries and context under the chosen diagnostic configuration. It does not mean
+every diagnostic was enabled or the addon is correct at runtime. With global
+diagnostics disabled, an empty report records that choice, not a clean Lua check.
+
+Slice 1A `LuaTypes` uses declarations as supplied by the caller. A parseable plain
+Lua Library does not establish a complete Blizzard API inventory. No generated
+report or certificate is required for this slice. Preserve upstream unresolved-
+symbol diagnostics, but never relabel them as confirmed absence of a Blizzard
+API. Missing Library coverage or metadata limits only requested checks that need
+that evidence; it does not globally block ordinary typing against supplied
+declarations.
 
 Deduplicate only same code/cause/location. Library/STD declarations are related
 locations, never fabricated Main spans.
