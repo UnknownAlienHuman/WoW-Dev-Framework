@@ -35,6 +35,23 @@ yet consume the generated report/maps. See
 [Implementation](../../docs/IMPLEMENTATION.md#native-annotation-generation) and
 [Ketho/native projection](../../docs/KETHO_RUST_PORT.md).
 
+## Resource and cancellation boundaries
+
+Input/file/output limits do not establish a process-wide peak-memory limit.
+The current [report producer](src/lib.rs) constructs a JSON value and serializes
+it completely before checking its 64 MiB size. That check refuses oversized
+output after allocation. Correct this in the producer: serialize a borrowed typed
+report through a bounded writer, enforcing the limit while encoding rather than
+cloning the complete report into an intermediate JSON value.
+
+Cancellation is cooperative. The bounded [Git reader](src/io.rs) performs blocking
+reads and waits without a stop token; Reference's
+[Lua parse](../../crates/wow-reference/src/native.rs) is also synchronous.
+Checkpoints around these stages do not interrupt an active read/parse or establish
+a hard timeout. Exit 6 means cancellation was observed, not immediate termination
+or rollback of output. Keep these limits explicit; do not add a new runtime or
+resource-management platform to describe guarantees the existing owners lack.
+
 Application source-bundle workflows use this executable, but their existence is
 not an observed builder-to-addon result. The copied producer and `/1` verifier
 are removed. The eventual `wow library build` reuses this pipeline rather than

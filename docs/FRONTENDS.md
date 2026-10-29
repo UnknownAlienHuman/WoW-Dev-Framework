@@ -137,11 +137,36 @@ JSON strings stay exact.
 ## LSP adapter
 
 Use one LSP 3.18 stdio profile and the same public Service check as CLI. Preserve
-exact unsaved text/version/root, UTF-8/UTF-16 conversion, version gaps, stale
-rejection, standard empty/null and protocol-only stdout. Never construct a lower
-request/second workspace or attach limitations. Publish only exact physical/mapped
-user locations. LS debounce (including interval) remains adapter state and does
-not alter analyzer configuration/reuse. General Lua intelligence stays upstream.
+exact unsaved text/version/root, UTF-8/UTF-16 conversion, standard empty/null and
+protocol-only stdout. Never construct a lower request/second workspace or attach
+limitations. Publish only exact physical/mapped user locations. LS debounce
+(including interval) remains adapter state and does not alter analyzer
+configuration/reuse. General Lua intelligence stays upstream.
+
+### Document synchronization
+
+The reviewed LSP source at `baf2db31` defines
+[signed 32-bit `integer`](https://github.com/microsoft/language-server-protocol/blob/baf2db31b5fb314a8f358f9a839d3c66e9d98734/_specifications/lsp/3.18/specification.md#baseTypes),
+[increasing, nonconsecutive document versions](https://github.com/microsoft/language-server-protocol/blob/baf2db31b5fb314a8f358f9a839d3c66e9d98734/_specifications/lsp/3.18/types/versionedTextDocumentIdentifier.md)
+and [ordered change arrays](https://github.com/microsoft/language-server-protocol/blob/baf2db31b5fb314a8f358f9a839d3c66e9d98734/_specifications/lsp/3.18/textDocument/didChange.md).
+Apply these at the wire boundary without changing Project's internal model into
+a protocol schema:
+
+| Input | Required handling |
+| --- | --- |
+| Version in `-2^31..=2^31-1`, including negative values and gaps | Preserve the signed client version through overlay/result binding; require an increase for a new change, not `previous + 1`. Internal generation counters remain separate; never cast a negative version to `u64`. |
+| `contentChanges: []` | The protocol array has no nonempty constraint. For an admitted newer version, keep bytes unchanged and advance version under the same stale-result guards. Do not fabricate an edit or force resynchronization merely because the array is empty. |
+| `[{"text":""}]` | Replace the whole document with empty text; this is not a no-op. Empty `didOpen.text` is also valid. |
+| Several ranged/full changes | Apply in received order against each intermediate text, then adopt the final state atomically. |
+| Deprecated `rangeLength` on a ranged change | Accept a valid LSP `uinteger`; `range` is authoritative. Validate then discard this redundant wire field before constructing `OverlayEdit`. |
+
+Stale versions and invalid ranges remain failures; accepting valid empty input
+does not bypass source bounds, cancellation or exact version matching. The current
+Service rejects negative versions, Project refuses an empty edit array, and the
+wire parser deserializes directly into strict `OverlayEdit`, rejecting
+`rangeLength`. These remain open under T08 in the
+[trace register](IMPLEMENTATION_TRACE_REGISTER.md#source-owners-behind-the-open-boundaries).
+Empty source text is already accepted and must stay accepted.
 
 <a id="mcp-adapter"></a>
 

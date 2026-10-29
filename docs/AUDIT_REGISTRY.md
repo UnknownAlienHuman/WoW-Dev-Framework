@@ -19,8 +19,8 @@ instructions.
 | Review current code and documentation at `8ab892f` | Complete; current owner paths traced |
 | Consolidate canonical contracts and contributor navigation | Complete; implementation, frontend and Emmy rules have one home each |
 | Remove stale templates and validation machinery | Complete; current task templates and proportional CI checks |
-| Review failure, empty-input and completeness boundaries | Complete; source-backed defects remain open in T13/T34/T35/T38/T39, with precise owner contracts |
-| Review generation handoff, source updates and agent entry points | Complete; report contents and failure/retry behavior corrected; T10 remains open |
+| Review failure, empty-input, resource and synchronization boundaries | Source review complete; T08/T13/T34/T35/T38/T39 retain open code defects and owner contracts, including diagnostic-budget classification and LSP version/change admission |
+| Review generation handoff, source updates and agent entry points | Source review complete; report contents, allocation/cancellation limits and failure/retry behavior corrected in guidance; T10 remains open |
 | Synchronize documentation with each implementation change | Ongoing; update the relevant status, queue, guide, or trace only when its facts change |
 | Record ordinary user-workflow observations | Deferred until the product paths are ready |
 

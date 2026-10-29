@@ -162,8 +162,29 @@ context/Library/analysis-config changes rebuild cold. LS debounce is not analyze
 identity. Remove declarations, virtual units, maps and diagnostics together;
 failed/cancelled/stale work never publishes.
 
+## Resource limits and cancellation
+
+`DiagnosticBudgetExceeded` is a resource refusal, not analyzer unavailability.
+Preserve its typed cause and source origin through the configured owner to
+Service; the ordinary CLI maps it to `invalid_input`/64 under the existing
+[error contract](FRONTENDS.md#check-results-and-command-status). A count or
+code/message-size refusal must not poison a healthy session, truncate a diagnostic
+to fit, or turn an incomplete collection into a successful empty result. The
+current `syntax_error` catch-all maps this case to `NativeFailure`, marks the
+session unhealthy, and the lower Service maps it to `ComponentUnavailable`.
+Fix that existing chain, not a parallel error framework.
+
+The [collector](../crates/wow-emmy/src/syntax/analyzer.rs) checks adapter count and
+message limits after upstream returns the file's diagnostic vector. These are
+retained-report admission limits, not a bound on native peak allocation. Snapshot
+byte limits and frontend encoded-output limits likewise do not cap the combined
+heap of source copies, ASTs, inference and intermediate reports.
+
 Cancellation is cooperative around framework stages. The pinned synchronous
-native call is not preemptible; check before/after and do not claim more.
+native call is not preemptible; check before/after and do not claim a hard deadline
+or bounded cancellation latency. A stop token does not make active native work
+interruptible. Keep bounded framework loops and honest refusal separate from any
+unmeasured native resource guarantee.
 
 <a id="editor-boundary"></a>
 
