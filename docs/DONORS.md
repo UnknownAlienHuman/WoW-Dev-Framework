@@ -1,150 +1,114 @@
 # Donors and source boundaries
 
-Use this as a short map from an existing upstream source to the Rust owner or
-bounded behavior that can be reused. Read the source at the pinned revision
-before copying behavior. Blizzard UI source is the authority for the selected
-client's facts; Ketho is an annotation-semantics donor; Wowless is a comparative
-implementation and data source. None of these makes runtime behavior statically
-provable.
+Choose the source used by the assigned task, not a tour of every donor. These are
+reviewed baselines, not claims about the latest upstream revision or delivered
+product support. Read the selected code before reusing its behavior; the
+[repository map](REPOSITORY_MAP.md) locates the existing Rust consumer.
 
 ## Pinned sources and useful surfaces
 
-| Donor | Revision and path | Reuse / owner | Boundary |
-|---|---|---|---|
-| EmmyLua analyzer | [`aaaca68425d9362876228649b0b8d92f07654daa`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/tree/aaaca68425d9362876228649b0b8d92f07654daa) | Public parser and semantic analysis in `wow-emmy`; use for Lua syntax, types, diagnostics and configuration. | Language analysis belongs upstream. Do not build a parallel Lua parser/type checker or depend on its private LSP internals. |
-| Ketho annotation generator | [`d0b5b51fac4c52c493371b9b18e66ce604ea4326`](https://github.com/Ketho/vscode-wow-api/tree/d0b5b51fac4c52c493371b9b18e66ce604ea4326), `luasrc/annotate/init.lua`, `wowdoc/init.lua` | `wow-annotations/src/ketho.rs` and callbacks: typed projection, ordered params/returns, callback signatures and receiver conventions. | Semantics/output donor, not a requirement to preserve VS Code activation or runtime. |
-| Ketho source loader and patches | Same Ketho revision: [`wowdoc/loader/init.lua`](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/wowdoc/loader/init.lua), [`patches.lua`](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/wowdoc/loader/patches.lua), [`doc_widgets.lua`](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/wowdoc/loader/doc_widgets.lua) | Rust equivalents in `wow-reference/src/native*.rs`: normalize source facts, retain raw input, apply guarded named-field corrections and map documented receivers. | Do not execute the Lua loader or patch code. Port narrow, inspected semantics into bounded Rust over source data. |
-| Ketho annotations | Same revision: [`Annotations/Core/Type`](https://github.com/Ketho/vscode-wow-api/tree/d0b5b51fac4c52c493371b9b18e66ce604ea4326/Annotations/Core/Type), [`Annotations/Core/Widget`](https://github.com/Ketho/vscode-wow-api/tree/d0b5b51fac4c52c493371b9b18e66ce604ea4326/Annotations/Core/Widget) | Existing native alias, structure, namespace, mixin, widget, literal and navigation modules under `wow-annotations` / `wow-ketho-literals`. | Preserve only understood, representable annotations. Keep losses and unsupported types visible; never silently widen them to `any`. |
-| Blizzard UI source mirror | [`e7aa82019dc298e0351c7159d60c2a9b916b9b67`](https://github.com/Gethe/wow-ui-source/tree/e7aa82019dc298e0351c7159d60c2a9b916b9b67) | Selected API documentation tables, Lua/XML/TOC source and flavor-specific API availability; consumed by `wow-reference`, project loading and annotations. | Primary facts are revision- and flavor-bound. This reviewed source revision represents build 12.1.5 / 70529; it does not identify a permanently supported build. Respect Blizzard's source terms; do not assume a code license from the mirror. |
-| Wowless UIObject model | [`c09acebd9be7d52e41154dff5276f4d62f3e4970`](https://github.com/wowless/wowless/tree/c09acebd9be7d52e41154dff5276f4d62f3e4970), [`uiobjecttypes.lua`](https://github.com/wowless/wowless/blob/c09acebd9be7d52e41154dff5276f4d62f3e4970/wowless/modules/uiobjecttypes.lua), [`uiobjects.yaml`](https://github.com/wowless/wowless/blob/c09acebd9be7d52e41154dff5276f4d62f3e4970/data/products/wow/uiobjects.yaml) | Compare inheritance/script lookup algorithms and bounded type/script facts against selected source; potential design input for XML script/object checks. | Comparative model/data, not Blizzard authority or a runtime dependency. Verify any finding against selected source and represent uncertainty explicitly. |
-| Wowless XML and TOC logic | Same Wowless revision: [`xmleval.lua`](https://github.com/wowless/wowless/blob/c09acebd9be7d52e41154dff5276f4d62f3e4970/wowless/modules/xmleval.lua), [`loader.lua`](https://github.com/wowless/wowless/blob/c09acebd9be7d52e41154dff5276f4d62f3e4970/wowless/modules/loader.lua), [`toc.lua`](https://github.com/wowless/wowless/blob/c09acebd9be7d52e41154dff5276f4d62f3e4970/wowless/toc.lua) | Compare XML template/script binding, ordered TOC entries, dependency aliases, product-channel gating, the `LoadWith` reverse-trigger model, exact `Bindings<suffix>.xml` selection and binding callback wrapping with `wow-project`. | Comparative behavior is not Blizzard authority. Do not import the interpreter, execute addons or promote donor ordering/security assumptions into client facts without selected-source evidence; preserve unsupported semantics explicitly. |
-| quick-xml | Declared `0.38`; lock resolves `0.38.4` in [`Cargo.lock`](../Cargo.lock); [0.38.4 docs](https://docs.rs/crate/quick-xml/0.38.4) | Existing XML event reader for source-located XML traversal. | Parse as data; XML callbacks/scripts are not executed. |
-| rusqlite / SQLite FTS5 | `rusqlite 0.37.0` with `bundled`, `serialize`, `backup` in [`crates/wow-store/Cargo.toml`](../crates/wow-store/Cargo.toml); [rusqlite 0.37 docs](https://docs.rs/rusqlite/0.37.0/rusqlite/); [SQLite FTS5 reference](https://www.sqlite.org/fts5.html) | SQLite persistence and optional full-text indexing/search in `wow-store` / `wow-search`. FTS5 is SQLite's virtual-table full-text module. | Search is auxiliary; addon checking must not require a populated search index. Use direct SQLite docs for FTS semantics, not an assumption based on crate feature names. |
-| LuaLS library consumer | [Libraries](https://luals.github.io/wiki/libraries/), [annotation compatibility](https://luals.github.io/wiki/annotations/) | External consumer for generated annotation libraries via workspace library configuration; useful interoperability target. | A `.lua` extension alone does not establish compatibility. LuaLS warns its LuaCATS annotations are no longer cross-compatible with EmmyLua annotations since v3. Validate emitted constructs with target consumers or provide a tested profile. |
+| Source | Reviewed revision | Use / owning contract |
+| --- | --- | --- |
+| EmmyLua Analyzer Rust | [`aaaca68425d9362876228649b0b8d92f07654daa`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/tree/aaaca68425d9362876228649b0b8d92f07654daa), compiled dependency | Public parser, semantic model, settings and diagnostics through [wow-emmy](EMMYLUA_UPSTREAM.md). No second Lua engine or private language-server handlers. |
+| Ketho vscode-wow-api | [`d0b5b51fac4c52c493371b9b18e66ce604ea4326`](https://github.com/Ketho/vscode-wow-api/tree/d0b5b51fac4c52c493371b9b18e66ce604ea4326), behavior/data comparison | Annotation semantics and explicit supplemental declarations through [the native projection](KETHO_RUST_PORT.md). Not a runtime dependency or promise of output parity. |
+| Blizzard UI source mirror | [`e7aa82019dc298e0351c7159d60c2a9b916b9b67`](https://github.com/Gethe/wow-ui-source/tree/e7aa82019dc298e0351c7159d60c2a9b916b9b67), reviewed build 12.1.5 / 70529 | Selected API tables and authored TOC/XML/Lua establish revision-bound [game facts](WOW_LINTER.md). The build is a baseline, not a permanent supported target. |
+| Wowless | [`c09acebd9be7d52e41154dff5276f4d62f3e4970`](https://github.com/wowless/wowless/tree/c09acebd9be7d52e41154dff5276f4d62f3e4970), comparative implementation/data | Compare bounded load/XML/object behavior; never substitute emulator behavior for Blizzard authority. See [Wowless](#wowless). |
 
-Wowless's own code is MIT-licensed at the pinned
-[`LICENSE`](https://github.com/wowless/wowless/blob/c09acebd9be7d52e41154dff5276f4d62f3e4970/LICENSE);
-that notice excludes separately licensed `vendor/` and `elune/` components.
-Ketho records MIT terms in its pinned
-[`LICENSE`](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/LICENSE);
-this project retains attribution in
-[`THIRD_PARTY_NOTICES.md`](../crates/wow-annotations/THIRD_PARTY_NOTICES.md).
-EmmyLua's pinned
-[`LICENSE`](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/LICENSE)
-governs that upstream code. Review each donor's license and data provenance
-before copying code or source-derived datasets; a software license does not
-settle rights in Blizzard-derived data.
+For Ketho, inspect only the relevant surface:
+[emitter](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/luasrc/annotate/init.lua),
+[source loader](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/wowdoc/loader/init.lua),
+[corrections](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/wowdoc/loader/patches.lua),
+[widget mappings](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/wowdoc/loader/doc_widgets.lua),
+[type catalogs](https://github.com/Ketho/vscode-wow-api/tree/d0b5b51fac4c52c493371b9b18e66ce604ea4326/Annotations/Core/Type)
+or [widget declarations](https://github.com/Ketho/vscode-wow-api/tree/d0b5b51fac4c52c493371b9b18e66ce604ea4326/Annotations/Core/Widget).
+Reuse the existing Reference/Annotations pipeline; donor Lua is data to inspect,
+not code to execute. Projection rules, known losses and supported Emmy syntax
+have one home in [KETHO_RUST_PORT.md](KETHO_RUST_PORT.md).
 
-The crate workspace pins EmmyLua through `Cargo.toml`; its revision is also
-the parser and semantic API contract for this checkout. The Ketho revision is
-the reviewed comparison for annotation behavior, not a promise of byte-for-byte
-output parity. Gethe's revision is the primary input for source-sensitive WoW
-facts. Keep these roles distinct when a donor and current client data disagree.
+## Existing primitives before new code
+
+| Need | Existing implementation | Reuse boundary |
+| --- | --- | --- |
+| Safe files and directories | `cap-std` / `cap-fs-ext` in [Project disk](../crates/wow-project/src/disk.rs) and [Library traversal](../crates/wow-project/src/disk/library.rs) | Expose the narrow Project entry points specified by [source admission](IMPLEMENTATION.md#safe-roots-and-selected-path-authority). Reuse component-wise no-follow acquisition, not the ambient root opener or legacy artifact prerequisites. |
+| Strict JSON input | Serde-based [StrictJson](../apps/wow/src/json.rs) | Duplicate-key/depth admission already exists. It does not establish config byte bounds, permitted keys or diagnostic semantics; use [the config contract](FRONTENDS.md#configuration-and-path-bases). Do not write another JSON parser. |
+| Bounded result encoding | Append-bounded buffer in [local response](../crates/wow-service/src/local/response.rs) | Reuse the buffer algorithm, not its legacy envelope/error mapping. App `json::encode` counts then serializes a `Value`; [ordinary output](FRONTENDS.md#check-results-and-command-status) needs a single bounded typed encoding. |
+| XML | [Project XML reader](../crates/wow-project/src/load/xml.rs), `quick-xml 0.38.4` in [Cargo.lock](../Cargo.lock); [versioned docs](https://docs.rs/crate/quick-xml/0.38.4) | Extend existing source-located parsing and maps; never execute callbacks or build another XML parser. |
+| SQLite / FTS | [Store manifest](../crates/wow-store/Cargo.toml), [rusqlite 0.37 docs](https://docs.rs/rusqlite/0.37.0/rusqlite/), [SQLite FTS5](https://www.sqlite.org/fts5.html) | Later [direct lookup](REFACTOR_QUEUE.md#4-direct-source-index-search-and-context), not a checking prerequisite. Existing `serialize`/`backup` features do not prescribe the new storage design. |
+
+This table identifies code to reuse, not new wrappers to create. Extract a shared
+primitive only when real callers need it; keep product orchestration out of the
+helper. Package versions come from manifests/lock, not this navigation table.
+
+LuaLS is an external interoperability target, not another engine for the checker:
+[library configuration](https://luals.github.io/wiki/libraries/) and
+[annotation compatibility](https://luals.github.io/wiki/annotations/).
+A `.lua` extension does not establish consumer compatibility; the
+[projection guide](KETHO_RUST_PORT.md#what-the-pinned-emmy-consumer-can-represent)
+records syntax supported by the pinned Emmy source, separately from executed runs.
 
 ## Updating a reviewed revision
 
-Updating a local checkout or running the current-source workflow does not update
-this reviewed baseline or the compiled engine. The guarded checkout updater is
-documented in [repository maintenance](../tools/xtask/README.md#updating-an-explicitly-selected-source-checkout).
+A checkout update or generation run does not update the compiled engine or prove
+compatibility. Use [the guarded source updater](../tools/xtask/README.md#updating-an-explicitly-selected-source-checkout)
+only for the explicitly selected checkout; do not advance every donor for an
+unrelated implementation change.
 
-- For EmmyLua, keep both dependency pins in [Cargo.toml](../Cargo.toml),
-  [Cargo.lock](../Cargo.lock) and the revision/tree/crate-version constants in
-  [`syntax.rs`](../crates/wow-emmy/src/syntax.rs) aligned with the same source.
-  Review the used parser/config/diagnostic APIs and affected adapter together.
-  While the [legacy compiled probe](../crates/wow-emmy/src/compatibility/compiled_probe.rs)
-  remains a caller, its measured source digest must also match; it is not a
-  prerequisite for an ordinary addon check.
-- For Blizzard/Ketho/Wowless facts, inspect the changed source used by the task
-  and update this table plus the affected owner guide. When a generation report
-  is emitted, keep its exact revision; a moving branch name does not replace it.
-- Preserve notices and historical source citations. A new reviewed revision
-  does not change which revision existing copied code came from. Record only
-  behavior actually rechecked; fetching newer data does not establish compatibility.
+- **EmmyLua:** align both pins in [Cargo.toml](../Cargo.toml), [Cargo.lock](../Cargo.lock)
+  and revision/tree/crate-version constants in [syntax.rs](../crates/wow-emmy/src/syntax.rs).
+  Review the used parser/config/diagnostic APIs with the adapter. While the
+  [compiled probe](../crates/wow-emmy/src/compatibility/compiled_probe.rs) remains a
+  caller, its measured source digest must match too; the probe is not an ordinary
+  check prerequisite.
+- **Blizzard/Ketho/Wowless:** inspect changed source needed by the task, its typed
+  projection and actual reader. Update this baseline and the affected owner guide
+  only for facts rechecked. Keep exact revisions in generated reports; a moving
+  branch name is not the revision used.
+- **Dependencies and evidence:** inspect the relevant manifest/lock diff, use the
+  [affected-caller checks](../CONTRIBUTING.md#choose-the-checks), and distinguish
+  source review from an observed run. Preserve historical citations and notices;
+  updating a baseline does not change where previously copied code came from.
 
 ## WoW source facts and limits
 
-Use Gethe's selected Blizzard API docs and authored Lua/XML/TOC as the source
-of truth. Do not treat Ketho's annotations or Wowless's models as newer or
-more authoritative facts. The exact source revision, client flavor and selected
-TOC control what is in scope.
+Selected Blizzard source outranks a comparative donor for client facts. API
+`Environment` values such as `All`/`SecureOnly` are contexts, not flavors; `All`
+does not assert cross-flavor availability. `SecretArguments` is a function-level
+policy string, not a list of parameter positions. Required interpretation lives
+in [WoW semantics](WOW_LINTER.md); typed/emission gaps live in
+[missing projection semantics](KETHO_RUST_PORT.md#missing-semantics-the-linter-needs).
 
-The pinned
-[`AddOnsDocumentation.lua`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_APIDocumentationGenerated/AddOnsDocumentation.lua)
-explicitly describes the addon table as the second result of chunk `...` and
-states that `AllowAddOnTableAccess: 1` only opts that table into retrieval through
-`C_AddOns.GetAddOnLocalTable`. The pinned
-[`Blizzard_CombatAudioAlerts.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_CombatAudioAlerts/Blizzard_CombatAudioAlerts.toc)
-uses that directive. This is stronger evidence for ordinary chunk context than a
-runtime-emulator convention, and it keeps table injection separate from external
-retrieval permission.
-
-In the pinned API docs, observed `Environment` values include `All` and
-`SecureOnly`. These name UI environments, not client flavors such as `Mainline`
-or `Classic`; `All` is not a statement that an API is present in every client
-flavor. The current model preserves and filters on system-level `Environment`
-through [`SystemFacts`](../crates/wow-reference/src/native_model.rs) and the
-Reference/annotation projections ([`native_view.rs`](../crates/wow-reference/src/native_view.rs),
-[`native.rs`](../crates/wow-annotations/src/native.rs)). It does not preserve a
-callable-level `Environment` override in [`CallableFact`](../crates/wow-reference/src/native_model.rs),
-so that member-level availability remains unmodeled. At this source revision,
-for example, `FrameScript.GetForbiddenObjectTable` is documented `SecureOnly`.
-
-Ketho-specific compatibility gaps to check against the current Rust owner:
-
-- Repeated `StrideIndex` groups and `NilableContents` occur in the selected
-  source. The Blizzard consumer of `GetMetaPowerInfo` demonstrates repeated
-  triples; preserving a single terminal vararg does not cover that shape.
-- `Mixin` annotations describe composition; do not substitute a guessed single
-  parent relationship.
-- `MayReturnNothing` is distinct metadata about a callable's return behavior.
-- `SecretArguments` is a function-level policy string, not a list of argument
-  positions. Do not reinterpret it as positional facts.
-
-Consult [WoW behavior](WOW_LINTER.md) for rule priorities and static-analysis
-limits. Dynamic loading, runtime-created objects, taint, combat behavior and
-arbitrary Secret-value flow cannot be certified by a partial static model.
-When extending the native path, trace the selected source field into its Rust
-fact, projection and consumer before deciding that the behavior is supported.
-Retain raw evidence and report unsupported forms as partial or unknown rather
-than silently dropping their meaning.
-
-For annotation syntax, use the pinned Emmy
-[parser](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_parser/src/grammar/doc/types.rs),
-[type lowering](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/compilation/analyzer/doc/infer_type.rs)
-and [return guide](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/docs/emmylua_doc/annotations_EN/return.md).
-Nullable element types and homogeneous variadic returns have source support;
-an exact repeated heterogeneous tuple form was not established. The
-[projection guide](KETHO_RUST_PORT.md#what-the-pinned-emmy-consumer-can-represent)
-records the verified forms and remaining limit. Do not invent syntax or a new
-type engine to fill that gap.
+For chunk context, the pinned
+[AddOns API documentation](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_APIDocumentationGenerated/AddOnsDocumentation.lua)
+and [AllowAddOnTableAccess example](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_CombatAudioAlerts/Blizzard_CombatAudioAlerts.toc)
+support the distinction between ordinary chunk arguments and later table retrieval.
+Follow [the game contract](WOW_LINTER.md#2-reuse-lua-analysis-model-the-wow-environment)
+and [the same-owner adapter](EMMYLUA_UPSTREAM.md#addon-chunk-context), not a second
+implementation described here. Static evidence never certifies runtime safety.
 
 ## Wowless
 
-For Wowless comparisons specifically, `uiobjecttypes.lua` precomputes ancestry
-for `InheritsFrom`/`HasScript`; `uiobjects.yaml` lists type inheritance and
-scripts. `xmleval.lua` binds XML script functions/methods and inline bodies,
-while `toc.lua` exposes source-order and conditional parsing. These are useful
-ideas and comparison points only. The `loader.lua`/`xmleval.lua` execution path
-models a client-like runtime, including addon chunk arguments `(addonName,
-privateTable)`; the linter must read source and model only the statically
-supported namespace relationship. Do not run Ketho or Wowless Lua loaders.
+Use [UIObject ancestry/script lookup](https://github.com/wowless/wowless/blob/c09acebd9be7d52e41154dff5276f4d62f3e4970/wowless/modules/uiobjecttypes.lua),
+[object data](https://github.com/wowless/wowless/blob/c09acebd9be7d52e41154dff5276f4d62f3e4970/data/products/wow/uiobjects.yaml),
+[XML evaluation](https://github.com/wowless/wowless/blob/c09acebd9be7d52e41154dff5276f4d62f3e4970/wowless/modules/xmleval.lua),
+[loader](https://github.com/wowless/wowless/blob/c09acebd9be7d52e41154dff5276f4d62f3e4970/wowless/modules/loader.lua)
+and [TOC parser](https://github.com/wowless/wowless/blob/c09acebd9be7d52e41154dff5276f4d62f3e4970/wowless/toc.lua)
+as comparisons only. Do not import their interpreter or execute addons.
 
-The inspected loader gives `SuppressLocalTableRef` its own branch and allocates
-bootstrap environments separately. It sets the addon environment to `nil` for
-that directive but still calls external Lua with both `addonName` and the
-`addonEnv` value. Gethe's selected
-[`Blizzard_RecruitAFriend.toc`](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_RecruitAFriend/Blizzard_RecruitAFriend.toc)
-confirms that the restricted/internal metadata still occurs in selected Blizzard
-source, but neither source establishes its current client effect. Do not turn the
-donor's `nil` convention into a supported client suppression rule. Preserve the
-raw directive as unsupported context and limit only conclusions that depend on
-chunk ellipsis/private-table semantics.
+Bootstrap/private-table behavior, product gates, `LoadWith`, bindings and handler
+arguments follow the reviewed/unsupported distinctions in
+[the load model](WOW_LINTER.md#4-toc-and-xml-form-the-load-model).
+The [Blizzard SuppressLocalTableRef occurrence](https://github.com/Gethe/wow-ui-source/blob/e7aa82019dc298e0351c7159d60c2a9b916b9b67/Interface/AddOns/Blizzard_RecruitAFriend/Blizzard_RecruitAFriend.toc)
+proves the metadata exists, not that Wowless's `nil` convention describes the
+current client. Preserve that uncertainty rather than making a guessed adapter.
 
-The loader also compares product gates, records `LoadWith` reverse triggers and
-searches a finite bindings-suffix list; its XML evaluator wraps binding bodies
-with `keystate`, compiles known handlers with their script parameters, and loads
-free inline Script bodies through a different call. These are reviewed donor
-behaviors, not an open Blizzard loader specification. They justify narrow
-adapters and scoped limitations, not universal runtime claims. The required
-[context adapter](EMMYLUA_UPSTREAM.md#addon-chunk-context) remains open work and
-must keep unsupported special environments explicitly limited.
+## Notices
+
+Review the pinned [EmmyLua license](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/LICENSE),
+[Ketho license](https://github.com/Ketho/vscode-wow-api/blob/d0b5b51fac4c52c493371b9b18e66ce604ea4326/LICENSE)
+and [Wowless license](https://github.com/wowless/wowless/blob/c09acebd9be7d52e41154dff5276f4d62f3e4970/LICENSE)
+before copying code/data; Wowless's notice excludes separately licensed vendor
+and elune components. A mirror or donor code license does not settle permission
+to redistribute Blizzard-derived data. Preserve the local
+[annotation](../crates/wow-annotations/THIRD_PARTY_NOTICES.md),
+[literal](../crates/wow-ketho-literals/THIRD_PARTY_NOTICES.md) and
+[reference](../crates/wow-reference/THIRD_PARTY_NOTICES.md) notices.

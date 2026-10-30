@@ -1,10 +1,10 @@
 # Documentation
 
-Start with [current status](CURRENT_STATUS.md) and
-[architecture](ARCHITECTURE.md), then select one [queue item](REFACTOR_QUEUE.md).
-Use its row in the [repository map](REPOSITORY_MAP.md) to reach the relevant owner
-sections and producer/consumer code. Read only that route; historical audits are
-background, not a prerequisite to implementation.
+Follow [AGENTS.md](../AGENTS.md) for startup and work policy. For an assigned task,
+use its [repository-map route](REPOSITORY_MAP.md), owner section and actual
+producer/consumer code. Use [the queue](REFACTOR_QUEUE.md) to choose unassigned
+work; [current status](CURRENT_STATUS.md) separates delivered from planned.
+Historical audits are background, not a prerequisite to implementation.
 
 ## Working guides
 
@@ -19,7 +19,7 @@ background, not a prerequisite to implementation.
 | CLI/config/output and later protocol adapters | [Frontends](FRONTENDS.md) |
 | Pinned Lua engine, diagnostic configuration and chunk context | [EmmyLua](EMMYLUA_UPSTREAM.md) |
 | Blizzard/Ketho annotation generation | [Native projection](KETHO_RUST_PORT.md) |
-| Exact sources and reuse boundaries | [Donors](DONORS.md) |
+| Exact sources, existing primitives and revision updates | [Donors](DONORS.md) |
 | Contribution workflow | [AGENTS.md](../AGENTS.md) |
 
 For a documentation-only task, read the affected guide, its source evidence and

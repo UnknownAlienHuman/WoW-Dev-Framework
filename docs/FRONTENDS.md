@@ -46,6 +46,12 @@ no-follow helper. Reuse duplicate-key/depth-bounded `StrictJson`; reject unknown
 outer fields and duplicate scalar CLI options. No implicit discovery. If config
 fails, only an already admitted CLI `--format` selects JSON error output.
 
+In [Project disk](../crates/wow-project/src/disk.rs), `read_configuration` currently
+admits 32 MiB; the smaller `read_json_artifact_with_limit` requires a predeclared
+digest/length. Neither is the ordinary config entry unchanged. Reuse the internal
+bounded read with the 256 KiB ceiling applied during acquisition. Do not read the
+larger buffer then reject it, invent an artifact identity, or add another reader.
+
 Path origin is part of deterministic configuration:
 
 - a relative `--config` path resolves from process cwd;
@@ -115,14 +121,25 @@ explicitly; visible `Unknown` meets every threshold. Completeness and an empty
 report have the [scope-relative meaning](WOW_LINTER.md#7-useful-output-and-updates)
 defined for the requested checks and diagnostic configuration.
 
-Encode the typed result into a buffer capped at 32 MiB, including escaped bytes
-and the final newline, then write once. Enforce the limit while appending; reuse
-a bounded writer rather than building an unbounded JSON value/string and checking
-its length afterwards. Complete/partial result -> stdout.
-Admitted-format pre-result error -> stderr; early grammar error -> text stderr.
-Public pre-result error codes are exactly `invalid_input`, `cancelled` and
-`internal`. Optional `role` is `config`, `main` or `library`. JSON error is one
-bounded object such as
+Encode the borrowed typed result once into a buffer capped at 32 MiB, including
+escaped bytes and the final newline, then write it. Reuse the check-before-append
+buffer algorithm in [local response](../crates/wow-service/src/local/response.rs),
+not `LocalOperationResult` or its generic encoding-error mapping. The existing
+[app JSON encoder](../apps/wow/src/json.rs) first counts encoded bytes and then
+serializes a `Value` again; do not put the ordinary typed result through an
+intermediate `Value` or a second serialization pass. Text and its newline use the
+same append bound, not an unbounded string checked after growth.
+
+Keep limit exhaustion distinguishable from serializer/I/O failure, for example
+with a private writer limit-hit flag inspected by the renderer. Do not parse error
+strings or classify every serialization error as oversized input. This needs a
+small output helper, not a serialization framework or a rewrite of every protocol
+adapter before the ordinary command can work.
+
+Complete/partial result -> stdout. Admitted-format pre-result error -> stderr;
+early grammar error -> text stderr. Public pre-result error codes are exactly
+`invalid_input`, `cancelled` and `internal`. Optional `role` is `config`, `main` or
+`library`. JSON error is one bounded object such as
 `{"error":{"code":"invalid_input","message":"...","role":"library","root_index":0,"relative_path":"..."}}`.
 Message <= 4 KiB; `root_index` only for Library and zero-based; paths role-relative.
 Check cancellation after encoding/before first byte. Once output starts, no retry,
