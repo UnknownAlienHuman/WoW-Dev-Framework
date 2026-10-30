@@ -8,6 +8,7 @@ use serde::Serialize;
 pub enum TocSavedVariableScope {
     Account,
     Character,
+    Machine,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -31,10 +32,10 @@ pub(super) fn parse(key: &str, value: &str) -> ProjectResult<Vec<TocSavedVariabl
     if value.is_empty() {
         return Ok(Vec::new());
     }
-    let scope = if key == "savedvariablespercharacter" {
-        TocSavedVariableScope::Character
-    } else {
-        TocSavedVariableScope::Account
+    let scope = match key {
+        "savedvariablespercharacter" => TocSavedVariableScope::Character,
+        "savedvariablesmachine" => TocSavedVariableScope::Machine,
+        _ => TocSavedVariableScope::Account,
     };
     let mut declarations = Vec::new();
     for name in value.split(',').map(str::trim) {

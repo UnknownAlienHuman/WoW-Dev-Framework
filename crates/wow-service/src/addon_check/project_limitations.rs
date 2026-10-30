@@ -120,7 +120,8 @@ fn load_issue_code(issue: &LoadIssue) -> Option<AddonCheckLimitationCode> {
         // known, so publishing them here would report a resolved dependency as
         // incomplete and duplicate the exact package-level outcome.
         LoadIssueKind::RequiredDependencyUnresolved
-        | LoadIssueKind::OptionalDependencyUnresolved => return None,
+        | LoadIssueKind::OptionalDependencyUnresolved
+        | LoadIssueKind::UnknownMetadata => return None,
         LoadIssueKind::LoadContextRequired | LoadIssueKind::LoadConditionUnresolved => {
             AddonCheckLimitationCode::LoadSelectionUnresolved
         }
@@ -153,6 +154,9 @@ const fn load_issue_message(kind: LoadIssueKind) -> &'static str {
         }
         LoadIssueKind::UnknownDirective => {
             "selected source contains an unsupported load-context directive"
+        }
+        LoadIssueKind::UnknownMetadata => {
+            "selected TOC contains retained metadata with unknown semantics"
         }
         LoadIssueKind::UnknownTocSyntax => "selected TOC contains unsupported syntax",
         LoadIssueKind::LoadContextRequired => "selected source requires an explicit load context",

@@ -11,7 +11,7 @@ mod saved_variables;
 pub mod schema;
 mod toc;
 pub use document_toc::DocumentTocSelection;
-pub use metadata::TocMetadata;
+pub use metadata::{TocMetadata, TocMetadataKind};
 pub use package_closure::{
     PACKAGE_LOAD_PROFILE, PACKAGE_MAIN_NAMESPACE_PROFILE, PACKAGE_MAIN_NAMESPACE_ROOT,
     ProjectLoadedPackage, ProjectPackageCycleKind, ProjectPackageInput, ProjectPackageLoadCoverage,
@@ -58,7 +58,7 @@ use crate::platform_source::AdmittedPlatformSource;
 use crate::{ProjectError, ProjectErrorCode, ProjectInputFile, ProjectPhase, ProjectResult};
 
 /// Versioned, deliberately restricted acquisition semantics; never a WoW build.
-pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/7";
+pub const LOAD_PROFILE: &str = "wow-project/toc-xml-files/8";
 const MAX_RECORDS: usize = 32_768;
 const MAX_INCLUDE_DEPTH: usize = 32;
 
@@ -103,7 +103,9 @@ pub enum LoadRecordKind {
     Unknown,
 }
 
-/// Reasons why the selected file projection cannot claim complete load coverage.
+/// Located load/metadata observations. `blocks_complete` on each retained issue
+/// records whether the selected source projection is incomplete for the ordinary
+/// language-check scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LoadIssueKind {
@@ -115,6 +117,7 @@ pub enum LoadIssueKind {
     RequiredDependencyUnresolved,
     OptionalDependencyUnresolved,
     UnknownDirective,
+    UnknownMetadata,
     UnknownTocSyntax,
     LoadContextRequired,
     LoadConditionUnresolved,
@@ -123,6 +126,19 @@ pub enum LoadIssueKind {
     UnsupportedXmlNamespace,
     UnsupportedXmlAttributes,
     InlineLuaNotAnalyzed,
+}
+
+impl LoadIssueKind {
+    /// Whether this issue prevents complete selected-source coverage for the
+    /// ordinary language-check scope. Unknown package metadata remains located
+    /// but does not erase independently enumerated files.
+    #[must_use]
+    pub const fn blocks_complete(self) -> bool {
+        !matches!(
+            self,
+            Self::OptionalDependencyUnresolved | Self::UnknownMetadata
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -812,7 +828,7 @@ impl Loader<'_> {
             document: document.to_owned(),
             byte_start: start as u64,
             byte_end: end as u64,
-            blocks_complete: kind != LoadIssueKind::OptionalDependencyUnresolved,
+            blocks_complete: kind.blocks_complete(),
         });
     }
 }
