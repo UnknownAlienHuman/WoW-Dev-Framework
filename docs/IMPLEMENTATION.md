@@ -27,25 +27,39 @@ each arrow. The [repository map](REPOSITORY_MAP.md) locates existing owners.
 
 ## Small implementation decisions
 
-Default to changing the existing owner and its caller. Reuse the relevant public
-donor/library API before writing a substitute. A short implementation must still
-preserve the contracts below; dropping bounds, errors or source context is not
-simplification.
+Reuse a suitable public donor/library API or existing domain function before
+writing a substitute. Choose the smallest connected change that preserves source
+bounds, typed failures and locations; fewer lines are not an excuse to lose them.
 
 | Decision | Default; reason to add more |
 | --- | --- |
-| Function, type or module? | Start with a concrete function and cohesive private helpers. Add a type to protect a real invariant or represent consumed data; add a module for a coherent responsibility, not for every stage or a line-count target. Contract names below do not require wrapper/builders/getters around each field. |
-| Trait, generic backend or registry? | Use concrete owners and an explicit match for finite domain cases. Add abstraction only for actual interchangeable behavior at a current call site or a required library boundary, not hypothetical providers, future adapters or mockability. Repeated syntax alone is not a shared domain policy. |
-| Where to validate? | Validate untrusted input in its owning boundary, then pass the admitted typed value. Recheck when bytes, authority or binding can change; do not repeat admission in every layer or silently replace failed input with defaults. Wire DTOs are legitimate at protocol boundaries, not between every pair of functions. |
-| What state to retain? | Keep request data local; move/borrow existing values and share exact source through existing ownership. Add no process-wide cache, lock, queue or lifecycle for one call. Retain a session only for a real repeated caller; use conservative rebuild until narrower updates are justified. |
-| Errors and internal transport? | Preserve typed cause and source origin; convert at the actual owner/frontend boundary. No message parsing, generic success envelopes or JSON round-trips to move typed data. Keep existing hashes where snapshots/maps/reuse need them; do not add a receipt or versioned identity per step. |
-| Dependency or optimization? | Use an existing suitable primitive first. A new dependency must supply a concrete missing capability, not duplicate one already present; avoiding a library is not a reason to write another parser. Avoid redundant reads/parses/copies now; add concurrency, caching or incremental machinery only for a demonstrated workflow need. |
+| Function, type or module? | Concrete function and cohesive private helpers. A type protects an invariant or carries consumed data; a module owns a coherent responsibility. No wrapper/builder/getter set per contract name or line-count quota. |
+| Trait, generic backend or registry? | Concrete owners and explicit matches for finite cases. Abstract actual interchangeable behavior or a required library boundary, not hypothetical providers or mockability. Repeated syntax alone is not shared domain policy. |
+| Where to validate? | Admit untrusted input at its owning boundary, then pass the typed value. Recheck changed bytes, authority or binding, not unchanged admission at every layer. Wire DTOs belong at protocol boundaries. No silent fallback. |
+| What state to retain? | Request-local values; move/borrow or share exact source through existing ownership. No global cache/lock/queue for one call. Retain sessions for real repeated callers; prefer conservative rebuild. |
+| Errors and internal transport? | Typed cause/origin, converted at the owner/frontend boundary. No message parsing, generic success envelopes or JSON round-trips. Keep hashes needed by snapshots/maps/reuse, not new receipts per step. |
+| Dependency or optimization? | Existing suitable primitive first; add a dependency for a concrete missing capability. No second parser to avoid a library. Remove redundant reads/parses/copies; add caching/concurrency/incremental machinery for a demonstrated workflow need. |
 
-Prefer a small, readable call chain over both a giant function and a tower of
-forwarding wrappers. Use comments for invariants, donor behavior and non-obvious
-tradeoffs, not narration. Do not add unused extension points, placeholder success,
-dummy source, dual-mode switches or a compatibility layer to keep obsolete
-machinery alive. Replace a caller, then remove what only that caller required.
+### Reuse behavior, not obsolete orchestration
+
+If a useful algorithm is entangled with unrelated prerequisites, extract a narrow
+helper within its owning crate and route the real callers through it. Do not copy
+and fork the algorithm, or add mode flags/dummy inputs to make the old coordinator
+pretend its prerequisites exist. For example, the current
+[`ServiceBackend`](../crates/wow-service/src/backend.rs) deals in published
+contexts/generations; it is not the reuse boundary for an ordinary addon check.
+Reuse Project admission and Emmy analysis below it, as the slice specifies.
+
+Update affected internal signatures, re-exports and callers in the same change
+rather than introducing a second version to keep the old call shape compiling.
+Keep an adapter only for a real remaining caller, translating real input; remove
+it with that caller. Existing serialization or fixtures alone do not establish a
+compatibility promise. Preserve genuinely supported user input and never rewrite
+user files to accommodate an internal refactor.
+
+Keep the call chain readable: neither a giant function nor forwarding wrappers
+at every arrow. Comments explain invariants and non-obvious donor behavior, not
+the surrounding syntax. No unused extension points or placeholder success.
 
 <a id="addon-configuration-and-emmy-analysis"></a>
 <a id="first-implementation-slice"></a>

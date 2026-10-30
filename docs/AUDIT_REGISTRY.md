@@ -21,7 +21,7 @@ instructions.
 | Remove stale templates and validation machinery | Complete; current task templates and proportional CI checks |
 | Review failure, empty-input, resource and synchronization boundaries | Source review complete; T08/T13/T34/T35/T38/T39 retain open code defects and owner contracts, including diagnostic-budget classification and LSP version/change admission |
 | Review generation handoff, source updates and agent entry points | Source review complete; report contents, allocation/cancellation limits and failure/retry behavior corrected in guidance; T10 remains open |
-| Make implementation tasks navigable and maintainable | [Map](REPOSITORY_MAP.md) locates owners; [implementation decisions](IMPLEMENTATION.md#small-implementation-decisions) constrain added abstraction/state; [review/check/update matrix](../CONTRIBUTING.md) covers the handoff. Queue steps require connected consumers, not unused scaffolding. |
+| Make implementation tasks navigable and maintainable | [Map](REPOSITORY_MAP.md) locates owners; [implementation decisions](IMPLEMENTATION.md#small-implementation-decisions) distinguish useful reuse from legacy orchestration; [check/update matrix](../CONTRIBUTING.md) owns verification. Skills and task bodies route to contracts instead of copying them; the [old Issue audit](ACTIVE_ISSUE_AUDIT.md) is historical. |
 | Synchronize documentation with each implementation change | Ongoing; update the relevant status, queue, guide, or trace only when its facts change |
 | Record ordinary user-workflow observations | Deferred until the product paths are ready |
 

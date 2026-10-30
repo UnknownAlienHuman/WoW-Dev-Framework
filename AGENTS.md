@@ -1,11 +1,11 @@
 # Contributor instructions
 
-Build a useful WoW addon linter on EmmyLua. Read the short
-[current status](docs/CURRENT_STATUS.md) and [architecture](docs/ARCHITECTURE.md),
-then the relevant [queue item](docs/REFACTOR_QUEUE.md). Use one row of the
-[repository map](docs/REPOSITORY_MAP.md) to reach its producer, consumer and owner
-contract. Do not load every guide or audit. Checks and update destinations are in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+Build a useful WoW addon linter on EmmyLua. Read [current status](docs/CURRENT_STATUS.md),
+then the assigned task's [map row](docs/REPOSITORY_MAP.md), linked owner section
+and producer/consumer code. Use the [queue](docs/REFACTOR_QUEUE.md) to choose work
+when no task is assigned. Read [architecture](docs/ARCHITECTURE.md) on first entry
+or when changing scope/ownership, not before every edit. Checks and update
+locations are in [CONTRIBUTING.md](CONTRIBUTING.md); do not load every guide/audit.
 
 ## Work
 
