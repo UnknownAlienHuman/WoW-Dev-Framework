@@ -14,7 +14,7 @@ background, not a prerequisite to implementation.
 | Where is the code and who consumes it? | [Repository map](REPOSITORY_MAP.md) |
 | Which checks should run, and what must be updated? | [Check matrix and maintenance](../CONTRIBUTING.md) |
 | Product purpose and exclusions | [Architecture](ARCHITECTURE.md) |
-| Code owners and the active check contract | [Implementation](IMPLEMENTATION.md) |
+| Code owners, smallest design and active check contract | [Implementation](IMPLEMENTATION.md), [implementation decisions](IMPLEMENTATION.md#small-implementation-decisions) |
 | WoW semantics and known static-analysis limits | [WoW linter](WOW_LINTER.md) |
 | CLI/config/output and later protocol adapters | [Frontends](FRONTENDS.md) |
 | Pinned Lua engine, diagnostic configuration and chunk context | [EmmyLua](EMMYLUA_UPSTREAM.md) |

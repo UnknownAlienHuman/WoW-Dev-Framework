@@ -7,16 +7,19 @@ a prerequisite campaign before each implementation change.
 
 ## Working one step
 
-Choose the first unfinished prerequisite for the assigned result, then use the
-[repository map](REPOSITORY_MAP.md#ordinary-check) to read its producer and
-consumer at the same revision. Keep one bounded change: expected input/output,
-owner paths and explicit later-slice exclusions. If another draft owns the same
-boundary, inspect its diff before implementing it again.
+Choose the first unfinished prerequisite for the assigned result, then use one
+[repository-map route](REPOSITORY_MAP.md#ordinary-check) to read its producer and
+consumer at the same revision. Reuse another draft's work before duplicating it.
+Define input/output, owner paths and excluded later work in the existing task/PR.
+Use [small implementation decisions](IMPLEMENTATION.md#small-implementation-decisions)
+rather than create a new layer for every noun in the contract.
 
-Before handoff, follow [the review and check matrix](../CONTRIBUTING.md#choose-the-checks)
-and update only the affected status/trace/contract. A new helper is not a finished
-step until its caller uses it; a merged component is not an observed workflow.
-No new task registry, correction number or full-repository audit is required.
+Steps below order integration, not unrelated edits: a configuration/error fix can
+use its existing caller without waiting for TOC work. Split commits at coherent
+handoffs, not into unused scaffolding. Before handoff use
+[the check matrix](../CONTRIBUTING.md#choose-the-checks) and update affected facts.
+A helper is not complete until consumed; compiled/merged is not observed. No new
+task registry, correction number or full-repository audit is required.
 
 <a id="1-first-usable-ordinary-addon-check"></a>
 
@@ -30,38 +33,32 @@ operation. No WoW rules in this slice.
 
 Read the [Slice 1A contract](IMPLEMENTATION.md#first-implementation-slice),
 [CLI/config/output](FRONTENDS.md#configuration-and-check-input) and the relevant
-[Emmy owner rules](EMMYLUA_UPSTREAM.md#configured-analyzer-session). These are the
-behavioral homes; this queue does not restate their limits or data models.
+[Emmy owner rules](EMMYLUA_UPSTREAM.md#configured-analyzer-session). The
+[map](REPOSITORY_MAP.md#ordinary-check) owns file paths; this table states when a
+handoff is connected, not another specification or list of new public APIs.
 
-Implement in this order, joining producer and consumer as each becomes usable:
-
-| Step | Change | Existing code to inspect |
+| Step | Change | Connected when |
 | --- | --- | --- |
-| 1 | Classify TOC metadata by effect (T23); reuse/reconcile draft #266 | `crates/wow-project/src/load/toc.rs`, `metadata.rs`, `package_closure/projection.rs` |
-| 2 | Profile-free target, physical-Lua selection, empty Main and safe source/error classification (T32–T36/T38) | `crates/wow-project/src/load/mod.rs`, `disk.rs`, `disk/library.rs` |
-| 3 | Same-session chunk requirements, structured Library errors and canonical settings/global disable (T31/T38/T13/T16) | `crates/wow-emmy/src/configured_session.rs`, `configuration.rs`, `syntax/analyzer.rs` |
-| 4 | One public Service operation owns preparation, blockers and exact snapshots; internalize the lower request/check (T37/T38) | `crates/wow-service/src/addon_check.rs`, `addon_check/project_limitations.rs`, `lib.rs` |
-| 5 | Connect ordinary CLI/config/result/errors (T01/T02/T39) | `apps/wow/src/args.rs`, `main.rs`, `output.rs` |
+| 1 | TOC metadata by effect (T23); reconcile draft #266 | The parser's classification reaches existing package admission/limitation consumers; no second alias/classification table is created. |
+| 2 | Profile-free physical source preparation (T32–T36/T38) | Existing Project preparation supplies captured Main/Library bytes, the plan and admitted authority to Service, including empty Main and distinct missing/unsafe/read failures. A changed function argument alone is insufficient. |
+| 3 | Configured Emmy behavior (T31/T38/T13/T16) | The same configured session supplies chunk requirements and diagnostics; settings/global-off, Library health and resource causes survive to the consuming checker. No second parser/session. |
+| 4 | Public Service assembly (T37/T38) | Merged ordinary input reaches preparation and the internal checker, producing one result or located typed failure. The lower snapshot request is no longer a frontend API. |
+| 5 | Ordinary CLI/config/output (T01/T02/T39) | Real arguments/config call that Service operation; text/JSON/errors/exits use its outcome. Replace the ordinary legacy dispatch and exclusive options/help rather than keep a permanent dual route. |
 
-These are implementation steps, not new registries or public APIs for every row.
-Keep existing callers intact until replaced. Do not advertise the ordinary
-command until its source-to-output path exists.
+Steps 2–5 must join into the explicit-input-to-output path. Do not introduce
+placeholder success, fabricated identities or unused preparation/execution
+interfaces to make an isolated step appear finished. Retain still-used legacy
+behavior until its callers move; advertise the ordinary command only when wired.
 
 <a id="source-traced-replacement-boundary"></a>
+<a id="exact-owner-split"></a>
 
 ### Replacement boundary
 
 Replace `LocalCommand -> LocalProjectBackend -> generic Service::check` for the
-ordinary checker. Do not satisfy that route's Reference/Rules/publication
-prerequisites with fabricated identities or a compatibility mode.
-
-<a id="exact-owner-split"></a>
-
-### Owner split
-
-[Project, Service, Emmy and frontend responsibilities](IMPLEMENTATION.md#code-ownership)
-are defined once in the implementation guide. Path-sorted analysis snapshots do
-not represent WoW runtime order.
+ordinary checker. Do not satisfy its Reference/Rules/publication prerequisites
+with fake identities or a compatibility mode. Ownership is defined in
+[Implementation](IMPLEMENTATION.md#code-ownership), not by the current crate count.
 
 ### Completion cases
 

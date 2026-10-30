@@ -11,10 +11,13 @@ and `git rev-parse HEAD`. Read the open PR/head for the same task before choosin
 branch; do not overwrite, reset or stash another contributor's work. Reuse the
 manager's single worktree. Historical Issues and fixtures are evidence, not scope.
 
-Define the task in the existing PR/task description: input -> expected output,
-owner paths, affected caller and excluded later-slice work. Read that handoff in
-code before editing. A new field, helper or module is not completion until its
-consumer uses it; do not create a planning file for every small change.
+Define input -> expected output, owner paths, caller and exclusions in the existing
+task/PR. Read that handoff and the available donor/library API, then choose the
+smallest change under [the implementation decisions](docs/IMPLEMENTATION.md#small-implementation-decisions).
+Do not create a planning file or another audit before every edit. A helper without
+a consuming caller is not completion. Delegate a bounded read or connected change;
+the manager resolves shared ownership instead of joining independently invented
+architectures.
 
 ## Choose the checks
 
@@ -65,6 +68,15 @@ unverified platform paths when the required toolchain is unavailable. Check the
 actual Rust version with `rustc +stable -Vv`; `stable` is not an immutable pin.
 
 ## Review the handoff
+
+Read the diff before adding machinery. For each new public API, abstraction,
+state store or dependency, identify its current caller or the invariant it
+protects; remove additions with neither. Follow the changed input through success,
+partial and refusal paths. Look for duplicate file reads, analyzer construction,
+source copies and format conversions across the boundary. Compare the displaced
+caller and remove its now-exclusive code/options. This is source review, not a
+new metrics gate or report template; few lines do not excuse hidden errors or
+unsafe shortcuts.
 
 | Area | Read through before considering the change ready |
 | --- | --- |

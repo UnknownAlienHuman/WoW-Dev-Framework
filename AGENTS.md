@@ -13,8 +13,11 @@ contract. Do not load every guide or audit. Checks and update destinations are i
   changes. Delegate bounded reads or disjoint paths; give each task its input,
   expected output, owner paths and exclusions. The manager joins the handoff.
 - Finish a useful input-to-output path. Change producer and consumer together;
-  remove displaced wrappers/options with their last caller. Keep helpers local
-  until real callers need sharing.
+  remove displaced wrappers/options with their last caller.
+- Default to existing concrete owners and private helpers. Before adding a type,
+  trait, state store or dependency, follow the
+  [small implementation decisions](docs/IMPLEMENTATION.md#small-implementation-decisions).
+  Contract stages are not new subsystems; shorter code must not hide failures.
 - Read the relevant [pinned donor](docs/DONORS.md) before reusing its semantics.
   EmmyLua owns Lua analysis; Project owns source selection; Service composes the
   operation; frontends render it. Never execute analyzed Lua or rewrite user source.
