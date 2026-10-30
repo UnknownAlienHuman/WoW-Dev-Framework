@@ -5,6 +5,19 @@ remaining work; [IMPLEMENTATION.md](IMPLEMENTATION.md) owns the active check
 contract. Change existing owners and their real callers. A source review is not
 a prerequisite campaign before each implementation change.
 
+## Working one step
+
+Choose the first unfinished prerequisite for the assigned result, then use the
+[repository map](REPOSITORY_MAP.md#ordinary-check) to read its producer and
+consumer at the same revision. Keep one bounded change: expected input/output,
+owner paths and explicit later-slice exclusions. If another draft owns the same
+boundary, inspect its diff before implementing it again.
+
+Before handoff, follow [the review and check matrix](../CONTRIBUTING.md#choose-the-checks)
+and update only the affected status/trace/contract. A new helper is not a finished
+step until its caller uses it; a merged component is not an observed workflow.
+No new task registry, correction number or full-repository audit is required.
+
 <a id="1-first-usable-ordinary-addon-check"></a>
 
 ## 1. First usable ordinary addon check

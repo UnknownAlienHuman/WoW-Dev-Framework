@@ -2,13 +2,16 @@
 
 Build a useful WoW addon linter on EmmyLua. Read the short
 [current status](docs/CURRENT_STATUS.md) and [architecture](docs/ARCHITECTURE.md),
-then the relevant [queue item](docs/REFACTOR_QUEUE.md). Follow its links to the
-owner contract and actual producer/consumer code; do not load every audit.
+then the relevant [queue item](docs/REFACTOR_QUEUE.md). Use one row of the
+[repository map](docs/REPOSITORY_MAP.md) to reach its producer, consumer and owner
+contract. Do not load every guide or audit. Checks and update destinations are in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Work
 
 - One manager, one worktree/branch. Check remote work and preserve unpublished
-  changes. Delegate bounded reads or disjoint paths.
+  changes. Delegate bounded reads or disjoint paths; give each task its input,
+  expected output, owner paths and exclusions. The manager joins the handoff.
 - Finish a useful input-to-output path. Change producer and consumer together;
   remove displaced wrappers/options with their last caller. Keep helpers local
   until real callers need sharing.
@@ -32,7 +35,8 @@ old Issues, fixtures and removed specs cannot expand scope.
 ## Verification and handoff
 
 Write the product first. For Rust changes run formatting and the smallest strict
-Clippy invocation covering affected crates/callers. Do not repeat `cargo check`.
+Clippy invocation covering affected crates/callers; use the
+[check matrix](CONTRIBUTING.md#choose-the-checks). Do not repeat `cargo check`.
 Do not add or run tests until functional completion, as directed by the owner.
 Do not delete a test merely because it fails.
 
@@ -41,9 +45,9 @@ existing `cargo xtask check` for local links/anchors and skill-copy synchronizat
 Do not build the Rust workspace for prose. Source review or compilation never
 proves that an addon/editor workflow ran.
 
-Update [status](docs/CURRENT_STATUS.md) when delivery changes, the affected
-[trace](docs/IMPLEMENTATION_TRACE_REGISTER.md) when evidence changes, and the
-owning contract when behavior changes. No parallel status diary or correction-ID
-ceremony is required. Publish one coherent branch/PR after rereading the remote
-head. State the change, verification and remaining limitation briefly; preserve
-third-party notices.
+Update only documents whose facts changed, using the
+[maintenance table](CONTRIBUTING.md#update-the-right-place). Keep evidence tied to
+the actual revision and distinguish implemented from observed. No parallel status
+diary or correction-ID ceremony is required. Publish one coherent branch/PR after
+rereading the remote head. State the change, verification and remaining limitation
+briefly; preserve third-party notices.

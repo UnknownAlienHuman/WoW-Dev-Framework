@@ -2,7 +2,8 @@
 
 Start with [current status](CURRENT_STATUS.md) and
 [architecture](ARCHITECTURE.md), then select one [queue item](REFACTOR_QUEUE.md).
-Read its linked owner/domain sections and actual code. The historical audits are
+Use its row in the [repository map](REPOSITORY_MAP.md) to reach the relevant owner
+sections and producer/consumer code. Read only that route; historical audits are
 background, not a prerequisite to implementation.
 
 ## Working guides
@@ -10,6 +11,8 @@ background, not a prerequisite to implementation.
 | Need | Read |
 | --- | --- |
 | What exists and what is next? | [Current status](CURRENT_STATUS.md), [queue](REFACTOR_QUEUE.md) |
+| Where is the code and who consumes it? | [Repository map](REPOSITORY_MAP.md) |
+| Which checks should run, and what must be updated? | [Check matrix and maintenance](../CONTRIBUTING.md) |
 | Product purpose and exclusions | [Architecture](ARCHITECTURE.md) |
 | Code owners and the active check contract | [Implementation](IMPLEMENTATION.md) |
 | WoW semantics and known static-analysis limits | [WoW linter](WOW_LINTER.md) |
@@ -19,6 +22,12 @@ background, not a prerequisite to implementation.
 | Exact sources and reuse boundaries | [Donors](DONORS.md) |
 | Contribution workflow | [AGENTS.md](../AGENTS.md) |
 
+For a documentation-only task, read the affected guide, its source evidence and
+inbound links; do not reopen every implementation trace. For a donor update, read
+[the revision procedure](DONORS.md#updating-a-reviewed-revision) and the affected
+projection/engine consumer, not every donor. For a failing check, start with
+[the actual command and failure](../CONTRIBUTING.md#failure-and-handoff).
+
 ## Maintaining the documentation
 
 - Status owns delivered/open behavior; the queue owns work order and completion
@@ -26,6 +35,9 @@ background, not a prerequisite to implementation.
 - Implementation owns source admission and Service assembly. Frontends owns
   command/config/output semantics; EmmyLua owns engine-specific rules; WoW linter
   owns game semantics. Link across these boundaries rather than copying rules.
+- The repository map owns navigation, not contracts. Keep moved paths/symbols
+  current; [the maintenance table](../CONTRIBUTING.md#update-the-right-place)
+  identifies which other documents change for a given edit.
 - [Implementation traces](IMPLEMENTATION_TRACE_REGISTER.md) retain source
   pointers and actual observations. Update the affected row when it changes;
   do not add a correction counter or another progress log.
@@ -33,7 +45,8 @@ background, not a prerequisite to implementation.
   A source trace, compiled change and executed workflow are different evidence.
 
 README/package instructions and Issues route to these guides. Existing fixtures
-and old specifications do not add product scope.
+and old specifications do not add product scope. A new guide needs a distinct
+owner and an inbound route here; otherwise improve the existing guide.
 
 ## Background evidence
 
