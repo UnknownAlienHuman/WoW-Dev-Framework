@@ -1,64 +1,53 @@
 # Contributor instructions
 
-Read, in order:
-
-1. [current status](docs/CURRENT_STATUS.md);
-2. [architecture](docs/ARCHITECTURE.md);
-3. the active item in [the queue](docs/REFACTOR_QUEUE.md);
-4. the relevant owner route in [IMPLEMENTATION.md](docs/IMPLEMENTATION.md) and
-   domain behavior in [WOW_LINTER.md](docs/WOW_LINTER.md);
-5. the actual producer, handoff and consumer code.
-
-`CURRENT_STATUS.md` is the only live delivery checkpoint. The queue is the only
-ordered work list; the trace register records evidence and observations. README,
-package guidance, skills, Issues and historical specifications cannot expand or
-narrow the active slice.
+Build a useful WoW addon linter on EmmyLua. Read [current status](docs/CURRENT_STATUS.md)
+and the assigned row of the [work register](docs/REFACTOR_QUEUE.md). With no assigned
+row, select its first unfinished unblocked step in the active slice. Use the
+[map](docs/REPOSITORY_MAP.md) and linked owner section to read the real producer and
+consumer. Read [architecture](docs/ARCHITECTURE.md) on first entry or scope changes,
+not before every edit. Do not load every guide, Issue comment or historical audit.
 
 ## Work
 
-- One manager, one worktree/branch. Delegate only bounded reads or disjoint paths.
-- Finish one producer-to-user path. Change the real producer and consumer together;
-  remove displaced wrappers, options and prose with their last caller.
-- Reuse [pinned donors](docs/DONORS.md) only after reading the exact relevant
-  source. Blizzard facts, Ketho behavior and Wowless comparison behavior have
-  different authority.
-- Preserve exact bytes, locations, ambiguity, incomplete input and cancellation.
-  Never execute analyzed Lua or rewrite user source.
-- After two failed attempts at one approach, identify the failed assumption and
-  change method.
+- One manager, one worktree/branch. Inspect the remote head and preserve unpublished
+  work. Delegate bounded reads or disjoint edits with exact revision, input/output,
+  owner/caller and exclusions; agree shared signatures before parallel edits.
+- An implementation task changes a connected producer/consumer path. Do not finish
+  at unused helpers, another plan or a new audit. Remove displaced exclusive
+  wrappers/options/fixtures with the last caller, not useful behavior or notices.
+- Start with existing concrete owners and private helpers. Follow
+  [small implementation decisions](docs/IMPLEMENTATION.md#small-implementation-decisions)
+  before adding types, traits, dependencies or retained state. Reuse algorithms,
+  not obsolete orchestration; shorter code must not hide failures.
+- Read the relevant [pinned donor](docs/DONORS.md). Emmy owns language analysis,
+  Project source selection, Service assembly and frontends transport/rendering.
+  Never execute analyzed Lua, rewrite user source or fabricate missing metadata.
+- Preserve exact bytes/locations, partial input and truthful cancellation. Unknown
+  input is not an absent API or clean result. After two failed attempts inspect
+  the failed assumption and change method, not limits or expected outcomes.
 
 ## Active slice
 
-Implement Slice 1A exactly as specified in
-[the queue](docs/REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check) and
-[the owner guide](docs/IMPLEMENTATION.md#first-implementation-slice). Do not copy
-that contract here or invent missing policy.
+[Slice 1A](docs/REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check) connects physical
+Lua to the existing configured Emmy owner through one Service operation. Follow
+[its contract](docs/IMPLEMENTATION.md#first-implementation-slice). Later loading,
+search and WoW rules do not expand this task. User instructions override this
+workflow; old Issues, fixtures and removed specifications do not override scope.
 
-Critical boundaries:
+## Verification and handoff
 
-- frontends call one narrow public Service operation;
-- Service owns Project preparation, requested-scope limitations, exact snapshots,
-  same-owner Emmy requirements and the lower check;
-- Project owns safe root/file admission and selected source authority;
-- no `ProfileIdentity`, publication/replay/proof, Reference/Rules, graph/store,
-  second parser/analyzer, generic result hierarchy or hidden compatibility route;
-- channel, dependencies, full XML/chunk injection, bindings, secure contexts and
-  WoW checks remain later slices unless the queue explicitly moves them.
+Write product code first for implementation tasks. Run formatting and the smallest
+strict Clippy invocation covering changed crates/callers; use
+[the check matrix](CONTRIBUTING.md#choose-the-checks), not another cargo check pass.
+Do not add or run tests until functional completion, as directed by the owner.
+Do not delete a test merely because it fails.
 
-## Validation
+For prose, inspect source claims, links and consistency; use existing xtask checks
+for local paths/anchors and skill synchronization, not a workspace build. A source
+review, compiler pass and executed user workflow are different evidence.
 
-Write the product path first. For Rust changes run formatting and the smallest
-strict Clippy invocation covering affected crates and callers; do not duplicate it
-with a separate `cargo check`. Tests remain deferred until functional completion,
-as directed by the owner.
-
-For documentation changes, inspect source claims, current `main`, links/anchors
-and instruction consistency. Update the trace immediately when a finding changes a
-boundary. Do not cite compilation or Clippy as documentation evidence.
-
-A build, source trace or document review never makes a workflow **observed**.
-Observation requires the exact ordinary command/protocol input and visible result
-recorded in the trace register.
-
-Publish one coherent branch/PR after rereading the remote head. Do not create
-acceptance-tier, proof-archive, migration-inventory or status-diary machinery.
+Update only affected [status/row/contract/trace](CONTRIBUTING.md#update-the-right-place).
+Re-read the remote head before publishing one coherent branch/PR. Handoff needs
+the changed behavior, actual checked revision/command/result, remaining blocker
+and next register row. No parallel diary, correction counter or new acceptance
+platform. Do not claim an unresolved row complete because its documentation exists.

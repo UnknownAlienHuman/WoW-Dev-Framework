@@ -13,7 +13,7 @@ Read [current status](CURRENT_STATUS.md) and the
 
 ## CLI
 
-First usable command:
+**Planned Slice 1A interface — not implemented in the current CLI:**
 
 ```text
 wow check
@@ -31,10 +31,26 @@ WoW checks; they do not delay physical Lua.
 
 ### Configuration and path bases
 
+The JSON object accepts only `root`, `toc`, `flavor`, `library`,
+`emmy_diagnostics`, `format` and `fail_on`. Paths/flavor/format/threshold are
+strings; `library` is an array of directory strings; `emmy_diagnostics` is the
+pinned diagnostic object. Root, TOC, exact `retail` and at least one Library are
+required after config/CLI merge. For example:
+
+```json
+{"root":"./MyAddon","toc":"MyAddon.toc","flavor":"retail","library":["./wow-library"]}
+```
+
 Read one explicit config only, max 256 KiB, through Project's component-wise
 no-follow helper. Reuse duplicate-key/depth-bounded `StrictJson`; reject unknown
 outer fields and duplicate scalar CLI options. No implicit discovery. If config
 fails, only an already admitted CLI `--format` selects JSON error output.
+
+In [Project disk](../crates/wow-project/src/disk.rs), `read_configuration` currently
+admits 32 MiB; the smaller `read_json_artifact_with_limit` requires a predeclared
+digest/length. Neither is the ordinary config entry unchanged. Reuse the internal
+bounded read with the 256 KiB ceiling applied during acquisition. Do not read the
+larger buffer then reject it, invent an artifact identity, or add another reader.
 
 Path origin is part of deterministic configuration:
 
@@ -59,13 +75,8 @@ config or CLI TOC. Merge before requiring root, TOC, exact `retail` and Librarie
 Defaults: text, `fail_on: error`, upstream default diagnostics. Slice 1A has no
 WoW-check option.
 
-Pinned diagnostic input is not trusted directly. Prevalidate keys
-`disable`, `enable`, `globals`, `globalsRegex`, `severity`, `enables`; compile all
-regexes; reject unknown keys, invalid regex and `diagnosticInterval`. Normalize
-analysis semantics for owner reuse: sort/dedup set-like diagnostic lists/regexes,
-sort severity by code, preserve `enable`, and omit LS-only interval. Therefore
-omitted diagnostics, `{}` and reordered/duplicated set-like entries are equivalent
-when analysis behavior is identical.
+Diagnostic settings use [strict Emmy admission and canonical semantics](EMMYLUA_UPSTREAM.md#diagnostic-configuration).
+`fail_on` changes exit status only, not collected diagnostics or analyzer reuse.
 
 The frontend resolves caller-facing path descriptors with the rules above, then
 calls one public Service operation. It does not open addon/Library source, compute
@@ -82,18 +93,23 @@ and located scoped limitations. Deterministic Service order:
 - diagnostics: role, canonical path, byte start/end, code, message;
 - limitations: code, optional location, message.
 
+Use explicit sort keys in Service. Derived struct field order is not this
+contract: the current lower diagnostic puts category/code/message before path,
+and the limitation puts message before location. Optional locations sort absent
+first, then by canonical path and byte start/end.
+
 Public result contains no snapshot/analyzer/Project/report/proof identities.
 Paths are relative to configured addon root; text may show `root/path`, JSON keeps
 relative identity. Absolute/path-authority data never enters output.
 
-Malformed config, root/explicit TOC, unsafe bytes/paths, source/Library budget or
-Library content is invalid input (`64`). A safely selected missing child Lua,
-required dependency, unresolved included condition or deferred XML is partial
-(`2`) and preserves findings.
+Service classifies failures and limitations under the
+[scope table](IMPLEMENTATION.md#requested-scope-limitations). Main Lua syntax/type
+errors are findings, not invalid input. A partial result preserves independent
+findings; it never becomes a clean result by discarding unavailable input.
 
 | Exit | Meaning |
 | --- | --- |
-| `0` | complete, no finding at/above threshold |
+| `0` | complete, no enabled finding at/above threshold |
 | `1` | finding at/above threshold |
 | `2` | requested scope partial |
 | `4` | internal/serialization/output failure |
@@ -101,11 +117,29 @@ required dependency, unresolved included condition or deferred XML is partial
 | `130` | observed cancellation |
 
 Precedence: 64, 130, 4, 2, 1, 0. Rank Error > Warning > Information > Hint
-explicitly; visible `Unknown` meets every threshold.
+explicitly; visible `Unknown` meets every threshold. Completeness and an empty
+report have the [scope-relative meaning](WOW_LINTER.md#7-useful-output-and-updates)
+defined for the requested checks and diagnostic configuration.
 
-Pre-encode at most 32 MiB, then write once. Complete/partial result -> stdout.
-Admitted-format pre-result error -> stderr; early grammar error -> text stderr.
-JSON error is one bounded object such as
+Encode the borrowed typed result once into a buffer capped at 32 MiB, including
+escaped bytes and the final newline, then write it. Reuse the check-before-append
+buffer algorithm in [local response](../crates/wow-service/src/local/response.rs),
+not `LocalOperationResult` or its generic encoding-error mapping. The existing
+[app JSON encoder](../apps/wow/src/json.rs) first counts encoded bytes and then
+serializes a `Value` again; do not put the ordinary typed result through an
+intermediate `Value` or a second serialization pass. Text and its newline use the
+same append bound, not an unbounded string checked after growth.
+
+Keep limit exhaustion distinguishable from serializer/I/O failure, for example
+with a private writer limit-hit flag inspected by the renderer. Do not parse error
+strings or classify every serialization error as oversized input. This needs a
+small output helper, not a serialization framework or a rewrite of every protocol
+adapter before the ordinary command can work.
+
+Complete/partial result -> stdout. Admitted-format pre-result error -> stderr;
+early grammar error -> text stderr. Public pre-result error codes are exactly
+`invalid_input`, `cancelled` and `internal`. Optional `role` is `config`, `main` or
+`library`. JSON error is one bounded object such as
 `{"error":{"code":"invalid_input","message":"...","role":"library","root_index":0,"relative_path":"..."}}`.
 Message <= 4 KiB; `root_index` only for Library and zero-based; paths role-relative.
 Check cancellation after encoding/before first byte. Once output starts, no retry,
@@ -120,11 +154,36 @@ JSON strings stay exact.
 ## LSP adapter
 
 Use one LSP 3.18 stdio profile and the same public Service check as CLI. Preserve
-exact unsaved text/version/root, UTF-8/UTF-16 conversion, version gaps, stale
-rejection, standard empty/null and protocol-only stdout. Never construct a lower
-request/second workspace or attach limitations. Publish only exact physical/mapped
-user locations. LS debounce (including interval) remains adapter state and does
-not alter analyzer configuration/reuse. General Lua intelligence stays upstream.
+exact unsaved text/version/root, UTF-8/UTF-16 conversion, standard empty/null and
+protocol-only stdout. Never construct a lower request/second workspace or attach
+limitations. Publish only exact physical/mapped user locations. LS debounce
+(including interval) remains adapter state and does not alter analyzer
+configuration/reuse. General Lua intelligence stays upstream.
+
+### Document synchronization
+
+The reviewed LSP source at `baf2db31` defines
+[signed 32-bit `integer`](https://github.com/microsoft/language-server-protocol/blob/baf2db31b5fb314a8f358f9a839d3c66e9d98734/_specifications/lsp/3.18/specification.md#baseTypes),
+[increasing, nonconsecutive document versions](https://github.com/microsoft/language-server-protocol/blob/baf2db31b5fb314a8f358f9a839d3c66e9d98734/_specifications/lsp/3.18/types/versionedTextDocumentIdentifier.md)
+and [ordered change arrays](https://github.com/microsoft/language-server-protocol/blob/baf2db31b5fb314a8f358f9a839d3c66e9d98734/_specifications/lsp/3.18/textDocument/didChange.md).
+Apply these at the wire boundary without changing Project's internal model into
+a protocol schema:
+
+| Input | Required handling |
+| --- | --- |
+| Version in `-2^31..=2^31-1`, including negative values and gaps | Preserve the signed client version through overlay/result binding; require an increase for a new change, not `previous + 1`. Internal generation counters remain separate; never cast a negative version to `u64`. |
+| `contentChanges: []` | The protocol array has no nonempty constraint. For an admitted newer version, keep bytes unchanged and advance version under the same stale-result guards. Do not fabricate an edit or force resynchronization merely because the array is empty. |
+| `[{"text":""}]` | Replace the whole document with empty text; this is not a no-op. Empty `didOpen.text` is also valid. |
+| Several ranged/full changes | Apply in received order against each intermediate text, then adopt the final state atomically. |
+| Deprecated `rangeLength` on a ranged change | Accept a valid LSP `uinteger`; `range` is authoritative. Validate then discard this redundant wire field before constructing `OverlayEdit`. |
+
+Stale versions and invalid ranges remain failures; accepting valid empty input
+does not bypass source bounds, cancellation or exact version matching. The current
+Service rejects negative versions, Project refuses an empty edit array, and the
+wire parser deserializes directly into strict `OverlayEdit`, rejecting
+`rangeLength`. These remain open under T08 in the
+[trace register](IMPLEMENTATION_TRACE_REGISTER.md#source-owners-behind-the-open-boundaries).
+Empty source text is already accepted and must stay accepted.
 
 <a id="mcp-adapter"></a>
 

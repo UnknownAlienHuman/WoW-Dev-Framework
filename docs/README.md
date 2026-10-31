@@ -1,41 +1,47 @@
 # Documentation
 
-Start with [current status](CURRENT_STATUS.md), then
-[architecture](ARCHITECTURE.md) and the active item in
-[the queue](REFACTOR_QUEUE.md). Read only the owner/domain guide needed for the
-change.
+Start with root [AGENTS](../AGENTS.md), [current status](CURRENT_STATUS.md) and the
+assigned row of the [work register](REFACTOR_QUEUE.md). Its [map route](REPOSITORY_MAP.md)
+leads to existing code and the relevant contract. Read architecture on first entry
+or when changing ownership; historical audits are not startup requirements.
 
-| Question | Read |
+## Working guides
+
+| Question | One owning source |
 | --- | --- |
-| What is delivered, open and actually observed? | [Current status](CURRENT_STATUS.md) |
-| What are we building and excluding? | [Architecture](ARCHITECTURE.md) |
-| What must the WoW-aware linter understand? | [WoW behavior](WOW_LINTER.md) |
-| Which owner changes and in what direct path? | [Implementation](IMPLEMENTATION.md) |
-| What is the next vertical slice? | [Queue](REFACTOR_QUEUE.md) |
-| Which source decisions and observations support it? | [Trace register](IMPLEMENTATION_TRACE_REGISTER.md) |
-| Which old documents and requirements were reconciled? | [Baseline register](AUDIT_REGISTRY.md) |
-| What did the baseline source audit establish? | [Baseline audit](AUDIT.md) |
-| Which active Issues were checked as instructions? | [Active Issue audit](ACTIVE_ISSUE_AUDIT.md) |
-| Which TOC/load details were source-traced? | [Load context](TOC_LOAD_CONTEXT_AUDIT.md), [triggers and bindings](TOC_TRIGGER_BINDINGS_AUDIT.md) |
-| How does EmmyLua own parsing/types/diagnostics? | [EmmyLua](EMMYLUA_UPSTREAM.md) |
-| How are Blizzard facts converted to a Library? | [Ketho/native projection](KETHO_RUST_PORT.md) |
-| What code may be reused? | [Donors](DONORS.md) |
-| How do CLI/LSP/MCP expose the owners? | [Frontends](FRONTENDS.md) |
+| What exists? | [Current status](CURRENT_STATUS.md) |
+| What do I implement, after what, for which caller, and what do I remove? | [Implementation work register](REFACTOR_QUEUE.md) |
+| Where is its producer/consumer code? | [Repository map](REPOSITORY_MAP.md) |
+| What is the product and what is excluded? | [Architecture](ARCHITECTURE.md) |
+| How do I keep the design small and assemble the checker? | [Implementation](IMPLEMENTATION.md) |
+| Which game semantics are required or uncertain? | [WoW linter](WOW_LINTER.md) |
+| What are CLI/config/output and protocol contracts? | [Frontends](FRONTENDS.md) |
+| How does the pinned engine behave? | [EmmyLua](EMMYLUA_UPSTREAM.md) |
+| How do selected facts become a usable Library? | [Native projection](KETHO_RUST_PORT.md) |
+| Which source/library can be reused or updated? | [Donors](DONORS.md) |
+| Which checks and documentation updates apply? | [Contributing](../CONTRIBUTING.md) |
+| What source/run evidence supports a claim? | [Trace register](IMPLEMENTATION_TRACE_REGISTER.md) |
 
-## Authority and maintenance
+## Maintaining the documentation
 
-- `CURRENT_STATUS.md` is the **only live delivery checkpoint**.
-- `REFACTOR_QUEUE.md` is the ordered work list, not a PR history.
-- `IMPLEMENTATION_TRACE_REGISTER.md` records source decisions and exact
-  observations.
-- `AUDIT.md` and `AUDIT_REGISTRY.md` remain tied to the baseline commit they name.
-- Owner/domain guides define durable contracts, not moving lists of merged PRs.
-- README, AGENTS, skills, package summaries and Issue bodies are navigation and
-  task-specific instructions; they must link to live status instead of copying it.
+Change the owning rule once; update only affected routes and facts. Status is not
+a task queue, the map is not a specification, and a source trace is not an executed
+workflow. Issue bodies select a row and name the outcome/exclusions, not another
+set of limits or implementation stages. Every open implementation Issue must have
+a route in the existing register; no duplicate progress diary or correction IDs.
 
-Only the live status and trace register may enumerate current delivered slices or
-verification runs. This prevents a merge from leaving half the documentation one
-or more implementation steps behind.
+When a file/symbol moves, fix its map row and inbound links. For source-sensitive
+changes use [the donor procedure](DONORS.md#updating-a-reviewed-revision). For a
+failure start with [the failed check](../CONTRIBUTING.md#failure-and-handoff), not
+a new repository-wide audit. A new guide needs a distinct responsibility and an
+entry here; otherwise edit the existing guide.
 
-Historical platform specifications remain in Git history. Compile-time fixtures
-and third-party notices are data/attribution, not active architecture.
+## Background evidence
+
+Read only to resolve a specific source question: [baseline source audit](AUDIT.md),
+[TOC/load context](TOC_LOAD_CONTEXT_AUDIT.md), [triggers/bindings](TOC_TRIGGER_BINDINGS_AUDIT.md)
+and the [historical document inventory](AUDIT_REGISTRY.md#historical-baseline).
+The removed duplicate Issue-audit page remains in its
+[immutable historical revision](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/blob/3fa003e3fc7c90cb6f205dc6ded5da0d627b4e1a/docs/ACTIVE_ISSUE_AUDIT.md).
+These records retain evidence, not current task status or authority to restore old
+platform requirements. Third-party notices remain attribution, not architecture.

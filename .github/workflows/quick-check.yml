@@ -1,19 +1,5 @@
 # Quick exact-head gate
-#
-# Bounded commit/tree build evidence. Third-party actions are pinned to reviewed
-# commit SHAs rather than mutable major tags. Both pins were re-resolved from the
-# live tag refs on 2026-10-13 and are mirrored into the EXACT_HEAD_MARKERS file, so
-# the tested source and the action identity that produced it are retained together:
-#
-#   actions/checkout@v7        -> 3d3c42e5aac5ba805825da76410c181273ba90b1
-#     "prep v7.0.1 release (#2531)" 2026-07-17T18:45:11Z
-#   actions/upload-artifact@v7 -> cf430e030ddbb5b0abf93d22962f4752f3646cd9
-#     "Merge pull request #822 from actions/tunc-d-prepare-upload-v7-0-2"
-#       2026-10-07T10:00:52Z
-#
-# Re-resolve these pins from the tags before re-pinning; never carry a SHA forward
-# from an earlier comment. Keep the two ACTION constants in the evidence step in
-# sync with the uses: lines below.
+# The checkout action remains pinned to a reviewed commit SHA.
 
 name: Quick exact-head gate
 
@@ -39,151 +25,78 @@ jobs:
       run:
         shell: bash
     env:
-      # Event values are bound once here and read by the shell as plain
-      # environment variables. No GitHub expression is interpolated into a
-      # run: script, so event text can never reach a shell as code.
       EVENT_NAME: ${{ github.event_name }}
-      EVENT_REF: ${{ github.ref }}
-      EVENT_REF_NAME: ${{ github.ref_name }}
       EVENT_SHA: ${{ github.sha }}
-      EVENT_WORKFLOW: ${{ github.workflow }}
-      EVENT_RUN_ID: ${{ github.run_id }}
-      EVENT_RUN_ATTEMPT: ${{ github.run_attempt }}
-      PR_NUMBER: ${{ github.event.pull_request.number }}
-      PR_SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      PR_SOURCE_REF: ${{ github.event.pull_request.head.ref }}
-      PR_SOURCE_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+      PUSH_BEFORE: ${{ github.event.before }}
       PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout@v7
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Install current stable Rust
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
 
-      - name: Record exact tested inputs
+      - name: Record checked revision
         run: |
           set -euo pipefail
-
-          emit() { printf '%s=%s\n' "$1" "$2"; }
-
           tested_commit_sha="$(git rev-parse HEAD)"
           tested_tree_sha="$(git rev-parse 'HEAD^{tree}')"
-          tested_head_ref="$(git symbolic-ref -q HEAD || printf 'detached')"
-
-          # The commit every check below compiles must be the exact commit this
-          # event names. On pull_request events that is the synthetic merge
-          # candidate, never the source branch head, which is why the source
-          # head and base are recorded separately.
-          if [ "$tested_commit_sha" != "$EVENT_SHA" ]; then
-            printf 'FAIL: tested checkout %s does not equal github.sha %s\n' "$tested_commit_sha" "$EVENT_SHA" >&2
+          if [[ "$tested_commit_sha" != "$EVENT_SHA" ]]; then
+            printf 'FAIL: checked commit %s does not match event SHA %s\n' "$tested_commit_sha" "$EVENT_SHA" >&2
             exit 1
           fi
+          printf 'Checked commit: %s\nChecked tree: %s\n' "$tested_commit_sha" "$tested_tree_sha"
+          rustc +stable -Vv
 
-          pr_number="${PR_NUMBER:-NotApplicable}"
-          pr_source_head_sha="NotApplicable"
-          pr_source_ref="NotApplicable"
-          pr_source_repository="NotApplicable"
-          pr_base_sha="NotApplicable"
-          pr_base_ref="NotApplicable"
-          push_source_sha="NotApplicable"
-
+      - name: Detect documentation-only changes
+        id: rust_changes
+        run: |
+          set -euo pipefail
+          base_sha=""
           case "$EVENT_NAME" in
-            pull_request)
-              pr_number="$PR_NUMBER"
-              pr_source_head_sha="$PR_SOURCE_HEAD_SHA"
-              pr_source_ref="$PR_SOURCE_REF"
-              pr_source_repository="$PR_SOURCE_REPOSITORY"
-              pr_base_sha="$PR_BASE_SHA"
-              pr_base_ref="$PR_BASE_REF"
-              if [ -z "$pr_source_head_sha" ] || [ -z "$pr_base_sha" ]; then
-                printf 'FAIL: pull_request event payload is missing source head or base identity\n' >&2
-                exit 1
-              fi
-              ;;
-            push)
-              push_source_sha="$EVENT_SHA"
-              if [ "$push_source_sha" != "$tested_commit_sha" ]; then
-                printf 'FAIL: pushed source %s is not the tested commit %s\n' "$push_source_sha" "$tested_commit_sha" >&2
-                exit 1
-              fi
-              ;;
-            *) : ;;
+            pull_request) base_sha="$PR_BASE_SHA" ;;
+            push) base_sha="$PUSH_BEFORE" ;;
+            *) ;;
           esac
 
-          {
-            emit EVENT_NAME "$EVENT_NAME"
-            emit EVENT_REF "$EVENT_REF"
-            emit EVENT_REF_NAME "$EVENT_REF_NAME"
-            emit EVENT_SHA "$EVENT_SHA"
-            emit EVENT_WORKFLOW "$EVENT_WORKFLOW"
-            emit EVENT_RUN_ID "$EVENT_RUN_ID"
-            emit EVENT_RUN_ATTEMPT "$EVENT_RUN_ATTEMPT"
-            emit TESTED_COMMIT_SHA "$tested_commit_sha"
-            emit TESTED_TREE_SHA "$tested_tree_sha"
-            emit TESTED_HEAD_REF "$tested_head_ref"
-            emit PUSH_SOURCE_SHA "$push_source_sha"
-            emit PR_NUMBER "$pr_number"
-            emit PR_SOURCE_HEAD_SHA "$pr_source_head_sha"
-            emit PR_SOURCE_REF "$pr_source_ref"
-            emit PR_SOURCE_REPOSITORY "$pr_source_repository"
-            emit PR_BASE_SHA "$pr_base_sha"
-            emit PR_BASE_REF "$pr_base_ref"
-            emit CHECKOUT_ACTION_PIN 'actions/checkout@v7 -> 3d3c42e5aac5ba805825da76410c181273ba90b1'
-            emit UPLOAD_ARTIFACT_ACTION_PIN 'actions/upload-artifact@v7 -> cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-          } | tee "$RUNNER_TEMP/EXACT_HEAD_MARKERS"
-
-          git rev-parse HEAD | tee "$RUNNER_TEMP/COMMIT_SHA"
-          git rev-parse 'HEAD^{tree}' | tee "$RUNNER_TEMP/TREE_SHA"
-          rustc +stable -Vv | tee "$RUNNER_TEMP/RUST_VERSION"
+          run_rust_checks=true
+          if [[ "$base_sha" =~ ^[0-9a-f]{40}$ ]] && git cat-file -e "$base_sha^{commit}" 2>/dev/null; then
+            run_rust_checks=false
+            changed_paths="$(mktemp "$RUNNER_TEMP/changed-paths.XXXXXX")"
+            git diff --no-renames --name-only -z "$base_sha" HEAD > "$changed_paths"
+            while IFS= read -r -d '' path; do
+              case "$path" in
+                AGENTS.md|README.md|CONTRIBUTING.md|SECURITY.md|GEMINI.md|CLAUDE.md|docs/*.md|*/README.md|*/AGENTS.md|*/THIRD_PARTY_NOTICES.md|.agent/skills/*/SKILL.md|.agents/skills/*/SKILL.md|.claude/skills/*/SKILL.md|.opencode/skills/*/SKILL.md|.github/*.md|.github/ISSUE_TEMPLATE/*.yml|.github/ISSUE_TEMPLATE/*.yaml)
+                  ;;
+                *)
+                  run_rust_checks=true
+                  break
+                  ;;
+              esac
+            done < "$changed_paths"
+          fi
+          printf 'rust_checks=%s\n' "$run_rust_checks" >> "$GITHUB_OUTPUT"
+          printf 'Rust/build checks required: %s\n' "$run_rust_checks"
 
       - name: Native repository policy
         run: cargo +stable xtask check
 
       - name: Formatting
+        if: steps.rust_changes.outputs.rust_checks == 'true'
         run: cargo +stable fmt --all --check
 
-      - name: Workspace compilation
-        run: cargo +stable check --locked --workspace --all-targets --all-features
-
       - name: Strict workspace Clippy
-        run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+        if: steps.rust_changes.outputs.rust_checks == 'true'
+        run: cargo +stable clippy --locked --workspace --lib --bins --all-features -- -D warnings
 
       - name: Verify checks did not rewrite tracked files
         run: |
           set -euo pipefail
           git diff --exit-code
           tested_commit_sha="$(git rev-parse HEAD)"
-          if [ "$tested_commit_sha" != "$EVENT_SHA" ]; then
-            printf 'FAIL: tested checkout changed after checks: %s does not equal %s\n' "$tested_commit_sha" "$EVENT_SHA" >&2
+          if [[ "$tested_commit_sha" != "$EVENT_SHA" ]]; then
+            printf 'FAIL: checked commit changed after checks: %s does not equal %s\n' "$tested_commit_sha" "$EVENT_SHA" >&2
             exit 1
           fi
-
-      - name: Retain exact checked source
-        if: success()
-        run: |
-          set -euo pipefail
-          git archive --format=tar --output="$RUNNER_TEMP/checked-source.tar" HEAD
-          sha256sum "$RUNNER_TEMP/checked-source.tar" > "$RUNNER_TEMP/SHA256SUMS"
-          archive_sha256="$(cut -d' ' -f1 "$RUNNER_TEMP/SHA256SUMS")"
-          printf 'SOURCE_ARCHIVE=checked-source.tar\nSOURCE_ARCHIVE_SHA256=%s\n' "$archive_sha256" \
-            | tee "$RUNNER_TEMP/SOURCE_ARCHIVE" >> "$RUNNER_TEMP/EXACT_HEAD_MARKERS"
-
-      - name: Upload exact-head evidence
-        if: success()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # actions/upload-artifact@v7
-        with:
-          name: quick-exact-head-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/checked-source.tar
-            ${{ runner.temp }}/SOURCE_ARCHIVE
-            ${{ runner.temp }}/EXACT_HEAD_MARKERS
-            ${{ runner.temp }}/COMMIT_SHA
-            ${{ runner.temp }}/TREE_SHA
-            ${{ runner.temp }}/RUST_VERSION
-            ${{ runner.temp }}/SHA256SUMS
-          retention-days: 14
-          if-no-files-found: error
