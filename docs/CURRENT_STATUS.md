@@ -1,51 +1,36 @@
 # Current status
 
-**Source reviewed:** `8ab892f040c42a9877836be8bd9818b98b1455d8` (2026-10-29).
-This page records delivery; the [queue](REFACTOR_QUEUE.md) orders work.
+**Runtime source baseline:** `8ab892f040c42a9877836be8bd9818b98b1455d8`, reviewed
+2026-10-29. Later documentation changes do not advance runtime implementation.
+The [work register](REFACTOR_QUEUE.md) owns tasks, prerequisites and removal order;
+[traces](IMPLEMENTATION_TRACE_REGISTER.md) own source/run evidence.
 
-**The ordinary addon checker is not implemented yet.** The existing CLI `check`
-requires the legacy project configuration and calls
-`LocalProjectBackend -> generic Service`. The target `wow check --root ...`
-interface in [FRONTENDS.md](FRONTENDS.md) is planned.
+**The ordinary addon checker is not implemented yet.** CLI still reaches
+`LocalProjectBackend -> generic Service`; `wow check --root ...` in
+[Frontends](FRONTENDS.md) is a target, not a working interface.
 
-## What the code actually provides
-
-| Area | Implemented | Remaining boundary |
+| Area | Existing useful code | Remaining connected work |
 | --- | --- | --- |
-| EmmyLua | One Lua 5.1 Main/Library/virtual session, STD, upstream diagnostics and exact byte ranges | Strict diagnostic admission, global-disable handling and semantic configuration equivalence |
-| Direct Service checker | Lower exact-snapshot request/result and finite located limitations | Public source-to-result orchestration and requested-scope blockers; lower request/check are still publicly exported |
-| Project | Bounded file/Library readers, TOC/XML parsing, package predicates and source maps | Profile-free physical-Lua plan and safe preparation API |
-| Annotation generation | Native Reference/Annotations/Ketho pipeline | Direct Library metadata/map handoff, failure-safe output and [projection gaps](KETHO_RUST_PORT.md) |
-| CLI/LSP/MCP and source lookup | Transitional platform routes | Shared ordinary check and later direct SQLite lookup |
+| EmmyLua | Configured Lua 5.1 Main/Library/virtual session, STD and upstream diagnostics | Strict/canonical settings, global-off, structured Library/resource failures and same-owner chunk requirements; #273 |
+| Project | Bounded disk/Library readers, TOC/XML predicates and source maps | Profile-free physical plan, empty Main, safe preparation/authority and correct selected-child failures; #200 |
+| Service / CLI | Lower exact-snapshot result and located limitations | Source-to-result operation and ordinary config/rendering. Lower checker still adds unconditional chunk Partial; #194/#197 |
+| Generation | Native Reference/Annotations/Ketho pipeline | Failure-safe bounded output, missing projection semantics and ordinary metadata/map reader; #274 |
+| Editors / lookup | Transitional LSP/MCP, overlay, Store/Search/Context routes | Shared ordinary owner, coherent candidates and direct later-process SQLite lookup; register sections 3–4 |
 
-The direct lower checker currently adds chunk-context incompleteness
-unconditionally and always returns `Partial`. Configuration reuse compares raw
-serialized settings. Library health errors lose the structured caller-input
-classification. These are known work items, not delivered guarantees.
+## Next implementation
 
-Selected-file errors also need correction: a missing parent directory is fatal,
-while any leaf metadata-read error is treated as absence. Global
-`diagnostics.enable=false` is incorrectly mapped to native failure. The
-[source traces](IMPLEMENTATION_TRACE_REGISTER.md#source-owners-behind-the-open-boundaries)
-identify these paths and the output-order/buffering gaps; the code remains open.
+Start with one unblocked [Slice 1A row](REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check).
+[Draft #266](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/266) contains
+T23 metadata work and must be reconciled, not duplicated or treated as merged.
+Emmy fixes can use the existing checker independently; source preparation, Service
+and CLI must then join into one path. Dependencies/XML/chunk injection, special
+loading, generated metadata and source lookup remain subsequent bounded work.
 
-## Next change
-
-Implement [Slice 1A](REFACTOR_QUEUE.md#1-first-usable-ordinary-addon-check):
-explicit root/TOC/retail/Libraries -> physical source -> one Service operation ->
-configured Emmy diagnostics -> ordinary text/JSON output.
-[Draft PR #266](https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/266)
-contains the TOC metadata prerequisite (T23); check its current head before
-changing the same owner. Dependencies, XML/chunk injection and special loading
-follow in later slices.
-
-## Evidence and maintenance
+## Evidence boundary
 
 No ordinary addon, editor or source-search workflow is recorded as executed.
-The [trace register](IMPLEMENTATION_TRACE_REGISTER.md) distinguishes existing
-code from actual runs. Tests remain deferred under [AGENTS.md](../AGENTS.md).
-The [documentation register](AUDIT_REGISTRY.md) tracks this cleanup and links the
-complete historical reconciliation; it is not required startup context.
-
-When code changes, update the affected row and trace. Keep detailed behavior in
-its owning guide rather than copying it into this status page.
+Repository/link checks, formatting and Clippy do not establish that behavior.
+Tests remain deferred under [AGENTS](../AGENTS.md#verification-and-handoff).
+Update an affected row only when its delivery changes; do not copy the detailed
+failure rules or task lists here. Historical records are linked from the
+[documentation index](README.md#background-evidence).

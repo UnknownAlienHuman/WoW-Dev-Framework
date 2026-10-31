@@ -1,25 +1,32 @@
-# Implementation order
+# Implementation work register
 
-[Current status](CURRENT_STATUS.md) identifies what exists. This file orders the
-remaining work; [IMPLEMENTATION.md](IMPLEMENTATION.md) owns the active check
-contract. Change existing owners and their real callers. A source review is not
-a prerequisite campaign before each implementation change.
+This is the single execution queue. [Status](CURRENT_STATUS.md) records delivery;
+[the map](REPOSITORY_MAP.md) locates producers/consumers; [traces](IMPLEMENTATION_TRACE_REGISTER.md)
+retain evidence; owner guides define behavior. Issue bodies route here instead of
+maintaining another plan. All work below remains open unless its row links an
+implemented change. A prerequisite is code the row consumes, not another Issue
+that must be closed in its entirety.
 
 ## Working one step
 
-Choose the first unfinished prerequisite for the assigned result, then use one
-[repository-map route](REPOSITORY_MAP.md#ordinary-check) to read its producer and
-consumer at the same revision. Reuse another draft's work before duplicating it.
-Define input/output, owner paths and excluded later work in the existing task/PR.
-Use [small implementation decisions](IMPLEMENTATION.md#small-implementation-decisions)
-rather than create a new layer for every noun in the contract.
+Use the assigned row, or the first unfinished unblocked row in the active slice.
+Read its owner contract and actual producer/consumer at one revision. Check an
+existing draft before duplicating work. Take one connected change, not an entire
+multi-row Issue. Put input -> output, owner/caller, exclusions and verification
+in the existing task/PR; do not create another planning file.
 
-Steps below order integration, not unrelated edits: a configuration/error fix can
-use its existing caller without waiting for TOC work. Split commits at coherent
-handoffs, not into unused scaffolding. Before handoff use
-[the check matrix](../CONTRIBUTING.md#choose-the-checks) and update affected facts.
-A helper is not complete until consumed; compiled/merged is not observed. No new
-task registry, correction number or full-repository audit is required.
+The manager resolves shared signatures before delegating disjoint changes in its
+single worktree. An implementation task must change its real caller, not stop at
+unused types, a new report or another audit. If a required input/decision is absent,
+record that specific blocker in the row and choose an independent assigned row;
+do not invent metadata, defaults, source identities or a parallel implementation.
+
+Before publication follow [CONTRIBUTING](../CONTRIBUTING.md#choose-the-checks).
+Update the affected row with code/evidence and the next remaining boundary.
+Implemented, linted and observed are different states. Tests remain deferred under
+[AGENTS](../AGENTS.md#verification-and-handoff); completion cases below are review
+questions until execution is authorized. No documentation-correction numbering,
+completion percentage or full-repository audit is required for a normal patch.
 
 <a id="1-first-usable-ordinary-addon-check"></a>
 
@@ -27,116 +34,167 @@ task registry, correction number or full-repository audit is required.
 
 ### 1A. Explicit physical-Lua `wow check`
 
-**Result:** explicit addon root + TOC + `retail` + annotation Libraries produces
-ordinary Emmy diagnostics and honest completeness through one public Service
-operation. No WoW rules in this slice.
+**Result:** explicit addon root, TOC, retail and ordinary Lua Libraries reach one
+Service operation, one configured Emmy owner and ordinary diagnostics/limitations.
+No dependency expansion, XML/chunk injection, WoW rules or search prerequisite.
+Read [the contract](IMPLEMENTATION.md#first-implementation-slice), then only the
+row being implemented. Detailed file routes are in [the map](REPOSITORY_MAP.md#ordinary-check).
 
-Read the [Slice 1A contract](IMPLEMENTATION.md#first-implementation-slice),
-[CLI/config/output](FRONTENDS.md#configuration-and-check-input) and the relevant
-[Emmy owner rules](EMMYLUA_UPSTREAM.md#configured-analyzer-session). The
-[map](REPOSITORY_MAP.md#ordinary-check) owns file paths; this table states when a
-handoff is connected, not another specification or list of new public APIs.
+| Work / owner | Needs first | Connected result and cleanup | Task / evidence |
+| --- | --- | --- | --- |
+| TOC metadata: Project parser -> package admission | Existing draft review | Reconcile the classifier/aliases in draft #266 with current guidance; one classification reaches package and limitation consumers. No parallel metadata table. | [#200][i200], [draft #266][p266]; T23 |
+| Physical plan: `ProjectLoadPlan` / TOC reader | Metadata classification | Bind ordinary target and physical projection without profile identity; retain deferred XML locations without opening XML. Change both Main nonempty gates; keep Library admission strict. Update retained real callers rather than fabricate profiles. | [#200][i200]; T32/T33/T35 |
+| Safe preparation: Project disk/Library -> Service | Physical plan for the combined handoff | Return captured Main/Library bytes, admitted authority and structured origins. Distinguish missing selected children from unsafe/I/O failure; enforce aggregate bounds and collisions before analysis. No source reread or ambient opener. | [#200][i200]; T04/T34/T36/T38 |
+| Diagnostic settings: Emmy configuration -> configured session | Existing owner; independent of TOC work | One strict admission/canonical-equivalence boundary; handle global-off without skipping health or context. CLI later calls it, not a second validator. | [#273][i273]; T13/T16 |
+| Engine failure origins: Emmy registration/collection -> Service | Existing owner/checker | Attach Library snapshot/path and resource cause at the producer; preserve them through conversions. Input/resource refusal is not native failure or session poisoning. | [#273][i273]; T38 |
+| Chunk requirements: registered Main AST -> lower checker | Existing configured owner | Same-session collection identifies affected chunks; the checker consumes it and removes unconditional chunk fallback/hard-coded Partial. No second parse/session or helper injection. | [#273][i273]; T31 |
+| Public operation: Service preparation -> internal checker | Combined Project preparation and the three Emmy rows | Consume admitted bytes once, map requested blockers, build exact snapshots and return one result/error. Keep one analyzer construction site; internalize lower requests after callers move. | [#194][i194]; T14/T37/T38 |
+| Ordinary command: CLI args/config -> Service -> output | Public operation; parsing/encoding can be prepared independently | Connect actual command/help to Service. Apply safe config acquisition and bounded typed rendering from [Frontends](FRONTENDS.md); replace the ordinary legacy dispatch and its exclusive options. | [#197][i197]; T01/T02/T39 |
 
-| Step | Change | Connected when |
-| --- | --- | --- |
-| 1 | TOC metadata by effect (T23); reconcile draft #266 | The parser's classification reaches existing package admission/limitation consumers; no second alias/classification table is created. |
-| 2 | Profile-free physical source preparation (T32–T36/T38) | Existing Project preparation supplies captured Main/Library bytes, the plan and admitted authority to Service, including empty Main and distinct missing/unsafe/read failures. A changed function argument alone is insufficient. |
-| 3 | Configured Emmy behavior (T31/T38/T13/T16) | The same configured session supplies chunk requirements and diagnostics; settings/global-off, Library health and resource causes survive to the consuming checker. No second parser/session. |
-| 4 | Public Service assembly (T37/T38) | Merged ordinary input reaches preparation and the internal checker, producing one result or located typed failure. The lower snapshot request is no longer a frontend API. |
-| 5 | Ordinary CLI/config/output (T01/T02/T39) | Real arguments/config call that Service operation; text/JSON/errors/exits use its outcome. Replace the ordinary legacy dispatch and exclusive options/help rather than keep a permanent dual route. |
-
-Steps 2–5 must join into the explicit-input-to-output path. Do not introduce
-placeholder success, fabricated identities or unused preparation/execution
-interfaces to make an isolated step appear finished. Retain still-used legacy
-behavior until its callers move; advertise the ordinary command only when wired.
+Engine fixes and small acquisition helpers need not wait for unrelated TOC work,
+but unused helper construction is not completion. Do not advertise the ordinary
+command until preparation, analysis and rendering are connected.
 
 <a id="source-traced-replacement-boundary"></a>
 <a id="exact-owner-split"></a>
 
 ### Replacement boundary
 
-Replace `LocalCommand -> LocalProjectBackend -> generic Service::check` for the
-ordinary checker. Do not satisfy its Reference/Rules/publication prerequisites
-with fake identities or a compatibility mode. Ownership is defined in
-[Implementation](IMPLEMENTATION.md#code-ownership), not by the current crate count.
+Replace `LocalCommand -> LocalProjectBackend -> generic Service::check` for this
+operation. Do not emulate its Reference/Rules/publication prerequisites. Preserve
+other still-used routes until their own callers move. [Ownership](IMPLEMENTATION.md#code-ownership)
+and [selective reuse](IMPLEMENTATION.md#small-implementation-decisions) govern the
+change, not the current crate count or legacy fixture shapes.
 
 ### Completion cases
 
-Keep these pending until the product path exists and validation is authorized by
-[the owner policy](../AGENTS.md#verification-and-handoff). They are not a demand
-for new tests before implementation. Record actual input/result when exercised;
-merging code alone does not mark a case observed.
+Review these now; record actual inputs/results under existing traces only after
+the path is ready and execution is authorized:
 
-- Clean and invalid typed calls retain exact root-relative diagnostics.
-- Top-level ellipsis limits affected files; function varargs, strings and comments
-  do not. Missing child Lua, required dependencies and deferred XML remain partial
-  while independent diagnostics survive. Missing child parents and leaves agree;
-  permission/symlink/I/O failures are not reported as absence.
-- Empty selected input is complete; deferred-only input is partial. Malformed
-  Library retains structured root/path. Duplicate authority is refused; disjoint
-  nested roots and equal relative paths under distinct roots work.
-- Invalid diagnostic keys/regex/interval are refused. Equivalent default/set-like
-  settings reuse one owner; real analysis changes rebuild it. Global diagnostics
-  off suppresses collection without hiding Library health failures or blockers.
-- Config outside cwd, CLI overrides and TOC use their specified path bases.
-  Text/JSON, errors, resource bounds, cancellation and exit precedence follow
-  [the frontend contract](FRONTENDS.md#check-results-and-command-status).
+- Clean and invalid typed calls keep exact code/message/severity/root-relative range.
+- Chunk ellipsis limits affected files, not function varargs, strings or comments.
+  Missing child Lua/parents, unresolved required dependencies and deferred XML
+  preserve independent diagnostics; unsafe/permission/I/O errors are not absence.
+- Empty Main with no blocker is complete; deferred-only Main is partial. Library
+  failure retains its root/path. Duplicate authority is refused; disjoint nested
+  roots and equal relative paths in distinct roots remain valid.
+- Invalid diagnostic keys/regex/interval are refused; equivalent settings reuse
+  the owner, real semantic changes rebuild. Global-off preserves health/blockers.
+- Config origins and overrides, deterministic text/JSON, resource refusals,
+  cancellation, stdout/stderr and exits follow [Frontends](FRONTENDS.md#check-results-and-command-status).
 
 ### 1B. Dependencies, XML and chunk injection
 
-After the physical path works, add required/available optional dependency
-closure and exact selected load order; mapped XML virtual Lua; ordinary
-`(addonName, addonTable)` for marked chunks; one reviewed XML handler adapter;
-physical, XML-only and empty scopes; coherent source/TOC/XML/Library updates.
-Malformed included XML must preserve independent diagnostics.
+| Work / owner | Needs first | Connected result and cleanup | Task / evidence |
+| --- | --- | --- | --- |
+| Dependencies and selected order: Project -> Service/Emmy | Working 1A | Required/available optional closure and exact order reach analysis; addons keep distinct chunk context. Do not turn path sorting into execution order or require the source index. | [#200][i200]; T03/T17/T18 |
+| XML: existing load/maps -> virtual Main -> diagnostics | Working 1A; closure only for selected dependencies | Reuse selected XML parsing, preserve independent units on malformed input, support XML-only/empty input and map diagnostics to exact source pieces. Remove publication-dependent handoff for moved callers. | [#117][i117]; T05/T24/T27 |
+| Ordinary chunk and reviewed handlers: Project context -> same Emmy owner | Requirement collector; XML maps for virtual handlers | Supply mapped chunk arguments only to supported affected external chunks; keep free inline scripts and reviewed handlers separate. Hide helpers; do not build another interpreter or type engine. | [#117][i117], [#273][i273]; T11/T22 |
 
 ### 1C. Special loading
 
-Add channel/`OnlyBetaAndPTR`, reverse `LoadWith` triggers, implicit bindings and
-mapped `keystate`, positive target Interface and secure/bootstrap/suppressed-table
-contexts. Preserve source Interface zero and unsupported raw `Secure`; retain
-lifecycle/retrieval/error metadata and machine SavedVariables declarations without
-reading user data. Use [WoW semantics](WOW_LINTER.md), not guesses at client timing.
+| Work / owner | Needs first | Connected result and cleanup | Task / evidence |
+| --- | --- | --- | --- |
+| Channel, Interface, triggers and environments: Project -> requested checks | Selected-order/context handoff | Carry source Interface zero, positive target compatibility, channel gates, reverse LoadWith and unsupported security/private-table evidence. Preserve lifecycle and SavedVariables declarations without reading user data. Add only [source-backed semantics](WOW_LINTER.md#4-toc-and-xml-form-the-load-model). | [#200][i200]; T19/T21/T22 |
+| Implicit bindings: Project discovery/maps -> mapped callbacks | XML mapping and selected flavor/context | Select an unambiguous bindings candidate; preserve absence, malformed/unsupported units and exact keystate callback mapping. No addon chunk arguments or invented runtime timing. | [#117][i117]; T20 |
 
 ## 2. Generated Library semantics and selected WoW checks
 
-Use the existing native builder and ordinary Library reader. Extend the existing
-`source-report.json` with the selected typed metadata and consume it optionally,
-keeping plain Lua valid. Follow the [output/handoff contract](KETHO_RUST_PORT.md#output-and-source-locations)
-and [generation publication boundary](KETHO_RUST_PORT.md#existing-source-to-output-path);
-the current report is not a raw-source bundle or a legacy cache envelope.
-Correct callable Environment, return groups, nilable contents, stride, mixins and
-selected restriction/Secret semantics. Then add one useful direct WoW check with
-correct semantic binding. Run only selected checks. Preserve source maps and
-explicit projection loss; no provider/capability/evidence platform.
+Generation safety/projection can progress independently of 1A. Ordinary type-only
+checking accepts plain Lua and must not wait for this section. Use the existing
+[builder and projection](KETHO_RUST_PORT.md), not another producer.
+
+| Work / owner | Needs first | Connected result and cleanup | Task / evidence |
+| --- | --- | --- | --- |
+| Bounded complete output: builder I/O/report | Existing builder | Bound report serialization while encoding; stage tool-owned output and publish the finished directory without replacing existing data. Preserve primary errors and actual cancellation limits. | [#274][i274]; T10 |
+| Missing source semantics: Reference -> Annotations | Selected source and supported Emmy lowering | Take one callable Environment/return/nilable-content/stride/mixin/restriction fact through normalization and emission. Preserve exact meaning or visible conservative loss; do not invent annotation syntax. | [#274][i274]; T10 |
+| Ordinary metadata/maps: emitted report -> Library reader | Emitted consumed fields and ordinary preparation | Read useful typed metadata/maps without regeneration or legacy cache envelopes. Source counts are not source bodies; plain Lua needs no report. A producer-only field does not complete this row. | [#274][i274]; T10 |
+| Selected WoW check: semantic binding + typed metadata -> Service | Working direct checker and facts used by that rule | Implement one requested API-context/local-Secret/relationship check through its real consumer. Preserve uncertainty and locations; no spelling-based API identity or broad new flow engine. Retire unused rule slots with their last caller. | [#103][i103]; [domain contract](WOW_LINTER.md#5-checks-to-deliver) |
 
 ## 3. Thin LSP/MCP adapters
 
-Reuse the same public Service operation, exact unsaved text/version and mapped
-positions; reject stale publication and accept standard empty results/version
-gaps. Advertise only implemented MCP operations. General Lua editor intelligence
-stays upstream. Protocol details live in [FRONTENDS.md](FRONTENDS.md).
+| Work / owner | Needs first | Connected result and cleanup | Task / evidence |
+| --- | --- | --- | --- |
+| Coherent candidates: Project/Service -> retained result | Working 1A; each later context only when implemented | Source/Library/config changes use conservative rebuild and exact binding; failed/cancelled/stale candidates do not publish as current. Remove obsolete replay helpers with their readers. Index integration is later, not a diagnostic prerequisite. | [#109][i109]; T08/T09/T16 |
+| LSP wire/overlay -> same Service operation | Public check and candidate/version handling | Correct signed versions, ordered/empty changes and wire-only rangeLength; preserve encoding/root isolation and reject stale publication. General Lua intelligence stays upstream; later indexed features wait only for their own reader. | [#198][i198]; T08; [protocol](FRONTENDS.md#lsp-adapter) |
+| MCP wire -> implemented Service operations | Public check; search/context only before advertising those tools | Preserve metadata, valid unknown notifications, bounded framing, cancellation and cleanup. No lower-request assembly, receipts or adapter-owned analyzer. | [#199][i199]; [protocol](FRONTENDS.md#mcp-adapter) |
 
 <a id="direct-source-lookup-and-remaining-platform-removal"></a>
 
 ## 4. Direct source index, search and context
 
-Use one rebuildable SQLite DB for exact selected bodies, symbols/spans and
-consumed relations. Query after restart without Project/Emmy/Graph replay: body
-FTS, exact symbol lookup and readable located context. Replace/update/delete
-transactionally; distinguish complete empty, unavailable/partial and truncated;
-use real SQLite cancellation where supported. Checking never requires this DB.
+The dependency direction is **index -> search -> context -> public workflow**.
+A downstream integration task is not a prerequisite for its producer. Priority is
+after the first checker; this index is never required to check an addon.
+
+| Work / owner | Needs first | Connected result and cleanup | Task |
+| --- | --- | --- | --- |
+| Direct current rows: Store -> later-process reader | Admitted exact source/symbol data | Store exact bodies, spans and consumed relations in one rebuildable SQLite DB. Switch a real reader off AcquiredProjectPair/ProjectReplay hydration; retain useful lazy SQL reads. Rebuild obsolete derived data, not user source. | [#131][i131] |
+| Body/exact-symbol query: Search -> located hits | Direct rows from #131 | Query actual body content, not just labels/names; update/delete transactionally. Replace nested SQLite -> hex -> JSON and displaced federation/response journals when their readers move. | [#169][i169] |
+| Readable context: hit -> exact excerpt | Located hit and matching indexed body | Render bounded located source; disk rereads must match indexed identity. Keep complete items plus explicit truncation. Remove displaced Context pack/custody/continuation machinery. Does not wait for #106 or XML features. | [#122][i122] |
+| Public source workflow: CLI -> index/search/context | The preceding three connected owners | Expose a real selected-source -> query -> excerpt path after restart. Add TOC/XML relations only when implemented and requested; do not make them a basic search dependency. Remove obsolete help/options with moved routes. | [#106][i106] |
 
 ## 5. Remove displaced platform code
 
-With each final caller, remove its obsolete publication/replay, generic results,
-recognizer pack/plan/matcher/proof, graph fingerprints, nested SQLite/hex/JSON,
-Store lifecycle, Search federation or Context packs plus exclusive options,
-fixtures and prose. Do not defer all cleanup to one final rewrite or delete
-still-consumed code merely because its name is on this list.
+Cleanup accompanies each replacement; it is not one final rewrite. A name, old
+caller census or dead-code lint is insufficient deletion evidence. Search current
+calls/re-exports, then remove the exclusive module, flags, fixtures and prose in
+the same patch. Keep notices, source files, unpublished work and useful behavior.
+
+| Family / entry point | Keep / replace first | Remove when that consumer no longer needs it | Task |
+| --- | --- | --- | --- |
+| Recognizers / Service graph-build adapters | One named diagnostic/navigation consumer receives typed located facts, including exact keys, ambiguity and incomplete coverage | Pack/plan/matcher JSON, witness requalification, synthetic ID inventories and unconsumed operators/adapters. No replacement DSL or plugin registry. | [#195][i195] |
+| Native Graph / Library origins | Useful callable/load/source mapping reads already available Library facts | Duplicate generation/requalification, proof/crosswalk/publication seals and redundant graph forms. No second universal graph. | [#107][i107] |
+| Fingerprint product routes / CLI graph/project | Retained exact symbol/load navigation still has its input | Function/XML fingerprint flags, manifests, exclusive implementation/fixtures. Already absent lineage/source-compare routes must not be recreated. | [#118][i118] |
+| Store/Search administration | Surviving readers use current direct data; preserve transactions, bounds and failure atomicity | Orphan backup/quarantine/replacement APIs immediately after caller verification; used replay/recovery/retention/leases/journals only after their readers move. No destructive recovery over user data. | [#111][i111] |
+
+Internal-format cleanup belongs to the affected row, not a separate versioning
+project. Ordinary errors/results stay in their existing owners. Do not retain
+unused compatibility signatures or delete tests merely to hide a failure.
 
 ## 6. Measure a real workflow
 
-After the public workflows run, measure one selected real source: file count,
-elapsed time, database size and demonstrated bottleneck. Fix it and compare the
-same input. No benchmark/telemetry/certification platform is required.
+[#113][i113] measures the runnable source workflow from #106: selected revision,
+file count, elapsed time, database size and the first demonstrated bottleneck.
+Compare the same input after the fix; no new benchmark/telemetry platform.
+
+[#125][i125] is the single final workflow-acceptance task: generated Library,
+ordinary checker, editor/agent adapters and later-process source search/context.
+Record exact command/framed input, revision and visible result under existing
+traces. A compiler pass or closed planning Issue is not product acceptance.
+After functional completion, add only the proportional coverage authorized by
+the owner; do not revive old certification programmes.
+
+## Issue routing and maintenance
+
+Each open implementation Issue has a row above. #112 (cross-cutting formats),
+#191 (umbrella plan) and #201 (duplicate workflow acceptance) are superseded by
+this register, the per-owner cleanup rows and #125. Their closure means duplicate
+planning was removed, not that their former runtime requirements were delivered.
+History and source evidence stay available; do not reopen a parallel queue.
+
+When adding a genuinely missing task, give it a consuming operation and a row
+here. Change that row's prerequisite/outcome only when the handoff changes. Do not
+copy numeric limits, configuration keys or error taxonomies out of owner guides.
+
+[i103]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/103
+[i106]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/106
+[i107]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/107
+[i109]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/109
+[i111]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/111
+[i113]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/113
+[i117]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/117
+[i118]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/118
+[i122]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/122
+[i125]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/125
+[i131]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/131
+[i169]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/169
+[i194]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/194
+[i195]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/195
+[i197]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/197
+[i198]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/198
+[i199]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/199
+[i200]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/200
+[i273]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/273
+[i274]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/issues/274
+[p266]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/266
