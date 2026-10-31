@@ -45,8 +45,7 @@ impl EmmyAnalysisConfiguration {
             && left.severity.len() == right.severity.len()
             && left.severity.iter().all(|(code, severity)| {
                 right.severity.get(code).is_some_and(|other_severity| {
-                    DiagnosticSeverity::from(*severity)
-                        == DiagnosticSeverity::from(*other_severity)
+                    DiagnosticSeverity::from(*severity) == DiagnosticSeverity::from(*other_severity)
                 })
             })
     }
