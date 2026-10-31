@@ -4,10 +4,11 @@
 //! upstream diagnostics, but this boundary never discovers or loads `.emmyrc`
 //! files on its own.
 
-use std::sync::Arc;
+use std::{collections::HashSet, hash::Hash, sync::Arc};
 
 pub use emmylua_code_analysis::{DiagnosticSeveritySetting, EmmyrcDiagnostic};
 use emmylua_code_analysis::{Emmyrc, EmmyrcLuaVersion};
+use lsp_types::DiagnosticSeverity;
 
 /// Supported configuration for one shared Main + Library analysis.
 #[derive(Debug, Clone)]
@@ -29,13 +30,24 @@ impl EmmyAnalysisConfiguration {
         &self.diagnostics
     }
 
-    /// Configuration equality for cache/session admission. JSON values are
-    /// compared structurally, so map insertion order does not create a false
-    /// configuration change.
+    /// Compare analysis-relevant settings without serializing them. Upstream
+    /// treats these lists as sets or OR-matched regexes; order and duplicates
+    /// do not change analysis. The language-server interval is not engine state.
     #[must_use]
     pub fn equivalent(&self, other: &Self) -> bool {
-        serde_json::to_value(&self.diagnostics).ok()
-            == serde_json::to_value(&other.diagnostics).ok()
+        let left = &self.diagnostics;
+        let right = &other.diagnostics;
+        left.enable == right.enable
+            && same_members(&left.disable, &right.disable)
+            && same_members(&left.enables, &right.enables)
+            && same_members(&left.globals, &right.globals)
+            && same_members(&left.globals_regex, &right.globals_regex)
+            && left.severity.len() == right.severity.len()
+            && left.severity.iter().all(|(code, severity)| {
+                right.severity.get(code).is_some_and(|other_severity| {
+                    DiagnosticSeverity::from(*severity) == DiagnosticSeverity::from(*other_severity)
+                })
+            })
     }
 
     pub(crate) fn upstream(&self) -> Arc<Emmyrc> {
@@ -44,6 +56,10 @@ impl EmmyAnalysisConfiguration {
         configuration.diagnostics = self.diagnostics.clone();
         Arc::new(configuration)
     }
+}
+
+fn same_members<T: Eq + Hash>(left: &[T], right: &[T]) -> bool {
+    left == right || left.iter().collect::<HashSet<_>>() == right.iter().collect::<HashSet<_>>()
 }
 
 impl Default for EmmyAnalysisConfiguration {

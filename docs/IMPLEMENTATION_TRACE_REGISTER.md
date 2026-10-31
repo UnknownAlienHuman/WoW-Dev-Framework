@@ -1,6 +1,7 @@
 # Implementation trace register
 
-**Source review:** `8ab892f040c42a9877836be8bd9818b98b1455d8`, 2026-10-29.
+**Baseline source review:** `8ab892f040c42a9877836be8bd9818b98b1455d8`, 2026-10-29.
+Subsequent source changes are linked in the affected rows.
 [Current status](CURRENT_STATUS.md) summarizes delivery;
 [the queue](REFACTOR_QUEUE.md) orders work. This register keeps bounded source
 traces and actual observations; it does not repeat implementation requirements.
@@ -27,10 +28,10 @@ were run during this review.
 | T10 | builder output -> ordinary Library metadata/maps | traced; typed handoff, encoding-time report bound and complete-output publication open | unexecuted |
 | T11 | addon chunk arguments -> mapped context | traced; injection open | unexecuted |
 | T12 | upstream diagnostic -> direct result | implemented #246 | unexecuted |
-| T13 | diagnostic config -> selected collection | owner implemented #247; strict admission/canonical semantics/global disable open | unexecuted |
+| T13 | diagnostic config -> selected collection | owner #247; global-off and typed equivalence [implemented][settings-fix]; strict raw-settings admission open | unexecuted |
 | T14 | exact snapshots -> direct findings/limitations | implemented #248 | unexecuted |
 | T15 | compiled identity vs report evidence | implemented #249 | unexecuted |
-| T16 | exact snapshots/config -> owner reuse | snapshot admission #250; semantic config equivalence open | unexecuted |
+| T16 | exact snapshots/config -> owner reuse | snapshot admission #250; typed set/map equivalence excluding LS interval [implemented][settings-fix] | unexecuted |
 | T17 | TOC metadata/file clauses -> package/unit context | traced; handoff open | unexecuted |
 | T18 | selected order -> snapshots + validated context | traced; context open | unexecuted |
 | T19 | channel + `LoadWith` -> reachability/trigger | traced; open | unexecuted |
@@ -55,6 +56,8 @@ were run during this review.
 | T38 | file/resource failure -> structured operation error | traced; origin and resource cause flattened | unexecuted |
 | T39 | strict config/result/error streams -> deterministic exit | traced; frontend, explicit order and bounded rendering open | unexecuted |
 
+[settings-fix]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/commit/8344f6042a776bf2aac600d01e7615130caf8954
+
 ## Source owners behind the open boundaries
 
 | Traces | Source / reason | Canonical contract |
@@ -66,8 +69,7 @@ were run during this review.
 | T34/T36 | [component-wise root opener](../crates/wow-project/src/disk.rs), [Library reader](../crates/wow-project/src/disk/library.rs); direct preparation/authority handoff absent | [Safe roots and snapshots](IMPLEMENTATION.md#safe-roots-and-selected-path-authority) |
 | T34/T38 | [disk `read`/`descend`](../crates/wow-project/src/disk.rs) maps every leaf metadata error to missing, but missing parents/open failures to read failure; [loader](../crates/wow-project/src/load/mod.rs) recovers only missing | [Selected-child failure classes](IMPLEMENTATION.md#requested-scope-limitations) |
 | T31/T37 | [lower checker](../crates/wow-service/src/addon_check.rs) always adds chunk limitation/Partial; [lib.rs](../crates/wow-service/src/lib.rs) publicly exports lower request/check | [same-owner requirement](EMMYLUA_UPSTREAM.md#addon-chunk-context), [Service ownership](IMPLEMENTATION.md#first-implementation-slice) |
-| T13/T16 | [configuration equality](../crates/wow-emmy/src/configuration.rs) compares serialized settings; [configured owner](../crates/wow-emmy/src/configured_session.rs) already exists | [Diagnostic semantics](EMMYLUA_UPSTREAM.md#diagnostic-configuration) |
-| T13 | [diagnostic collector](../crates/wow-emmy/src/syntax/analyzer.rs) treats the pinned donor's global-off `None` as unavailable; [configured error mapping](../crates/wow-emmy/src/configured_session.rs) turns it into native failure | [Global disable](EMMYLUA_UPSTREAM.md#diagnostic-configuration) |
+| T13 | [configuration](../crates/wow-emmy/src/configuration.rs) now compares typed analysis fields; [collector](../crates/wow-emmy/src/syntax/analyzer.rs) handles explicit global-off. Shared raw key/regex/interval admission still needs a connected caller before lenient upstream decoding | [Diagnostic semantics](EMMYLUA_UPSTREAM.md#diagnostic-configuration) |
 | T38 | [configured errors](../crates/wow-emmy/src/configured_session.rs) and [lower check mapping](../crates/wow-service/src/addon_check.rs) flatten Library input failure | [Structured failures](IMPLEMENTATION.md#structured-failures) |
 | T38 | [collector](../crates/wow-emmy/src/syntax/analyzer.rs) returns `DiagnosticBudgetExceeded`; [configured owner](../crates/wow-emmy/src/configured_session.rs) maps it to `NativeFailure` and marks the owner unhealthy; [Service](../crates/wow-service/src/addon_check.rs) reports `ComponentUnavailable` | [Resource failure and native limits](EMMYLUA_UPSTREAM.md#resource-limits-and-cancellation) |
 | T39 | [lower result](../crates/wow-service/src/addon_check.rs) sorts by derived struct order, not the specified keys; [legacy output](../apps/wow/src/output.rs) bounds text after growth and appends a newline outside the [bounded JSON writer](../crates/wow-service/src/local/response.rs) | [Order, encoding and exits](FRONTENDS.md#check-results-and-command-status) |

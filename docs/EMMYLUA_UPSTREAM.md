@@ -77,27 +77,35 @@ logs then drops invalid `globalsRegex`. The direct checker therefore:
    `emmylua_ls` debounce, not code analysis;
 5. uses no `.emmyrc` discovery or lenient fallback.
 
-`EmmyAnalysisConfiguration::equivalent` must compare a canonical semantic
-projection, not raw serialized `EmmyrcDiagnostic`. Preserve `enable`; convert
-`disable` and `enables` to sorted/deduplicated diagnostic-code sets; sort/dedup
-`globals` and `globalsRegex`; sort severity entries by diagnostic code; omit
-`diagnosticInterval`. Pinned analysis turns the first three list families into
-sets/OR-matched regexes, so order and duplicates have no semantic effect. Thus
-omitted diagnostics, `{}`, reordered lists and duplicate entries reuse the same
-owner when analysis semantics are identical, while a real analysis change forces
-a cold owner. LS debounce remains frontend state.
+Strict raw-settings admission remains open. The existing typed configuration
+constructor is not a validator: after lenient upstream deserialization, it cannot
+recover discarded unknown keys. Wire the shared Emmy admission boundary before
+that information is lost; do not duplicate it in each frontend.
+
+[`EmmyAnalysisConfiguration::equivalent`](../crates/wow-emmy/src/configuration.rs)
+compares analysis fields directly, without JSON or a new persisted fingerprint:
+`enable` exactly; `disable`, `enables`, `globals` and `globalsRegex` by set
+membership; severity by diagnostic code and upstream severity value. This matches
+the pinned [set/map and regex configuration](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/diagnostic/lua_diagnostic_config.rs).
+Order and duplicates do not change those list semantics. Identical lists take the
+allocation-free equality path; other comparisons use temporary borrowed sets.
+The retained caller settings and public configuration shape remain unchanged.
+
+`diagnosticInterval` does not enter equality. Thus default diagnostics and decoded
+`{}` compare equally despite upstream's `Some(500)` versus `None`; reordered or
+duplicated set-like entries also reuse the owner. A changed analysis field still
+requires a cold owner. Ignoring an LS-only interval for reuse does not admit that
+key into the ordinary checker; strict admission must reject it as specified above.
 
 The global `enable` switch is distinct from the `disable` code set. At the pinned
 [donor implementation](https://github.com/EmmyLuaLs/emmylua-analyzer-rust/blob/aaaca68425d9362876228649b0b8d92f07654daa/crates/emmylua_code_analysis/src/diagnostic/lua_diagnostic.rs#L52),
 `enable: false` makes `diagnose_file` return `None`; disabling individual codes
-filters findings while diagnostic collection remains enabled. The adapter must
-normalize `None` to an empty configured diagnostic report only when the validated
-configuration explicitly sets global `enable: false`. Every other non-cancelled
-`None` remains a diagnostics-unavailable failure. The current
-[`collect_registered`](../crates/wow-emmy/src/syntax/analyzer.rs) treats every
-non-cancelled `None` as `DiagnosticsUnavailable`, then
-[`syntax_error`](../crates/wow-emmy/src/configured_session.rs) maps it to
-`NativeFailure`; correct that owner path without treating the source as valid.
+filters findings while diagnostic collection remains enabled. The existing
+[`collect_registered`](../crates/wow-emmy/src/syntax/analyzer.rs) reads the active
+engine configuration and normalizes `None` only under explicit global-off, after
+checking registration and cancellation. Every other non-cancelled `None` remains
+`DiagnosticsUnavailable`. Physical and virtual diagnostics use this same path;
+do not add a second collector or interpret every refusal as an empty success.
 
 With global diagnostics off, an empty report records suppression, not a clean
 Lua check. Still validate exact Main and Library registration/health, preserve

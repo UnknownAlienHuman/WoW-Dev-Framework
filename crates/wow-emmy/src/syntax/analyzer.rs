@@ -74,8 +74,7 @@ pub(crate) fn diagnostic_calls() -> usize {
 /// The seam runs after a native diagnostic call has completed, so the first
 /// file is fully diagnosed and only a later file is prevented from starting.
 /// A test arms a finite one-based bound. Without a test arming the seam this
-/// only reads a counter, so production never polls, spins, waits, or observes
-/// an extra source callback.
+/// only reads a counter, and production carries no such bookkeeping.
 #[cfg(test)]
 fn observe_diagnostic_call(stop: &AtomicBool) -> usize {
     let calls = DIAGNOSTIC_CALLS.get() + 1;
@@ -145,6 +144,7 @@ pub(crate) fn collect_registered(
     stop: &AtomicBool,
 ) -> EmmySyntaxResult<EmmySyntaxReport> {
     validate_backend(snapshot)?;
+    let diagnostics_enabled = analysis.get_emmyrc().diagnostics.enable;
     let mut diagnostics = Vec::new();
     let mut files = Vec::with_capacity(snapshot.files().len());
     for file in snapshot.files() {
@@ -177,11 +177,10 @@ pub(crate) fn collect_registered(
         // armed stop is visible here, so the next file never enters upstream.
         cancel(stop, file.path())?;
         let before = diagnostics.len();
-        // Upstream returns `None` both for a refused cancelled entry and for
-        // a file it cannot diagnose. Only the shared stop state names this
-        // operation's cancellation; any other refusal keeps the
-        // unavailable-diagnostics reading, so a healthy analyzer is never
-        // reported as cancelled.
+        // The pinned engine also returns None for explicit global suppression.
+        // Normalize only that case, after registration and cancellation checks;
+        // Library parse health is checked while opening the configured owner.
+        let upstream = upstream.or_else(|| (!diagnostics_enabled).then(Vec::new));
         let upstream = upstream.ok_or_else(|| {
             EmmySyntaxError::new(
                 if stop.load(Ordering::Acquire) {

@@ -1,9 +1,10 @@
 # Current status
 
-**Runtime source baseline:** `8ab892f040c42a9877836be8bd9818b98b1455d8`, reviewed
-2026-10-29. Later documentation changes do not advance runtime implementation.
-The [work register](REFACTOR_QUEUE.md) owns tasks, prerequisites and removal order;
-[traces](IMPLEMENTATION_TRACE_REGISTER.md) own source/run evidence.
+**Broad source-review baseline:** `8ab892f040c42a9877836be8bd9818b98b1455d8`,
+reviewed 2026-10-29. Subsequent implementation changes are linked in the affected
+[traces](IMPLEMENTATION_TRACE_REGISTER.md); documentation-only changes do not
+advance runtime delivery. The [work register](REFACTOR_QUEUE.md) owns tasks,
+prerequisites and removal order.
 
 **The ordinary addon checker is not implemented yet.** CLI still reaches
 `LocalProjectBackend -> generic Service`; `wow check --root ...` in
@@ -11,7 +12,7 @@ The [work register](REFACTOR_QUEUE.md) owns tasks, prerequisites and removal ord
 
 | Area | Existing useful code | Remaining connected work |
 | --- | --- | --- |
-| EmmyLua | Configured Lua 5.1 Main/Library/virtual session, STD and upstream diagnostics | Strict/canonical settings, global-off, structured Library/resource failures and same-owner chunk requirements; #273 |
+| EmmyLua | Configured Lua 5.1 Main/Library/virtual session, STD, upstream diagnostics, explicit global-off and typed settings equivalence | Strict settings admission, structured Library/resource failures and same-owner chunk requirements; #273 |
 | Project | Bounded disk/Library readers, TOC/XML predicates and source maps | Profile-free physical plan, empty Main, safe preparation/authority and correct selected-child failures; #200 |
 | Service / CLI | Lower exact-snapshot result and located limitations | Source-to-result operation and ordinary config/rendering. Lower checker still adds unconditional chunk Partial; #194/#197 |
 | Generation | Native Reference/Annotations/Ketho pipeline | Failure-safe bounded output, missing projection semantics and ordinary metadata/map reader; #274 |
