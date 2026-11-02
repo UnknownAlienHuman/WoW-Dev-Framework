@@ -46,7 +46,7 @@ were run during this review.
 | T28 | Project issue -> finite direct limitation code | implemented #263 | unexecuted |
 | T29 | retained reachable package issues -> limitations | implemented #264 | unexecuted |
 | T30 | line/package predicates -> closure/completeness | implemented #265 | unexecuted |
-| T31 | selected Main requirements -> scope completeness | traced; unconditional chunk fallback remains | unexecuted |
+| T31 | selected Main requirements -> scope completeness | [implemented #276][chunk-fix]; same-owner AST requirements, exact Main validation and blocker-derived completeness; injection remains T11 | unexecuted |
 | T32 | ordinary target -> profile-free target/scope plan | traced; current plan profile-bound | unexecuted |
 | T33 | physical plan -> standalone blockers + Main | traced; current loader opens XML/package mapper only | unexecuted |
 | T34 | admitted Main/Libraries -> exact snapshots/paths/errors | traced; construction and child-read classification open | unexecuted |
@@ -57,6 +57,7 @@ were run during this review.
 | T39 | strict config/result/error streams -> deterministic exit | traced; frontend, explicit order and bounded rendering open | unexecuted |
 
 [settings-fix]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/commit/8344f6042a776bf2aac600d01e7615130caf8954
+[chunk-fix]: https://github.com/UnknownAlienHuman/WoW-Dev-Framework/pull/276
 
 ## Source owners behind the open boundaries
 
@@ -68,7 +69,7 @@ were run during this review.
 | T35 | [inventory reader](../crates/wow-project/src/disk.rs) rejects empty Main; [TOC reader](../crates/wow-project/src/load/mod.rs) separately rejects Main with no Lua | [Empty physical Main](IMPLEMENTATION.md#physical-projection) |
 | T34/T36 | [component-wise root opener](../crates/wow-project/src/disk.rs), [Library reader](../crates/wow-project/src/disk/library.rs); direct preparation/authority handoff absent | [Safe roots and snapshots](IMPLEMENTATION.md#safe-roots-and-selected-path-authority) |
 | T34/T38 | [disk `read`/`descend`](../crates/wow-project/src/disk.rs) maps every leaf metadata error to missing, but missing parents/open failures to read failure; [loader](../crates/wow-project/src/load/mod.rs) recovers only missing | [Selected-child failure classes](IMPLEMENTATION.md#requested-scope-limitations) |
-| T31/T37 | [lower checker](../crates/wow-service/src/addon_check.rs) always adds chunk limitation/Partial; [lib.rs](../crates/wow-service/src/lib.rs) publicly exports lower request/check | [same-owner requirement](EMMYLUA_UPSTREAM.md#addon-chunk-context), [Service ownership](IMPLEMENTATION.md#first-implementation-slice) |
+| T37 | [lower checker](../crates/wow-service/src/addon_check.rs) now consumes T31 requirements; [lib.rs](../crates/wow-service/src/lib.rs) still publicly exports lower request/check and ordinary preparation remains open | [Service ownership](IMPLEMENTATION.md#first-implementation-slice) |
 | T13 | [configuration](../crates/wow-emmy/src/configuration.rs) now compares typed analysis fields; [collector](../crates/wow-emmy/src/syntax/analyzer.rs) handles explicit global-off. Shared raw key/regex/interval admission still needs a connected caller before lenient upstream decoding | [Diagnostic semantics](EMMYLUA_UPSTREAM.md#diagnostic-configuration) |
 | T38 | [configured errors](../crates/wow-emmy/src/configured_session.rs) and [lower check mapping](../crates/wow-service/src/addon_check.rs) flatten Library input failure | [Structured failures](IMPLEMENTATION.md#structured-failures) |
 | T38 | [collector](../crates/wow-emmy/src/syntax/analyzer.rs) returns `DiagnosticBudgetExceeded`; [configured owner](../crates/wow-emmy/src/configured_session.rs) maps it to `NativeFailure` and marks the owner unhealthy; [Service](../crates/wow-service/src/addon_check.rs) reports `ComponentUnavailable` | [Resource failure and native limits](EMMYLUA_UPSTREAM.md#resource-limits-and-cancellation) |

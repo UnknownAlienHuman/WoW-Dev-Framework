@@ -11,8 +11,11 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+use emmylua_parser::{
+    LuaAstNode, LuaAstToken, LuaClosureExpr, LuaComment, LuaLiteralExpr, LuaLiteralToken,
+};
 use serde::Serialize;
-use wow_core::ProjectGenerationId;
+use wow_core::{ProjectGenerationId, SourceSpan};
 
 use crate::{
     EmmyLocalFlowReport, EmmySyntaxReport, LuaWorkspaceSnapshot,
@@ -59,11 +62,20 @@ impl std::error::Error for ConfiguredSessionError {}
 
 pub type ConfiguredSessionResult<T> = Result<T, ConfiguredSessionError>;
 
-/// Diagnostics from the physical Main and optional mapped virtual Main units.
+/// First chunk-owned ellipsis in one exact physical Main file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddonChunkRequirement {
+    pub path: Box<str>,
+    pub content_sha256: Box<str>,
+    pub span: SourceSpan,
+}
+
+/// Diagnostics and physical-Main requirements from the same registered owner.
 #[derive(Debug)]
 pub struct ConfiguredDiagnosticReports {
     pub main: EmmySyntaxReport,
     pub virtual_units: Option<EmmySyntaxReport>,
+    pub chunk_requirements: Vec<AddonChunkRequirement>,
 }
 
 /// Optional semantic output from the same configured owner.
@@ -173,8 +185,8 @@ impl ConfiguredAnalyzerSession {
             && self.configuration.equivalent(configuration)
     }
 
-    /// Collect only configured language diagnostics. No member/call/local-flow
-    /// collector runs on this path.
+    /// Collect configured diagnostics and physical chunk requirements. No
+    /// optional member/call/local-flow collector runs on this path.
     pub fn diagnostics(
         &mut self,
         stop: &AtomicBool,
@@ -277,6 +289,7 @@ impl ConfiguredAnalyzerSession {
         &self,
         stop: &AtomicBool,
     ) -> ConfiguredSessionResult<ConfiguredDiagnosticReports> {
+        let chunk_requirements = self.collect_chunk_requirements(stop)?;
         let main = crate::syntax::analyzer::collect_registered(
             &self.semantic.analysis,
             &self.main,
@@ -303,7 +316,66 @@ impl ConfiguredAnalyzerSession {
         Ok(ConfiguredDiagnosticReports {
             main,
             virtual_units,
+            chunk_requirements,
         })
+    }
+
+    fn collect_chunk_requirements(
+        &self,
+        stop: &AtomicBool,
+    ) -> ConfiguredSessionResult<Vec<AddonChunkRequirement>> {
+        let mut requirements = Vec::new();
+        for file in self.main.files() {
+            checkpoint(stop)?;
+            let model = crate::references::semantic_model(
+                &self.semantic.analysis,
+                &self.semantic.main_root,
+                file,
+            )
+            .map_err(member_error)?;
+            let mut walk = model.get_root().syntax().preorder();
+            while let Some(event) = walk.next() {
+                checkpoint(stop)?;
+                let rowan::WalkEvent::Enter(node) = event else {
+                    continue;
+                };
+                // Function parameters/bodies own their varargs; documentation
+                // is not executable chunk context. Skip both subtrees entirely.
+                if LuaClosureExpr::can_cast(node.kind().into())
+                    || LuaComment::can_cast(node.kind().into())
+                {
+                    walk.skip_subtree();
+                    continue;
+                }
+                let Some(literal) = LuaLiteralExpr::cast(node) else {
+                    continue;
+                };
+                let Some(LuaLiteralToken::Dots(token)) = literal.get_literal() else {
+                    continue;
+                };
+                let range = token.syntax().text_range();
+                let span = SourceSpan::byte_range(
+                    u64::from(u32::from(range.start())),
+                    u64::from(u32::from(range.end())),
+                )
+                .map_err(|_| {
+                    error(
+                        ConfiguredSessionErrorCode::NativeFailure,
+                        "chunk requirement has an invalid upstream byte range",
+                    )
+                })?;
+                requirements.push(AddonChunkRequirement {
+                    path: file.path().into(),
+                    content_sha256: file.content_sha256().into(),
+                    span,
+                });
+                // Source-order traversal gives the lowest-starting occurrence.
+                // Retained output is at most one record per admitted Main file.
+                break;
+            }
+        }
+        checkpoint(stop)?;
+        Ok(requirements)
     }
 }
 

@@ -12,9 +12,9 @@ prerequisites and removal order.
 
 | Area | Existing useful code | Remaining connected work |
 | --- | --- | --- |
-| EmmyLua | Configured Lua 5.1 Main/Library/virtual session, STD, upstream diagnostics, explicit global-off and typed settings equivalence | Strict settings admission, structured Library/resource failures and same-owner chunk requirements; #273 |
+| EmmyLua | Configured Lua 5.1 Main/Library/virtual session, STD, upstream diagnostics, explicit global-off, typed settings equivalence and same-owner physical chunk requirements | Strict settings admission and structured Library/resource failures; #273 |
 | Project | Bounded disk/Library readers, TOC/XML predicates and source maps | Profile-free physical plan, empty Main, safe preparation/authority and correct selected-child failures; #200 |
-| Service / CLI | Lower exact-snapshot result and located limitations | Source-to-result operation and ordinary config/rendering. Lower checker still adds unconditional chunk Partial; #194/#197 |
+| Service / CLI | Lower exact-snapshot result, validated located chunk limitations and blocker-derived completeness | Source-to-result operation, ordinary config/rendering and virtual projection; #194/#197 |
 | Generation | Native Reference/Annotations/Ketho pipeline | Failure-safe bounded output, missing projection semantics and ordinary metadata/map reader; #274 |
 | Editors / lookup | Transitional LSP/MCP, overlay, Store/Search/Context routes | Shared ordinary owner, coherent candidates and direct later-process SQLite lookup; register sections 3–4 |
 

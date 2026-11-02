@@ -9,14 +9,14 @@ mod project_limitations;
 
 pub use project_limitations::project_package_limitations;
 
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 use wow_core::SourceSpan;
 use wow_emmy::{
-    ConfiguredAnalyzerSession, ConfiguredSessionError, ConfiguredSessionErrorCode,
-    EmmyAnalysisConfiguration, EmmyDiagnosticSeverity, EmmySyntaxDiagnostic,
-    EmmySyntaxDiagnosticKind, LuaWorkspaceSnapshot,
+    AddonChunkRequirement, ConfiguredAnalyzerSession, ConfiguredSessionError,
+    ConfiguredSessionErrorCode, EmmyAnalysisConfiguration, EmmyDiagnosticSeverity,
+    EmmySyntaxDiagnostic, EmmySyntaxDiagnosticKind, LuaWorkspaceSnapshot,
 };
 
 use crate::{ExactSourceLocation, ServiceError, ServiceErrorCode, ServiceResult};
@@ -73,9 +73,8 @@ impl AddonCheckRequest {
         self
     }
 
-    /// Preserve limitations discovered while selecting and preparing exact
-    /// Project input. A later, more specific located limitation replaces the
-    /// same-code fallback that this first Service slice would otherwise add.
+    /// Preserve requested-scope limitations discovered during Project input
+    /// preparation. Located chunk requirements are added independently.
     #[must_use]
     pub fn with_input_limitations(mut self, input_limitations: Vec<AddonCheckLimitation>) -> Self {
         self.input_limitations = input_limitations;
@@ -304,11 +303,11 @@ impl AddonCheckResult {
     }
 }
 
-/// Run the first direct addon-language slice over exact caller-supplied inputs.
+/// Run the direct addon-language slice over exact caller-supplied inputs.
 ///
 /// No Reference, Rules, compatibility report, Project publication, graph or
-/// persistent store is created. The result is intentionally partial until addon
-/// chunk context and virtual-source projection reach this same owner.
+/// persistent store is created. Completeness reflects supplied scope blockers,
+/// actual physical chunk requirements and any unprojected virtual input.
 pub fn check_addon(
     request: AddonCheckRequest,
     stop: &AtomicBool,
@@ -341,11 +340,22 @@ pub fn check_addon(
     diagnostics.sort_unstable();
 
     let mut limitations = input_limitations;
-    add_fallback_limitation(
-        &mut limitations,
-        AddonCheckLimitationCode::AddonChunkContextUnavailable,
-        "addon-name/private-table chunk arguments are not yet bound to Main files",
-    );
+    for requirement in &reports.chunk_requirements {
+        if stop.load(Ordering::Acquire) {
+            return Err(ServiceError::new(
+                ServiceErrorCode::Cancelled,
+                "addon check cancelled by the caller",
+            ));
+        }
+        let location = chunk_requirement_location(session.main(), requirement)?;
+        limitations.push(
+            AddonCheckLimitation::new(
+                AddonCheckLimitationCode::AddonChunkContextUnavailable,
+                "addon-name/private-table arguments are not yet bound for this chunk ellipsis",
+            )
+            .with_location(location),
+        );
+    }
     if reports.virtual_units.is_some() {
         add_fallback_limitation(
             &mut limitations,
@@ -360,14 +370,47 @@ pub fn check_addon(
     }
     limitations.sort_unstable();
     limitations.dedup();
+    if stop.load(Ordering::Acquire) {
+        return Err(ServiceError::new(
+            ServiceErrorCode::Cancelled,
+            "addon check cancelled by the caller",
+        ));
+    }
 
     Ok(AddonCheckResult {
         schema: RESULT_SCHEMA,
         scope: AddonCheckScope::LuaTypes,
-        completeness: AddonCheckCompleteness::Partial,
+        completeness: if limitations.is_empty() {
+            AddonCheckCompleteness::Complete
+        } else {
+            AddonCheckCompleteness::Partial
+        },
         diagnostics,
         limitations,
     })
+}
+
+fn chunk_requirement_location(
+    main: &LuaWorkspaceSnapshot,
+    requirement: &AddonChunkRequirement,
+) -> ServiceResult<ExactSourceLocation> {
+    let invalid = || {
+        ServiceError::new(
+            ServiceErrorCode::InternalContractViolation,
+            "chunk requirement does not bind to exact Main source",
+        )
+    };
+    let file = main.file(&requirement.path).ok_or_else(invalid)?;
+    let start = requirement.span.byte_start().ok_or_else(invalid)?;
+    let end = requirement.span.byte_end().ok_or_else(invalid)?;
+    let start_index = usize::try_from(start).map_err(|_| invalid())?;
+    let end_index = usize::try_from(end).map_err(|_| invalid())?;
+    if requirement.content_sha256.as_ref() != file.content_sha256()
+        || file.text().get(start_index..end_index) != Some("...")
+    {
+        return Err(invalid());
+    }
+    ExactSourceLocation::new(file.path(), file.content_sha256(), start, end).map_err(|_| invalid())
 }
 
 fn add_fallback_limitation(

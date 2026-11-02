@@ -28,8 +28,9 @@ pub use compatibility::{
 };
 pub use configuration::{DiagnosticSeveritySetting, EmmyAnalysisConfiguration, EmmyrcDiagnostic};
 pub use configured_session::{
-    ConfiguredAnalyzerSession, ConfiguredDiagnosticReports, ConfiguredSemanticReports,
-    ConfiguredSessionError, ConfiguredSessionErrorCode, ConfiguredSessionResult,
+    AddonChunkRequirement, ConfiguredAnalyzerSession, ConfiguredDiagnosticReports,
+    ConfiguredSemanticReports, ConfiguredSessionError, ConfiguredSessionErrorCode,
+    ConfiguredSessionResult,
 };
 pub use flow::{
     EmmyControlFlowFact, EmmyControlFlowRelationKind, EmmyGuardFact, EmmyGuardKind,
