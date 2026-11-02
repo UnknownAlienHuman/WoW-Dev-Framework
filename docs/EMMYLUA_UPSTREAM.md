@@ -152,13 +152,21 @@ addon, rewrites only chunk-owned ellipsis in memory, preserves exact maps and
 hides helpers. Nested function varargs, strings/comments, free inline scripts,
 handlers, bindings, secure/bootstrap and suppressed-table contexts are distinct.
 
-Slice 1A adds only a bounded requirement collector on the same configured owner:
-walk registered Main expression nodes, match `LuaLiteralExpr`/
-`LuaLiteralToken::Dots`, exclude matches with an enclosing `LuaClosureExpr`, and
-return the lowest-starting exact `{path, content_sha256, span}` per file. Named,
-local and anonymous functions all contain `LuaClosureExpr` at the pinned parser
-revision. Do not raw-scan text or launch another parse/analysis. Service verifies
-records against exact Main and limits only affected files.
+[`ConfiguredAnalyzerSession::diagnostics`](../crates/wow-emmy/src/configured_session.rs)
+returns physical `chunk_requirements` with its diagnostic reports, including when
+diagnostics are globally disabled. The private collector walks each registered
+Main AST in source order, skips `LuaClosureExpr` and comment subtrees, and matches
+`LuaLiteralExpr` / `LuaLiteralToken::Dots`. It stops at the first match per file,
+returning exact `{path, content_sha256, span}`. Named, local and anonymous functions
+all contain `LuaClosureExpr` at the pinned parser revision. No second parse,
+source scan or optional semantic collector is involved; each traversal step polls
+cancellation and output is bounded by the admitted Main file count.
+
+[Service](../crates/wow-service/src/addon_check.rs) validates each record against
+exact Main and the indicated token bytes before adding a located limitation.
+Completeness follows all retained blockers, not diagnostic count. Input and
+unprojected virtual blockers remain; `Complete` does not certify source correctness
+or Blizzard API coverage. Helper injection and exact virtual context stay in 1B.
 
 <a id="updates-and-cancellation"></a>
 

@@ -11,7 +11,9 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use emmylua_parser::{LuaAstNode, LuaAstToken, LuaClosureExpr, LuaComment, LuaLiteralExpr, LuaLiteralToken};
+use emmylua_parser::{
+    LuaAstNode, LuaAstToken, LuaClosureExpr, LuaComment, LuaLiteralExpr, LuaLiteralToken,
+};
 use serde::Serialize;
 use wow_core::{ProjectGenerationId, SourceSpan};
 

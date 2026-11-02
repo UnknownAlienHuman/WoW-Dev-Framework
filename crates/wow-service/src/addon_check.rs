@@ -410,8 +410,7 @@ fn chunk_requirement_location(
     {
         return Err(invalid());
     }
-    ExactSourceLocation::new(file.path(), file.content_sha256(), start, end)
-        .map_err(|_| invalid())
+    ExactSourceLocation::new(file.path(), file.content_sha256(), start, end).map_err(|_| invalid())
 }
 
 fn add_fallback_limitation(
